@@ -1,0 +1,8 @@
+16c16,20
+<         return tuple(ceil(l * 1e2) / 1e2 for l in os.getloadavg())
+---
+>         try:
+>             loadavg = tuple(ceil(l * 1e2) / 1e2 for l in os.getloadavg())
+>         except:
+>             loadavg = (0.0, 0.0, 0.0) 
+>         return loadavg

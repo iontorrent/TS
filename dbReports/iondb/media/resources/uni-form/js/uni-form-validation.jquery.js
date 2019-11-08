@@ -481,8 +481,15 @@ jQuery.fn.uniform = function (extended_settings) {
          * @param jQuery field
          * @param string caption
          */
-        validateUniq : function(field, caption) {
-            isUniq = $.inArray(field.val(), uniq);
+        validateUniq : function(field, caption, uniq_values, original_value) {
+            if (typeof(uniq_values)==='undefined') uniq_values = uniq;
+            if (typeof(original_value) ==='undefined') original_value = field.data('value')
+            if (original_value) {  // remove self from set of unique values
+                uniq_values = jQuery.grep(uniq_values, function (value) {
+                    return value != field.data('value');
+                });
+            }
+            isUniq = $.inArray(field.val(), uniq_values);
 
             if(isUniq === -1) {
                 return true
@@ -582,7 +589,8 @@ jQuery.fn.uniform = function (extended_settings) {
                 .toggleClass(settings.error_class, !valid)
                 .toggleClass(settings.valid_class, valid)
                	.find(settings.msg_selector);
-
+            var name = $input.attr('name');
+            var hasExistingError = name in errors;
             // store this into the errors array, can be used by the custom callback
             if (! valid) {
                 errors[name] = text;
@@ -593,14 +601,17 @@ jQuery.fn.uniform = function (extended_settings) {
 
             // if the validation failed we'll stash the p help text into the info-data
             // and then put the error message in it's place.
-            if (! valid && ! $p.data('info-text')) {
-                $p.data('info-text', $p.html());
+            var pInfoText = $p.data('infoText');
+            if (! valid && ! pInfoText && ! hasExistingError) {
+                $p.data('infoText', $p.html());
             }
             else if (valid) {
-                text = $p.data('info-text');
+                text = pInfoText;
             }
-
-            if (text) {
+            if (typeof (text) === 'undefined') {
+                text = ""
+            }
+            if (text || text === "") {
                 $p.html(text);
             }
         };
@@ -909,6 +920,8 @@ jQuery.fn.uniform.isValid = function(form, settings) {
 };
 /**
  * Internationalized language strings for validation messages
+ *
+ * Be sure to update iondb/rundb/templates/rundb/common/uni-form-validation.jquery.js.html
  */
 jQuery.fn.uniform.language = {
 /*    required      : '%s is required',*/

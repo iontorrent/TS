@@ -30,7 +30,11 @@ class CleanupTest(TestCase):
             stores.append(store)
 
         for store in stores:
-            self.assertEquals(store.exists(store.session_key), True, 'Session store could not be created')
+            self.assertEquals(
+                store.exists(store.session_key),
+                True,
+                "Session store could not be created",
+            )
 
         unexpired_stores = stores[:10]
         expired_stores = stores[10:]
@@ -43,7 +47,15 @@ class CleanupTest(TestCase):
         cleanup()
 
         for store in unexpired_stores:
-            self.assertEquals(store.exists(store.session_key), True, 'Unexpired store was deleted by cleanup')
+            self.assertEquals(
+                store.exists(store.session_key),
+                True,
+                "Unexpired store was deleted by cleanup",
+            )
 
         for store in expired_stores:
-            self.assertEquals(store.exists(store.session_key), False, 'Expired store was not deleted by cleanup')
+            self.assertEquals(
+                store.exists(store.session_key),
+                False,
+                "Expired store was not deleted by cleanup",
+            )

@@ -7,11 +7,11 @@ enable_testing()
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/usr/local/lib/R/site-library" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_TORRENTR_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_TORRENTR_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_TORRENTR_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 configure_file (
@@ -63,8 +63,8 @@ add_custom_target(LIBTORRENTRCLEAN ALL
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_custom_target(LIBTORRENTR ALL
-           COMMAND "mkdir" "-p" "rlib"
-           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." MAKE="$(MAKE) -j$(nproc)" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
+	   COMMAND "mkdir" "-p" "rlib"
+	   COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." MAKE="$(MAKE) -j$(nproc)" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_dependencies(LIBTORRENTR LIBTORRENTRCLEAN)
@@ -74,67 +74,15 @@ install(DIRECTORY ${PROJECT_BINARY_DIR}/rlib/torrentR DESTINATION .
 )
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
-#% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
-    libhdf5-serial-dev,
-    libgcc1,
-    libgfortran3,
-    libstdc++6,
-    gfortran,
-    libcurl4-openssl-dev,
-    libxml2-dev,
-    r-base-core,
-    r-base-dev,
-    r-base-html,
-    r-doc-html,
-    r-bioc-annotationdbi,
-    r-bioc-biobase,
-    r-bioc-biocgenerics,
-    r-bioc-biostrings,
-    r-bioc-genomicranges,
-    r-bioc-iranges,
-    r-bioc-rsamtools,
-    r-bioc-shortread,
-    r-cran-boot,
-    r-cran-class,
-    r-cran-cluster,
-    r-cran-codetools,
-    r-cran-dbi,
-    r-cran-gdata,
-    r-cran-getopt,
-    r-cran-ggplot2,
-    r-cran-gtable,
-    r-cran-foreign,
-    r-cran-formula,
-    r-cran-hdf5,
-    r-cran-hwriter,
-    r-cran-kernsmooth,
-    r-cran-lattice,
-    r-cran-latticeextra,
-    r-cran-mass,
-    r-cran-matrix,
-    r-cran-mgcv,
-    r-cran-nlme,
-    r-cran-nnet,
-    r-cran-plyr,
-    r-cran-rcolorbrewer,
-    r-cran-rjson,
-    r-cran-rpart,
-    r-cran-scales,
-    r-cran-spatial,
-    r-cran-stringr,
-    r-cran-survival,
-    r-cran-reshape2,
-    r-cran-rcpp,
-    r-cran-rcurl,
-    r-cran-rsqlite")
-# these two packages have been removed because it causes a bug in aptitude
-# TS-14064 which makes the package always upgradable
-#    r-cran-xml,
-#    r-cran-xtable")
-
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "r-cran-gplots")
-set(CPACK_DEBIAN_PACKAGE_REPLACES  "r-cran-gplots")
+if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+    file(READ "bionic-deps.txt" contents)
+else()
+    file(READ "trusty-deps.txt" contents)
+    set(CPACK_DEBIAN_PACKAGE_CONFLICTS "r-cran-gplots")
+    set(CPACK_DEBIAN_PACKAGE_REPLACES  "r-cran-gplots")
+endif()
+string(REPLACE "\n" "" contents ${contents})
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "${contents}")
 
 set(CPACK_PACKAGE_DESCRIPTION "A package for the statistical program R which provides methods for working with, analyzing, and visualizing Ion Torrent data.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

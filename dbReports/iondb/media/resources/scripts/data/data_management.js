@@ -11,14 +11,14 @@ function filter(e){
 	  e.stopPropagation();
 
 	  var id = $(e.currentTarget).data('id');
-	  var daterange = $("#rangeA_"+id).val();
-
-    if (daterange) {
-        if (!/ - /.test(daterange)) {
-            daterange = daterange + ' - ' + daterange;
-        }
-        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
-    }
+	  /* calculate the date range for the '__range' operator */
+	  var daterange = '';
+	  var _daterange = $("#rangeA_"+id).data("daterange");
+	  if (_daterange) {
+		var start = _daterange.start.clone();
+		var end = _daterange.end.clone().addHours(23).addMinutes(59);
+		daterange = start.toString('yyyy-MM-dd HH:mm') + "," + end.toString('yyyy-MM-dd HH:mm');
+	  }
 
 	  $("#grid_"+id).data("kendoGrid").dataSource.filter([
 		  {
@@ -126,12 +126,14 @@ $(document).ready(function () {
 		showModal(this, 'modal_event_log');
 	});
 
-	$('[name=rangeA]').each(function(){ $(this).daterangepicker({dateFormat: 'yy-mm-dd'}); });
+	$('[name=rangeA]').each(function(){ $(this).daterangepicker($.DateRangePickerSettings.get()); });
 	$('.rangeA').change(function (e) { filter(e); });
 	$('.search_text').change(function (e) { filter(e); });
 	$('.filter_state').change(function (e) { filter(e); });
 	$('.clear_filters').click(function (e) {
 		var id = $(e.currentTarget).data('id');
+		$("#rangeA_"+id).removeData("daterange");
+		$("#rangeA_"+id).trigger('change');
 		$('#search_bar_'+id).find('input').each(function(){$(this).val(''); });
 		$('#search_bar_'+id+' .selectpicker').selectpicker('deselectAll');
 		filter(e);

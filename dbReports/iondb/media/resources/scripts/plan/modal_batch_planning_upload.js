@@ -1,6 +1,6 @@
 TB.namespace('TB.plan.batchupload');
 
-TB.plan.batchupload.ready = function(plannedUrl) {
+TB.plan.batchupload.ready = function(plannedUrl, key_barcoded_samples_validation_errors, key_sample_csv_file_name, key_iru_validation_errors) {
 
     $('#modal_batch_planning_upload').on('hidden', function() {
         $('body #modal_batch_planning_upload').remove();
@@ -9,7 +9,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
     var processing;
 
     $(function() {
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = gettext('uni-form-validation.language.required');
         $('#modalBatchPlanningUpload').uniform({
             holder_class : 'control-group',
             msg_selector : 'p.help-block.error',
@@ -18,6 +18,9 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         });
 
         processing = false;
+        $("#postedfile").on('change', function(e){
+            $("#postedfile").blur();
+        });
 
         $("#postedfile").click(function(e){
             $(".submitUpload").attr("disabled", false);
@@ -56,14 +59,30 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             return false;
         }
         $('#modal_batch_planning_upload .modal-body #modal-error-messages').addClass('hide').empty();
-        $("#loadingstatus").html("<div class='alert alert-info'><img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'> Uploading csv file for plans </div>");
+        $("#loadingstatus").html("<div class='alert alert-info'><img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'>" + gettext('upload_plans_for_template.loadingstatus') + "</div>");
         $("#submitUpload").attr("disabled", true);
     }
 
     function AjaxError() {
-        $("#loadingstatus").html("<div class='alert alert-error'>Failure uploading file!</div>");
+        var _html = kendo.template($('#UploadPlansForTemplateFailureTemplate').html())({});
+        $("#loadingstatus").html(_html);
         processing = false;
     }
+    function isJSON(data)
+    {
+        var isJson = false;
+
+        try
+        {
+            //This works with JSON string and JSON object, not sure about others.
+            var json = $.parseJSON(data);
+            isJson = (typeof(json) === 'object');
+        }
+        catch (ex) {console.error('data is not JSON');}
+
+        return isJson;
+    }
+
 
     //handleResponse will handle both successful upload and validation errors
     function handleResponse(responseText, statusText) {
@@ -76,10 +95,22 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         var inputPlanCount = responseText.inputPlanCount;
         var plansFailed = responseText.plansFailed;
 
+        function getFailedKeyI18N(key) {
+            var key18n = key; //default
+            var parsedKey = /:?(?<key>column|row)(?<number>\d+)/.exec(key.toLowerCase());
+            if (parsedKey) {
+                gettext('row')
+                gettext('column')
+                key18n = interpolate("%(key)s %(number)s", {key: gettext(parsedKey.groups.key.toLowerCase()), number: parsedKey.groups.number}, true)
+            }
+            return key18n;
+        }
+
         hasErrors = false;
         var error = "";
         var warning = "";
 
+        //DANGEROUS to check for existence of "error" within i18n.. likely BUG!
         if (msg.toLowerCase().indexOf("error") >= 0) {
             hasErrors = true;
             error += "<p>" + msg + "</p>";
@@ -90,20 +121,24 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         if (!responseText.status && !inputPlanCount) {
             hasErrors = true;
             for (var key in responseText.failed) {
-                error += "<strong>" + key + " contained error(s):</strong> ";
+                error += "<strong>" + interpolate(gettext('upload_plans_for_template.errors.rowOrColumn'), {key:key}, true) + "</strong>"; //'%(key)s contained error(s):'
                 for (var i = 0; i < responseText.failed[key].length; i++) {
                     error += "<li><strong>  " + responseText.failed[key][i] + "</strong></li>";
                 }
             }
         }
+        else if ('NON_ASCII_FILES' in responseText.failed) {
+            hasErrors = true;
+            error += "<p>" + responseText.failed['NON_ASCII_FILES'] + "<br>";
+        }
         else if (responseText.failed) {
             if (!hasErrors) {
                 error += "<p>" + msg + "<br>";
             }
-            error +=  plansFailed  + " / " + inputPlanCount + " plan(s) failed" + "<br>";
-            error += "Total no. of failures: " + total_errors + "</p>";
+            error += interpolate(gettext('upload_plans_for_template.errors.summary'), {plansFailed:plansFailed, inputPlanCount:inputPlanCount}, true) + "<br>"; //%(plansFailed)s of %(inputPlanCount)s plan(s) failed
+            error += interpolate(gettext('upload_plans_for_template.errors.totalerrors'), {total_errors:total_errors}, true) + "</p>"; //Total no. of failures: %(total_errors)s
             if ( plansFailed > 1) {
-                error +=  "Only one plan errors will be displayed. To see specific plan or all errors, click button below:";
+                error +=  gettext('upload_plans_for_template.errors.instructions'); //Only one plan's errors will be displayed. To see specific plan or all errors, click button below:
                 dropDown_menu = get_failed_plans_dropdown(responseText.failed);
                 error += dropDown_menu;
             }
@@ -112,6 +147,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             for (var key in responseText.failed) {
                 hasErrors = true;
                 plan_no = key.match(/\d+/) - 1;
+                var key18n = getFailedKeyI18N(key);
                 error += '<div id=' + key;
 
                 //Display first failed plan errors always
@@ -119,7 +155,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
                 skipFirstPlan = false;
 
                 error += "<ul class='unstyled'>";
-                error += "<li><strong>" + key + " (Plan " + plan_no + ") contained error(s):</strong> ";
+                error += "<li>" + interpolate(gettext('upload_plans_for_template.errors.rowOrColumn.title'), {rowOrColumnKey: key18n, plan_number:plan_no}, true); //<strong> %(rowOrColumnKey)s (Plan %(plan_number)s) contained error(s):</strong>
                 error += "<ul>";
                 plan_param = "Plan_" + plan_no
                 if (singleCSV){
@@ -131,21 +167,37 @@ TB.plan.batchupload.ready = function(plannedUrl) {
                     console.log(errorCount_total);
                     BC_IR_flag = false;
                     error += '<tr>';
-                    if (key.indexOf('Row') > -1){
-                        error += "<li><strong>  " + responseText.failed[key][i][0] + "</strong> column ";
-                        error += " : " + responseText.failed[key][i][1];
+
+
+
+                    if (key.indexOf('Row') > -1) {
+                        if (responseText.failed[key][i][0] == key_barcoded_samples_validation_errors) {
+                            if ( isJSON(responseText.failed[key][i][1]) ) {
+                                barcodeSamplesJson = typeof responseText.failed[key][i][1] === "string" ? $.parseJSON(responseText.failed[key][i][1]) : responseText.failed[key][i][1]
+                                for(var barcodeSamplesJson_key in barcodeSamplesJson) {
+                                    error += "<li>";
+                                    error += interpolate(gettext('upload_plans_for_template.errors.rowOrColumnError'), {columnName:barcodeSamplesJson_key, columnErrors: barcodeSamplesJson[barcodeSamplesJson_key]}, true); //<strong>%(columnName)s</strong> column  : %(columnErrors)s
+                                    error += "</li>";
+                                }
+                            } else { // show general errors related to barcodedSamples
+                                error += "<li><strong>  " + responseText.failed[key][i][1] + "</strong>";
+                            }
+                        } else {
+                        error += "<li>";
+                        error += interpolate(gettext('upload_plans_for_template.errors.rowOrColumnError'), {columnName:responseText.failed[key][i][0], columnErrors: responseText.failed[key][i][1]}, true);
                         error += "</li>";
+                        }
                     } else {
                         var errorLists = responseText.failed[key][i];
                         $.each(errorLists, function(index, value){
                             if ((singleCSV) && (!IRU_flag)){
                                 error += '<td class="single_csv">' + value + '</td>';
                             }
-                            if (value == "Sample CSV File Name: "){
+                            if (value == key_sample_csv_file_name){
                                 BC_IR_flag = true;
                                 error += "<li><strong>" + value + "</strong>" + errorLists[index+1] + "</li>";
                             }
-                            if ((!singleCSV) && ((value == "Barcoded samples validation errors:") || (value == "IRU validation errors:"))){
+                            if ((!singleCSV) && ((value == key_barcoded_samples_validation_errors) || (value == key_iru_validation_errors))){
                                 BC_IR_flag = true;
                                 IRU_flag = true;
                                 //error = get_iru_bc_error_table(index, value, errorLists, error);
@@ -175,7 +227,9 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         if (responseText.warnings) {
             for (var key in responseText.warnings) {
                 plan_no = key.match(/\d+/) - 1;
-                warning += "<div><strong>" + key + " (Plan " + plan_no + ") contained warning(s):</strong><ul>";
+                warning += "<div>"
+                warning += interpolate(gettext('upload_plans_for_template.warnings.rowOrColumn.title'), {rowOrColumnKey: key, plan_number:plan_no}, true); //"<strong> %(rowOrColumnKey)s (Plan %(plan_number)s) contained warning(s):</strong>"
+                warning += "<ul>"
                 for (var i = 0; i < responseText.warnings[key].length; i++) {
                     warning += '<li>'+ responseText.warnings[key][i] +'</li>';
                 }
@@ -191,8 +245,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             $('#modal_batch_planning_upload .modal-body #modal-success-messages').html(responseText.status).show();
             $('#modal_batch_planning_upload .modal-body #modal-error-messages').html(warning).show();
             $('#modal_batch_planning_upload #submitUpload').hide();
-            $('#modal_batch_planning_upload #dismissUpload').text("Close").addClass('warnings');
-
+            $('#modal_batch_planning_upload #dismissUpload').text(gettext("global.action.modal.close"));
         } else {
             $('#modal_batch_planning_upload').modal("hide");
             window.location = plannedUrl;
@@ -208,8 +261,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 // Construct the drop down menu to list the failed plans
 function get_failed_plans_dropdown(invalidPlans){
     dropDown_menu = '<div class="dropdown">' +
-                    '<button id="error_list" type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">' +
-                    '<span>Choose plan to view errors</span>' +
+                    '<button type="button" class="btn btn-danger dropdown-toggle" data-toggle="dropdown">' +
+                    '<span class="">' + gettext('upload_plans_for_template.errors.choose.dropdown') + '</span>' + //Choose plan to view errors
                     '<span class="caret"></span>' +
                     '</button>' +
                     '<ul class="dropdown-menu" role="menu">';
@@ -220,10 +273,10 @@ function get_failed_plans_dropdown(invalidPlans){
         if (plan_no) {
             all_failed_plans.push(col_row);
         }
-        dropDown_menu += '<li><a href="#" onclick="toggler(\'' + col_row + '\');">Plan ' + plan_no + '</a></li>';
+        dropDown_menu += '<li><a href="#" onclick="toggler(\'' + col_row + '\');">' + interpolate(gettext('upload_plans_for_template.errors.choose.dropdown.choice'), {plan_number:plan_no}, true) + '</a></li>'; //Plan %(plan_number)s
     }
 
-    show_all_item = '<li><a href="#" onclick="toggler(\'show_all\');">Show all errors</a></li>';
+    show_all_item = '<li><a href="#" onclick="toggler(\'show_all\');">' + gettext('upload_plans_for_template.errors.choose.all') + '</a></li>'; //Show all errors
     all_failed_plans = '<input name="all_failed_plans" type="hidden" value=' +(JSON.stringify(all_failed_plans)) + '>';
     dropDown_menu += '<li class="divider"></li>';
     dropDown_menu += show_all_item + '</ul></div>';
@@ -238,14 +291,14 @@ function get_iru_bc_error_table(index, value, errorLists, error, plan_param){
      table_id = "iru_validation_errors_" + plan_param;
      //handle any exception if data is not in json format
      try {
-        data = JSON.parse(errorLists[index+1]);
+        data = typeof errorLists[index+1] === "string" ? JSON.parse(errorLists[index+1]) : errorLists[index+1];
         BC_IR_err_count = $.map(data, function(n, i) { return i; }).length;
         error_table =  '<ul><table id=' + table_id + ' class="table table-striped table-condensed table-bordered">' +
                        '<thead>' +
                        '<tr><th colspan="2">' + value + BC_IR_err_count + '</th></tr>' +
                        '<tr>' +
-                       '<th class="bc_ir" data-field="id">Row #</th>' +
-                       '<th data-field="errormsg">Error Message</th>' +
+                       '<th class="bc_ir" data-field="id">' + gettext('upload_plans_for_template.errors.column.rowNumber.title') + '</th>' + // Row #
+                       '<th data-field="errormsg">' + gettext('upload_plans_for_template.errors.column.errormsg.title') + '</th>' + //Error Message
                        '</tr>' +
                        '</thead>' +
                        '<tbody>';
@@ -274,3 +327,58 @@ function toggler(divId) {
         $("#" + divId).show(1000);
     }
 }
+//
+// function toHtmlUnorderNestedLists(json) {
+//     var error = [];
+//     $.each(json, function(planRowOrColumnName, planRowOrColumnErrorObjectsList){
+//         plan_number = planRowOrColumnName.match(/\d+/) - 1;
+//         error.push("<ul class='unstyled'>");
+//         error.push("<li><strong>" + planRowOrColumnName + " (Plan " + plan_number + ") contained error(s):</strong> ");
+//
+//         if (planRowOrColumnName.indexOf('Row') > -1) {
+//             $.each(planRowOrColumnErrorObjectsList, function (index, planRowOrColumnErrorObject) {
+//                 if (planRowOrColumnErrorObject && _.size(planRowOrColumnErrorObject) > 0) {
+//                     error.push("<ul>");
+//                     // if ($.isPlainObject(planRowOrColumnError)) {
+//                     //     error.push("<li><strong>  " + index + "</strong> column : ");
+//                     // } else if ($.isArray(planRowOrColumnError)) {
+//                     //     error.push("<ul><li><strong>  " + planRowOrColumnErrorObject[index] + "</strong> column : ");
+//                     // }
+//                     $.each(planRowOrColumnErrorObject, function (keyOrIndex, planRowOrColumnError) {
+//                         error.push("<ul>");
+//                         if ($.isNumeric(keyOrIndex)) {
+//                             error.push("<ul><li><strong>  " + planRowOrColumnError + "</strong> column : ");
+//                         } else {
+//                             error.push("<li><strong>  " + keyOrIndex + "</strong> column : ");
+//                         }
+//
+//                         $.each(planRowOrColumnError, function (j, stringOrListOrObject) {
+//                             if (typeof(stringOrListOrObject) === 'string') {
+//                                 error.push(stringOrListOrObject);
+//                             } else if (typeof(stringOrListOrObject) === 'object') { // list or object
+//                                 if (stringOrListOrObject && _.size(stringOrListOrObject) > 0) {
+//                                     error.push("<ul>");
+//                                     $.each(stringOrListOrObject, function (jj, value) {
+//                                         error.push("<li><strong>" + jj + "</strong> : " + value + "</li>");
+//                                     });
+//                                     error.push("</ul>");
+//                                 }
+//                             } else {
+//                                 error.push(stringOrListOrObject);
+//                             }
+//
+//                         });
+//                         error.push("</li>");
+//                         error.push("</ul>");
+//
+//                     });
+//                     // error.push("</li>");
+//                     // error.push("</ul>");
+//                 }
+//             });
+//         }
+//         error.push("</li>");
+//         error.push("</ul>");
+//     });
+//     return error;
+// }

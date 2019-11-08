@@ -78,6 +78,8 @@ struct BaseCallerFiles
 
     string    lib_datasets_file;      //!< Datasets file containing all the barcodes that are used in the run
     string    calibration_panel_file; //!< Datasets file containing the barcodes that are used for calibration panel
+
+    string    inline_control_reference_file;
     Json::Value read_structure;
 
     bool      options_set;            //!< Flag whether options have been read to ensure order
@@ -113,6 +115,7 @@ struct BCcontextVars {
                                       //                         "adaptive-normalized" - Adaptive normalized and not dephased, and
                                       //                         "unclipped" - Normalized and phased but unclipped.
     string    wells_norm_method;      //!< Well file normalization method
+    bool      compress_multi_taps;    //!< Compress the signal from adjacent multi-tap flows
 
     // Treephaser options
     string    keynormalizer;          //!< Name of selected key normalization algorithm
@@ -125,6 +128,7 @@ struct BCcontextVars {
     bool      just_phase_estimation;  //!< BaseCaller will only do phase estimation and nothing else
     bool      calibrate_TFs;          //!< Switch to apply calibration to TFs
     bool      trim_zm;                //!< Trim the ZM tag when writing it to the bam file
+    bool      inline_control;         //!< Switch to trigger inline control statistics
 
     bool      options_set;            //!< Flag whether options have been read to ensure order
 };
@@ -158,6 +162,8 @@ struct BaseCallerContext {
     bool                      debug_normalization_bam;//!< Switch to output debug info to the bam file
     bool                      calibrate_TFs;          //!< Switch to apply calibration to TFs
     bool                      trim_zm;                //!< Trim the ZM tag when writing it to the bam file
+    bool                      compress_multi_taps;    //!< Compress the signal from adjacent multi-tap flows
+    bool                      inline_control;         //!< Switch to trigger inline control statistics
 
     // Important outside entities accessed by BaseCaller
     ion::ChipSubset           chip_subset;            //!< Chip coordinate & region handling for Basecaller

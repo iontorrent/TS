@@ -1,0 +1,795 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+  .parameter-subname {
+      color: #808080;
+      font-size: 12px;
+      margin-left: 30px;
+      margin-bottom: 12px;
+  }
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .center { margin-left:auto; margin-right:auto; }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+ <script>
+ 
+ function load_tvc_parameters(){
+	var table_entry = '';
+	var compatible_lib = '';
+	var parameter_sets_json_path = window.location.protocol + "//" + window.location.host + "/plugins/variantCaller/pluginMedia/parameter_sets/parameter_sets.json";
+	// Reset parameters
+	$("#parameter_sets_table").empty();
+	tvc_parameter_sets = [];
+	
+	if (planLibType.includes("AMPS_HD")){
+		compatible_lib = "ampliseq_hd"
+	}else if (planLibType == "TAG_SEQUENCING"){
+		compatible_lib = "tag_sequencing";
+	}else{
+		return;
+	}
+	
+	$.get(parameter_sets_json_path, function (data) {
+        $.each(data, function (index, param){
+    	    if (param['meta']['compatibility']['library'].indexOf(compatible_lib) >= 0 ){
+    	    	tvc_parameter_sets.push(param);
+    	    	var my_id = "param_" + (tvc_parameter_sets.length - 1);
+      		    table_entry += '<div style="height:22px"><input type="radio" name="param_table" id="'+ my_id + '">  &nbsp <span class="help" title="'+ param['meta']['tooltip']+'">'+ param['meta']['name']+ '</span></div>';
+      		    table_entry += '<div class="parameter-subname">' +  param['meta']['configuration'] + ', TS version: '+ param['meta']['ts_version'] + '</div>';    
+            }
+        });
+        
+    	if (tvc_parameter_sets.length == 0){
+        	console.error("No valid TVC parameter set is available.");
+    	}
+        // External parameter file
+        table_entry += '<div style="height:22px"> <input type="radio" name="param_table" id="param_external" value="Custom" /> &nbsp <span class="help" title="Use custom setting from an external parameter file."> Custom </span> &nbsp <button id="load_external" type="button" onclick="$(\'#files\').click()" > Load external file</button> </div>';
+        table_entry += '<div class="parameter-subname" id="ext_file_name"> No parameter file being uploaded </div>';      
+    	$("#parameter_sets_table").append(table_entry);
+    	// Select the first one for now
+		selected_param_id =  "param_0";
+    	$("#" + selected_param_id).prop("checked", true); 	
+    }).fail(function () {
+    	console.error("Unable to load TVC parameters from " + parameter_sets_json_path);
+    });
+    select_default_param();
+}
+
+function click_on_parameter_sets_table() {
+	var my_selected_id = $("#parameter_sets_table input[type='radio']:checked").attr("id");
+	// No external file was previously uploaded. Automatically trigger the file upload dialog.
+	if (my_selected_id == 'param_external' && $.isEmptyObject(external_param)){
+		// Check the previously selected parameter for now.
+		// Handle the click on external parameter file by $("#files").change later.
+		$("#" + selected_param_id).prop("checked", true);
+		// Trigger file upload.
+		$('#files').click();
+		return;
+	}
+	selected_param_id = my_selected_id;
+}
+
+
+//restore the data from the previous returned data from serializeForm
+function restoreForm(data) {
+	previous_tvc_config = data.tvc_config || {}
+	if ($.isEmptyObject(previous_tvc_config) || !('meta' in previous_tvc_config)){
+		// Nothing to restore
+		return;
+	}
+	
+	// Restore the external param that was previously uploaded
+	external_param = data.external_param || {};
+	if ($.isEmptyObject(external_param)){
+	    $("#ext_file_name").html('No parameter file being uploaded');
+	}else{
+	    $("#ext_file_name").html(external_param.meta.filename || 'Unknown file name');
+	}
+
+	var is_custom = previous_tvc_config.meta.custom || false;
+	if (is_custom){
+		selected_param_id = 'param_external';
+	}else{
+		var my_configuration = previous_tvc_config.meta.configuration || 'unknown'
+		var param_found = false;
+		for (var idx = 0; idx < tvc_parameter_sets.length; idx++){
+			if (my_configuration == tvc_parameter_sets[idx]['meta']['configuration']){
+				param_found = true;
+				selected_param_id = 'param_' + idx;
+				//XXX No need to do the following in instance.html
+				/*
+				if ( tvc_parameter_sets[idx]['meta']['ts_version'] != previous_tvc_config.meta.ts_version){
+					alert('The version (' + previous_tvc_config.meta.ts_version + ') of the configuration that was previously selected is different from the current version (' + tvc_parameter_sets[idx]['meta']['ts_version'] +') in the system. Use the system default.');
+				}
+				*/
+				break;
+			}
+		}
+		if (!param_found){
+			return;
+			//XXX No need to do the following in instance.html
+			/*
+			// In case that the previously selected configuration is deprecated, I restore the deprecated configuration to custom.
+			alert('WARNING: The configuration "' + my_configuration +'" that was previously selected is not found in the system! Restore the configuration to custom.')
+			external_param = previous_tvc_config;
+			external_param['meta']['custom'] = true;
+			external_param['meta']['filename'] = my_configuration;
+			selected_param_id = 'param_external';
+			$("#ext_file_name").html(external_param['meta']['filename']);
+			*/
+		}
+	}
+	$("#" + selected_param_id).prop("checked", true);
+}
+
+function select_default_param(){
+	var default_config = '';
+	var user_input = {};
+	if (eas != ''){
+		try {
+		    $.getJSON(eas + "/?format=json", function(data) {
+		    	user_input = data['selectedPlugins'][TB_plugin.fields.name]['userInput'];
+		    	default_config = user_input['meta']['configuration'];
+		    });
+		}catch(e){}
+	}
+	if (default_config != ''){
+		// TS default configuraiton
+        $.each(tvc_parameter_sets, function (index, param){
+        	if (param['meta']['configuration'] == default_config){
+        		selected_param_id =  "param_" + index;
+            	$("#" + selected_param_id).prop("checked", true); 	
+        	}
+        });
+	}else{
+		// Retrive the configuration from the plan.
+		try {
+			restoreForm(user_input);
+		}catch(e){}
+	}
+}
+
+// get the parameter set being selected by the radio button.
+function get_selected_param(){
+	if (selected_param_id == 'param_external'){
+		return external_param;
+	}
+	var param_idx = parseInt(selected_param_id.substr("param_".length));
+	return tvc_parameter_sets[param_idx];
+}
+ 
+var selected_param_id = ''; // The id of the parameter set being selected by the radio button.
+var planLibType = ''; // Library type of the run 
+var plan_page = false; // Is it a plan page?
+var tvc_parameter_sets = []; // Tvc parameter sets for the library (either tag_sequencing or ampliseq_hd)
+var external_param = {}; // External parameter file
+var eas = ''; // Experiment Analysis Setting of the run
+
+function get_plan_lib_type() {
+    $.ajaxSetup({async: false});
+    $.ajaxSetup({cache: false});
+	try {
+	    $.getJSON("/rundb/api/v1/results/" + TB_result + "/?format=json", function(data) {
+	    	try{
+	    		eas = data['eas'];
+	    	}catch (e){}
+	        $.each(data, function (index, result) {
+				if (index == "experiment") {
+				    $.getJSON(result + "/?format=json", function(experiment_data) {
+				        $.each(experiment_data, function (experiment_index, experiment_result) {
+							if (experiment_index == "plan") {
+							    $.getJSON(experiment_result + "/?format=json", function(plan_data) {
+							        $.each(plan_data, function (plan_index, plan_result) {
+										if (plan_index == "runType") {
+											planLibType = plan_result;
+										}
+									});
+							    });
+							}
+						});
+				    });
+				}
+			});
+	    });
+		plan_page = false;
+    }
+	catch(e) {
+		plan_page = true;
+		planLibType = "AMPS";
+		try {planLibType = TB_plan_json.runType;} catch(e) {planLibType = "AMPS";}
+	}
+}
+ 
+  $(function() {
+
+    $.fn.serializeObject = function() {
+     var o = {};
+     var a = this.serializeArray();
+     $.each( a, function() {
+       if( o[this.name] != null ) {
+         if( !o[this.name].push ) {
+           o[this.name] = [o[this.name]];
+         }
+         o[this.name].push(this.value || '');
+       } else {
+         o[this.name] = this.value || '';
+       }
+      });
+      return o;
+    };
+    $('#show_advanced').click(function() {
+      var state = $(this).text();
+      if( state == "Show advanced options" ) {
+        state = "Hide advanced options";
+        $('.advanced').show();
+        // set show/hide based on application selected
+        setOptionDefaults($("#librarytype").val(),true);
+      } else {
+        state = "Show advanced options";
+        $('.advanced').hide();
+      }
+      $(this).text(state);
+      return false; // cancels redirection
+    });
+
+    var refBedType = '/unmerged/detail/';
+
+    function targetNameFromURL(bedURL) {
+      var i = bedURL.lastIndexOf(refBedType);
+      if( i >= 0 ) {
+        bedURL = bedURL.substr(i+refBedType.length);
+      } else {
+        i = bedURL.lastIndexOf('/');
+        if( i >= 0 ) bedURL = bedURL.substr(i+1);
+      }
+      if( bedURL.substr(0,7) == 'example' ) return "";
+      i = bedURL.lastIndexOf('.bed');
+      if( i > 0 ) return bedURL.substr(0,i);
+      return bedURL;
+    }
+
+    // For each selector populated by this function a list of items and selected reference is recorded
+    // for performance by avoiding multiple API queries to poplate and sort these lists.
+    var selectRefs = {};
+    var selectLst = {};
+    var planBcAssign = {};
+    var referenceID = "Unknown";
+
+    // Returns true if the list was created or changed. Returns false if no change was necessary.
+    function populateTargetsList(refID,selectorID,firstItem) {
+      if( selectorID == '' || selectRefs[selectorID] == refID ) return false;
+      selectRefs[selectorID] = refID;
+      $('#'+selectorID).empty();
+      var lstID = selectorID+"@"+refID;
+      if( !selectLst[lstID] ) {
+        var refBedURL = '/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/'+refID+refBedType;
+        $.get( refBedURL, function(data) {
+          $.each( data.objects, function(intIndex,result) {
+            var targfile = result.file;
+            var selName = targetNameFromURL(targfile);
+            if( selName != "" && !result.meta.hotspot ) {
+              $('#'+selectorID).append("<option value='"+targfile+"'>"+selName+"</option>");
+            }
+          });
+        });
+        orderSelectorList(selectorID,firstItem);
+        // ensure reference with no targets get 'none' selection
+        if( $('#'+selectorID+' option').size() == 0 ) {
+          $('#'+selectorID).append("<option value=''>None</option>");
+        }
+        selectLst[lstID] = $('#'+selectorID+' option');
+      } else {
+        $('#'+selectorID).append(selectLst[lstID]);
+        if( $('#'+selectorID+' option').size() > 0 )
+          $('#'+selectorID+' option')[0].selected = true;
+      }
+      return true;
+    }
+
+    function orderSelectorList(selectorID,firstItem) {
+      var lst = $('#'+selectorID+' option');
+      lst.sort(function(a,b) {
+        if( a.text > b.text ) return 1;
+        if( a.text < b.text ) return -1;
+        return 0;
+      });
+      $('#'+selectorID).empty();
+      if( firstItem ) {
+        $('#'+selectorID).append("<option value=''>"+firstItem+"</option>");
+      }
+      $('#'+selectorID).append(lst);
+      if( $('#'+selectorID+' option').size() > 0 )
+        $('#'+selectorID+' option')[0].selected = true;
+    }
+
+    function setOptionDefaults(runType,forceUpdate) {
+      forceUpdate = forceUpdate || false;
+      $("#librarytype").val(runType);
+      var showchecks = 'NYYYY';
+      if( runType.substr(0,4) == "AMPS" || runType == "MIXED") {
+        showchecks = 'YNYNY';
+      } else if( runType == "TAG_SEQUENCING" ) {
+        showchecks = 'YNYNY';
+      } else if( runType == "TARS_16S" || runType == "RNA" ) {
+        showchecks = 'NNYNN';
+      }
+    }
+
+    // Check (user) NPVs are correctly formated and available and
+    // return a compressed list of mappings or error message "Error at line ..."
+    function checkBarcodeTargets(txtList) {
+      var txt = "";
+      var curBarcode = $("#barcodeids").val();
+      var curReference = selectRefs['barcodetargets'];
+      var curTarget = $("#barcodetargets").val();
+      var lines = txtList.split("\n");
+      $.each(lines, function(n,row) {
+        var fields = $.trim(row).split(/\s+/);
+        if( fields.length == 1 && fields[0] == "" ) {
+          return true;  // blank lines ok
+        } else if( fields.length != 2 || fields[1] == "" ) {
+          txt = "Error at line "+(n+1)+": Invalid number of fields. Must be '<barcode> <targets>'.";
+          return false;
+        }
+        var barcodename = fields[0];
+        var trgname = fields[1];
+        if( $('#barcodeids option[value='+barcodename+']').length == 0 ) {
+          txt = "Error at line "+(n+1)+": Barcode ID "+barcodename+" is unavailable to this run analysis.";
+          return false;
+        }
+        // allow explicit 'None' just to support plan for erroneously assigned references w/o targets
+        var trgbed = 'None';
+        if( trgname == 'None' ) {
+          trgbed = '';
+        } else {
+          var refID = barcodename in planBcAssign ? planBcAssign[barcodename].ref : referenceID;
+          populateTargetsList(refID,'barcodetargets')
+          var inList = false;
+          $('#barcodetargets option').each(function() {
+            if( this.text == trgname ) {
+              inList = true;
+              trgbed = this.value;
+              return false;
+            }
+          });
+          if( !inList ) {
+            txt = "Error at line "+(n+1)+": Target Regions "+trgname+" is unavailable to reference "+refID+".";
+            return false;
+          }
+        }
+        // collect the actual file path to the bed file
+        txt += barcodename+'='+trgbed+';';
+      });
+      // restore selectors to entry state
+      $("#barcodeids").val(curBarcode);
+      populateTargetsList(curReference,'barcodetargets')
+      $("#barcodetargets").val(curTarget);
+      return txt;
+    }
+
+    //$("#librarytype").change(function() {
+    //  var libType = $("#librarytype option:selected").val();
+    //  setOptionDefaults(libType);
+    //});
+
+    $('#barcodebeds').change(function() {
+      if( $(this).attr("checked") ) {
+        $('.bcbed-shy').show();
+      } else {
+        $('.bcbed-shy').hide();
+      }
+    });
+
+    $('#barcodeids').change(function() {
+      updateTargetAfterBarcodeChange(this.value);
+    });
+
+    function updateTargetAfterBarcodeChange(barcode) {
+      if( barcode in planBcAssign ) {
+        bcdat = planBcAssign[barcode];
+        // update default selecion only if list updated => reference changed
+        if( populateTargetsList(bcdat.ref,'barcodetargets') ) {
+          // set to default target if no specifc value given
+          $("#barcodetargets").val( bcdat.trg ? bcdat.trg : $("#targetregions").val() );
+        }
+      }
+    }
+
+    $('#addbcbutton').click(function() {
+      var bcID = $('#barcodeids option:selected').val();
+      var trgID = $('#barcodetargets option:selected').text();
+      var box = $("#bctextarea");
+      // clean current input by removing duplicates and blank lines
+      var lines = box.val().split("\n");
+      var txt = "";
+      $.each(lines, function(n,row) {
+        var fields = $.trim(row).split(/\s+/);
+        if( fields.length >= 2 && fields[0] != "" && fields[0] != bcID ) {
+          txt += fields[0]+'\t'+fields[1]+'\n';
+        }
+      });
+      box.val(txt+bcID+'\t'+trgID+'\n');
+      var bcIndex = $('#barcodeids :selected').index()+1;
+      var numOptions = $('#barcodeids option').size();
+      if( bcIndex >= numOptions ) bcIndex = 0;
+      $('#barcodeids option')[bcIndex].selected = true;
+      updateTargetAfterBarcodeChange( $('#barcodeids option:selected').val() );
+    });
+
+    // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
+    $('#barcodebeds').attr('checked',false);
+    $('.bcbed-shy').hide();
+    
+    var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
+    var easUrl;
+    var analysisUrl;
+    $.ajaxSetup({async: false});
+    $.get( reportUrl, function(data) {
+      analysisUrl = data.reportLink;
+      easUrl = data.eas;
+      experimentUrl = data.experiment;
+      referenceID = data.reference;
+      // set up any config.html plan settings
+      $.each( data.config, function(key,val) {
+        try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+        catch(e) {}
+      });
+    });
+
+    var runTypes = {};
+    $.ajaxSetup( {async:false} );
+    $.get( '/rundb/api/v1/runtype/?format=json', function(data) {
+      $.each( data.objects, function(intIndex,result) {
+        runType = result.runType;
+        var selName = result.description.trim();
+        // debar unsuported applications here, e.g. runType != "GENS"
+        if( selName != "" ) {
+          runTypes[runType] = selName;
+        }
+      });
+    });
+
+    // attempt to get Plan details for default selection values - should be in EAS!
+	get_plan_lib_type();	
+/*
+    var planLibType = "";
+    if( experimentUrl != undefined && experimentUrl != null && experimentUrl != "" ) {
+      var planUrl;
+      $.get( experimentUrl+"?format=json", function(data) { planUrl = data.plan; } );
+      if( planUrl != undefined && planUrl != null && planUrl != "" ) {
+        $.get( planUrl+"?format=json", function(data) { planLibType = data.runType; });
+      }
+    }
+*/
+    if(planLibType.includes("AMPS_HD") || planLibType =='TAG_SEQUENCING'){
+           $('.center').show();
+	   $('.warnning').hide();
+    }
+    else{
+	   $('.center').hide();
+           $('.warnning').show();
+    }
+    $('#referenceid').html(referenceID);
+    $('#librarytxt').html(runTypes[planLibType]);
+    // get majority of current report settings from EAS
+    var def_nuc = (planLibType == 'AMPS_RNA' || planLibType == 'RNA') ? 'RNA' : 'DNA'; 
+    var def_trg = 'None';//(planLibType == 'AMPS_DNA_RNA') ? 'None' : ''; 
+    var planBedFile = "";
+    var barcodedTargets = 0;
+    var def_barcode = null;
+    if( easUrl != undefined && easUrl != null && easUrl != "" ) {
+      $.get( easUrl+"?format=json", function(data) {
+        planBedFile = data.targetRegionBedFile;
+        $.each( data.barcodedSamples, function(samplename,sampledata) {
+          $.each( sampledata.barcodeSampleInfo, function(barcodename,barcodedata) {
+            var nuc = barcodedata.nucleotideType ? barcodedata.nucleotideType : def_nuc;
+            var ref = barcodedata.reference ? barcodedata.reference : referenceID;
+            var trg = '';
+            if( barcodedata.targetRegionBedFile !== undefined ) {
+               trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : def_trg;
+            }
+            // do not include barcodes for 'None' reference, since should be excluded from analysis
+            if( ref != "None" ) {
+              planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
+              if( ++barcodedTargets == 1 ) def_barcode = barcodename;
+            }
+          });
+        });
+        // set up plan.html plan settings
+        try {
+          $.each( data.selectedPlugins.coverageAnalysis_dev.userInput, function(key,val) {
+            if( key != 'launch_mode' ) {
+              try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+              catch(e) {}
+            }
+          });
+        }
+        catch(e) {}
+      });
+    }
+    // fill in for un-named samples
+    var numBarcodes = 0;
+    var barcodeUrl = analysisUrl + 'barcodeList.txt';
+    $.get( barcodeUrl, function(mem) {
+      var lines = mem.split("\n");
+      $.each(lines, function(n,row) {
+        var fields = $.trim(row).split(',');
+        if( fields[0].substr(0,7) == "barcode" ) {
+          ++numBarcodes;
+          if( barcodedTargets > 0 ) {
+            if( !(fields[1] in planBcAssign) ) {
+              planBcAssign[fields[1]] = { 'nuc':def_nuc, 'ref':referenceID, 'trg':'' };
+            }
+          } else {
+            $('#barcodeids').append("<option value='" + fields[1] + "'>" +  fields[1] + "</option>");
+          }
+        }
+      });
+    }).error(function() {
+      $('#multibed').hide();
+    });
+
+    populateTargetsList(referenceID,'targetregions','None');
+
+    var deadTarget = 0;
+    if( barcodedTargets > 0 ) {
+      // create barcode ids from planBcAssign[]
+      $.each( planBcAssign, function(barcodename,barcodedata) {
+        $('#barcodeids').append("<option value='"+barcodename+"'>"+barcodename+": ("+barcodedata.nuc+") "+ barcodedata.ref+"</option>");
+      });
+      orderSelectorList('barcodeids');
+      var boxtxt = "";
+      var bcdat = def_barcode ? planBcAssign[def_barcode] : null;
+      $('#barcodeids option').each(function(i) {
+        var bc = $(this).val();
+        var trg = planBcAssign[bc].trg;
+        if( trg != '' && trg != planBedFile ) {
+          if( planBedFile != '' || trg != 'None' ) {
+            boxtxt += bc+'\t'+targetNameFromURL(trg)+'\n';
+          }
+        }
+        if( bcdat === null ) bcdat = planBcAssign[bc];
+      });
+      // For 4.4 always allow a 'None' selection for barcode-specific targets
+      populateTargetsList(bcdat.ref,'barcodetargets','None');
+      // set the default for barcoded targets to the first specified
+      if( def_barcode ) $("#barcodeids").val(def_barcode);
+      if( $("#barcodetargets option[value='"+bcdat.trg+"']").length == 0 ) ++deadTarget;
+      $("#barcodetargets").val(bcdat.trg);
+      $("#bctextarea").val(boxtxt);
+      $('.custom_fusions').show();
+      if( boxtxt != '' ) {
+        $('#barcodebeds').attr("checked",true);
+        $('.bcbed-shy').show();
+      }
+    } else {
+      // populate targets for reference w/o the 'None' option
+      populateTargetsList(referenceID,'barcodetargets');
+      if( numBarcodes < 2 ) {
+        $('#multibed').hide();
+      } else {
+        orderSelectorList('barcodeids');
+      }
+    }
+    // smarter default sizing of text box
+    var nbc = barcodedTargets > 0 ? barcodedTargets : numBarcodes;
+    if( nbc > 0 && nbc <= 20 ) {
+      $('#bctextarea').attr("rows",(nbc < 4 ? 4 : nbc+1));
+    }
+
+    // populate Library Type selector
+    //populateLibType("librarytype");
+
+    // populate Plan default selections
+    var pluginLibType = planLibType != "" ? planLibType : (planBedFile == "" ? "WGNM" : "AMPS");
+    if( planBedFile !== "" ) {
+      if( $("#barcodetargets option[value='"+planBedFile+"']").length == 0 ) ++deadTarget;
+      $("#targetregions").val(planBedFile);
+    }
+    setOptionDefaults(pluginLibType);
+
+    // Hide waiting and display Submit
+    $("#still_loading").hide();
+    $("#postbutton").show();
+
+    if( deadTarget ) alert("Warning: The original target regions specified by the Plan no longer exists or was replaced with a newer version.");
+
+    load_tvc_parameters();
+    $("#parameter_sets_table").click(function() {
+    	click_on_parameter_sets_table();
+  	});
+    $("#files").change(function (evt) {
+        var JsonObj = null;
+        var files = evt.target.files; // FileList object
+        //f = files[0];
+        var theFile = files[0];
+        var reader = new FileReader();
+		var error_msg = '';
+        reader.onload = function (e) {
+          console.log(theFile);
+          try {
+            JsonObj = e.target.result;
+            var new_config = JSON.parse(JsonObj);
+            // First check keys
+            var required_keys = ['torrent_variant_caller', 'freebayes'];            
+            for (var key_idx = 0; key_idx < required_keys.length; key_idx++){
+              	if (!(required_keys[key_idx] in new_config)){
+              		error_msg = "Invalid TVC parameter file " + theFile.name + ": The key \"" + required_keys[key_idx] + " \" is not found!"
+                    break;
+            	}            	
+            }
+            
+            // Second check compatible library
+            if (error_msg == ''){
+    			var compatible_lib = new_config.meta.compatibility.library || [];
+    			if (! $.isEmptyObject(compatible_lib)){
+    				if (compatible_lib.indexOf('ampliseq_hd') < 0 && compatible_lib.indexOf('tag_sequencing') < 0){
+    					error_msg = "Invalid TVC parameter file " + theFile.name + ': Neither "tag_sequencing" nor "ampliseq_hd" is listed in meta.compatibility.library.';
+    				}
+    			}
+            }
+          }
+          catch (e) {
+        	  error_msg = "Failed to load the external file \"" + theFile.name + "\"!";
+          }        
+          if (error_msg == ''){
+              external_param = new_config;
+              external_param['meta']['custom'] = true;
+              external_param['meta']['filename'] = theFile.name;
+              $("#ext_file_name").html(theFile.name);
+              // Success: the radio button can safely be "param_external"
+              $("#param_external").prop("checked", true);
+              selected_param_id = $("#parameter_sets_table input[type='radio']:checked").attr("id");
+              alert('The parameter file "' + theFile.name + '" is uploaded successfully!');        	
+          }
+          else{
+            alert(error_msg);        		
+            $("#" + selected_param_id).prop("checked", true);
+           
+          }
+            // I always reset #file-form. Otherwise the user can't upload the same file from local twice though the file is changed.
+          $("#file-form").trigger('reset');
+          $("#files").attr("value", "");
+        };
+        // Read in JSON as a data URL.
+        reader.readAsText(theFile, 'UTF-8');
+    });
+
+    $('#postbutton').click(function() {
+      //var libType = $('#librarytype option:selected').val();
+      //var libName = $('#librarytype option:selected').text();
+      var tarn = $('#targetregions')[0].selectedIndex;
+      var useBcTargets = $('#barcodebeds').attr("checked");
+      var bcTargetList = "";
+      if( useBcTargets ) {
+        bcTargetList = checkBarcodeTargets( $("#bctextarea").val() );
+        if( bcTargetList == "" ) {
+          var msg = "Barcode-specific Targets was specified but no mappings were defined."
+          msg += "\n\nDo you wish to continue?";
+          if( !confirm(msg) ) return false;
+        } else if( bcTargetList.substr(0,5) == "Error" ) {
+          alert("Barcode target mapping is invalid.\n"+bcTargetList);
+          return false;
+        }
+      }else if (tarn == 0 && $('#targetregions option:selected').text() == 'None'){
+    	  alert("Targeted Regions can not be None.")
+    	  return false;
+      }
+      $('#librarytype').val(planLibType);
+      $('#librarytype_id').val(runTypes[planLibType]);
+      $('#targetregions_id').val( $('#targetregions option:selected').text() );
+      $('#barcodetargetregions').val(bcTargetList);
+      obj = $('#molecularCoverageAnalysis').serializeObject();
+      obj["tvc_config"] = get_selected_param();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+        type: 'POST',
+        url: pluginURL,
+        async: false,
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check molecularCoverageAnalysis.html in the Plugin Summary</p></div>');
+          setTimeout("parent.$.fn.colorbox.close()",2000);
+        },
+        data: pluginAPIJSON,
+        dataType: "json"
+      });
+    });
+  });
+ </script>
+
+</head>
+
+<body>
+ <form id="molecularCoverageAnalysis" name="molecularCoverageAnalysis">
+  <div style="text-align:center">
+   <h1>Molecular Coverage Analysis Plugin</h1>
+  </div>
+   <div class="warnning" align="text-align:center">
+       <h3> The plugin works with AmpliSeq HD or Tag Sequencing library ONLY. </h3>
+   </div>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td><span class="help" title="The short name of the reference genome (or DNA sequences) that the current report was generated against and to be used for molecular coverage analysis.">Reference Genome:</span></td>
+     <td><div id="referenceid"></div></td> </tr>
+    <tr>
+      <td><span class="help" title="The library (enrichment) type sequenced.">Library Type:</span></td>
+     <td><div id="librarytxt" name="librarytxt"> </div> </td></tr>
+    <tr id="targetselect">
+     <td><span class="help"
+       title="Select the target regions matching your reference and enriched fragment library.">
+       Targeted Regions:</span></td>
+     <td><select id="targetregions" name="targetregions" value="Default"></select></td> </tr>
+    <tr id="multibed">
+     <td style="vertical-align: text-top"><span class="help"
+       title="Assign target regions based on assigned barcodes.">
+       Barcode-specific Targets:</span></td>
+     <td><input type="checkbox" id="barcodebeds" name="barcodebeds" value="Yes" style="float:left"/>
+       <div class="bcbed-shy" style="margin-left:25px;display:none">
+         Use the text box below to assign specific target regions to individual barcodes.</div>
+       <div style="font-size:3px;display:none">&nbsp;</div>
+       <div class="bcbed-shy" style="display:none">
+         <input id="addbcbutton" type="button" title="Add the currently selected target regions for the currently selected barcode to the list of barcode-specific targets." value="Add" style="font-size:13px">
+         <select id="barcodeids" style="font-size:13px"></select>
+         <span class="custom_fusions" style="display:none"><br/></span>
+         <select id="barcodetargets" style="font-size:13px"></select>
+       </div>
+       <div class="bcbed-shy" style="display:none">
+         <textarea id="bctextarea" rows=20 cols="61" style="font-size:13px;border:5px double #C0C0C0"></textarea>
+       </div>
+       <div class="bcbed-shy" style="font-style:italic;max-width:540px;display:none">
+         Un-assigned barcodes will use the Targeted Regions selected when the Submit button is clicked.
+         (Set to 'None' to ignore un-assigned barcodes.)</div>
+     </td> </tr>
+    <tr id="sampid" style="display:none">
+     <td><span class="help"
+       title="Check if this AmpliSeq library employed sampleID tracking amplicons.">
+       Sample Tracking:</span></td>
+     <td><input type="checkbox" id="sampleid" name="sampleid" value="Yes"/></td> </tr>
+     <tr>
+       <td valign="top">
+         <span class="help" title="Select a TVC parameter file. The file will be used for determining functinoality of molecules, read filtering and LOD calculation."> Parameter File:</span>
+       </td>
+       <td valign="middle"> 
+         <div class="span9" id="parameter_sets_table"> </div>
+       </td>
+     </tr>
+     <input form="file-form" style="display:none" type="file" id="files" name="files[]"/>
+   </table>
+   <br/>
+   <div class="center" align="center" id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="librarytype" name="librarytype"/>
+   <input type="hidden" id="librarytype_id" name="librarytype_id"/>
+   <input type="hidden" id="targetregions_id" name="targetregions_id"/>
+   <input type="hidden" id="barcodetargetregions" name="barcodetargetregions" value=""/>
+   <input type="hidden" id="launch_mode" name="launch_mode" value="Manual"/>
+   <br/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+This plugin generates statistics, downloadable data files and interactive visualization of molecular coverage over
+targeted regions of the reference genome.</p>
+   
+   </div>
+ </form>
+</body>
+</html>
+

@@ -143,12 +143,13 @@ set (tmap_SOURCES
 			   src/index/tmap_index_speed.h src/index/tmap_index_speed.c 
 			   src/index/tmap_bwt_check.c src/index/tmap_bwt_check.h 
 			   src/index/tmap_bwt_compare.c src/index/tmap_bwt_compare.h 
-			   src/map/util/tmap_map_opt.h src/map/util/tmap_map_opt.c 
-			   src/map/util/tmap_map_stats.h src/map/util/tmap_map_stats.c 
-			   src/map/util/tmap_map_util.h src/map/util/tmap_map_util.c 
-			   src/map/pairing/tmap_map_pairing.h src/map/pairing/tmap_map_pairing.c 
-			   src/map/map1/tmap_map1.h src/map/map1/tmap_map1.c 
-			   src/map/map1/tmap_map1_aux.h src/map/map1/tmap_map1_aux.c 
+                           src/map/util/tmap_map_opt.h src/map/util/tmap_map_opt.c 
+                           src/map/util/tmap_map_stats.h src/map/util/tmap_map_stats.c 
+                           src/map/util/tmap_map_util.h src/map/util/tmap_map_util.c
+                           src/map/util/tmap_map_locopt.h src/map/util/tmap_map_locopt.c 
+                           src/map/pairing/tmap_map_pairing.h src/map/pairing/tmap_map_pairing.c 
+                           src/map/map1/tmap_map1.h src/map/map1/tmap_map1.c 
+                           src/map/map1/tmap_map1_aux.h src/map/map1/tmap_map1_aux.c 
 			   src/map/map2/tmap_map2.h src/map/map2/tmap_map2.c 
 			   src/map/map2/tmap_map2_aux.h src/map/map2/tmap_map2_aux.c 
 			   src/map/map2/tmap_map2_chain.h src/map/map2/tmap_map2_chain.c 
@@ -163,14 +164,15 @@ set (tmap_SOURCES
 			   src/map/tmap_map_driver.h src/map/tmap_map_driver.c 
 			   src/tmap_main.h src/tmap_main.c )
 
-include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
-include_directories( ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9 )
-include_directories( ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9/samtools )
+		   include_directories( BEFORE ${CMAKE_CURRENT_BINARY_DIR} )
+		   include_directories( BEFORE ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9 )
+		   include_directories( BEFORE ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9/samtools )
 
 configure_file (
         "${PROJECT_SOURCE_DIR}/config.h.in"
         "${PROJECT_BINARY_DIR}/config.h" @ONLY
 )
+
 
 add_executable(tmap ${tmap_SOURCES})
 set_target_properties(tmap PROPERTIES COMPILE_FLAGS "-D_TMAP_BWT_RUN_TYPE=0 -D_USE_KNETFILE -DSAMTOOLS_MAIN -D__STDC_LIMIT_MACROS -DTMAP_MMAP=1")
@@ -180,6 +182,11 @@ check_c_compiler_flag(-fdiagnostics-color=never HAS_DIAGNOSTICS_COLOR)
 if (HAS_DIAGNOSTICS_COLOR)
     target_compile_options(tmap PUBLIC -fdiagnostics-color=never)
 endif()
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag(-faligned-new HAS_ALIGNED_NEW)
+if (HAS_ALIGNED_NEW)
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -faligned-new ")
+endif ()
 
 
 

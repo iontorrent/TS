@@ -307,6 +307,11 @@ private:
   }
   void InferAlleleTypeAndLength(AlleleDetails& allele) const;
   bool filtered_by_coverage_novel_allele(AlleleDetails& allele);
+  bool is_fake_hotspot(AlleleDetails& allele);
+  string get_alt(AlleleDetails& allele, long hint_position, long rlen);
+  bool to_ref(AlleleDetails& allele, long hint_position, long rlen);
+  bool decompose_allele(AlleleDetails &allele, long hp, long rlen, int &ab, int &ae, int &alb, int &ale);
+  AlleleDetails *find_same_allele(AlleleDetails *allele);
 
   long ComputeRepeatBoundary(const string& seq, int chr, long position, int max_size, long &hp_repeat_len) const;
 
@@ -315,9 +320,10 @@ private:
 
   void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
   bool FillVariantFlowDisCheck(VariantCandidate &v, string &refstring, list<PositionInProgress>::iterator& position_ticket, bool hotspot_present, int haplotype_length);
-  void MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
   void set_subset(VariantCandidate &v1, VariantCandidate &v, list<int> &co);
-  void BlacklistAlleleIfNeeded(AlleleDetails& allele, int cov);
+  void MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
+  void BlacklistAlleleIfNeeded(AlleleDetails& allele, int cov, int cov_f, bool b);
+  void SegmentBlacklist(int pos, int chr, int total_cov, int total_f_cov);
   void flushblackpos(int idx, size_t pos); 
   int nextblackpos(int i) {
 	if (i >= MAXBLACK) return -1;
@@ -362,6 +368,7 @@ private:
   int                         read_snp_limit_;            // -$ --read-snp-limit
   long double                 min_alt_fraction_;  // -F --min-alternate-fraction
   long double                 min_indel_alt_fraction_; // Added by SU to reduce Indel Candidates for Somatic
+  long double		      min_fake_hotspot_fr_;    // use it to decide if a hotspot allele is considered fake HS.
   int                         min_alt_count_;             // -C --min-alternate-count
   int                         min_alt_total_;             // -G --min-alternate-total
   int                         min_coverage_;             // -! --min-coverage
@@ -369,6 +376,7 @@ private:
   int 			      merge_lookahead_;
   bool 			      output_cigar_;
   bool 			      new_hotspot_grouping;
+  bool			      coverage_above_minC_;
 
   // data structures
   const ReferenceReader *     ref_reader_;

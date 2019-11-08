@@ -68,7 +68,7 @@
                         <div class="controls">
                             {{ rpf.blockArgs }}
                             <label for="fromRaw" class="checkbox inline" rel="tooltip" title='Start from .dat files'>
-                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" {% if not has_thumbnail %}checked="checked"{% endif %}/ >
+                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" {% if not has_thumbnail %}checked="checked"{% endif %}/>
                                 Signal Processing</label>
                             <label for="fromWells" class="checkbox inline" rel="tooltip" title='Start from previous analysis 1.wells files'>
                                 <input type="radio" id="fromWells" name="pipetype" value="fromWells" {% if has_thumbnail %}checked="checked"{% endif %}/>
@@ -283,48 +283,39 @@
                     </div>
                 </div>
                 <div class="tab-pane" id="reference">
-                    <div class="control-group">
-                        <label for="id_reference" class="control-label" rel="tooltip" title='Genomic reference to align to'>Default Alignment Reference</label>
-                        <div class="controls">
-                            {{ eas_form.reference }}
-                            {{ eas_form.reference.errors }}
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="id_targetRegionBedFile" class="control-label" rel="tooltip" title='Targeted regions of interest file'>Default Target Regions BED File</label>
-                        <div class="controls">
-                            {{ eas_form.targetRegionBedFile }}
-                            {{ eas_form.targetRegionBedFile.errors }}
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="id_hotSpotRegionBedFile" class="control-label" rel="tooltip" title='Hotspots file. Variant caller includes each hotspot position in its output VCF file'>Default Hotspot Regions BED File</label>
-                        <div class="controls">
-                            {{ eas_form.hotSpotRegionBedFile }}
-                            {{ eas_form.hotSpotRegionBedFile.errors }}
-                        </div>
-                    </div>
-                    
-                    <div class="control-group">
-                        <label for="id_barcodeKitName" class="control-label" rel="tooltip" title='Barcode Set'>Barcode Set </label>
-                        <div class="controls" >
-                            {{ eas_form.barcodeKitName }}
-                            {{ eas_form.barcodeKitName.errors }}
-                        </div>
-                    </div>
-
-                    <div class="control-group text-success">
-                        Default reference info is used for barcodes with no sample name. Additional options for barcoded samples are available on the
-                        <a href="{% url "page_plan_edit_run" exp.pk %}">Edit Run Plan</a> page.
-                    </div>
-                    
-                    {% if barcodesWithSamples %}
-                        <div id='barcodedReference_container'>
-                            <div id='unsupported' class="text-error" style="display: none;">
-                                Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" exp.pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
+                    Reference, target regions, hotspots regions, and barcode set selection is only available on the
+                    <a href="{% url "page_plan_edit_run" exp.pk %}">Edit Run Plan</a> page.
+                    <div style="display: none">
+                        <div class="control-group">
+                            <label for="id_reference" class="control-label" rel="tooltip" title='Genomic reference to align to'>Default Alignment Reference</label>
+                            <div class="controls">
+                                {{ eas_form.reference }}
+                                {{ eas_form.reference.errors }}
                             </div>
                         </div>
-                    {% endif %}
+                        <div class="control-group">
+                            <label for="id_targetRegionBedFile" class="control-label" rel="tooltip" title='Targeted regions of interest file'>Default Target Regions BED File</label>
+                            <div class="controls">
+                                {{ eas_form.targetRegionBedFile }}
+                                {{ eas_form.targetRegionBedFile.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_hotSpotRegionBedFile" class="control-label" rel="tooltip" title='Hotspots file. Variant caller includes each hotspot position in its output VCF file'>Default Hotspot Regions BED File</label>
+                            <div class="controls">
+                                {{ eas_form.hotSpotRegionBedFile }}
+                                {{ eas_form.hotSpotRegionBedFile.errors }}
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="id_barcodeKitName" class="control-label" rel="tooltip" title='Barcode Set'>Barcode Set </label>
+                            <div class="controls" >
+                                {{ eas_form.barcodeKitName }}
+                                {{ eas_form.barcodeKitName.errors }}
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="tab-pane" id="plugins">
                     <div class="row-fluid">

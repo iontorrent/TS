@@ -404,8 +404,8 @@ function install_prerequisites()
                 log $(dpkg -i $pkgfile)
             else
                 # should not get here
-                log "apt-get --assume-yes --force-yes install $pkgname"
-                log $(apt-get --assume-yes --force-yes install $pkgname)
+                log "apt-get --assume-yes --allow-unauthenticated install $pkgname"
+                log $(apt-get --assume-yes --allow-unauthenticated install $pkgname)
             fi
         fi
     done

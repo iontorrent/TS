@@ -400,6 +400,17 @@ body .modal-1000 {
     margin-left: -515px;
 }
 
+.form-horizontal.form-horizontal-200 {
+    .control-group {
+        .controls {
+            margin-left: 220px;
+        }
+        .control-label {
+            width: 200px;
+        }
+    }
+}
+
 .modal-backdrop, .modal-backdrop.fade.in {
   opacity: 0.5;
   filter: alpha(opacity=50);
@@ -792,7 +803,6 @@ tr.new_plan td {
 	float:right;
 }
 .run-actions .btn {
-	width: 70px;
 	margin-bottom: 5px;
   display: block;
   padding: 4px 10px 4px 10px;
@@ -1889,7 +1899,7 @@ color: #fff;
 /* Overrides for bootstrap-select */
 .bootstrap-select {
   li, .actions-btn, input, .filter-option {
-    font-size: 11px;
+    font-size: 12px;
   }
   .actions-btn {
     margin: 0
@@ -1900,7 +1910,7 @@ color: #fff;
 #search_bar {
   .search-field, .search-field-run {
     > .btn, > input {
-      font-size: 11px;
+      font-size: 12px;
     }
   }
   .search-field {
@@ -1932,7 +1942,9 @@ color: #fff;
     margin: 0px;
     font-size: 10px;
     tbody > tr > td {
-      word-wrap: break-word;
+       word-break: break-word;
+       max-width: 160px;
+       white-space:normal;
     }
     tfoot > tr > td {
       text-align: center;

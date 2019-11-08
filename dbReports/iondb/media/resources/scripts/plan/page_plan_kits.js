@@ -17,19 +17,6 @@ $(document).ready(function () {
         $('.advanced').each(function(){ $(this).prop('disabled',false); });
     });
 
-    $("#base_recalibrate").each( function (){
-        var i =0;
-        var sel = this;
-        for(i = 0; i < sel.length;i++){
-            if (sel.options[i].text == "Default Calibration") {
-                sel.options[i].title = "A random sample of reads (up to 100,000 by default) is aligned and used to determine calibration parameters, which are then applied to the rest of the run";
-            }
-            else if (sel.options[i].text == "Enable Calibration Standard") {
-                sel.options[i].title = "Select Enable Calibration Standard when the experiment does not include a reference BAM file.  Only choose this option if you have added Calibration Standards with the library for AmpMix preparation.";
-            }
-        }
-       }
-    );
 
     function init_protocol_n_readLength_visibility() {
         var templateKit = templateKits[$("#templateKit").val()];
@@ -53,6 +40,7 @@ $(document).ready(function () {
         }
     }
 
+
     function handleTemplateKitSelectionForLibraryReadLength() {
         $('.library_read_length_info').hide();
         var templateKit = templateKits[$("#templateKit").val()];
@@ -62,6 +50,7 @@ $(document).ready(function () {
             $('.library_read_length_info').show();
         }
     }
+
 
     function updateLibraryReadLength(){
         var defaultLibraryReadLength = 0;
@@ -86,6 +75,7 @@ $(document).ready(function () {
         $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
         updateSummaryPanel("#selectedLibraryReadLength", $('input[name = "libraryReadLength"]').val());
     }
+
 
     //for some templating kits, templating size cannot be used to drive UI behavior or db persistence.  Need to use read length instead
     function handleTemplateKitSelectionForReadLength() {
@@ -268,6 +258,7 @@ $(document).ready(function () {
         $(el).html(value);
     }
 
+
     function updateFlows(value) {
         if (!_isEditRun && !isInit && value > 0){
             $('input[name = "flows"]').val(value);
@@ -388,7 +379,7 @@ $(document).ready(function () {
         if (templateKit && categorizedApplProductInUse){
             var categorizedDefaults = categorizedApplProducts[categorizedApplProductInUse];
             if (categorizedDefaults.isBarcodeKitSelectionRequired == "True"){
-                $('#barcodeKitLabel').text("Barcode Set (required)");
+                $('#barcodeKitLabel').text(gettext('workflow.step.kits.fields.barcodeId.label') + ' ' + gettext('workflow.step.kits.fields.barcodeId.label.required'));
                 $('input[name = "isBarcodeKitRequired"]').val("true");
             }
         }
@@ -396,15 +387,15 @@ $(document).ready(function () {
             isBarcodeKitRequired = $("#isBarcodeKitRequired").val() || "";
             if (!isBarcodeKitRequired || isBarcodeKitRequired == "false"){
                 if ("{{helper.getApplProduct.isBarcodeKitSelectionRequired }}" == "True"){
-                    $('#barcodeKitLabel').text("Barcode Set (required)");
+                    $('#barcodeKitLabel').text(gettext('workflow.step.kits.fields.barcodeId.label') + ' ' + gettext('workflow.step.kits.fields.barcodeId.label.required'));
                     $('input[name = "isBarcodeKitRequired"]').val("true");
                 }
                 else if (libraryKit.categories.toLowerCase().indexOf("bcrequired") >= 0) {
-                    $('#barcodeKitLabel').text("Barcode Set (required)");
+                    $('#barcodeKitLabel').text(gettext('workflow.step.kits.fields.barcodeId.label') + ' ' + gettext('workflow.step.kits.fields.barcodeId.label.required'));
                     $('input[name = "isBarcodeKitRequired"]').val("true");
                 }
                 else{
-                    $('#barcodeKitLabel').text("Barcode Set (optional)");
+                    $('#barcodeKitLabel').text(gettext('workflow.step.kits.fields.barcodeId.label') + ' ' + gettext('workflow.step.kits.fields.barcodeId.label.optional'));
                     $('input[name = "isBarcodeKitRequired"]').val("false");
                 }
 
@@ -480,7 +471,6 @@ $(document).ready(function () {
             if (!selectedLibKitValue && defaults.defaultLibraryKit){
                 $('#libraryKitType option[value="' + defaults.defaultLibraryKit + '"]').attr('selected', 'selected');
                 $('#libraryKitType').change();
-
             }
 
             selectedTemplKit = $("#templateKit").val();
@@ -651,7 +641,7 @@ $(document).ready(function () {
             updateSummaryPanel("#selectedFlowOrder", displayedValue);
         }
         else {
-            updateSummaryPanel("#selectedFlowOrder", "Use Instrument Default");
+            updateSummaryPanel("#selectedFlowOrder", gettext('workflow.step.kits.fields.flowOrder.default'));
         }
     });
 
@@ -664,7 +654,7 @@ $(document).ready(function () {
             updateSummaryPanel("#selectedSamplePrepProtocol", displayedValue);
         }
         else {
-            updateSummaryPanel("#selectedSamplePrepProtocol", "Use Instrument Default");
+            updateSummaryPanel("#selectedSamplePrepProtocol", gettext('workflow.step.kits.fields.samplePrepProtocol.default'));
         }
         set_default_flows_from_category_rules()
     });
@@ -769,6 +759,7 @@ $(document).ready(function () {
     update_TemplateKit_select();
     update_SequencingKit_select();
 
+
     // Advanced Settings
     $('[name=advancedSettingsChoice]').change(function(){
         if (isCustomKitSettings()){
@@ -817,14 +808,14 @@ $(document).ready(function () {
     
             if ( default_value != current ){
                 var label = $(el).siblings('label').text();
-                var text = "Recommended " + $.trim(label) + ": ";
-    
+                var text = default_value;
                 if ( $(el).find('option[value='+ default_value +']').length > 0 ){
-                    text += $(el).find('option[value='+ default_value +']').text();
-                } else {
-                    text += default_value;
+                    text = $(el).find('option[value='+ default_value +']').text();
                 }
-                $(el).siblings('p.alert').text(text).show();
+
+                // 'Recommended %(fieldLabel)s : %(fieldValue)s'
+                var textmsg = interpolate(gettext('workflow.step.kits.advancedsettings.messages.recommendation'), {'fieldLabel':label, 'fieldValue':text}, true);
+                $(el).siblings('p.alert').text(textmsg).show();
             } else {
                 $(el).siblings('p.alert').hide();
             }
@@ -862,7 +853,7 @@ function filter_select_dropdown(data, filters, selectId){
     });
     // make sure to keep original option order
     filtered_options.sort(function(a,b){ return a.index > b.index? 1: -1;})
-    
+
     create_filter_select_dropdown(filtered_options, selectId);
 }
 

@@ -2,8 +2,9 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-references %}
-    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
 {% endblock tab-configure-references %}
 {% block extra_head %}
 <style type="text/css">

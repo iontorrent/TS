@@ -20,21 +20,9 @@
   apt: name={{ item }} state=present force=yes
   with_items: "{{ ionmaster_syspkg_list }}"
 
-#-----------------------------------------------------------------------------
-# Copy configuration and init scripts celeryd and celerybeat daemons
-# (Currently provided via ion-dbreports package)
-#-----------------------------------------------------------------------------
-#- name: Install celeryd configuration file - /etc/default/celeryd
-#  copy: src=celeryd.conf dest=/etc/default/celeryd owner=root group=root mode=0644
-#
-#- name: Install celeryd init script - /etc/init.d/celeryd
-#  copy: src=celeryd.init dest=/etc/init.d/celeryd owner=root group=root mode=0755
-#
-#- name: Install celerybeat configuration file - /etc/default/celerybeat
-#  copy: src=celerybeat.conf dest=/etc/default/celerybeat owner=root group=root mode=0644
-#
-#- name: Install celerybeat init script - /etc/init.d/celerybeat
-#  copy: src=celerybeat.init dest=/etc/init.d/celerybeat owner=root group=root mode=0755
+- name: Install pdftk, skip if not available
+  apt: name=pdftk state=present
+  ignore_errors: yes
 
 #-----------------------------------------------------------------------------
 # mod-gnutls conflicts and so we install the package, b/c it is a dependency and
@@ -51,6 +39,7 @@
 - name: Tag the headnode with the masternode indicator file
   file: path=/opt/ion/.masternode owner=root group=root mode=0644 state=touch
 
+
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a master node
 #-----------------------------------------------------------------------------
@@ -64,16 +53,31 @@
   when: item != ''
   ignore_errors: yes
 
+# Install or remove OEM packages
+- name: Install OEM packages if "is_oem" is {{ is_oem }}
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
+  with_items: "{{ ionmaster_oempkg_list }}"
+  when:
+    - item != ''
+    - is_oem
+
+- name: Remove OME packages if "is_oem" is {{ is_oem }}
+  apt:
+    name: "{{ item }}"
+    state: absent
+    force: yes
+  with_items: "{{ ionmaster_oempkg_list }}"
+  when:
+    - item != ''
+    - not is_oem
+    
 # Ensure Ion system daemons are running
 - name: Ion Daemons
-  service: name={{ item }} state=restarted
-  with_items:
-    - rabbitmq-server
-    - celeryd
-    - celerybeat
-    - ionCrawler
-    - ionJobServer
-    - ionPlugin
+  service: name={{ item }} state=restarted enabled=yes
+  with_items: "{{ ion_services_list }}"
 
 #-----------------------------------------------------------------------------
 # Site Specific Database Changes
@@ -163,6 +167,43 @@
   when: S5_virtual_guest|bool == True
 
 #-----------------------------------------------------------------------------
+# write out list of ion services to monitor and restart
+#-----------------------------------------------------------------------------
+- stat:
+    path: /etc/torrentserver/telemetry-services
+  register: telemetry_file
+
+- name: initialize telemetry-services if not found
+  template:
+    src: telemetry-services.j2
+    dest: /etc/torrentserver/telemetry-services
+    mode: 0644
+    owner: www-data
+    group: www-data
+  when:
+    - telemetry_file.stat.exists|bool == False
+
+- name: load telemetry-services
+  include_vars: /etc/torrentserver/telemetry-services
+
+# disable telemetry services if users choose to disable
+- name: disabling telemetry services on boot if configured
+  service:
+    name: "{{ item }}"
+    enabled: no
+  with_items: "{{ telemetric_services }}"
+  when: enable_telemetry|bool == False
+
+- name: write out ion-services
+  template:
+    src: services.j2
+    dest: /etc/torrentserver/ion-services
+    mode: 0644
+    owner: www-data
+    group: www-data
+
+
+#-----------------------------------------------------------------------------
 # Set up cron job to check system services
 #-----------------------------------------------------------------------------
 - cron:
@@ -170,3 +211,10 @@
     minute: "*/30"
     job: "/usr/bin/python /opt/ion/iondb/bin/check_system_services.py -n > /dev/null"
 
+
+#-----------------------------------------------------------------------------
+# Rescan for new and updated plugins
+#-----------------------------------------------------------------------------
+
+- name: Starting celery tasks to rescan for new plugins
+  command: /usr/bin/python /opt/ion/iondb/bin/rescan_plugins.py

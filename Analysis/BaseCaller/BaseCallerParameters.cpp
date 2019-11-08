@@ -133,6 +133,7 @@ void BaseCallerParameters::PrintHelp()
     printf ("                                          \"adaptive-normalized\" - Adaptive normalized and not dephased\n");
     printf ("                                          \"residual\" - Measurement-prediction residual\n");
     printf ("                                          \"scaled-residual\" - Scaled measurement-prediction residual\n");
+    printf ("     --compress-multi-taps   BOOL       Compress the signal from adjacent multi-tap flows [false]\n");
     printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
     printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
     printf ("\n");
@@ -152,6 +153,10 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --calibration-file      FILE       Legacy text input file for HistogramCalibration [off]\n");
     printf ("     --calibrate-tfs         FILE       Calibrate test fragment reads [off]\n");
     printf ("\n");
+    printf ("Inline Control Options:\n");
+    printf ("     --inline-control        BOOL       Enable inline control [off]\n");
+    printf ("     --inlinecontrol-reference       FILE       Fasta file for inline control\n");
+    printf ("\n");
     printf ("Debug Options:\n");
     printf ("     --debug-normalization-bam  BOOL       Output debug data to the bam tags Ya, Yb, Yw, and Yx, for the adaptive offset, adaptive slope, well-normalized measurements, and not-calibrated measurements [off]\n");
     printf ("\n");
@@ -160,7 +165,9 @@ void BaseCallerParameters::PrintHelp()
     PhaseEstimator::PrintHelp();
     PerBaseQual::PrintHelp();
     BarcodeClassifier::PrintHelp();
+#ifndef DATAVIEWER
     EndBarcodeClassifier::PrintHelp();
+#endif
     MolecularTagTrimmer::PrintHelp(false);
     BaseCallerMetricSaver::PrintHelp();
 
@@ -210,6 +217,8 @@ bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
 
     bc_files.lib_datasets_file      = opts.GetFirstString ('-', "datasets", "");
     bc_files.calibration_panel_file = opts.GetFirstString ('-', "calibration-panel", "");
+    bc_files.inline_control_reference_file = opts.GetFirstString ('-', "inlinecontrol-reference", "/opt/ion/config/inline_controls_ref.fasta");
+
     if (not bc_files.lib_datasets_file.empty())
       ValidateAndCanonicalizePath(bc_files.lib_datasets_file);
     if (not bc_files.calibration_panel_file.empty())
@@ -281,6 +290,12 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     context_vars.just_phase_estimation       = opts.GetFirstBoolean('-', "just-phase-estimation", false);
     context_vars.calibrate_TFs               = opts.GetFirstBoolean('-', "calibrate-tfs", false);
     context_vars.trim_zm                     = opts.GetFirstBoolean('-', "trim-zm", true);
+    context_vars.compress_multi_taps         = opts.GetFirstBoolean('-', "compress-multi-taps", false);
+
+    context_vars.inline_control              = opts.GetFirstBoolean('-', "inline-control", false);
+    if (context_vars.inline_control and not bc_files.inline_control_reference_file.empty()){
+      ValidateAndCanonicalizePath(bc_files.inline_control_reference_file);
+    }
 
     // debug options
     context_vars.debug_normalization_bam     = opts.GetFirstBoolean ('-', "debug-normalization-bam", false);
@@ -380,8 +395,10 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
     bc.skip_recal_during_norm = context_vars.skip_recal_during_norm;
     bc.calibrate_TFs          = context_vars.calibrate_TFs;
     bc.trim_zm                = context_vars.trim_zm;
+    bc.compress_multi_taps    = context_vars.compress_multi_taps;
 
     bc.flow_predictors_       = context_vars.flow_predictors_;
+    bc.inline_control         = context_vars.inline_control;
     // debug options
     bc.debug_normalization_bam              = context_vars.debug_normalization_bam;
     return true;
@@ -423,6 +440,8 @@ bool BaseCallerParameters::SaveParamsToJson(Json::Value& basecaller_json, const 
     basecaller_json["BaseCaller"]["block_col_offset"] = bc.chip_subset.GetColOffset();
     basecaller_json["BaseCaller"]["block_row_size"] = bc.chip_subset.GetChipSizeY();
     basecaller_json["BaseCaller"]["block_col_size"] = bc.chip_subset.GetChipSizeX();
+    basecaller_json["BaseCaller"]["inline_control"] = bc.inline_control;
+    basecaller_json["BaseCaller"]["inline_control_reference"] = bc_files.inline_control_reference_file;
     SaveJson(basecaller_json, bc_files.filename_json);
     return true;
 };

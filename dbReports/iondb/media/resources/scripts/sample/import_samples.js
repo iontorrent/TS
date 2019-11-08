@@ -2,7 +2,8 @@
 $(function() {
 	
 	$('.modal_addSampleSet').click(function(e) {
-		e.preventDefault();		
+		e.preventDefault();
+        $(".add_sample_set_info").addClass("in");
 		$(".add_sample_set_info").slideDown("fast");
 	});
 
@@ -50,7 +51,7 @@ TB.sample.batchupload.ready = function(sampleUrl) {
 //    });
 
     $(function() {
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = gettext('uni-form-validation.language.required');
         $('#import_sample_upload').uniform({
             holder_class : 'control-group',
             msg_selector : 'p.help-block.error',
@@ -89,71 +90,32 @@ TB.sample.batchupload.ready = function(sampleUrl) {
         //$('#import_sample_upload .modal-body #modal-error-messages').addClass('hide').empty();
     	//$('.main .container-fluid .content #modal-error-messages').addClass('hide').empty();
 		$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').addClass('hide').empty();
-        
+		$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-success-messages').addClass('hide').empty();
+
         //$("#loadingstatus").html("<div class='alert alert-info'><img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'> Uploading csv file for plans </div>");
     }
 
     function AjaxError() {
-        $("#loadingstatus").html("<div class='alert alert-error'>Failure uploading file!</div>");
+        var _html = kendo.template($('#ImportSamplesFailureTemplate').html())({});
+        $('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages')
+            .removeClass('hide')
+            .html(_html);
     }
 
     //handleResponse will handle both successful upload and validation errors
     function handleResponse(responseText, statusText) {
         console.log("responseText..", responseText);
-        var msg = responseText.status;
-        console.log(msg);
-
-        hasErrors = false;
-        var error = "";
-
-        if (msg.toLowerCase().indexOf("error") >= 0) {
-            hasErrors = true;
-        	error += "<p>" + msg + "</p>";
-        }
-
-        if (responseText.failed) {
-        	if (!hasErrors) {
-            	error += "<p>" + msg + "</p>";
-        	}
-
-            for (var key in responseText.failed) {
-                hasErrors = true;
-                error += "<ul class='unstyled'>";
-
-                if ($.isNumeric(key)) {
-	                error += "<li><strong> Row " + key + " contained error(s):</strong> ";
-	                error += "<ul>";
-	                for (var i = 0; i < responseText.failed[key].length; i++) {
-	                    error += "<li><strong>  " + responseText.failed[key][i][0] + "</strong> column ";
-	                    error += " : " + responseText.failed[key][i][1];
-	                    error += "</li>";
-	                }   
-                }
-                else {
-                	error += "<li><strong>" + key + " contained error(s):</strong> ";
-                    error += "<ul>";
-                    error += "<li>" + responseText.failed[key];   
-                    error += "</li>";            	
-                }
-                
-                error += "</ul>";
-                error += "</li>";
-
-                error += "</ul>";
-            }
-            
-            console.log("import_samples.js - error=", error);
-            
-            if (error) {
-            	$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').removeClass('hide').html(error);
-            }
-        }
-
-        if (hasErrors) {
-        	$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').removeClass('hide').html(error);     	
+        var _html = kendo.template($('#ImportSamplesResponseTemplate').html())(responseText);
+        console.debug(_html);
+        if (responseText.error) {
+            $('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages')
+                .removeClass('hide')
+                .html(_html);
         }
         else  {
-            $('#import_sample_upload').modal("hide");
+            $('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-success-messages')
+                .removeClass('hide')
+                .html(_html);
             window.location = sampleUrl;
         }
     }

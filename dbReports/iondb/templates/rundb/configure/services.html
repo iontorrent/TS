@@ -1,8 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-services %}
-    <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
+    <li class="active"><a href="{% url "configure_services" %}">{% trans "global.nav.menu.configure.menu.services.label" %}</a></li>
 {% endblock tab-configure-services %}
 {% block content %}
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
@@ -208,7 +209,6 @@ $(document).ready(function () {
             </tbody>
         </table>
     </div>
-    {% comment %}
     <div class="content clearfix">
         <h1>Telemetry Services <small>{% if telemetry_enabled %} Enabled {% else %} Disabled {% endif %}</small></h1>
         <table class="data-table">
@@ -238,12 +238,7 @@ $(document).ready(function () {
             <div class="span10">
                 <p>These services provide connectivity to Thermo Fisher Cloud and allow Thermo Fisher Scientific staff to perform
                     remote troubleshooting on request. They also report anonymous usage statistics to Thermo Fisher Scientific. Disabling them
-                    will stop all Thermo Fisher Cloud integration and may make remote support more difficult.
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore
-                    et dolore
-                    magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex
-                    ea
-                    commodo consequat.</p></div>
+                    will stop all Thermo Fisher Cloud integration and may make remote support more difficult.</p></div>
             <div class="span2" style="text-align: center">
                 <form action="{% url 'configure_telemetry_services_toggle' %}" method="POST">
                     <input class="btn btn-default" type="submit"
@@ -252,7 +247,6 @@ $(document).ready(function () {
             </div>
         </div>
     </div>
-    {% endcomment %}
     <div class="content clearfix">
         <h1>Active Jobs</h1>
         <h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
@@ -346,7 +340,7 @@ $(document).ready(function () {
             <p>Crawler is <b>Stopped</b>.</p>
         {% endif %}
     </div>
-    <div class="content clearfix">
+    <div id="raid_nav" class="content clearfix">
         <h1>RAID Info <small>(last updated {{ raid_status_updated }})</small>
             <a title="Refresh RAID Info" id="refresh_raid_info" href="{% url 'raid_info_refresh' %}"><i class="icon-refresh"></i></a>
             <div id="raid_msg" style="display:inline-block;"></div>
@@ -392,7 +386,7 @@ $(document).ready(function () {
     </div>
 
     {% if show_nas_info %}
-    <div class="content clearfix">
+    <div id="torrentnas_nav" class="content clearfix">
         <h1>Torrent NAS Info
             <a title="Refresh Torrent NAS Info" id="refresh_nas_info" href="{% url 'torrent_nas_section' %}"><i class="icon-refresh"></i></a>
             <div id="torrentnas_msg" style="display:inline-block;"></div>
@@ -405,7 +399,7 @@ $(document).ready(function () {
     {% endif %}
 
     {% if crunchers %}
-    <div class="content clearfix">
+    <div id="cluster_nav" class="content clearfix">
         <h1>Cluster Info
             <a title="Refresh Cluster Info" id="refresh_cluster_info" href="{% url 'cluster_info_refresh' %}"><i class="icon-refresh"></i></a>
             <div id="cluster_msg" style="display:inline-block;"></div>
@@ -483,4 +477,19 @@ $(document).ready(function () {
         </table>
     </div>
     {% endif %}
+
+
+    <div class="content clearfix">
+        <h1>System Memory Usage
+            <small>(last updated {{ memory_info.generated }})</small>
+            <a title="Refresh" href="" onClick="event.preventDefault();window.location.reload();return false;"><i class="icon-refresh"></i></a></h1>
+        <p>{{ memory_info.used|floatformat:2 }}
+            <small>GB</small>
+            / {{ memory_info.total|floatformat:2 }}
+            <small>GB</small>
+            ({{ memory_info.percentage|floatformat:2 }}%)
+        </p>
+    </div>
+
+
 {% endblock content %}

@@ -131,7 +131,7 @@ tmap_error_full(const char *file, const unsigned int line, const char *function_
 }
 
 
-void 
+void
 tmap_warn (const char* src_fname, const char* src_func, int src_lno, const char *fmt, ...)
 {
   elock ();
@@ -144,7 +144,7 @@ tmap_warn (const char* src_fname, const char* src_func, int src_lno, const char 
   eunlock ();
 }
 
-void 
+void
 tmap_fail (int quit, const char* src_fname, const char* src_func, int src_lno, const char *fmt, ...)
 {
   elock ();
@@ -157,5 +157,31 @@ tmap_fail (int quit, const char* src_fname, const char* src_func, int src_lno, c
   eunlock ();
   if (quit)
     exit(EXIT_FAILURE);
+}
+
+void
+tmap_user_warning (const char *fmt, ...)
+{
+  elock ();
+  va_list ap;
+  va_start (ap, fmt);
+  fprintf (stderr, "Warning: ");
+  vfprintf (stderr, fmt, ap);
+  fprintf (stderr, "\n");
+  va_end (ap);
+  eunlock ();
+}
+
+void
+tmap_user_fileproc_msg (const char* fname, int lineno, const char *fmt, ...)
+{
+  elock ();
+  va_list ap;
+  va_start (ap, fmt);
+  fprintf (stderr, "%s:%d ", fname, lineno);
+  vfprintf (stderr, fmt, ap);
+  fprintf (stderr, "\n");
+  va_end (ap);
+  eunlock ();
 }
 

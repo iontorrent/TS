@@ -1,9 +1,10 @@
 {% extends "rundb/data/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url "data" %}">Data</a></li>
-    <li><a href="{% url "projects" %}">Projects</a></li>
+    <li class="active"><a href="{% url "data" %}">{% trans "global.nav.menu.data.menu.data.label" %}</a></li>
+    <li><a href="{% url "projects" %}">{% trans "global.nav.menu.data.menu.projects.label" %}</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
 <link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
@@ -40,7 +41,7 @@
 </script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 <script src="{% static "js/chosen.jquery.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 {% endblock extra_head %}
 {% block content %}
 <div id="data_view" class="content group">

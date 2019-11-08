@@ -18,10 +18,21 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from ion import version as TS_version
 
-from iondb.rundb.configure.views import process_set, get_torrent_nas_info, load_raid_status_json
+from iondb.rundb.configure.views import (
+    process_set,
+    get_torrent_nas_info,
+    load_raid_status_json,
+)
 from iondb.rundb.home.definitions import *
 from iondb.rundb.home.runs import get_runs_list
-from iondb.rundb.models import FileServer, Rig, Cruncher, DMFileStat, NewsPost, GlobalConfig
+from iondb.rundb.models import (
+    FileServer,
+    Rig,
+    Cruncher,
+    DMFileStat,
+    NewsPost,
+    GlobalConfig,
+)
 from iondb.utils import devices
 from iondb.utils.files import get_disk_attributes_gb, is_mounted
 
@@ -30,12 +41,12 @@ def is_live(ip):
     # test is the instrument online
     try:
         socket.gethostbyaddr(ip)
-    except:
+    except Exception:
         # try ping
-        ping = ['ping', '-c 2', '-W 1', ip]
+        ping = ["ping", "-c 2", "-W 1", ip]
         try:
             subprocess.check_call(ping)
-        except:
+        except Exception:
             return False
 
     return True
@@ -45,26 +56,29 @@ def get_instrument_info(rig):
     # returns dict with Rig info
     instr = {
         "name": rig.name,
-        "type": rig.type or 'PGM',
+        "type": rig.type or "PGM",
         "last_init": format_date(rig.last_init_date),
         "last_clean": format_date(rig.last_clean_date),
         "last_experiment": format_date(rig.last_experiment),
-        "alarms": rig.alarms.values() if rig.alarms else [],
-        "image_url": ''
+        "alarms": list(rig.alarms.values()) if rig.alarms else [],
+        "image_url": "",
     }
-    if instr['type'] == "Raptor": instr['type'] = "S5"
-    if instr['type'] in INSTRUMENT_TYPES:
-        instr['image_url'] = "resources/img/instrument_icons/%s.png" % instr['type'].lower()
+    if instr["type"] == "Raptor":
+        instr["type"] = "S5"
+    if instr["type"] in INSTRUMENT_TYPES:
+        instr["image_url"] = (
+            "resources/img/instrument_icons/%s.png" % instr["type"].lower()
+        )
 
     if is_live(rig.host_address):
-        instr['display_state'] = rig.get_display_state() or CONNECTED
+        instr["display_state"] = rig.get_display_state() or CONNECTED
 
         if rig.alarms:
-            instr['status'] = ALARM
+            instr["status"] = ALARM
         else:
-            instr['status'] = CONNECTED
+            instr["status"] = CONNECTED
     else:
-        instr['display_state'] = instr['status'] = OFFLINE
+        instr["display_state"] = instr["status"] = OFFLINE
 
     return instr
 
@@ -72,7 +86,9 @@ def get_instrument_info(rig):
 def get_disk_usage():
     disk_usage = []
     paths = []
-    for fs_path, percentfull in FileServer.objects.order_by('pk').values_list('filesPrefix', 'percentfull'):
+    for fs_path, percentfull in FileServer.objects.order_by("pk").values_list(
+        "filesPrefix", "percentfull"
+    ):
         if os.path.exists(fs_path):
             disk_usage.append((fs_path, percentfull))
             paths.append(fs_path)
@@ -84,7 +100,7 @@ def get_disk_usage():
     for bdir, name in archive_folders:
         mounted = is_mounted(bdir)
         if mounted and bdir not in paths:
-            disk_usage.append((bdir, get_disk_attributes_gb(bdir).get('percentfull')))
+            disk_usage.append((bdir, get_disk_attributes_gb(bdir).get("percentfull")))
             paths.append(bdir)
 
     return disk_usage
@@ -94,28 +110,27 @@ def get_storage_status():
     # Torrent NAS and RAID info, if any
     # this does not actually check the status directly but loads cached info
     def combined_state(states):
-        if 'error' in states:
-            return 'error'
-        elif 'warning' in states:
-            return 'warning'
+        if "error" in states:
+            return "error"
+        elif "warning" in states:
+            return "warning"
         else:
-            return 'good'
+            return "good"
 
-    status = {
-        'show_nas': False,
-        'show_raid': False
-    }
+    status = {"show_nas": False, "show_raid": False}
     nasInfo = get_torrent_nas_info(refresh=False)
     if nasInfo:
-        status['show_nas'] = True
-        nas_states = sum([[volume['state'] for volume in nas['volumes']] for nas in nasInfo], [])
-        status['nas_status'] = combined_state(nas_states)
+        status["show_nas"] = True
+        nas_states = sum(
+            [[volume["state"] for volume in nas["volumes"]] for nas in nasInfo], []
+        )
+        status["nas_status"] = combined_state(nas_states)
 
     raidInfo = load_raid_status_json()
-    if raidInfo and raidInfo['raid_status']:
-        status['show_raid'] = True
-        raid_states = [encl['status'] for encl in raidInfo['raid_status']]
-        status['raid_status'] = combined_state(raid_states)
+    if raidInfo and raidInfo["raid_status"]:
+        status["show_raid"] = True
+        raid_states = [encl["status"] for encl in raidInfo["raid_status"]]
+        status["raid_status"] = combined_state(raid_states)
 
     return status
 
@@ -124,10 +139,10 @@ def format_date(date):
     obj_date = None
     try:
         obj_date = datetime.datetime.strptime(date, "%Y/%m/%d %H:%M:%S")
-    except:
+    except Exception:
         try:
             obj_date = datetime.datetime.strptime(date, "%Y_%m_%d_%H_%M_%S")
-        except:
+        except Exception:
             pass
 
     if obj_date:
@@ -136,7 +151,6 @@ def format_date(date):
         return date
 
 
-@login_required
 def dashboard_fragments(request, skip_runs=False):
     """ Returns the dashboard sections as html in a json object"""
     time_span = request.GET.get("time_span", "24hours")
@@ -161,8 +175,8 @@ def dashboard_fragments(request, skip_runs=False):
                 "time_span": time_span,
                 "stages": DASHBOARD_STAGES,
                 "runs": [],
-                "error": ""
-            },
+                "error": "",
+            }
         }
     else:
         try:
@@ -178,8 +192,8 @@ def dashboard_fragments(request, skip_runs=False):
                 "time_span": time_span,
                 "stages": DASHBOARD_STAGES,
                 "runs": runs,
-                "error": runs_error
-            },
+                "error": runs_error,
+            }
         }
 
     # software update
@@ -195,19 +209,20 @@ def dashboard_fragments(request, skip_runs=False):
     nodes_down = []
     if Cruncher.objects.count() > 0:
         show_cluster = True
-        nodes_down = Cruncher.objects.exclude(state='G').values_list('name', flat=True)
+        nodes_down = Cruncher.objects.exclude(state="G").values_list("name", flat=True)
 
     # storage status
     storage = get_storage_status()
 
     # data management
     disk_usage = get_disk_usage()
-
-    dm_active_jobs = DMFileStat.objects.filter(action_state__in=['AG', 'DG', 'EG', 'SA', 'SE', 'SD', 'IG']).values_list(
-        'action_state', flat=True)
+    dm_active_jobs = DMFileStat.objects.filter(
+        action_state__in=["AG", "DG", "EG", "SA", "SE", "SD", "IG"]
+    ).values_list("action_state", flat=True)
+    dm_errors = DMFileStat.objects.filter(action_state="E").count()
 
     # instruments
-    rigs = Rig.objects.exclude(host_address='')
+    rigs = Rig.objects.exclude(host_address="")
     num_rigs = len(rigs)
     if num_rigs > 1:
         pool = Pool(processes=min(num_rigs, 50))
@@ -215,9 +230,9 @@ def dashboard_fragments(request, skip_runs=False):
     else:
         instruments = [get_instrument_info(rig) for rig in rigs]
 
-    instr_connected = sum([instr['status'] == CONNECTED for instr in instruments])
-    instr_offline = sum([instr['status'] == OFFLINE for instr in instruments])
-    instr_alarm = sum([instr['status'] == ALARM for instr in instruments])
+    instr_connected = sum([instr["status"] == CONNECTED for instr in instruments])
+    instr_offline = sum([instr["status"] == OFFLINE for instr in instruments])
+    instr_alarm = sum([instr["status"] == ALARM for instr in instruments])
 
     summary_context = {
         # Summary Section
@@ -235,40 +250,53 @@ def dashboard_fragments(request, skip_runs=False):
                 "services_down": services_down,
                 "show_cluster": True if show_cluster else False,
                 "number_nodes_down": len(nodes_down) if show_cluster else "",
-                "show_nas": storage['show_nas'],
-                "nas_status": storage.get('nas_status', ''),
-                "show_raid": storage['show_raid'],
-                "raid_status": storage.get('raid_status', ''),
+                "show_nas": storage["show_nas"],
+                "nas_status": storage.get("nas_status", ""),
+                "show_raid": storage["show_raid"],
+                "raid_status": storage.get("raid_status", ""),
             },
             "data_management": {
                 "url": reverse("datamanagement"),
                 "disk_usage": disk_usage,
                 "show_path": len(disk_usage) > 1,
                 "dm_jobs": [
-                    ("archive in progress", sum([s == 'AG' for s in dm_active_jobs])),
-                    ("export in progress", sum([s == 'EG' for s in dm_active_jobs])),
-                    ("delete in progress", sum([s == 'DG' for s in dm_active_jobs])),
-                    ("import in progress", sum([s == 'IG' for s in dm_active_jobs])),
-                    ("archive pending", sum([s == 'SA' for s in dm_active_jobs])),
-                    ("export pending", sum([s == 'SE' for s in dm_active_jobs])),
-                    ("delete pending", sum([s == 'SD' for s in dm_active_jobs])),
-                ]
-            }
-        },
+                    ("archive in progress", sum([s == "AG" for s in dm_active_jobs])),
+                    ("export in progress", sum([s == "EG" for s in dm_active_jobs])),
+                    ("delete in progress", sum([s == "DG" for s in dm_active_jobs])),
+                    ("import in progress", sum([s == "IG" for s in dm_active_jobs])),
+                    ("archive pending", sum([s == "SA" for s in dm_active_jobs])),
+                    ("export pending", sum([s == "SE" for s in dm_active_jobs])),
+                    ("delete pending", sum([s == "SD" for s in dm_active_jobs])),
+                ],
+                "dm_errors": dm_errors,
+            },
+        }
     }
 
     instruments_context = {
-        "instruments": sorted(instruments, key=lambda x: (x['status'], x['name'].lower()))
+        "instruments": sorted(
+            instruments, key=lambda x: (x["status"], x["name"].lower())
+        )
     }
 
-    return HttpResponse(json.dumps({
-        "summary": render_to_string("rundb/home/fragments/summary.html", summary_context),
-        "runs": render_to_string("rundb/home/fragments/runs.html", runs_context),
-        "instruments": render_to_string("rundb/home/fragments/instruments.html", instruments_context)
-    }), content_type="application/json")
+    return HttpResponse(
+        json.dumps(
+            {
+                "summary": render_to_string(
+                    "rundb/home/fragments/summary.html", summary_context
+                ),
+                "runs": render_to_string(
+                    "rundb/home/fragments/runs.html", runs_context
+                ),
+                "instruments": render_to_string(
+                    "rundb/home/fragments/instruments.html", instruments_context
+                ),
+            }
+        ),
+        content_type="application/json",
+    )
 
 
-@login_required
 def dashboard(request):
     """ Renders the TS dashboard
     """
@@ -285,14 +313,12 @@ def dashboard(request):
     return render(request, "rundb/home/dashboard.html", context)
 
 
-@login_required
 def news(request):
     profile = request.user.userprofile
     ctx = {
-        "articles": list(NewsPost.objects.all().order_by('-updated')),
+        "articles": list(NewsPost.objects.all().order_by("-updated")),
         "last_read": profile.last_read_news_post,
         "is_updating": GlobalConfig.get().check_news_posts,
-
     }
     profile.last_read_news_post = timezone.now()
     profile.save()

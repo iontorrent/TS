@@ -1,0 +1,866 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-02-12 14:31-0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#: media/js/data_models.js:89
+msgid "global.messages.warning.label"
+msgstr "переведите:WARNING"
+
+#: media/js/data_models.js:202
+msgid "data.pageable.messages.goprev"
+msgstr "Перейти на предыдущую страницу"
+
+#: media/js/data_models.js:203
+msgid "data.pageable.messages.noprev"
+msgstr "Нет предыдущей страницы"
+
+#: media/js/data_models.js:205
+msgid "data.pageable.messages.gonext"
+msgstr "Перейти на следующую страницу"
+
+#: media/js/data_models.js:206
+msgid "data.pageable.messages.nonext"
+msgstr "Следующая страница"
+
+#: media/js/data_models.js:208
+msgid "data.pageable.messages.onfirst"
+msgstr "На первой странице"
+
+#: media/js/data_models.js:209
+msgid "data.pageable.messages.gofirst"
+msgstr "Перейти на первую страницу"
+
+#: media/js/data_models.js:211
+msgid "data.pageable.messages.onlast"
+msgstr "На последней странице"
+
+#: media/js/data_models.js:212
+msgid "data.pageable.messages.golast"
+msgstr "Перейти на последнюю страницу"
+
+#: media/js/data_models.js:223
+msgid "data.pageable.messages.display"
+msgstr "%(lower_range)s - %(upper_range)s из %(total)s работает"
+
+#: media/js/data_tab.js:190
+msgid "data.listview.messages.reports-show-more"
+msgstr "Показать все сообщения %(number)s"
+
+#: media/js/data_tab.js:199
+msgid "data.listview.messages.reports-show-less"
+msgstr "Спрятать"
+
+#: media/js/data_tab.js:308 media/js/data_tab.js.c:386 media/js/data_tab.js:500
+#: media/js/monitor_tab.js:75
+#: media/resources/scripts/plan/plan_templates.html.js:230
+#: media/resources/scripts/plan/planned.html.js:71
+#: media/resources/scripts/plan/planned.html.js:97
+#: media/resources/scripts/plan/planned.html.js:116
+#: media/resources/scripts/plan/planned.html.js:368
+#: media/resources/scripts/reports/report.js:369
+#: media/resources/scripts/reports/report.js:482
+#: media/resources/scripts/reports/report.js:516
+#: media/resources/scripts/sample/input_samples.js:60
+#: media/resources/scripts/sample/input_samples.js:105
+#: media/resources/scripts/sample/input_samples.js:141
+#: media/resources/scripts/sample/input_samples.js:182
+#: media/resources/scripts/sample/sampleattributes.js:51
+#: media/resources/scripts/sample/sampleattributes.js:91
+#: media/resources/scripts/sample/sampleattributes.js:133
+#: media/resources/scripts/sample/samplesets.js:63
+#: media/resources/scripts/sample/samplesets.js:87
+#: media/resources/scripts/sample/samplesets.js:109
+#: media/resources/scripts/sample/samplesets.js:169
+#: media/resources/scripts/sample/samplesets.js:193
+#: media/resources/scripts/sample/samplesets.js:223
+#: media/resources/scripts/sample/samplesets.js:252
+msgid "global.messages.error.label"
+msgstr "ОШИБКА"
+
+#: media/js/data_tab.js:317
+msgid "data.messages.errors.mesh.changefavorite"
+msgstr "Запускать можно только на своем исходном сервере Torrent."
+
+#: media/js/data_tab.js:329
+msgid "data.messages.errors.mesh.changerepresentative"
+msgstr "Отчеты могут быть отмечены только как репрезентативные на их исходном сервере Torrent."
+
+#: media/js/data_tab.js:676 media/js/monitor_tab.js:64
+#: media/resources/scripts/plan/plan_templates.html.js:208
+#: media/resources/scripts/plan/plan_templates.html.js:239
+#: media/resources/scripts/plan/plan_templates.html.js:271
+#: media/resources/scripts/plan/plan_templates.html.js:305
+#: media/resources/scripts/plan/plan_templates.html.js:339
+#: media/resources/scripts/plan/plan_templates.html.js:514
+#: media/resources/scripts/plan/plan_templates.html.js:550
+#: media/resources/scripts/plan/planned.html.js:5
+#: media/resources/scripts/plan/planned.html.js:52
+#: media/resources/scripts/plan/planned.html.js:398
+#: media/resources/scripts/reports/report.js:493
+#: media/resources/scripts/sample/input_samples.js:15
+#: media/resources/scripts/sample/input_samples.js:40
+#: media/resources/scripts/sample/input_samples.js:73
+#: media/resources/scripts/sample/input_samples.js:121
+#: media/resources/scripts/sample/input_samples.js:162
+#: media/resources/scripts/sample/sampleattributes.js:5
+#: media/resources/scripts/sample/sampleattributes.js:30
+#: media/resources/scripts/sample/sampleattributes.js:70
+#: media/resources/scripts/sample/sampleattributes.js:113
+#: media/resources/scripts/sample/samplesets.js:21
+msgid "global.messages.loading"
+msgstr "Loading ..."
+
+#: media/js/monitor_tab.js:37
+msgid "monitor.fields.flows.tooltip"
+msgstr "переведите:Progress is %(progress_flows)s of %(total_flows)s flows"
+
+#: media/js/monitor_tab.js:38
+msgid "monitor.fields.flows.progress.message"
+msgstr "переведите:%(progress_flows)s of %(total_flows)s flows"
+
+#: media/js/monitor_tab.js:129
+msgid "monitor.fields.flows.progress.message.alternate"
+msgstr "переведите:%(progress_flows)s / %(total_flows)s flows"
+
+#: media/resources/scripts/signal.js:35 media/resources/scripts/signal.min.js:1
+msgid "signal.js.strength.percentage.suffix"
+msgstr "%"
+
+#: media/resources/scripts/configure/configure/contacts.js:3
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_add_prune_group.js:15
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_edit_pruning_config.js:17
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:12
+#: media/resources/scripts/sample/import_samples.js:54
+msgid "uni-form-validation.language.required"
+msgstr "переведите:%s is required. "
+
+#: media/resources/scripts/plan/by_template.js:8
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_chars"
+msgstr "Ошибка, имя плана должно содержать только числа, буквы, пробелы и следующее:. - _"
+
+#: media/resources/scripts/plan/by_template.js:13
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_length"
+msgstr "Ошибка, длина имени плана должна быть не более 512 символов."
+
+#: media/resources/scripts/plan/by_template.js:22
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_chars"
+msgstr "Ошибка, примечания должны содержать только числа, буквы, пробелы и следующее:. - _"
+
+#: media/resources/scripts/plan/by_template.js:27
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_length"
+msgstr "Ошибка, длина заметки должна быть не более 1024 символов."
+
+#: media/resources/scripts/plan/modal_batch_planning.js:33
+msgid "batch_plans_from_template.messages.validate.planCount"
+msgstr "Номер должен быть целым числом от 1 до 100."
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:62
+msgid "upload_plans_for_template.loadingstatus"
+msgstr "переведите:Uploading csv file for plans"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:102
+msgid "row"
+msgstr "Row"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:103
+msgid "column"
+msgstr "Column"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:124
+msgid "upload_plans_for_template.errors.rowOrColumn"
+msgstr "переведите:%(key)s contained error(s):"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:138
+msgid "upload_plans_for_template.errors.summary"
+msgstr "переведите:%(plansFailed)s of %(inputPlanCount)s plan(s) failed"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:139
+msgid "upload_plans_for_template.errors.totalerrors"
+msgstr "переведите:Total no. of failures: %(total_errors)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:141
+msgid "upload_plans_for_template.errors.instructions"
+msgstr "переведите:Only one plan's errors will be displayed. To see specific plan or all errors, click button below:"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:158
+msgid "upload_plans_for_template.errors.rowOrColumn.title"
+msgstr "переведите:<strong> %(rowOrColumnKey)s (Plan %(plan_number)s) contained error(s):</strong>"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:179
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:187
+msgid "upload_plans_for_template.errors.rowOrColumnError"
+msgstr "переведите:<strong>%(columnName)s</strong> column  : %(columnErrors)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:231
+msgid "upload_plans_for_template.warnings.rowOrColumn.title"
+msgstr "переведите:<strong> %(rowOrColumnKey)s (Plan %(plan_number)s) contained warning(s):</strong>"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:248
+msgid "global.action.modal.close"
+msgstr "переведите:Close"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:265
+msgid "upload_plans_for_template.errors.choose.dropdown"
+msgstr "переведите:Choose plan to view errors"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:276
+msgid "upload_plans_for_template.errors.choose.dropdown.choice"
+msgstr "переведите:Plan %(plan_number)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:279
+msgid "upload_plans_for_template.errors.choose.all"
+msgstr "переведите:Show all errors"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:300
+msgid "upload_plans_for_template.errors.column.rowNumber.title"
+msgstr "переведите:Row #"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:301
+msgid "upload_plans_for_template.errors.column.errormsg.title"
+msgstr "переведите:Error Message"
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:33
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:53
+msgid "workflow.step.analysisparams.action.viewupdate.label.collapse"
+msgstr "Детали -"
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:49
+msgid "workflow.step.analysisparams.action.viewupdate.label.expand"
+msgstr "Подробнее +"
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label"
+msgstr "Набор штрих-кодов"
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+msgid "workflow.step.kits.fields.barcodeId.label.required"
+msgstr "(обязательный)"
+
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label.optional"
+msgstr "(необязательный)"
+
+#: media/resources/scripts/plan/page_plan_kits.js:644
+msgid "workflow.step.kits.fields.flowOrder.default"
+msgstr "Использовать инструмент по умолчанию"
+
+#: media/resources/scripts/plan/page_plan_kits.js:657
+msgid "workflow.step.kits.fields.samplePrepProtocol.default"
+msgstr "Использовать инструмент по умолчанию"
+
+#: media/resources/scripts/plan/page_plan_kits.js:817
+msgid "workflow.step.kits.advancedsettings.messages.recommendation"
+msgstr "Рекомендуемые %(fieldLabel)s : %(fieldValue)s"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:354
+msgid "workflow.step.sample.grid.columns.field.row.title"
+msgstr "#"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:359
+msgid "workflow.step.sample.grid.columns.field.barcodeId.title"
+msgstr "Штрих-код"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:367
+msgid "workflow.step.sample.grid.columns.field.endBarcodeId.title"
+msgstr "Конец штрих-кода"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+#: media/resources/scripts/plan/page_plan_sample_table.js:1342
+msgid "workflow.step.sample.grid.columns.field.sampleName.title"
+msgstr "Имя образца"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+msgid "workflow.step.sample.grid.columns.field.sampleName.title.required"
+msgstr "(обязательный)"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:383
+msgid "workflow.step.sample.grid.columns.field._control_type.title"
+msgstr "Тип управления"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:388
+msgid "workflow.step.sample.grid.columns.field.controlType.title"
+msgstr "Тип управления"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:396
+msgid "workflow.step.sample.grid.columns.field.sampleExternalId.title"
+msgstr "Образец"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:401
+msgid "workflow.step.sample.grid.columns.field.sampleDescription.title"
+msgstr "Описание примера"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title.isDNAandFusions"
+msgstr "ДНК / Гибриды"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title"
+msgstr "ДНК / РНК"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:415
+msgid "workflow.step.sample.grid.columns.field._ref_details.title"
+msgstr "Справка"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:419
+msgid "workflow.step.sample.grid.columns.field.reference.title"
+msgstr "Справка"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:427
+msgid "workflow.step.sample.grid.columns.field.targetRegionBedFile.title"
+msgstr "Целевые регионы"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:435
+msgid "workflow.step.sample.grid.columns.field.hotSpotRegionBedFile.title"
+msgstr "Области Горячих точек"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:443
+#: media/resources/scripts/plan/page_plan_sample_table.js:1350
+msgid "workflow.step.sample.grid.columns.field.tubeLabel.title"
+msgstr "Образец метки пробки"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:449
+msgid "workflow.step.sample.grid.columns.field.chipBarcode.title"
+msgstr "Чип-штрих-код"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:455
+msgid "workflow.step.sample.grid.columns.field.controlSequenceType.title"
+msgstr "Тип управления Seq (необязательно)"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1205
+msgid "workflow.step.sample.messages.validate.csv_file.required"
+msgstr "Выберите CSV-файл"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1344
+msgid "workflow.step.sample.messages.validate.sampleName.is_valid_leading_chars"
+msgstr "Имя образца не может начинаться с (.) Или (_) или (-)"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1358
+msgid "workflow.step.sample.grid.messages.validate.is_valid_chars"
+msgstr "Ошибка, %(displayedTerm)s должна содержать только числа, буквы, пробелы и следующее:. - _"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1364
+msgid "workflow.step.sample.grid.messages.validate.is_valid_length"
+msgstr "Ошибка, %(displayedTerm)s длина должна быть %(max_length)d символов максимум"
+
+#: media/resources/scripts/plan/plan_templates.html.js:106
+msgid "template.pageable.messages.display"
+msgstr "{0} - {1} из {2} шаблонов"
+
+#: media/resources/scripts/plan/plan_templates.html.js:107
+msgid "template.pageable.messages.empty"
+msgstr "Нет шаблонов для отображения"
+
+#: media/resources/scripts/plan/plan_templates.html.js:114
+msgid "template.fields.planDisplayedName.label"
+msgstr "Имя Шаблона"
+
+#: media/resources/scripts/plan/plan_templates.html.js:119
+msgid "template.fields.sequencingInstrumentType.label"
+msgstr "прибор"
+
+#: media/resources/scripts/plan/plan_templates.html.js:125
+msgid "template.fields.templatePrepInstrumentType.label"
+msgstr "Пример Prep"
+
+#: media/resources/scripts/plan/plan_templates.html.js:131
+msgid "template.fields.runType.label"
+msgstr "исследование"
+
+#: media/resources/scripts/plan/plan_templates.html.js:137
+msgid "template.fields.barcodeKitName.label"
+msgstr "штрихкоды"
+
+#: media/resources/scripts/plan/plan_templates.html.js:142
+msgid "template.fields.reference.label"
+msgstr "Справка"
+
+#: media/resources/scripts/plan/plan_templates.html.js:147
+msgid "template.fields.projects.label"
+msgstr "Проект (ы)"
+
+#: media/resources/scripts/plan/plan_templates.html.js:151
+#: media/resources/scripts/plan/planned.html.js:281
+msgid "template.fields.projects.label.plural"
+msgstr "Проектов"
+
+#: media/resources/scripts/plan/plan_templates.html.js:156
+msgid "template.fields.irAccountName.label"
+msgstr "Ионная учетная запись репортера"
+
+#: media/resources/scripts/plan/plan_templates.html.js:162
+msgid "template.fields.irworkflow.label"
+msgstr "Рабочий процесс Ion Reporter"
+
+#: media/resources/scripts/plan/plan_templates.html.js:167
+msgid "template.fields.date.label"
+msgstr "Дата"
+
+#: media/resources/scripts/plan/plan_templates.html.js:172
+msgid "template.fields.isSystem.label"
+msgstr "Источник"
+
+#: media/resources/scripts/plan/plan_templates.html.js:469
+msgid "templates.messages.references.notinstalled"
+msgstr "Ссылки не установлены:"
+
+#: media/resources/scripts/plan/plan_templates.html.js:475
+msgid "templates.messages.bedfiles.notinstalled"
+msgstr "Файлы BED не установлены:"
+
+#: media/resources/scripts/plan/plan_templates.html.js:600
+msgid "import_plan_template.messages.validate.file.required"
+msgstr "Выберите CSV-файл"
+
+#: media/resources/scripts/plan/planned.html.js:209
+msgid "plannedruns.pageable.messages.display"
+msgstr "{0} - {1} из {2} запланированные трассы"
+
+#: media/resources/scripts/plan/planned.html.js:210
+msgid "plannedruns.pageable.messages.empty"
+msgstr "Нет запланированные трассы для отображения"
+
+#: media/resources/scripts/plan/planned.html.js:218
+msgid "plannedruns.fields.id.label"
+msgstr " "
+
+#: media/resources/scripts/plan/planned.html.js:221
+msgid "plannedruns.selectall.deselectall.tooltip"
+msgstr "переведите:(De)select All"
+
+#: media/resources/scripts/plan/planned.html.js:225
+msgid "plannedruns.fields.sampleSetDisplayedName.label"
+msgstr "Набор образцов"
+
+#: media/resources/scripts/plan/planned.html.js:234
+msgid "plannedruns.fields.planShortID.label"
+msgstr "Код запуска"
+
+#: media/resources/scripts/plan/planned.html.js:240
+msgid "plannedruns.fields.planDisplayedName.label"
+msgstr "Запланированное имя запуска"
+
+#: media/resources/scripts/plan/planned.html.js:245
+msgid "plannedruns.fields.barcodeId.label"
+msgstr "штрихкоды"
+
+#: media/resources/scripts/plan/planned.html.js:250
+msgid "plannedruns.fields.library.label"
+msgstr "Справка"
+
+#: media/resources/scripts/plan/planned.html.js:255
+msgid "plannedruns.fields.runType.label"
+msgstr "Исследование применения"
+
+#: media/resources/scripts/plan/planned.html.js:261
+msgid "plannedruns.fields.sampleGroupingName.label"
+msgstr "группа"
+
+#: media/resources/scripts/plan/planned.html.js:266
+msgid "plannedruns.fields.libraryPrepType.label"
+msgstr "Тип библиотеки библиотеки"
+
+#: media/resources/scripts/plan/planned.html.js:273
+msgid "plannedruns.fields.combinedLibraryTubeLabel.label"
+msgstr "Комбинированная метка библиотеки"
+
+#: media/resources/scripts/plan/planned.html.js:277
+msgid "plannedruns.fields.projects.label"
+msgstr "Проект"
+
+#: media/resources/scripts/plan/planned.html.js:285
+msgid "plannedruns.fields.sampleDisplayedName.label"
+msgstr "Образец"
+
+#: media/resources/scripts/plan/planned.html.js:291
+msgid "plannedruns.fields.sampleTubeLabel.label"
+msgstr "Образец метки пробки"
+
+#: media/resources/scripts/plan/planned.html.js:296
+msgid "plannedruns.fields.chipBarcode.label"
+msgstr "Чип-штрих-код"
+
+#: media/resources/scripts/plan/planned.html.js:301
+msgid "plannedruns.fields.date.label"
+msgstr "Последнее изменение"
+
+#: media/resources/scripts/plan/planned.html.js:306
+msgid "plannedruns.fields.planStatus.label"
+msgstr "статус"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.message"
+msgstr "Ты уверен?"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.cancel"
+msgstr "нет"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.confirm"
+msgstr "Да!"
+
+#: media/resources/scripts/reports/report.js:99
+msgid "report.section.plugins.messages.nopluginsrun"
+msgstr "Плагины не запущены"
+
+#: media/resources/scripts/reports/report.js:165
+msgid "report.section.plugins.messages.failedtogetpluginstatus"
+msgstr "Не удалось получить статус плагина"
+
+#: media/resources/scripts/reports/report.js:188
+msgid "report.messages.status.progresscomplete"
+msgstr "Отчет завершен. Страница будет перезагружена через %(reload_interval_s)s секунд"
+
+#: media/resources/scripts/reports/report.js:195
+msgid "report.messages.status.progress.onajaxerror"
+msgstr "Состояние проверки ошибки"
+
+#: media/resources/scripts/reports/report.js:546
+msgid "report.section.plugins.action.removeplugin.confirm"
+msgstr "Вы действительно хотите удалить этот результат плагина?"
+
+#: media/resources/scripts/reports/report.js:553
+msgid "report.section.plugins.action.removeplugin.failure"
+msgstr "Не удалось удалить результат плагина."
+
+#: media/resources/scripts/reports/report.js:593
+msgid "report.section.plugins.action.viewlog.failure"
+msgstr "Не удалось прочитать журнал подключений:"
+
+#: media/resources/scripts/reports/report.js:606
+msgid "report.section.plugins.action.terminate.inprogress"
+msgstr "переведите:Stopping"
+
+#: media/resources/scripts/reports/report.js:613
+msgid "report.section.plugins.messages.terminate.inprogress"
+msgstr "Плагин Job %(jobid)s завершается через SGE"
+
+#: media/resources/scripts/reports/report.js:616
+msgid "report.section.plugins.messages.terminate.failed"
+msgstr "Не удалось завершить работу SGE Job %(jobid)s"
+
+#: media/resources/scripts/reports/report.js:635
+msgid "report.section.plugins.execute.title"
+msgstr "Выберите плагин для запуска"
+
+#: media/resources/scripts/reports/report.js:637
+msgid "report.section.plugins.execute.messages.loadingpluginlist"
+msgstr "Загрузка списка плагинов"
+
+#: media/resources/scripts/reports/report.js:650
+msgid "global.nav.menu.configure.menu.plugins.label"
+msgstr "Плагины"
+
+#: media/resources/scripts/reports/report.js:651
+msgid "report.section.plugins.messages.nopluginsenabled"
+msgstr "Плагины не включены. Перейдите на страницу %(page_link)s, чтобы установить и включить плагины."
+
+#: media/resources/scripts/reports/report.js:747
+msgid "report.section.plugins.execute.messages.executing"
+msgstr "Запуск плагина %(pluginName)s"
+
+#: media/resources/scripts/reports/report.js:754
+msgid "report.section.plugins.execute.messages.failureexecuting"
+msgstr "ОШИБКА: Не удалось запустить плагин %(pluginName)s"
+
+#: media/resources/scripts/reports/report.js:892
+msgid "report.section.output.barcodes.fields.barcode_name.label"
+msgstr "Имя штрих-кода"
+
+#: media/resources/scripts/reports/report.js:896
+msgid "report.section.output.barcodes.fields.sample.label"
+msgstr "Образец"
+
+#: media/resources/scripts/reports/report.js:900
+msgid "report.section.output.barcodes.fields.total_bases.label"
+msgstr "Основы"
+
+#: media/resources/scripts/reports/report.js:904
+msgid "report.section.output.barcodes.fields.Q20_bases.label"
+msgstr "&gt; = Основы Q20"
+
+#: media/resources/scripts/reports/report.js:908
+msgid "report.section.output.barcodes.fields.read_count.label"
+msgstr "Читает"
+
+#: media/resources/scripts/reports/report.js:912
+msgid "report.section.output.barcodes.fields.mean_read_length.label"
+msgstr "Средняя длина чтения"
+
+#: media/resources/scripts/reports/report.js:915
+msgid "report.section.output.barcodes.read_len_histogram.label"
+msgstr "Прочитать длину гистограммы"
+
+#: media/resources/scripts/reports/report.js:919
+msgid "report.section.output.barcodes.files.label"
+msgstr "файлы"
+
+#: media/resources/scripts/sample/input_samples.js:347
+msgid "samplesets.PendingSampleSetItemInfo.fields.displayedName.label"
+msgstr "Имя образца"
+
+#: media/resources/scripts/sample/input_samples.js:351
+msgid "samplesets.PendingSampleSetItemInfo.fields.externalId.label"
+msgstr "образец идентификатора"
+
+#: media/resources/scripts/sample/input_samples.js:355
+msgid "samplesets.PendingSampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr "translate: PCR Plate Position"
+
+#: media/resources/scripts/sample/input_samples.js:363
+msgid "samplesets.PendingSampleSetItemInfo.fields.barcode.label"
+msgstr "Штрих-код"
+
+#: media/resources/scripts/sample/input_samples.js:367
+msgid "samplesets.PendingSampleSetItemInfo.fields.description.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/input_samples.js:371
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr "translate: Sample Collection Date"
+
+#: media/resources/scripts/sample/input_samples.js:375
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr "translate: Sample Receipt Date"
+
+#: media/resources/scripts/sample/input_samples.js:392
+msgid "samplesets.PendingSampleSetItemInfo.fields.gender.label"
+msgstr "род"
+
+#: media/resources/scripts/sample/input_samples.js:396
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipRole.label"
+msgstr "Тип"
+
+#: media/resources/scripts/sample/input_samples.js:400
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipGroup.label"
+msgstr "группа"
+
+#: media/resources/scripts/sample/input_samples.js:404
+msgid "samplesets.PendingSampleSetItemInfo.fields.cancerType.label"
+msgstr "Тип рака"
+
+#: media/resources/scripts/sample/input_samples.js:408
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellularityPct.label"
+msgstr "Сотовая связь%"
+
+#: media/resources/scripts/sample/input_samples.js:412
+msgid "samplesets.PendingSampleSetItemInfo.fields.biopsyDays.label"
+msgstr "Дни биопсии"
+
+#: media/resources/scripts/sample/input_samples.js:416
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellNum.label"
+msgstr "номер мобильного"
+
+#: media/resources/scripts/sample/input_samples.js:420
+msgid "samplesets.PendingSampleSetItemInfo.fields.coupleId.label"
+msgstr "Пара ID"
+
+#: media/resources/scripts/sample/input_samples.js:424
+msgid "samplesets.PendingSampleSetItemInfo.fields.embryoId.label"
+msgstr "Идентификатор эмбрионов"
+
+#: media/resources/scripts/sample/input_samples.js:428
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.population.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/input_samples.js:432
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.mouseStrains.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/sampleattributes.js:229
+msgid "samplesets.SampleAttribute.fields.displayedName.label"
+msgstr "Имя набора"
+
+#: media/resources/scripts/sample/sampleattributes.js:234
+msgid "samplesets.SampleAttribute.fields.description.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/sampleattributes.js:237
+msgid "samplesets.SampleAttribute.fields.dataType_name.label"
+msgstr "Тип данных"
+
+#: media/resources/scripts/sample/sampleattributes.js:241
+msgid "samplesets.SampleAttribute.fields.isMandatory.label"
+msgstr "необходимые"
+
+#: media/resources/scripts/sample/sampleattributes.js:246
+msgid "samplesets.SampleAttribute.fields.isActive.label"
+msgstr "показывать"
+
+#: media/resources/scripts/sample/sampleattributes.js:251
+msgid "samplesets.SampleAttribute.fields.sampleCount.label"
+msgstr "# Образцы"
+
+#: media/resources/scripts/sample/sampleattributes.js:255
+msgid "samplesets.SampleAttribute.fields.lastModifiedDate.label"
+msgstr "Дата"
+
+#: media/resources/scripts/sample/samplesets.js:366
+msgid "samplesets.fields.id.label"
+msgstr "Выбрать"
+
+#: media/resources/scripts/sample/samplesets.js:372
+msgid "samplesets.fields.displayedName.label"
+msgstr "Имя набора"
+
+#: media/resources/scripts/sample/samplesets.js:376
+msgid "samplesets.fields.lastModifiedDate.label"
+msgstr "Дата"
+
+#: media/resources/scripts/sample/samplesets.js:381
+msgid "samplesets.fields.sampleCount.label"
+msgstr "# Образцы"
+
+#: media/resources/scripts/sample/samplesets.js:384
+msgid "samplesets.fields.description.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/samplesets.js:387
+msgid "samplesets.fields.sampleGroupTypeName.label"
+msgstr "группирование"
+
+#: media/resources/scripts/sample/samplesets.js:390
+msgid "samplesets.fields.libraryPrepType.label"
+msgstr "Тип подготовки к библиотеке"
+
+#: media/resources/scripts/sample/samplesets.js:394
+msgid "samplesets.fields.libraryPrepKitDisplayedName.label"
+msgstr "Набор для подготовки библиотеки"
+
+#: media/resources/scripts/sample/samplesets.js:397
+msgid "samplesets.fields.pcrPlateSerialNum.label"
+msgstr "PCR Пластинчатый серийный номер #"
+
+#: media/resources/scripts/sample/samplesets.js:400
+msgid "samplesets.fields.combinedLibraryTubeLabel.label"
+msgstr "Комбинированная метка трубки"
+
+#: media/resources/scripts/sample/samplesets.js:403
+msgid "samplesets.fields.status.label"
+msgstr "статус"
+
+#: media/resources/scripts/sample/samplesets.js:598
+msgid "samplesets.SampleSetItemInfo.fields.sampleDisplayedName.label"
+msgstr "Имя образца"
+
+#: media/resources/scripts/sample/samplesets.js:603
+msgid "samplesets.SampleSetItemInfo.fields.sampleExternalId.label"
+msgstr "образец идентификатора"
+
+#: media/resources/scripts/sample/samplesets.js:608
+msgid "samplesets.SampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr "PCR Положение пластины"
+
+#: media/resources/scripts/sample/samplesets.js:612
+msgid "samplesets.SampleSetItemInfo.fields.controlType.label"
+msgstr "Тип управления"
+
+#: media/resources/scripts/sample/samplesets.js:616
+msgid "samplesets.SampleSetItemInfo.fields.dnabarcode.label"
+msgstr "Штрих-код"
+
+#: media/resources/scripts/sample/samplesets.js:620
+msgid "samplesets.SampleSetItemInfo.fields.description.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/samplesets.js:625
+msgid "samplesets.SampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr "translate: Sample Collection Date"
+
+#: media/resources/scripts/sample/samplesets.js:630
+msgid "samplesets.SampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr "translate: Sample Receipt Date"
+
+#: media/resources/scripts/sample/samplesets.js:654
+msgid "samplesets.SampleSetItemInfo.fields.gender.label"
+msgstr "род"
+
+#: media/resources/scripts/sample/samplesets.js:659
+msgid "samplesets.SampleSetItemInfo.fields.relationshipRole.label"
+msgstr "Тип"
+
+#: media/resources/scripts/sample/samplesets.js:664
+msgid "samplesets.SampleSetItemInfo.fields.relationshipGroup.label"
+msgstr "группа"
+
+#: media/resources/scripts/sample/samplesets.js:670
+msgid "samplesets.SampleSetItemInfo.fields.cancerType.label"
+msgstr "Тип рака"
+
+#: media/resources/scripts/sample/samplesets.js:675
+msgid "samplesets.SampleSetItemInfo.fields.cellularityPct.label"
+msgstr "Сотовая связь%"
+
+#: media/resources/scripts/sample/samplesets.js:680
+msgid "samplesets.SampleSetItemInfo.fields.biopsyDays.label"
+msgstr "Дни биопсии"
+
+#: media/resources/scripts/sample/samplesets.js:684
+msgid "samplesets.SampleSetItemInfo.fields.cellNum.label"
+msgstr "номер мобильного"
+
+#: media/resources/scripts/sample/samplesets.js:688
+msgid "samplesets.SampleSetItemInfo.fields.coupleId.label"
+msgstr "Пара ID"
+
+#: media/resources/scripts/sample/samplesets.js:692
+msgid "samplesets.SampleSetItemInfo.fields.embryoId.label"
+msgstr "Идентификатор эмбрионов"
+
+#: media/resources/scripts/sample/samplesets.js:696
+#, fuzzy
+msgid "samplesets.SampleSetItemInfo.fields.population.label"
+msgstr "Описание"
+
+#: media/resources/scripts/sample/samplesets.js:700
+#, fuzzy
+msgid "samplesets.SampleSetItemInfo.fields.mouseStrains.label"
+msgstr "Описание"
+
+#~ msgid "samplesets.PendingSampleSetItemInfo.fields.nucleotideType.label"
+#~ msgstr "DNA/RNA"
+
+#~ msgid "samplesets.SampleSetItemInfo.fields.nucleotideType.label.isFusions"
+#~ msgstr "DNA/Fusions"
+
+#~ msgid "samplesets.SampleSetItemInfo.fields.nucleotideType.label"
+#~ msgstr "DNA/RNA"
+
+#~ msgid "samplesets.PendingSampleSetItemInfo.fields.barcodeKit.label"
+#~ msgstr "Штрих-код"
+
+#~ msgid "global.mode.live.enable"
+#~ msgstr "Автообновление"
+
+#~ msgid "global.mode.live.enable.details"
+#~ msgstr "Страница статична до обновления"
+
+#~ msgid "global.mode.live.disable"
+#~ msgstr "Остановить обновление"
+
+#~ msgid "global.mode.live.disable.details"
+#~ msgstr "Страница обновляется автоматически"

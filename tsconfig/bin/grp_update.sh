@@ -40,7 +40,7 @@ CLUST_CMD="$TOOL -l $USER -S -w ssh:$HOST_LIST "
 APT_UPDATE_CMD="${CLUST_CMD}sudo apt-get -qq update"
 if [ $DEBUG == 0 ]; then
     # DEPLOY VERSION
-    TSCONFIG_INSTALL_CMD="${CLUST_CMD}sudo apt-get install --force-yes -y ion-tsconfig"
+    TSCONFIG_INSTALL_CMD="${CLUST_CMD}sudo apt-get install --allow-unauthenticated -y ion-tsconfig"
     TSCONFIG_CMD="${CLUST_CMD}sudo TSconfig -s"
 else
     #DEBUG VERSION

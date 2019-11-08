@@ -3,8 +3,13 @@
 
 static const maskCheckBox_t mcbt1[] = {
     {"Mask UnAligned",1,Qt::Unchecked},
-    {"Mask Aligned",2,Qt::Unchecked}
+    {"Mask Aligned",2,Qt::Unchecked},
+    {"Show NoBarcode",3,Qt::Unchecked},
+    {"Show Sequence",4,Qt::Checked},
+    {"Show Query/Align",5,Qt::Checked},
+    {"InvertQuality",6,Qt::Unchecked},
 };
+
 
 AlignmentTab::AlignmentTab(QString _mName, Dialog *_mParent, QWidget *parent)
     : ModelTab(_mName, _mParent, parent)
@@ -12,7 +17,7 @@ AlignmentTab::AlignmentTab(QString _mName, Dialog *_mParent, QWidget *parent)
     mSpatialPlot = new AlignmentSpatial(this);
 
     QGridLayout *grid = new QGridLayout;
-    grid->addWidget(MakeSlider("flows"),0,0);
+    grid->addWidget(MakeSlider("quality"),0,0);
     grid->addWidget(MakeTraceCB(),1,0);
     grid->addWidget(MakeList(mcbt1,sizeof(mcbt1)/sizeof(mcbt1[0])),0,1,2,1);
     grid->setRowStretch(0,0);

@@ -84,11 +84,11 @@ void BbcDepth::Report( bool usingRange )
 				// unless the low threshold is specifically caught both are at the current depth
 				if( !ucov_low ) ucov_low = covlen;
 				ucov_high = covlen;
-				mrd_high = mrd_max+1;	// prevent finding again
+				check_ucov = false;
 			}
 		}
 		while( firstCovDepth < m_ncovDepths ) {
-			if( (uint32_t)m_covAtDepth[firstCovDepth] < rd ) break;
+			if( (uint32_t)m_covAtDepth[firstCovDepth] > rd ) break;
 			covDepths[firstCovDepth] = covlen;
 			++firstCovDepth;
 		}

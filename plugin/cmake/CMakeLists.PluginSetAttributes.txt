@@ -5,6 +5,15 @@
 #        PROJECT_BINARY_DIR
 # DESCRIPTION: This will setup all of the standard plugin package attributes and install scripts
 
+find_program(LSB_RELEASE_COMMAND lsb_release)
+if(LSB_RELEASE_COMMAND)
+    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
+        OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
+    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+endif(LSB_RELEASE_COMMAND)
+
 # clean the plugin name of illegal characters
 STRING(REPLACE "_" "" DEB_PLUGIN_NAME ${PLUGIN_NAME})
 STRING(TOLOWER ${DEB_PLUGIN_NAME} DEB_PLUGIN_NAME)

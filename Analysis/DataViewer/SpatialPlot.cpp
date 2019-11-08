@@ -9,7 +9,7 @@
 
 
 //! [0]
-const double ZoomInFactor = 0.8;
+const double ZoomInFactor = 0.7;
 const double ZoomOutFactor = 1 / ZoomInFactor;
 const int ScrollStep = 20;
 //! [0]
@@ -31,6 +31,19 @@ int SpatialPlot::flows=0;
 int SpatialPlot::Block_X=0;
 int SpatialPlot::Block_Y=0;
 char *SpatialPlot::mMask = NULL;
+float *SpatialPlot::WellsOut=NULL;    // raw calls data
+float *SpatialPlot::WellsNormOut=NULL;    // raw calls data
+int32_t *SpatialPlot::sequenceLenOut=NULL; // length of alignments
+char **SpatialPlot::SequenceQueryBasesOut=NULL;   // called bases
+char **SpatialPlot::SequenceAlignedBasesOut=NULL; // aligned bases
+uint16_t *SpatialPlot::SequenceMapQuality=NULL;
+uint32_t **SpatialPlot::SequenceMapErrors=NULL;
+float *SpatialPlot::NumpyOut=NULL;
+float *SpatialPlot::microscopeOut=NULL;    // raw calls data
+int SpatialPlot::flowOrderLen=0;
+char SpatialPlot::flowOrder[4096]={0};
+int SpatialPlot::curDisplayFlow=-1;
+
 
 TraceDescr_t SpatialPlot::traces[MAX_NUM_TRACES] = {{0,0}};
 int SpatialPlot::traces_curSelection=0;
@@ -64,7 +77,7 @@ SpatialPlot::SpatialPlot(QWidget *parent)
      memset(traces,0,sizeof(traces));
      for(int trc=0;trc<MAX_NUM_TRACES;trc++)
      {
-         if(trc < 2)
+         if(trc < 1)
             traces[trc].y = traces[trc].x = trc;
          else
             traces[trc].y = traces[trc].x = -1;
@@ -87,6 +100,7 @@ void SpatialPlot::SetOption(QString option, int state)
 
 void SpatialPlot::setfilename(QString fileName)
 {
+    printf("%s: %s\n",__PRETTY_FUNCTION__,fileName.toLatin1().data());
     fname = fileName;
     render();
 }
@@ -113,10 +127,12 @@ void SpatialPlot::paintEvent(QPaintEvent * /* event */)
             (lastStartY != startY) ||
             (lastEndX   != endX) ||
             (lastEndY   != endY) ||
+            //(lastcurDisplayFlow != curDisplayFlow) ||
             (GblTracesVer != LocalTracesVer)){
         thread.render();
     }
     firstShow=1;
+
 
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
@@ -210,6 +226,8 @@ void SpatialPlot::UpdateTraceData()
 {
     LocalTracesVer = GblTracesVer;
 
+    memset(traces_highlited,0,sizeof(traces_highlited));
+
     // copy from out to traces
     int limit=traces_len;
     for(int trc=0;trc<MAX_NUM_TRACES;trc++)
@@ -227,13 +245,57 @@ void SpatialPlot::UpdateTraceData()
 void SpatialPlot::UpdateTracePlot()
 {
     // plot the data in traces
+	qDebug() << __PRETTY_FUNCTION__ << ": hist=" << display_histogram;
+	if(display_histogram){
+		// just use trace 0 for the histogram
+		{
+            QVector<double> x(0);
+            QVector<double> y(0);
+            for(int bin=0;bin<NUM_HIST_BINS;bin++){
+            	y.push_back(histData[bin]);
+            	x.push_back(minPixVal + (maxPixVal-minPixVal) * bin/NUM_HIST_BINS);
+            }
+            _mTracePlot->graph(0)->setData(x, y);
+		}
+        for(int trc=1;trc<MAX_NUM_TRACES;trc++){
+            if(_mTracePlotSet[trc]){
+                 QString name="";
+                 _mTracePlot->graph(trc)->setName(name);
+                 _mTracePlotSet[trc]=0;
+                 QVector<double> x(0);
+                 QVector<double> y(0);
+                 _mTracePlot->graph(trc)->setData(x, y);
+             }
+        }
+        float ymax=0;
+        float ymin=1000;
+        float xmax = maxPixVal;
+        float xmin = minPixVal;
 
-    if (traces_len)
+        for(int bin=0;bin<NUM_HIST_BINS;bin++){
+        	if(histData[bin] > ymax)
+        		ymax = histData[bin];
+        	if(histData[bin] < ymin)
+        		ymin = histData[bin];
+        }
+
+        qDebug() << __PRETTY_FUNCTION__ << ": xmin=" << xmin << " xmax=" << xmax << " ymin=" << ymin << " ymax=" << ymax;
+        _mTraceRange=ymax-ymin;
+        _mTracePlot->xAxis->setRange(xmin, xmax);
+        _mTracePlot->yAxis->setRange(ymin, ymax);
+        _mTracePlot->yAxis->setScaleType(QCPAxis::stLogarithmic);
+        _mTracePlot->replot();
+
+	}else if (traces_len)
     {
         double xmin = 0; // set defaults
         double xmax = ((double)traces_ts[traces_len-1]);
         double ymin = 16384;
         double ymax = 0;
+        int highlited = 0;
+        QVector<double> x_highlited(traces_len/**MAX_NUM_TRACES*/);
+        QVector<double> y_highlited(traces_len/**MAX_NUM_TRACES*/);
+
 
         for(int trc=0;trc<MAX_NUM_TRACES;trc++)
         {
@@ -250,8 +312,11 @@ void SpatialPlot::UpdateTracePlot()
                       ymin = y[i];
                   if(y[i] > ymax)
                       ymax = y[i];
+                  if(traces_highlited[trc][i] && highlited < traces_len){
+                      x_highlited[highlited]=traces_ts[i];
+                      y_highlited[highlited++]=y[i];
+                  }
                 }
-
 
                 // create graph and assign data to it:
                 _mTracePlot->graph(trc)->setData(x, y);
@@ -272,6 +337,18 @@ void SpatialPlot::UpdateTracePlot()
             }
         }
 
+        _mTracePlot->graph(MAX_NUM_TRACES+1)->setData(x_highlited,y_highlited);
+
+        if(X_Upper_Override != NO_OVERRIDE)
+            xmax=X_Upper_Override;
+        if(Y_Upper_Override != NO_OVERRIDE)
+            ymax=Y_Upper_Override;
+        if(X_Lower_Override != NO_OVERRIDE)
+            xmin=X_Lower_Override;
+        if(Y_Lower_Override != NO_OVERRIDE)
+            ymin=Y_Lower_Override;
+
+        CustomTracePlotAdder(xmin,xmax,ymin,ymax);
         {
             // add frame/flow line
             QVector<double> x(2);
@@ -287,10 +364,19 @@ void SpatialPlot::UpdateTracePlot()
         _mTraceRange=ymax-ymin;
         _mTracePlot->xAxis->setRange(xmin, xmax);
         _mTracePlot->yAxis->setRange(ymin, ymax);
+        _mTracePlot->yAxis->setScaleType(QCPAxis::stLinear);
         _mTracePlot->replot();
 
     }
 
+}
+
+void SpatialPlot::CustomTracePlotAdder(double &xmin, double &xmax, double &ymin, double &ymax)
+{
+    (void)xmin;
+    (void)xmax;
+    (void)ymin;
+    (void)ymax;
 }
 
 
@@ -305,7 +391,7 @@ void SpatialPlot::setTracePlot(QCustomPlot *mtracePlot, int _flow_based)
     double ymax = 1;
 
     // create graph and assign data to it:
-    for(int i=0;i<(MAX_NUM_TRACES+1);i++){
+    for(int i=0;i<(MAX_NUM_TRACES+2);i++){
         mtracePlot->addGraph();
 
         if(i < MAX_NUM_TRACES){
@@ -316,6 +402,10 @@ void SpatialPlot::setTracePlot(QCustomPlot *mtracePlot, int _flow_based)
 
             qp.setColor(QColor(qRed(xcolor),qGreen(xcolor),qBlue(xcolor)));
             mtracePlot->graph(i)->setPen(qp);
+        }
+        else if(i==(MAX_NUM_TRACES+1)){
+            mtracePlot->graph(i)->setScatterStyle(QCPScatterStyle::ssDiamond);
+            mtracePlot->graph(i)->setLineStyle(QCPGraph::lsNone);
         }
     }
 
@@ -332,6 +422,8 @@ void SpatialPlot::setTracePlot(QCustomPlot *mtracePlot, int _flow_based)
 
     connect(mtracePlot, SIGNAL(mouseMove(QMouseEvent*)), this,SLOT(showPointToolTip_traces(QMouseEvent*)));
     connect(mtracePlot, SIGNAL(mouseDoubleClick(QMouseEvent*)), this,SLOT(mouseDoubleClickEvent_traces(QMouseEvent*)));
+    connect(mtracePlot, SIGNAL(axisDoubleClick(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event)), this,SLOT(
+        axisDoubleClick_traces(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event)));
 }
 
 void SpatialPlot::showPointToolTip(QMouseEvent *event)
@@ -362,42 +454,95 @@ void SpatialPlot::Save(QTextStream &strm)
     }
 }
 
-void SpatialPlot::DoubleClick_traces(int x, int y, int ts)
+void SpatialPlot::DoubleClick_traces(int x, int y, int ts, float val)
 {
     // .... override me ......
-    (void)x;
-    (void)y;
-    (void)ts;
+    qDebug() << __PRETTY_FUNCTION__ << ": Y" << QString::number(y) << "_X" << QString::number(x) << " TS " << ts << "val " << QString::number(val);
+
+//    (void)x;
+//    (void)y;
+//    (void)ts;
+//    (void)val;
 }
+void SpatialPlot::axisDoubleClick_traces(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event)
+{
+    (void)axis;
+    (void)part;
+    (void)event;
+    qDebug() << __PRETTY_FUNCTION__ ;
+
+}
+
 
 void SpatialPlot::mouseDoubleClickEvent_traces(QMouseEvent *event)
 {
-    float x = _mTracePlot->xAxis->pixelToCoord(event->pos().x());
-    float y = _mTracePlot->yAxis->pixelToCoord(event->pos().y());
+    double x = _mTracePlot->xAxis->pixelToCoord(event->pos().x());
+    double y = _mTracePlot->yAxis->pixelToCoord(event->pos().y());
+
+    double x_lower=_mTracePlot->xAxis->range().lower;
+    double x_upper=_mTracePlot->xAxis->range().upper;
+    double y_lower=_mTracePlot->yAxis->range().lower;
+    double y_upper=_mTracePlot->yAxis->range().upper;
+
     qDebug() << __PRETTY_FUNCTION__ << ": X" << x << "_Y" << y;
 
+    if(x < x_lower){
+        //handle y limits
+        qDebug() << "handle y limits " << x;
+        if(y < (y_lower + (y_upper - y_lower)/2)){
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("Y Min:"),y_lower,-1500,1500,1,&ok);
+            Y_Lower_Override=ok?rc:NO_OVERRIDE;
+        }else{
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("Y Max:"),y_upper,-1500,1500,1,&ok);
+            Y_Upper_Override=ok?rc:NO_OVERRIDE;
 
-    // figure out which frame we are looking at...
-    int min_ts=0;
-    for(int ts=0;ts<traces_len;ts++){
-        if(std::abs(x - traces_ts[ts]) < std::abs(x - traces_ts[min_ts]))
-            min_ts = ts;
-    }
+        }
+        render();
+    }else if(y < y_lower){
+        // handle x limits
+        qDebug() << "handle x limits " << y;
+        if(x < (x_lower + (x_upper - x_lower)/2)){
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("X Min:"),x_lower,-1500,1500,1,&ok);
+            X_Lower_Override=ok?rc:NO_OVERRIDE;
+        }else{
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("X Max:"),x_upper,-1500,1500,1,&ok);
+            X_Upper_Override=ok?rc:NO_OVERRIDE;
+        }
+        render();
+    }else{
 
-    int min_val_idx=0;
-    for(int i=0;i<(MAX_NUM_TRACES);i++){
-        if((traces[i].x >=0) && (traces[i].y > 0))
-        {
-            if(std::abs(y - traces_Val[i][min_ts]) < std::abs(y - traces_Val[min_val_idx][min_ts]))
-                min_val_idx = i;
+        // figure out which frame we are looking at...
+        int min_ts=0;
+        for(int ts=0;ts<traces_len;ts++){
+            if(std::abs(x - traces_ts[ts]) < std::abs(x - traces_ts[min_ts]))
+                min_ts = ts;
+        }
+
+        int min_val_idx=0;
+        for(int i=0;i<(MAX_NUM_TRACES);i++){
+            if((traces[i].x >=0) && (traces[i].y > 0))
+            {
+                if(std::abs(y - traces_Val[i][min_ts]) < std::abs(y - traces_Val[min_val_idx][min_ts]))
+                    min_val_idx = i;
+            }
+        }
+
+        // we now have min_ts and min_val_idx....
+        if(std::abs(y-traces_Val[min_val_idx][min_ts]) < (3.0*_mTraceRange/100.0)){
+            //_mTracePlot->setToolTip(QString("Y%1_X%2: (%3,%4)").arg(traces[min_val_idx].y).arg(traces[min_val_idx].x).arg(traces_ts[min_ts]).arg(traces_Val[min_val_idx][min_ts]));
+            DoubleClick_traces(traces[min_val_idx].x,traces[min_val_idx].y,min_ts,traces_Val[min_val_idx][min_ts]);
         }
     }
+}
 
-    // we now have min_ts and min_val_idx....
-    if(std::abs(y-traces_Val[min_val_idx][min_ts]) < (3.0*_mTraceRange/100.0)){
-        //_mTracePlot->setToolTip(QString("Y%1_X%2: (%3,%4)").arg(traces[min_val_idx].y).arg(traces[min_val_idx].x).arg(traces_ts[min_ts]).arg(traces_Val[min_val_idx][min_ts]));
-        DoubleClick_traces(traces[min_val_idx].x,traces[min_val_idx].y,traces_Val[min_val_idx][min_ts]);
-    }
+void SpatialPlot::SetTracesToolTip(int y, int x, float ts, float val)
+{
+    _mTracePlot->setToolTip(QString("Y%1_X%2: (%3,%4)").arg(y).arg(x).arg(ts).arg(val));
+
 }
 
 void SpatialPlot::showPointToolTip_traces(QMouseEvent *event)
@@ -425,7 +570,7 @@ void SpatialPlot::showPointToolTip_traces(QMouseEvent *event)
 
     // we now have min_ts and min_val_idx....
     if(std::abs(y-traces_Val[min_val_idx][min_ts]) < (3.0*_mTraceRange/100.0)){
-        _mTracePlot->setToolTip(QString("Y%1_X%2: (%3,%4)").arg(traces[min_val_idx].y).arg(traces[min_val_idx].x).arg(traces_ts[min_ts]).arg(traces_Val[min_val_idx][min_ts]));
+        SetTracesToolTip(traces[min_val_idx].y,traces[min_val_idx].x,traces_ts[min_ts],traces_Val[min_val_idx][min_ts]);
     }
 //    else{
 //        _mTracePlot->setToolTip("");
@@ -435,15 +580,52 @@ void SpatialPlot::showPointToolTip_traces(QMouseEvent *event)
 
 void SpatialPlot::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    int oobx=0;
-    int ooby=0;
-    int ax = GetAX(event->x(),width(),oobx);
-    int ay = GetAY(event->y(),height(),ooby);
-    int oob=oobx|ooby;
 
-    DoubleClick(oob?-1:ax,oob?-1:ay);
+    if(event->x() >= (width()-scaleBarWidth)){
+        // they double-clicked on the scale bar.
+        if(event->y() < (height()/2)){
+            // override the max value
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("Max:"),maxPixVal,-5000,20000,1,&ok);
+            Spa_Upper_Override=ok?rc:NO_OVERRIDE;
+        }else{
+            // override the min value
+            bool ok;
+            double rc = QInputDialog::getDouble(this,tr(""),tr("Max:"),minPixVal,-5000,20000,1,&ok);
+            Spa_Lower_Override=ok?rc:NO_OVERRIDE;
+        }
+
+    }else{
+        int oobx=0;
+        int ooby=0;
+        int ax = GetAX(event->x(),width(),oobx);
+        int ay = GetAY(event->y(),height(),ooby);
+        int oob=oobx|ooby;
+        bool ok=false;
+        if(event->x() < borderWidth){
+        	if(event->y() < borderHeight){
+                bool ok;
+                double rc = QInputDialog::getDouble(this,tr(""),tr("Y Max:"),endY,0,rows,1,&ok);
+                if(ok)endY=rc;
+        	}else if(event->y() > (height()-(2*borderHeight)) &&
+        			(event->y() < (height()-(borderHeight)))){
+                double rc = QInputDialog::getDouble(this,tr(""),tr("Y Min:"),startY,0,rows,1,&ok);
+                if(ok)startY=rc;
+        	}
+        }else if(event->y() > (height() - borderHeight)){
+
+        	if(event->x() > borderWidth && event->x() < (2*borderWidth)){
+                double rc = QInputDialog::getDouble(this,tr(""),tr("X Min:"),startX,0,cols,1,&ok);
+                if(ok)startX=rc;
+        	}else if(event->x() > (width()-scaleBarWidth-borderWidth) && event->x() < (width()-scaleBarWidth)){
+                double rc = QInputDialog::getDouble(this,tr(""),tr("X Max:"),endX,0,cols,1,&ok);
+                if(ok)endX=rc;
+        	}
+        }
+        DoubleClick(oob?-1:ax,oob?-1:ay);
+        printf("%s: %d/%d  %d/%d\n",__FUNCTION__,event->x(),event->y(),ax,ay);
+    }
     render();
-    printf("%s: %d/%d  %d/%d\n",__FUNCTION__,event->x(),event->y(),ax,ay);
     initialHints=0;
     fflush(stdout);
 }
@@ -647,7 +829,7 @@ void SpatialPlot::zoom(double zoomFactor, double XWeight, double YWeight)
 
     startX += diffXS;
     startY += diffYS;
-    endX -= diffYE;
+    endX -= diffXE;
     endY -= diffYE;
     if(startX < 0)
         startX=0;
@@ -778,7 +960,7 @@ int SpatialPlot::GetAY(int y, int Height, int & ooby)
     double bh = borderHeight;
     double rh = (double)(endY-startY);
     double screenh = (double)(Height - bh);
-    int ay = endY - bh - 1 - (int)(((double)y/*-bh*/) * rh / screenh);
+    int ay = endY - 1 - (int)(((double)y) / screenh * rh);
     if((y >= screenh))
         ooby=1;
     if(ay >= rows || ay < 0)
@@ -805,7 +987,7 @@ int SpatialPlot::GetY(int ay, int Height, int & ooby)
 {
     double rh = (double)(endY-startY);
     double screenh = (double)(Height - borderHeight);
-    int y = /*borderHeight +*/ (int)((double)(endY-ay-borderHeight-1) * screenh/rh);
+    int y = (int)((double)(endY-ay-1) * screenh/rh);
     if(y < 0)
         ooby=1;
     if(y >= Height)
@@ -847,38 +1029,52 @@ QImage *SpatialPlot::doRender()
 //        printf("rendering from %d/%d/%d to %d/%d --> %d/%d frame %d\n",
 //               rows,cols,frames,startX,startY,endX,endY, frame);
 
-    int minVal = 16384;
-    int maxVal = -16384;
-    // get the max and min values first...
-    for (int y = 0; y < Height; y++) {
-        int ooby=0;
-        int ay = GetAY(y,Height,ooby);
-        for(int x=0;x<Width;x++){
-            int oobx=0;
-            int ax = GetAX(x,Width,oobx);
+    float minVal = 16384;
+    float maxVal = -16384;
+    {
+        // get the max and min values first...
+        for (int y = 0; y < Height; y++) {
+            int ooby=0;
+            int ay = GetAY(y,Height,ooby);
+            for(int x=0;x<Width;x++){
+                int oobx=0;
+                int ax = GetAX(x,Width,oobx);
 
-            if(ooby || oobx){
-            }else{
+                if(ooby || oobx){
+                }else{
 
-                int val = Get_Data(flow_based?flow:frame,ay,ax);
-                if((val < minVal) && (!ignore_pinned || (val >= 4))){
-                    minVal = val;
-                }
-                if((val > maxVal) && (val <= 16380)){
-                    maxVal = val;
+                    float val = Get_Data(flow_based?flow:frame,ay,ax);
+                    if((val < minVal) && (!ignore_pinned || (val >= 4))){
+                        minVal = val;
+                    }
+                    if((val > maxVal) && (val <= 16380)){
+                        maxVal = val;
+                    }
                 }
             }
         }
+
+        maxVal++;
+        if(maxVal <= minVal)
+            maxVal = minVal+10;
+    //    if(minVal > 0)
+    //        minVal-=1;
     }
 
-    maxVal++;
-    if(maxVal <= minVal)
-        maxVal = minVal+10;
-//    if(minVal > 0)
-//        minVal-=1;
+    if(Spa_Lower_Override != NO_OVERRIDE)
+        minVal = Spa_Lower_Override;
+    if(Spa_Upper_Override != NO_OVERRIDE)
+        maxVal = Spa_Upper_Override;
+
+
     maxPixVal=maxVal;
     minPixVal=minVal;
-    int range = maxVal-minVal;
+
+    float range = maxVal-minVal;
+    float histBlockSize = range/sizeof(sizeof(histData)/sizeof(histData[0]));
+    if(histBlockSize < 1)
+    	histBlockSize = 1;
+    memset(histData,0, (sizeof(histData)));
 //    if(range < 1)
 //        range=1; // don't divide by zero!
 //    printf("range = %d - %d --> %d\n",maxVal,minVal,range);
@@ -901,20 +1097,33 @@ QImage *SpatialPlot::doRender()
                 }
             }else{
 
-                int val = Get_Data(flow_based?flow:frame,ay,ax);
+                float val = Get_Data(flow_based?flow:frame,ay,ax);
+                histData[((uint32_t)val/(uint32_t)histBlockSize) % (sizeof(histData)/sizeof(histData[0]))]++;
+                if(val > maxVal)
+                    val = maxVal;
+                if(val < minVal)
+                    val = minVal;
 //                if(ignore_pinned && ((val >= 16380) || (val <= 4)))
 //                    scanLine[x]=colormap[0];
 //                else{
                     val -= minVal;
                     val *= ColormapSize;
                     val /= range;
-                    uint cmap = colormap[val % ColormapSize];
+                    uint cmap = colormap[(int)val % ColormapSize];
                     scanLine[x] = cmap;
 //                }
             }
         }
     }
 
+    paintXMarks(image);
+    UpdateTraceData();
+
+    return image;
+}
+
+void SpatialPlot::paintXMarks(QImage *image)
+{
     // put the X's on the selected well's
     if(rows && cols){
         for(int ts=0;ts<MAX_NUM_TRACES;ts++){
@@ -949,10 +1158,6 @@ QImage *SpatialPlot::doRender()
             }
         }
     }
-
-    UpdateTraceData();
-
-    return image;
 }
 
 float SpatialPlot::Get_Data(int idx, int y, int x)

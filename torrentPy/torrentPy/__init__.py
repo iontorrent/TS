@@ -4,10 +4,10 @@ import IO
 
 try:
     import IonDBQuery
-except ImportError, e:
-    print e
-    print "Ion TS database access not available"
-    
+except ImportError as e:
+    print(e)
+    print("Ion TS database access not available")
+
 import IonDebugData
 import IonPlotting
 from torrentPyLib import *

@@ -1,33 +1,34 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_references_add_barcodeset" title="" class="modal hide" data-width="750">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Add New DNA Barcodes</h3>
+        <h3>{% trans "references_barcodeset_add.title" %}</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <form class="form-horizontal" id="modal_references_add_barcodeset_form" method="POST" action="{% url "references_barcodeset_add" %}" enctype="multipart/form-data">
             <fieldset>
                 <div class="control-group">
-                    <label for="input01" class="control-label">Barcode Set Name</label>
+                    <label for="input01" class="control-label">{{ BarcodeSet.verbose_name }} {{ BarcodeSet.name.verbose_name }}</label>
                     <div class="controls">
                         <input value="" name="name" id="name" class="input-xlarge required" maxlength="512" type="text">
                         <p class="help-block error">
                         </p>
                         <p class="help-block">
-                            Descriptive name of the Result
+                            {% trans 'entity.BarcodeSet.fields.name.helptext' %}
                         </p>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="fileInput" class="control-label">Barcode CSV File</label>
+                    <label for="fileInput" class="control-label">{% trans "references_barcodeset_add.fields.postedfile.label" %}</label>
                     <div class="controls">
                         <input type="file" id="postedfile" name="postedfile" class="input-file required">
                         <p class="help-block error">
                         </p>
                         <p class="help-block">
-                            CSV File of barcodes. <a href="{% static "examples/barcodeExample.csv"%}">Download the example file </a><em>sequence column is required</em>
+                            {% trans "references_barcodeset_add.fields.postedfile.helptext"|safe %}
                         </p>
                     </div>
                 </div>
@@ -40,8 +41,8 @@
         </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a id="upfile" class="btn btn-primary" href="#">Upload & Save</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a id="upfile" class="btn btn-primary" href="#">{% trans "references_barcodeset_add.action.submit" %}</a>
     </div>
     <script type="text/javascript">
         $('#modal_references_add_barcodeset').on('hidden', function () {
@@ -51,7 +52,7 @@
                $('#modal_references_add_barcodeset_form').submit();
         });
 
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = '{% trans "uni-form-validation.language.required" %}';  //'%s is required'
         $('#modal_references_add_barcodeset_form').uniform({
             holder_class : 'control-group',
             msg_selector : 'p.help-block.error',
@@ -64,7 +65,7 @@
                 if (!jQuery.fn.uniform.isValid($('#modal_references_add_barcodeset_form'), jQuery.fn.uniform.defaults)) {
                     return false;
                 }
-                $("#loadingstatus").html("<p>Uploading Barcode file <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
+                $("#loadingstatus").html("<p>{% trans "references_barcodeset_add.messages.inprogress" %} <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
             },
             success: function SubmitSuccesful(responseText, statusText) {
                 upReturn = eval(responseText);
@@ -79,10 +80,11 @@
                 } else {
                     $("#return").html(upReturn["status"]).addClass('alert alert-error');
                     for (var key in upReturn["failed"]) {
-                        $("#error").append("<p>Row " + key + " contained error(s)</p> ");
+
+                        $("#error").append("<p>" + interpolate("{% trans "global.messages.validation.format.row.errors" %}", {n: key}, true) + "</p> ");
                         for (var i = 0; i < upReturn["failed"][key].length; i++) {
-                            $("#error").append("<strong>" + upReturn["failed"][key][i][0] + "</strong> column ");
-                            $("#error").append(": " + upReturn["failed"][key][i][1]);
+                            var columnErrorMsg = interpolate("{% trans "global.messages.validation.format.column.errors" %}", {columnName: upReturn["failed"][key][i][0], columnErrors: upReturn["failed"][key][i][1]}, true)
+                            $("#error").append(columnErrorMsg);
                             $("#error").append("</br>");
                         }
                     }
@@ -92,9 +94,10 @@
                 $('#modal_references_add_barcodeset').trigger('modal_references_add_barcodeset_done', {});
             },
             error: function AjaxError() {
-                $("#loadingstatus").html("<p>Failure uploading file</p>");
+                $("#loadingstatus").html("<p>{% trans "global.messages.error.file.upload" %}</p>");
             },
             dataType: 'json'
         });
+        //# sourceURL=templates/rundb/configure/modal_references_add_barcodeset.html
     </script>
 </div>

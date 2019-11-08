@@ -5,11 +5,11 @@ set(PROJECT_DESCRIPTION "Ion Torrent Publishers")
 enable_testing()
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/results" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_PUBLISHER_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_PUBLISHER_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_PUBLISHER_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 

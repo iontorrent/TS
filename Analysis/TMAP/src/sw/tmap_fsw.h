@@ -12,9 +12,11 @@
 
 #define TMAP_FSW_MAX_PATH_LENGTH(ref_len, flow_len, offset) ((1 + (ref_len * (flow_len + 1) * (offset + 1))))
 
+#define TMAP_FSW_MATRIX_SIZE 25
+
 #define __tmap_fsw_gen_ap1(par, score_match, pen_mm, pen_gapo, pen_gape, fscore) do { \
     int32_t i; \
-    for(i=0;i<25;i++) { \
+    for(i=0;i<TMAP_FSW_MATRIX_SIZE;i++) { \
         (par).matrix[i] = -100 * pen_mm; \
     } \
     for(i=0;i<4;i++) { \
@@ -28,6 +30,7 @@
 } while(0)
 
 #define __tmap_fsw_gen_ap(par, opt) (__tmap_fsw_gen_ap1(par, (opt)->score_match, (opt)->pen_mm, (opt)->pen_gapo, (opt)->pen_gape), (opt)->fscore)
+
 
 /*!
  *   From which cell; helps recovert the best scoring path.
@@ -65,7 +68,7 @@ typedef struct {
 typedef struct {
     int64_t match_score; /*!< match score */
     int64_t ins_score; /*!< insertion score */
-    int64_t del_score; /*! <deletion score */
+    int64_t del_score; /*!< deletion score */
 } tmap_fsw_dpscore_t;
 
 /*!

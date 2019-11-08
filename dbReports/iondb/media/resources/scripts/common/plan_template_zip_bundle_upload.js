@@ -37,26 +37,26 @@ $(function() {
       up.removeFile(up.files[0]);
     }
     console.log(up.files);
-    $('#file_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
-    $('#file_progress').html('');
+    $('#file_name_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
+    $('#file_info').html('').hide();
+    $('#file_progress').find('.bar').css('width', "0%");
     up.refresh(); // Reposition Flash/Silverlight
   });
 
   uploader.bind('UploadProgress', function(up, file) {
-    $('#file_progress').html(file.percent + "%");
+    $('#file_progress').show().find('.bar').css('width', file.percent + "%");
   });
 
   uploader.bind('Error', function(up, err) {
-    $('#file_info').append("<div>There was an error during your upload.  Please refresh the page and try again.</div>");
+    $('#file_info').html($('#file_info').data('error')).show();
   });
 
   uploader.bind('FileUploaded', function(up, file) {
-    $('#file_progress').html("100%").delay(500).html("");
-    $("#file_info").delay(500).html("File uploaded successfully.  Upload another or check the appropriate reference page for processing status.")
-  });
-  $('#hotspot_help_text').hide();
-  $('#hotspot_help_button').click(function(){
-    $('#hotspot_help_text').slideToggle(300);
-    return false;
+    $('#file_progress').find('.bar').css('width', file.percent + "%")
+        .delay(500)
+        .css('width', 0 + "%").parents('#file_progress').hide();
+    $("#file_info").html($('#file_info').data('fileUploaded')).show();
+    uploader.removeFile(file);
+    $('#file_name_info').html($('#file_name_info').attr('placeholder'));
   });
 });

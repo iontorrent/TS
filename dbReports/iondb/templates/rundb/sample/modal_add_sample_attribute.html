@@ -1,12 +1,13 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 
 <div id="modal_add_attribute_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
         <h3 id="modal_addLabel">
-    	{% if intent == "edit" %}Edit Attribute
-    	{% else %}Add Attribute
+    	{% if intent == "edit" %}{% trans "samplesets.sampleattributes.edit.title" %}
+    	{% else %}{% trans "samplesets.sampleattributes.add.title" %}
     	{% endif %}
     </h3>        
     </div>
@@ -23,22 +24,23 @@
         		<input type="hidden" id="id" name="id" value="{{sample_attribute.id}}">
         		
 				<div class="control-group">			
-					<label class="control-label" for="sampleAttributeName">Attribute Name:</label>
+					<label class="control-label" for="sampleAttributeName">{% trans "samplesets.sampleattributes.fields.displayedName.label" %}</label>
 					<div class="controls">
 						{% if intent == "edit" %}
-							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="Required" value="{{sample_attribute.displayedName}}">
+							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="{% trans "samplesets.sampleattributes.fields.displayedName.placeholder" %}" value="{{sample_attribute.displayedName}}">
 						{% else %}
-							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="Required">
+							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="{% trans "samplesets.sampleattributes.fields.displayedName.placeholder" %}">
 						{% endif %}						
 					</div>
 
 					<div class="help-block">
+                        {% trans "samplesets.sampleattributes.fields.sample_attribute.displayedName.helptext" %}
 					</div>
 				</div>
 
 				
 				<div class="control-group">
-					<label class="control-label" for="attributeType">Attribute Type:</label>
+					<label class="control-label" for="attributeType">{% trans "samplesets.sampleattributes.fields.dataType.dataType.label" %}</label>
 					<div class="controls">
                     	<select id="attributeType" name="attributeType" style="height:28px;">                    	
 
@@ -66,23 +68,24 @@
 
 						<div class="help-block">
         					{% if sample_attribute.samples.count > 0 %}       					
-        						FYI: Attribute type cannot be changed since it is already used by samples.
+        						{% trans "samplesets.sampleattributes.fields.dataType.dataType.helptext" %}
         					{% endif %}
 						</div>
 					</div>
 				</div>
 				
 				<div class="control-group">
-					<label class="control-label" for="attributeDescription">Description:</label>
+					<label class="control-label" for="attributeDescription">{% trans "samplesets.sampleattributes.fields.description.label" %}</label>
 					<div class="controls">										
 						{% if intent == "edit" %}
-							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="Optional" value="{{sample_attribute.description}}">{{sample_attribute.description}}</textarea>					
+							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="{% trans "samplesets.sampleattributes.fields.description.placeholder" %}" value="{{sample_attribute.description}}">{{sample_attribute.description}}</textarea>
 						{% else %}						
-							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="Optional"></textarea>
+							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="{% trans "samplesets.sampleattributes.fields.description.placeholder" %}"></textarea>
 						{% endif %}				
 					</div>
 
 					<div class="help-block">
+                        {% trans "samplesets.sampleattributes.fields.description.helptext" %}
 					</div>
 	
 				</div>
@@ -90,15 +93,18 @@
 				<div class="control-group">
 					<div class="controls">
 						<label class="checkbox">
-							<input  id="is_mandatory" name="is_mandatory" type="checkbox"> Is Mandatory
+							<input  id="is_mandatory" name="is_mandatory" type="checkbox" {% if intent == "edit" %}{{sample_attribute.isMandatory|yesno:"checked='checked',"}}{% endif %}>{% trans "samplesets.sampleattributes.fields.isMandatory.label" %}
 						</label>
+					</div>
+                    <div class="help-block">
+                        {% trans "samplesets.sampleattributes.fields.isMandatory.helptext" %}
 					</div>
 				</div>
 		</form>
 		</div>
 	<div class="modal-footer">
-		<button class="btn" data-dismiss="modal">Cancel</button>
-		<a class="btn btn-primary save-attribute-btn">Save</a>
+		<button class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</button>
+		<a class="btn btn-primary save-attribute-btn">{% trans "samplesets.sampleattributes.action.submit.label" %}</a>
 	</div>
 
 
@@ -109,17 +115,7 @@
 	        $('.save-attribute-btn').click(function(e){
 	            e.preventDefault();
 	            e.stopImmediatePropagation();
-	            
-	            //attribute_name = $("#sampleAttributeName").val();
-	            //attribute_name2 = $('input[id=sampleAttributeName]').val();
-	            //attribute_type = $("#attributeType").val();
-	            //attribute_description = $("#attributeDescription").val();
-	            
-	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_name=", attribute_name);
-	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_name2=", attribute_name2);	            
-	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_type=", attribute_type);
-	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_description=", attribute_description);
-            
+
 	            url = "{% url "save_sample_attribute" %}"
 	            data = $('#saveAttribute').serialize();
 	            $.post(url, data, function(data) {
@@ -127,13 +123,13 @@
 	                    $( "#modal_add_attribute_popup" ).modal("hide");
 	                    $('body #modal_add_attribute_popup').remove();
 	                    refreshKendoGrid("#samplesetitem_attribute_grid");
-	                }else{
-	                    $('#error-messages').empty();
+	                } else{
+	                    $('#modal_add_attribute_popup .modal-body #error-messages').empty();
 	                    
 	                    console.log("modal_add_sample_attribute data=", data);
-	                    $('#error-messages').removeClass('hide');
+	                    $('#modal_add_attribute_popup .modal-body #error-messages').removeClass('hide');
 	                    for (var i=0;i < data.length;i++){
-	                        $('#error-messages').append('<p class="error">' + data[i] + '</p>');
+	                        $('#modal_add_attribute_popup .modal-body #error-messages').append('<p class="error">' + data[i] + '</p>');
 	                        console.log("error:", data[i]);
 	                    }
 	                }
@@ -141,9 +137,9 @@
 	                console.log("success:", url);
 	            })
 	            .fail(function(data) {
-	                $('#error-messages').empty();
-                    $('#error-messages').removeClass('hide');
-	                $('#error-messages').append('<p class="error">' + data.responseText + '</p>'); 
+	                $('#modal_add_attribute_popup .modal-body #error-messages').empty();
+                    $('#modal_add_attribute_popup .modal-body #error-messages').removeClass('hide');
+	                $('#modal_add_attribute_popup .modal-body #error-messages').append('<p class="error">' + data.responseText + '</p>'); 
 	                console.log("error:", data);
 	            })
 	            .always(function(data) { /*console.log("complete:", data);*/ });
@@ -151,5 +147,6 @@
 	            return false;
 	        });
 	      });
+    	//# sourceURL=templates/rundb/sample/modal_add_sample_attribute.html
     </script>
 </div>

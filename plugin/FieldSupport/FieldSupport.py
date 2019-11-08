@@ -17,7 +17,7 @@ from ion.utils import makeCSA
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.10.0.1'
+    version = '5.12.0.1'
     runtypes = [RunType.THUMB]
     runlevels = [RunLevel.LAST]
 

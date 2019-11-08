@@ -102,6 +102,7 @@ PhaseEstimator::PhaseEstimator()
 
   normalization_string_    = "gain";
   key_norm_method_         = "default";
+  compress_multi_taps_      = true;
   num_fullchip_iterations_ = 3;
   num_region_iterations_   = 1;
   maxfrac_negative_flows_  = 0.2;
@@ -115,7 +116,10 @@ PhaseEstimator::PhaseEstimator()
 
 // ---------------------------------------------------------------------------
 
-void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset, const string & key_norm_method)
+void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts,
+                                           const ion::ChipSubset & chip_subset,
+                                           const string & key_norm_method,
+                                           bool compress_multi_taps)
 {
   // Parse command line options
   phasing_estimator_      = opts.GetFirstString ('-', "phasing-estimator", "spatial-refiner-2");
@@ -130,6 +134,7 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
   phase_file_name_        = opts.GetFirstString ('-', "phase-estimation-file", "");
   normalization_string_   = opts.GetFirstString ('-', "phase-normalization", "adaptive");
   key_norm_method_        = key_norm_method;
+  compress_multi_taps_    = compress_multi_taps;
   wells_norm_method_      = opts.GetFirstString ('-', "wells-normalization", "off");
   just_phase_estimation_  = opts.GetFirstBoolean('-', "just-phase-estimation", false);
 
@@ -696,15 +701,30 @@ size_t PhaseEstimator::LoadRegion(int region)
           continue;
       }
 
-      for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
-        well_buffer[flow] = wells_->At(y,x,flow);
+      // Multi-tap compression
+      if (compress_multi_taps_) {
+        int sig_idx = 0;
+        for (int flow = 0; flow < flow_order_.num_flows(); ++flow){
+          if (flow>0 and flow_order_[flow-1]==flow_order_[flow]) {
+            well_buffer[flow] = 0.0;
+            well_buffer[sig_idx] += wells_->At(y,x,flow);
+          }
+          else {
+            sig_idx = flow;
+            well_buffer[flow] = wells_->At(y,x,flow);
+          }
+        }
+      }
+      else
+        for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
+          well_buffer[flow] = wells_->At(y,x,flow);
 
       // Sanity check. If there are NaNs in this read, print warning
       vector<int> nanflow;
       for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
         if (!isnan(well_buffer[flow]))
           continue;
-        well_buffer[flow] = 0;
+        well_buffer[flow] = 0.0;
         nanflow.push_back(flow);
       }
       if(nanflow.size() > 0) {

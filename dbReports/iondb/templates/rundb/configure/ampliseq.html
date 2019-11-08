@@ -1,13 +1,49 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block current_tab %}about{% endblock %}
+{% load i18n %}
+
+
+
+{% block extra_head %}
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        height: 20px;
+        float: left;
+        margin: 0 10px 15px 0;
+    }
+    .search-field [name=rangeA] {
+        margin: 0px;
+        width: 140px;
+    }
+    .filter-field {
+        width:100px;
+        margin:0px;
+        font-size:small;
+    }
+    .btn {
+        font-size: small;
+    }
+</style>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "js/date.js"%}"></script>
+<script src="{% static "resources/scripts/configure/ampliseq.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
+{% endblock extra_head %}
 {% block content %}
 
-<table style="width: 100%">
-    <tr>
+    {% if tfc_account_setup %}
+        <table style="width: 100%">
+        <tr>
         <td style="padding: 20px;">
-            {% if tfc_account_setup %}
                 {% if http_error %}
                     <p class="alert alert-error">
                         {{http_error|safe}}
@@ -16,252 +52,314 @@
                 {% else %}
                     <h3>Currently your account is not setup to access ampliseq.com.  Please visit the Accounts configuration page to set this up.</h3>
                 {% endif %}
-                <a href={% url 'configure_account' %}>Configure Account</a>
-            {% else %}
-                <form action="{% url "configure_ampliseq_download" %}" method="post">
-                <div class="row-fluid">
-                    <div class="span12">
-                            <h3>Instrument/Chip </h3>
+                <a href={% url 'configure_account' %}#linkAmpliseq>Configure Account</a>
+                        </td>
+        </tr>
+        </table>
+    {% else %}
+                <h3 class="section-header">Ampliseq.com Panels</h3>
+                <div>
+                <ul class="nav nav-tabs" id="ampliseq-grid" role="tablist">
+                  <li class="nav-item {% ifequal panelTab "on-demand" %}active {% endifequal %}">
+                    <a class="nav-link" id="on-demand-tab" data-content="on-demand" data-toggle="tab" href="#on-demand" role="tab" aria-controls="on-demand" aria-selected="false">On-Demand Panels</a>
+                  </li>
+                  <li class="nav-item {% ifequal panelTab "made-to-order" %}active {% endifequal %}">
+                    <a class="nav-link" id="made-to-order-tab" data-content="made-to-order" data-toggle="tab" href="#made-to-order" role="tab" aria-controls="made-to-order" aria-selected="true">Made-to-Order Panels</a>
+                  </li>
+                  <li class="nav-item {% ifequal panelTab "ready-to-use" %}active {% endifequal %}">
+                    <a class="nav-link" id="ready-to-use-tab" data-content="ready-to-use" data-toggle="tab" href="#ready-to-use" role="tab" aria-controls="ready-to-use" aria-selected="false">Ready-to-Use Panels</a>
+                  </li>
+                    <li class="nav-item {% ifequal panelTab "community" %}active {% endifequal %}">
+                    <a class="nav-link" id="community-tab" data-content="community" data-toggle="tab" href="#community" role="tab" aria-controls="community" aria-selected="false">Community Panels</a>
+                  </li>
+                  </ul>
+                  <div class="tab-content" id="ampliseqGridContent">
+                    <form class="well well-small clearfix">
+                        <div class="filter-item">
                             <div>
-                                    <table><tr>
-                                    <td style="padding-right:50px;"><span class=label>PGM: </span></td><td>
-
-                                    <label class="radio inline"><input id="pgm_choice" type="radio" name="_instrument_choice" value="pgm" checked /><div>  314 / 316 / 318</div></label></td>
-                                    </tr><tr>
-                                    <td style="padding-right:50px;"><span class=label>Proton: </span></td><td>
-                                    <label class="radio inline"><input type="radio" name="_instrument_choice" value="p1" /><div> PI</div></label>
-                                    </tr><tr>
-                                    <td style="paddingi-right:50px;"><span class=label>S5: </span></td><td>
-                                    <div>
-                                    {% for s5_chip in s5_chips %}
-                                        <label class="radio inline"><input type="radio" name="_instrument_choice" value="{{s5_chip}}" /> {{s5_chip}}</label>
-                                    {% endfor %}
-                                    </div>
-                                    </td></tr></table>
-                            </div>
-                        {% if ordered_solutions %}
-                            <h3>Your solutions:</h3>
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Design</th>
-                                        <th></th>
-                                        <th>View on AmpliSeq.com</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for design, solution in ordered_solutions %}
-                                        <tr>
-                                            <td>
-                                               <label>
-                                                    <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}}" />
-                                                    {{design.designName}} {{solution.solutionId}}
-                                                    <small>(design id {{design.id}} solution id {{solution.id}})</small>
-                                                </label>
-                                            </td>
-                                            <td><div id="{{solution.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
-                                                <input id="{{solution.id}}_instrument_choice" type="hidden" name="{{solution.id}}_instrument_choice" value="pgm"/>
-                                            </td>
-                                            <td>
-                                                <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
-                                                    View
-                                                </a>
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        {% else %}
-                            <h5>You haven't ordered any AmpliSeq designs</h5>
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="row-fluid">
-                    <div class="span12">
-                        {% if fixed_solutions %}
-
-                            <h3>Ready-to-Use Panels</h3>
-                                                <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Design</th>
-                                        <th></th>
-                                        <th>View on AmpliSeq.com</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-
-                                    {% for design in fixed_solutions %}
-                                        <tr>
-                                            <td>
-                                               <label>
-                                                    <input type="checkbox" name="fixed_solutions" value="{{design.id}},{{design.genome}}" />
-                                                    {{design.name}}
-                                                </label>
-                                            </td>
-                                            <td><div id="{{design.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
-                                                <input id="{{design.id}}_instrument_choice" type="hidden" name="{{design.id}}_instrument_choice" value="pgm"/>
-                                            </td>
-                                            <td>
-                                                {% if design.type == "COMMUNITY_PANEL" %}
-                                                    <a href="{{ ampliseq_url }}/protected/tmpl/dashboard.action?tmplDesignType=COMMUNITY_PANEL" target="_blank">
-                                                        View
-                                                    </a>
-                                                {% elif design.type == "FIXED_PANEL" %}
-                                                    <a href="{{ ampliseq_url }}/protected/tmpl/dashboard.action" target="_blank">
-                                                        View
-                                                    </a>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        {% else %}
-                            <h5>Unable to find matching AmpliSeq panels.</h5>
-                        {% endif %}
-                    </div>
-                </div>
-
-                {% if unordered_solutions %}
-                    <div class="row-fluid">
-                        <div class="span12">
-                            <a href="#" id="not_ordered_btn">Show solutions which were not ordered.</a>
-                            <div id="not_ordered" style="display: none;">
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Design</th>
-                                            <th></th>
-                                            <th>View on AmpliSeq.com</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for design, solution in unordered_solutions %}
-                                            <tr>
-                                                <td>
-                                                   <label>
-                                                        <input type="checkbox" name="solutions" value="{{design.id}},{{solution.id}}" />
-                                                        {{design.designName}} {{solution.solutionId}}
-                                                        <small>(design id {{design.id}} solution id {{solution.id}})</small>
-                                                    </label>
-                                                </td>
-                                                <td><div id="{{solution.id}}_info_td" style="display:none;"><img src="{% static "resources/img/warning_triangle.png"%}" width="24" height="24"/></div>
-                                                    <input id="{{solution.id}}_instrument_choice" type="hidden" name="{{solution.id}}_instrument_choice" value="pgm"/>
-                                                </td>
-                                                <td>
-                                                    <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
-                                                        View
-                                                    </a>
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                                <input id="search_design" type="text" placeholder="Search by Design name" style="width:160px;" />
+                                <button class="btn search_design pull-right" type="button" style="font-size:11px;">{% trans "template.search_bar.fields.search_text.label" %}</button>
                             </div>
                         </div>
+                      <div class="filter-item">
+                            <div id="id_chemistryType" class="btn-group filter-btn-group" data-toggle="buttons-radio">
+                                <a class="btn" data-value="ampliseq"><img src="{% static "resources/img/appl_ampliSeq.png"%}" width="24px" height="24px" /><span>&nbsp;Ampliseq</span></a>
+                                <a class="btn" data-value="ampliseqHD"><img src="{% static "resources/img/appl_ampliSeqHD.png"%}" width="24px" height="24px" /><span>&emsp13;AmpliseHD</span></a>
+                            </div>
+                      </div>
+                        <div class="filter-item">
+                            <div id="id_pipeline" class="btn-group filter-btn-group" data-toggle="buttons-radio">
+                                <a class="btn" data-value="DNA"><img src="{% static "resources/img/pipeline-dna.png"%}" width="24px" height="24px" />DNA</a>
+                                <a class="btn" data-value="RNA"><img src="{% static "resources/img/pipeline-rna.png"%}" width="24px" height="24px" />RNA</a>
+                            </div>
+                        </div>
+                        <div class="filter-item">
+                            <select id='recommend_app' class="selectpicker recommend_app_filter"
+                                    title="Recommended Application" data-persist-title="true" data-option-size="10px" data-width="210px">
+                                <option value="All">All</option>
+                                {% for app in recommended_apps %}
+                                    <option value="{{ app }}">{{ app }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <a id="clear_filters" class="btn search-submit pull-left">Clear All</a>
+                        </div>
+
+                    </form>
+                        <p></p>
+                      <div class="tab-pane fade in {% ifequal panelTab "on-demand" %}active {% endifequal %}  panel-categories" data-panel-type="on-demand" id="on-demand" role="tabpanel" aria-labelledby="on-demand-tab"></div>
+                      <div class="tab-pane fade in {% ifequal panelTab "made-to-order" %}active {% endifequal %} panel-categories" data-panel-type="made-to-order" id="made-to-order" role="tabpanel" aria-labelledby="made-to-order-tab"></div>
+                        <div class="tab-pane fade in {% ifequal panelTab "ready-to-use" %}active {% endifequal %}  panel-categories" data-panel-type="ready-to-use" id="ready-to-use" role="tabpanel" aria-labelledby="ready-to-use-tab"></div>
+                        <div class="tab-pane fade in {% ifequal panelTab "community" %}active {% endifequal %} panel-categories" data-panel-type="community" id="community" role="tabpanel" aria-labelledby="community-tab"></div>
                     </div>
-                {% endif %}
-                <div class="form-actions">
-                    <input class="btn btn-primary" type="submit" value="Import Selected" />
-                    <a href="{% url "plan_templates" %}" class="btn">Cancel</a>
                 </div>
-                </form>
-                <div id="api" style="display:none;">
-                <h3>Full API response</h3>
-                <strong>Fixed</strong>
-                <pre>{{fixed_designs_pretty}}</pre>
-                <strong>Custom</strong>
-                <pre>{{designs_pretty}}</pre>
-                </div>
-            {% endif %}
-        </td>
-        <td style="width: 500px; vertical-align: top">
-            <h1>AmpliSeq</h1>
-            <h3>Manual Upload <small> AmpliSeq.com export zip</small></h3>
-            <p>Upload a design or panel's zip archive exported from AmpliSeq.com</p>
-                {% include "rundb/common/plan_template_zip_bundle_upload.html" %}
-            <div class="form-actions">
-                <button class="btn btn-primary" id="upload_button">Upload</button>
-            </div>
-            <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-            <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
-            <script type="text/javascript" src="{% static "resources/scripts/common/plan_template_zip_bundle_upload.js"%}"></script>
-        </td>
-    </tr>
-</table>
+{% endif %}
+    <div class="modal fade" id="modal_ampliseq_panel_install" aria-hidden="true">
+    <form class="form-horizontal" id="modal_ampliseq_panel_install_form" method="POST" action="{% url "configure_ampliseq_download" %}">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title">Ampliseq Panel Import</h4>
+      </div>
+      <div class="modal-body">
+          <input type="hidden" name="solutions" id="solutions" value="" />
+          <input type="hidden" name="fixed_solutions" id="fixed_solutions" value="" />
+          <input type="hidden" name="panel_tab" id="panel_tab" value="" />
+          <div id="summary"></div>
+      </div>
+      <div class="modal-footer">
+          <p class="text-warning">Are you sure to install the panel ?</p>
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+          <input type="submit" href="{% url "configure_ampliseq_download" %}" class="btn btn-primary" value="Import Selected"/>
+
+      </div>
+    </form>
+    </div>
 
 <script>
-$(function (){
-    $("#not_ordered_btn").click(function(){
-        $("#not_ordered").slideToggle();
-        return false;
-    });
-});
-$(document).ready(function() {
-    function replaceAll(find, replace, target) {
-        return target.replace(new RegExp(find,'g'), replace);
-    }
-    function chipTypeFilter(target, selected) {
-        var fixed_solution_str = replaceAll("&quot;",'"', target);
-        var fixed_solution = JSON.parse(fixed_solution_str);
-        var fixed_len = fixed_solution.length;
-        for (i = 0; i < fixed_len; i++) {
-            var design_id = fixed_solution[i].id;
-            var config_list = fixed_solution[i].configuration_choices;
-            var found_in_config_list = false;
-            for (j = 0; j < config_list.length; j++) {
-                var choice = config_list[j];
-                if (selected == choice){
-                    found_in_config_list = true;
-                }
-            }
-            var td_id = "#".concat(design_id, "_info_td");
-            if (found_in_config_list == false){
-                if (selected == "pgm"){
-                    selected_code = "PGM";
-                }
-                else if (selected == "proton"){
-                    selected_code = "Proton";
-                }
-                else {
-                    selected_code = selected;
-                }
-                var info = selected_code.concat("-specific parameters not available");
-                var img_info = $(td_id).html();
-                var n = img_info.search(">");
-                img_info = img_info.substring(0, n+1);
-                var message = img_info.concat(" ", info);
-                $(td_id).html(message);   
-                $(td_id).show();
-            }
-            else {
-                $(td_id).hide();
-            }
-            var input_element = "#".concat(design_id,"_instrument_choice");
-            $(input_element).val(selected);
-        }
+    function display_ampliseq_panels(){
+        $(".panel-categories").each(function() {
+            var panel_type = $(this).data("panel-type");
+            var grid =    $("#"+panel_type).kendoGrid({
+                dataSource: {
+                    type: "json",
+                    transport: {
+                        read:{
+                            url: "{% url 'configure_ampliseq_getGridData' %}"
 
-    }
-    function chipTypeFilterWrapper(selected){
-        var fixed = "{{fixed_ids_choices}}";
-        chipTypeFilter(fixed, selected);
-        var unordered = "{{unordered_solution}}";
-        chipTypeFilter(unordered, selected);
-        var ordered = "{{ordered_solution}}";
-        chipTypeFilter(ordered, selected);
+                        }
+                        , parameterMap: function(options) {
+                        console.log(options);
+                        return buildParameterMap(options)
+                    }
+                    },
+                    schema: {
+                        data: "objects",
+                        total: "total",
+                        model: {
+                            fields: {
+                                displayedID:{ type: "string" },
+                                name: { type: "string" },
+                                pipeline: { type: "string" },
+                                genome: {type:"string"},
+                                status: {type:"string"},
+                                chemistryType: {type:"string"},
+                                recommended_application: {type:"sting"},
+                                import: {type: "string"}
+                            }
+                        }
+                    },
+                    serverPaging: false,
+                    serverFiltering: false,
+                    serverSorting: false,
+                    sort: { field: "status"},
+                    pageSize: 10,
+                    filter: {
+                        field: "panelType",
+                        operator: "eq",
+                        value:panel_type
+                    }
+                },
+                height: 'auto',
+                sortable: true,
+                pageable: {
+                        pageSizes: [10, 20, 50, 100],
+                        previousNext: true
+                    },
+                scrollable: false,
+                columns: [
+                     {
+                        field: "name",
+                        title: "Design Name",
+                        width: '25%',
+                        template: function(dataItem) {
+                            value = "{{ ampliseq_url }}";
+                            if (panel_type == "ready-to-use") {
+                                if (dataItem.type == "COMMUNITY_PANEL") {
+                                    value += "/protected/tmpl/dashboard.action?tmplDesignType=" + dataItem.type;
+                                    return "<a href=" + value + "  target='_blank'>" + kendo.htmlEncode(dataItem.name) + "</a>";
+                                }
+                                else if (dataItem.type == "FIXED_PANEL") {
+                                    value = "/protected/tmpl/dashboard.action";
+                                    return "<a href=" + value + "  target='_blank'>" + kendo.htmlEncode(dataItem.name) + "</a>";
+                                }
+                            }
+                            else if (dataItem.name){
+                                value += "/protected/tmpl/dashboard.action?tmplDesignType=" + dataItem.type;
+                                return "<a href=" + value + "  target='_blank'>" + kendo.htmlEncode(dataItem.name) + "</a>";
+                            }
+                            else {
+                                return dataItem.name
+                            }
+                        }
+                    } ,
+                    {
+                        field: "displayedID",
+                        title: "Design ID",
+                        width: '110px',
+                    },
+                    {
+                        field: "pipeline",
+                        title: "Nucleic acid type",
+                        width: '150px',
+                        template: function (dataItem) {
+                            pipeline = kendo.htmlEncode(dataItem.pipeline)
+                            if (pipeline == "DNA"){
+                                return "<img src='{% static 'resources/img/pipeline-dna.png'%}' width='24px' height='24px' />DNA"
+                            }
+                            if (pipeline == "RNA"){
+                                return "<img src='{% static 'resources/img/pipeline-rna.png'%}' width='24px' height='24px' />RNA"
+                            }
+                        }
+                    },
+                    {
+                        field: "genome",
+                        title: "Reference",
+                        width: '110px',
+                    },
+                    {
+                        field: "chemistryType",
+                        title: "Chemistry Type",
+                        width: '110px'
+                    },
+                    {
+                        field: "recommended_application",
+                        title: "Recommended Application",
+                         hidden:false,
+                        width: '250px'
+                    },
 
+                    {
+                        field: "status",
+                        title: "Status",
+                        width: '110px',
+                        template: function (dataItem) {
+                            if (dataItem.status == 'Successfully Completed') {
+                                return "<a href='" + dataItem.uploadHistory + "'>Completed</a>";
+                             }
+                             else if ((dataItem.status) &&  (dataItem.status.indexOf("Error") !=-1)) {
+                                    return "<a href='" + dataItem.uploadHistory + "'><span style='color:red;'>" + dataItem.status +"</span></a>";
+                             }
+                             else{
+                                return "";
+                            }
+
+                        }
+                    },
+                    {
+                        field: "import",
+                        title: "&nbsp;",
+                        sortable: false,
+                        width: '110px',
+                        template: function (dataItem) {
+                            var value;
+                            var solutions;
+                            var fixed_solutions;
+                            var description;
+                            if (dataItem.status == "Successfully Completed"){
+                                return "<a class='btn btn-primary btn-mini' role='button' disabled='true'>Import</a>";
+                            }
+                            if (panel_type == "ready-to-use"){
+                                fixed_solutions = kendo.htmlEncode(dataItem.id)+","+kendo.htmlEncode(dataItem.genome);
+                                description = kendo.htmlEncode(dataItem.description);
+                                return "<a id='do_update' class='do_update btn btn-primary btn-mini' role='button'" + "data-description='" + description + "'  data-fixed-solutions='" + fixed_solutions +"' data-panel-tab='" + panel_type + "' aria-disabled='true' href='"  + value+"' data-confirm_msg='Install " + kendo.htmlEncode(dataItem.name) +" ????'>" + "Import</a>";
+                            }
+                            else {
+                                description = "<strong>Recommend for:</strong> <ul><li>Ion GeneStudio S5, S5 Plus, S5 Prime (510,520,530,540,550*) </li>" +
+                                    "<li>Ion S5, S5 XL (510,520,530,540,550*)</li></ul>" +
+                                    "<p>*550 chip is supported only on Ion S5 XL, Ion GeneStudio S5 Plus and Ion GeneStudio S5 Prime.</p>";
+                                solutions=kendo.htmlEncode(dataItem.design_id)+","+kendo.htmlEncode(dataItem.solution_id);
+                                return "<a id='do_update' class='do_update btn btn-primary btn-mini' role='button'" + "data-description='" + description + "' data-solutions='" + solutions +"' data-panel-tab='" + panel_type + "' aria-disabled='true' href='"  + value+"' data-confirm_msg='Install " + kendo.htmlEncode(dataItem.name) +" ????'>" + "Import</a>";
+                            }
+                        }
+                    },
+                ],
+                dataBound: function(e) {
+                    var gridTemp = e.sender;
+                    if (gridTemp.dataSource.total() == 0) {
+                        var colCount = gridTemp.columns.length;
+                        $(e.sender.wrapper)
+                            .find('tbody')
+                            .append('<tr class="kendo-data-row"><td colspan="' + colCount + '" class="no-data"><p class="text-warning">You have not ordered any ' + panel_type + ' panels. Please visit ' +
+                                '<a href="http://ampliseq.com/">Ampliseq.com</a> to design and order.</p></td></tr>');
+                    }
+                    $('.do_update').click(function(e){
+                        var summary_desc = $(this).attr('data-description');
+                        var ids_solutions = $(this).attr('data-solutions');
+                        var ids_fixed_solutions = $(this).attr('data-fixed-solutions');
+                        var panel_tab = $(this).attr('data-panel-tab');
+                        var msg = $(this).data('confirm_msg');
+                        var $alert_div = $(this).parents('#ampliseqGridContent').find('.alert');
+                        $alert_div.removeClass('alert-error', 'alert-success').hide();
+                        if(ids_solutions !== undefined) {
+                            $(".modal-body #solutions").val(ids_solutions);
+                        }
+                        if (ids_fixed_solutions !== undefined) {
+                            $(".modal-body #fixed_solutions").val(ids_fixed_solutions);
+                        }
+                        $(".modal-body #panel_tab").val(panel_tab);
+
+                        $('#summary').html(summary_desc);
+
+                        $('#modal_ampliseq_panel_install').modal('show');
+
+                        return false;
+                    });
+                }
+            });
+            $('input[type=submit]').click(function(){
+                $('#modal_ampliseq_panel_install').modal('hide');
+            });
+        });
     }
-    $("input[name=_instrument_choice]").on('click', function(){
-        var selected = $(this).val();
-        if (selected == "p1"){
-            selected = "proton";
-        }
-        chipTypeFilterWrapper(selected);
+
+    $('#id_chemistryType a').click(function (e) {
+        e.preventDefault();
+        $(this).parent().children('a').removeClass('active');
+        $(this).addClass('active');
+        filter(e);
     });
-    if ($("#logout_button").is(':visible')) {
-        $("#pgm_choice").click();
-    }
-});
+
+    $('.search_design').click(function (e) {
+        filter(e);
+    });
+
+    $('#id_pipeline a').click(function (e) {
+        e.preventDefault();
+        $(this).parent().children('a').removeClass('active');
+        $(this).addClass('active');
+        filter(e);
+    });
+
+    $('#clear_filters').click(function (e) { clear_filters(); });
+    $('#recommend_app').change(function (e) { filter(e); });
+
+
+    $(document).ready(function() {
+        {% if not http_error %}
+            display_ampliseq_panels();
+        {% endif %}
+    });
 </script>
+
 {% endblock content %}

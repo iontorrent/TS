@@ -1,14 +1,15 @@
 {% extends "rundb/data/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head_js %}
 <script type="text/javascript" src="{% static "js/sprintf-0.7-beta1.js"%}"></script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 <script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
 <script src="{% static "resources/scripts/data/modal_combine_results.js"%}"></script>
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 <script src="/site_media/js/date.min.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.min.js"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 <script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
 <script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
 {% endblock extra_head_js %}
@@ -16,15 +17,17 @@
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}"/>
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 <style type="text/css">
     .search-field {
         display: inline-block;
         zoom: 1;
         *display: inline;
-        width: 200px;
+        {#width: 200px;#}
         height: 30px;
         float: left;
-        margin: 0 15px 15px 0;
+        {#margin: 0 15px 15px 0;#}
     }
     .search-field #rangeA {
         margin: 0;
@@ -50,85 +53,115 @@
 <div class="content clearfix">
     <div class="row-fluid">
         <div class="span12">
-            <h1 class="pull-left">Result Sets in {{project.name}}</h1>
-            <a href="/data/project/{{project.id}}/delete/" class="btn btn-danger pull-right delete_project">Delete Project</a>
+            <h1 class="pull-left">{{title}}</h1>
+            <a href="/data/project/{{project.id}}/delete/" class="btn btn-danger pull-right delete_project">{% trans "projects.action.delete.label" %}</a>
         </div>
     </div>
     {%spaceless%}
-    <div id="search_bar" class="well">
-            <div class="search-field">
-                <label for="rangeA" class="hide">Date</label>
-                <input type="text" value="" id="rangeA" placeholder="Report Date"/>
-            </div>
-            <div class="input-append search-field">
-                <label for="search_text" class="hide">Search Names</label>
-                <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
-            </div>
-            <div class="input-append search-field">
-                <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
-                    Clear
-                </button>
-            </div>
-	    {% if filter_thumbnails %}
-            <div class="btn-group pull-left">          
-                <select id="report_type" class="select-group">
-                    <option value=''>All Results</option>
-                    <option value='yes'>Thumbnail Results</option>
-                    <option selected value='no'>Exclude Thumbnail Results</option>
-                </select>
-            </div>
-	    {% endif %}
+    <div class="row-fluid">
+        <div class="form-inline well well-small">
+            <fieldset>
+                <div id="search_bar" class="">
+                    <div class="search-field">
+                        <label for="rangeA" class="hide">{% trans "projectresults.search_bar.fields.rangeA.label" %}</label>
+                        <input type="text" value="" id="rangeA" placeholder="{% trans "projectresults.search_bar.fields.rangeA.placeholder" %}"/>
+                    </div>
+                    <div class="search-field input-append">
+                        <label for="search_text" class="hide">{% trans "projectresults.search_bar.fields.search_text.label" %}</label>
+                        <input class="input-medium" id="search_text" type="text" placeholder="{% trans "projectresults.search_bar.fields.search_text.placeholder" %}" style="width: 150px;" />
+                        <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">{% trans "projectresults.search_bar.fields.search_text.action.submit" %}</button>
+                    </div>
+                    {% if filter_thumbnails %}
+                    <div class="search-field">
+                        <select id="report_type" class="selectpicker" title="{% trans "projectresults.search_bar.fields.isThumbnail.title" %}By Report Type">
+                            <option value=''>{% trans "projectresults.search_bar.fields.isThumbnail.choice.default" %}</option>
+                            <option value='yes'>{% trans "projectresults.search_bar.fields.isThumbnail.choice.yes" %}</option>
+                            <option selected value='no'>{% trans "projectresults.search_bar.fields.isThumbnail.choice.no" %}</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div class="search-field">
+                        <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
+                            {% trans "projectresults.search_bar.action.clear_filters.label" %}
+                        </button>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
     </div>
     {%endspaceless%}
-    <div id="grid" style="margin-top: 5px; margin-bottom: 5px;"></div>
+    <div class="row-fluid">
+        <div id="grid"></div>
+    </div>
     <!--
     -->
-    <a class="btn btn-success pull-right download_csv" href="/data/project/{{project.id}}/results/%s/getSelectedCSV.csv">Download Selected CSV</a>
+    <div class="row-fluid">
+    {% if featureflags.DATA_DOWNLOAD_FILTERED_RESULTS_SELECTED_AS_CSV %}
+    <a class="btn btn-success pull-right download_csv" href="/data/project/{{project.id}}/results/%s/getSelectedCSV.csv">{% trans "projectresults.action.get_project_CSV" %}</a>
+    {% endif %}
+    {% if featureflags.DATA_RESULTS_COMBINE_SELECTED %}
     <div class="btn-group pull-left">
-        <a id="combine_selected_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" > Combine Selected <span class="caret"></span> </a>
+        <a id="combine_selected_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" >{% trans "projectresults.menu.combine_selected.label" %} <span class="caret"></span> </a>
         <ul class="dropdown-menu">
             <li>
-                <a class="combine_alignments" href="/data/results/%s/combine/project/{{project.id}}/">&raquo;&nbsp;&nbsp; Combine Alignments</a>
+                <a class="combine_alignments" href="/data/results/%s/combine/project/{{project.id}}/">{% trans "projectresults.action.results_to_combine.label" %}</a>
             </li>
         </ul>
     </div>
+    {% endif %}
     <div class="btn-group pull-left">
-        <a id="action_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" > Process Selected <span class="caret"></span> </a>
+        <a id="action_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" >{% trans "projectresults.menu.action.label" %}<span class="caret"></span> </a>
         <ul class="dropdown-menu">
             <li>
-                <a class="send_to_project" href="/data/results/%s/project/">&raquo;&nbsp;&nbsp; Add to Project</a>
+                <a class="send_to_project" href="/data/results/%s/project/">{% trans "projectresults.action.results_to_project" %}</a>
             </li>
             <li>
-                <a class="remove_from_project" href="/data/project/{{project.id}}/results/%s/">&raquo;&nbsp;&nbsp; Remove from Project</a>
+                <a class="remove_from_project" href="/data/project/{{project.id}}/results/%s/">{% trans "projectresults.action.results_from_project" %}</a>
             </li>
+            {% if request.user.is_staff %}
             <li class="divider"></li>
-        <li><a class="dm_actions" href="{% url "dm_actions" 99999 %}" >&raquo;&nbsp;&nbsp; Data Management </a></li>
+            <li><a class="dm_actions" href="{% url "dm_actions" 99999 %}" >{% trans "projectresults.action.dm_actions" %}</a></li>
+            {% endif %}
         </ul>
     </div>
-    <a href="{% url "project_compare" project.pk %}" class="btn btn-primary pull-left" style="margin-left: 5px;">Compare All</a>
+    {% if featureflags.DATA_RESULTS_COMPARE_ALL %}
+    <a href="{% url "project_compare" project.pk %}" class="btn btn-primary pull-left" style="margin-left: 5px;">{% trans "projectresults.action.project_compare" %}</a>
+    {% endif %}
+    </div>
 
 <script type="text/javascript">
 function initialize_search () {
-    $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
+    $('#rangeA').daterangepicker($.DateRangePickerSettings.get());
     clear_filters()
+}
+
+function getDateRangeInFilterFormat($daterange, format /*yyyy-MM-dd HH:mm[:ss[.uuuuuu]][TZ]*/) {
+    var date = "";
+    var _format = format || 'yyyy-MM-dd HH:mm';
+
+    if ($daterange && $daterange.start) {
+        var start = new Date($daterange.start); //clone
+        var end = new Date($daterange.start); //clone
+        if ($daterange.end) {
+            end = new Date($daterange.end);
+        }
+        end.setHours(23);
+        end.setMinutes(59);
+        end.setSeconds(59);
+        date = start.toString(_format) + "," + end.toString(_format);
+    }
+    return date;
 }
 
 function filter(e){
     e.preventDefault();
     e.stopPropagation();
-    var daterange = $("#rangeA").val();
-    if (daterange) {
-        if (!/ - /.test(daterange)) {
-            daterange = daterange + ' - ' + daterange;
-        }
-        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
-    }
+
     $("#grid").data("kendoGrid").dataSource.filter([
         {
             field: "timeStamp",
             operator: "__range",
-            value: daterange
+            value: getDateRangeInFilterFormat($("#rangeA").data("daterange"))
         }
         , {
             field: "resultsName",
@@ -136,10 +169,10 @@ function filter(e){
             value: $("#search_text").val()
         }
         , {
-	    field: "isThumbnail",
-	    operator: "",
-	    value: $("#report_type").val()
-	}
+            field: "isThumbnail",
+            operator: "",
+            value: $("#report_type").val()
+        }
     ]);
 }
 
@@ -193,26 +226,26 @@ $(document).ready(function(){
         scrollable: false,
         columns: [ {
                 field: "id",
-                title: "&nbsp;",
+                title: "{% trans "projectresults.fields.id.label" %}",
                 sortable: false,
                 width: '7%',
                 template: "<input id='${id}' type='checkbox' class='selected'>"
             } , {
                 field: "resultsName",
-                title: "Name",
+                title: "{% trans "projectresults.fields.resultsName.label" %}",
                 width: '40%',
                 template: '<a href="/report/${id}/" target="_blank">${resultsName}</a>'
             } , {
                 field: "status",
-                title: "Status",
+                title: "{% trans "projectresults.fields.status.label" %}",
                 width: '15%'
             } , {
                 field: "reference",
-                title: "Reference",
+                title: "{% trans "projectresults.fields.reference.label" %}",
                 width: '20%'
             } , {
                 field: "timeStamp",
-                title: "Date",
+                title: "{% trans "projectresults.fields.timeStamp.label" %}",
                 width: '15%',
                 template: '#= kendo.toString(new Date(Date._parse(timeStamp)),"yyyy/MM/dd hh:mm tt") #'
             }
@@ -270,7 +303,7 @@ $(document).ready(function(){
             return false;
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
             console.log("error:", data);
         });
     });
@@ -292,7 +325,7 @@ $(document).ready(function(){
             })
             .fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                 console.log("error:", data);
             })
             .always(function(data) { /*console.log("complete:", data);*/ });;
@@ -314,7 +347,7 @@ $(document).ready(function(){
             })
             .fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                 console.log("error:", data);
             })
             .always(function(data) { /*console.log("complete:", data);*/ });;
@@ -352,12 +385,12 @@ $(document).ready(function(){
                         ref = gridDataArray[index].reference;
                     }
                     else if (ref != gridDataArray[index].reference){
-                        alert("ERROR: Selected results must have the same Alignment Reference.");
+                        alert("{% trans "projectresults.action.results_to_combine.messages.referenceNotEqual" %}");
                         $('#combine_selected_dropdown').dropdown('toggle');
                         return;
                     }
                     if (    gridDataArray[index].status.indexOf("Completed") == -1 )                {
-                        alert("ERROR: Selected results must have Status = Completed.");
+                        alert("{% trans "projectresults.action.results_to_combine.messages.statusNotCompleted" %}");
                         $('#combine_selected_dropdown').dropdown('toggle');
                         return;
                     }
@@ -378,12 +411,12 @@ $(document).ready(function(){
             })
             .fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                 console.log("error:", data);
             })
             .always(function(data) { /*console.log("complete:", data);*/ });;
         }
-        else { alert("Please select 2 or more results to combine."); }
+        else { alert("{% trans "projectresults.action.results_to_combine.messages.minSelected" %}"); }
 
     });
 
@@ -397,37 +430,39 @@ $(document).ready(function(){
 
 });
 </script>
-    <div id="modal_data_management" title="" class="modal hide">
-        <div class="modal-header">
-            <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Title</h3>
-        </div>
-        <div class="modal-body">
-            <div id="modal_data_management_errormessages" class="alert alert-danger hide"></div>
-            <form class="form-horizontal" id="modal_data_management_form" method="POST">
-                <fieldset>
-                    <div class="control-group">
-                        <label for="data_management_comments" class="control-label">Comment:</label>
-                        <div class="controls">
-                            <input id="data_management_comments" type="text"/>
-                            <p class="help-block">
-                            </p>
-                        </div>
-                    </div>
-                </fieldset>
-            </form>
-        </div>
-        <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-            <a href="#" class="btn btn-primary">Ok</a>
-        </div>
+{#DEAD CODE#}
+{#        <div id="modal_data_management" title="" class="modal hide">#}
+{#            <div class="modal-header">#}
+{#                <button type="button" class="close" data-dismiss="modal">&times;</button>#}
+{#                <h3>Title</h3>#}
+{#            </div>#}
+{#            <div class="modal-body">#}
+{#                <div id="modal_data_management_errormessages" class="alert alert-danger hide"></div>#}
+{#                <form class="form-horizontal" id="modal_data_management_form" method="POST">#}
+{#                    <fieldset>#}
+{#                        <div class="control-group">#}
+{#                            <label for="data_management_comments" class="control-label">Comment:</label>#}
+{#                            <div class="controls">#}
+{#                                <input id="data_management_comments" type="text"/>#}
+{#                                <p class="help-block">#}
+{#                                </p>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </fieldset>#}
+{#                </form>#}
+{#            </div>#}
+{#            <div class="modal-footer">#}
+{#                <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>#}
+{#                <a href="#" class="btn btn-primary">{% trans "global.action.modal.ok" %}</a>#}
+{#            </div>#}
+{##}
+{#            <script>#}
+{#                $('#modal_data_management').on("hide", function() {#}
+{#                    $('#modal_data_management .btn_primary').unbind('click');#}
+{#                    $('#data_management_comments').val('');#}
+{#                });#}
+{#            </script>#}
+{#        </div>#}
 
-        <script>
-            $('#modal_data_management').on("hide", function() {
-                $('#modal_data_management .btn_primary').unbind('click');
-                $('#data_management_comments').val('');
-            });
-        </script>
-    </div>
 </div>
 {% endblock content %}

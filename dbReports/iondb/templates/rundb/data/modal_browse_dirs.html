@@ -1,4 +1,5 @@
 {% load url from future %}
+{% load i18n %}
 <div id="modal_browse_dirs" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -84,7 +85,7 @@ $('#modal_browse_dirs').on('click','.click_path', function(e){
     $('#modal_browse_dirs .modal-body').load(url + ' #dir_contents',
         function (data, status, xhr){
             if (status == "error") {
-                $('#modal_browse_dirs #error-messages').empty().append('<p class="error">ERROR: ' + data + '</p>').show();
+                $('#modal_browse_dirs #error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data + '</p>').show();
                 console.log("error:", data, xhr);
             } else {
                 $('#modal_browse_dirs #error-messages').hide();

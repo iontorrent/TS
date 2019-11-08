@@ -11,7 +11,10 @@ from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 
-from iondb.product_integration.utils import send_deep_laser_iot_request, get_deep_laser_iot_response
+from iondb.product_integration.utils import (
+    send_deep_laser_iot_request,
+    get_deep_laser_iot_response,
+)
 from iondb.rundb.json_field import JSONField
 from iondb.security.models import SecureString
 from iondb import settings
@@ -80,7 +83,7 @@ class ThermoFisherCloudAccount(models.Model):
 
     def setup_ampliseq(self, password):
         """This method will setup a secret for the ampliseq password"""
-        base_url = os.path.join(settings.AMPLISEQ_URL,"ws/design/list")
+        base_url = os.path.join(settings.AMPLISEQ_URL, "ws/design/list")
         ampliseq_response = requests.get(base_url, auth=(self.username, password))
         ampliseq_response.raise_for_status()
 
@@ -91,7 +94,7 @@ class ThermoFisherCloudAccount(models.Model):
 
     def save(self, *args, **kwargs):
         """Override the default save behavior to also include the secure secret"""
-        password = kwargs.pop('password', '')
+        password = kwargs.pop("password", "")
         super(ThermoFisherCloudAccount, self).save(*args, **kwargs)
         if password:
             secret = SecureString.create(password, self.ampliseq_secret_name)
@@ -107,6 +110,7 @@ def on_pluginresult_delete(sender, instance, **kwargs):
 
 class DeepLaserResponse(models.Model):
     """This model store iot responses from deep laser"""
+
     date_received = models.DateTimeField(auto_now_add=True)
     request_id = models.CharField(max_length=512, db_index=True)
     request_type = models.CharField(max_length=512, db_index=True)
@@ -114,4 +118,4 @@ class DeepLaserResponse(models.Model):
     status_code = models.PositiveSmallIntegerField()
 
     class Meta:
-        ordering = ['-date_received']
+        ordering = ["-date_received"]

@@ -29,6 +29,14 @@
 
 #include <stdint.h>
 
+#define ACTGN_MATRIX_ROWSIZE 5
+#define ACTGN_MATRIX_ROWNO 5
+#define ACTGN_MATRIX_SIZE (ACTGN_MATRIX_ROWSIZE*ACTGN_MATRIX_ROWNO)
+#define IUPAC_MATRIX_ROWSIZE 16
+#define IUPAC_MATRIX_ROWNO 5
+#define IUPAC_MATRIX_SIZE (IUPAC_MATRIX_ROWSIZE*IUPAC_MATRIX_ROWNO)
+
+
 // TODO: replace these with those from bam.h
 #define TMAP_SW_CIGAR_OP(_cigar) (((_cigar) & 0xf))
 #define TMAP_SW_CIGAR_LENGTH(_cigar) (((_cigar) >> 4))
@@ -98,6 +106,7 @@ typedef struct
   int32_t gap_ext; /*!< gap extension penalty (positive) */
   int32_t gap_end; /*!< gap end penalty (positive */
   int32_t *matrix; /*!< substitution matrix (see details)*/
+  uint8_t matrix_owned; /*!< substitution matrix ownership - for memory management*/
   int32_t row; /*!< the alphabet size */  
   int32_t band_width; /*!< for Smith-Waterman banding */
 } tmap_sw_param_t;

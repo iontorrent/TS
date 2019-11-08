@@ -1,5 +1,6 @@
+{% load i18n %}
     	<div class="row-fluid">
-    	<h2>Network</h2>
+    	<h2>{% trans "configure_system_stats.section.stats_network.title" %}</h2>
 
 		{% if stats_network %}
 <pre>
@@ -8,12 +9,12 @@
 {% endfor %}
 </pre>
 		{% else %}
-			<p><b>No network statistics available</b></p>
+			<p><b>{% trans "configure_system_stats.section.stats_network.none" %}</b></p>
 		{% endif %}
 	    </div>
 
     	<div class="row-fluid">
-	    <h2>System</h2>
+	    <h2>{% trans "configure_system_stats.section.stats.title" %}</h2>
 	    {% if stats %}
 <pre>
 {% for line in stats %}{% spaceless %}
@@ -21,12 +22,12 @@
 {% endfor %}
 </pre>
     	{% else %}
-			<p><b>No system statistics available</b></p>
+			<p><b>{% trans "configure_system_stats.section.stats.none" %}</b></p>
     	{% endif %}
 	    </div>
 
     	<div class="row-fluid">
-	    <h2>Data</h2>
+	    <h2>{% trans "configure_system_stats.section.stats_dm.title" %}</h2>
     	{% if stats_dm %}
 <pre>
 {% for line in stats_dm %}{% spaceless %}
@@ -34,21 +35,21 @@
 {% endfor %}
 </pre>
     	{% else %}
-      		<p><b>No raw data management statistics available</b></p>
+      		<p><b>{% trans "configure_system_stats.section.stats_dm.none" %}</b></p>
     	{% endif %}
 	    </div>
 
     	<div class="row-fluid">
-	    <h2>RAID Info</h2>
+	    <h2>{% trans "configure_system_stats.section.raid_stats.title" %}</h2>
     	{% if raid_stats %}
         <pre>{{raid_stats}}</pre>
     	{% else %}
-      		<p><b>No RAID statistics available</b></p>
+      		<p><b>{% trans "configure_system_stats.section.raid_stats.none" %}</b></p>
     	{% endif %}
 	    </div>
 
         <div class="row-fluid">
-            <h2>Environment Info</h2>
+            <h2>{% trans "configure_system_stats.section.environment.title" %}</h2>
             <pre>{{ environment }}</pre>
         </div>
 

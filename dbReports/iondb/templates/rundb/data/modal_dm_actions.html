@@ -1,5 +1,6 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_dm_actions" title="" class="modal hide" style="width:auto">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -21,12 +22,12 @@
 			<table id="dm_actions_table" class="table">
 				<thead>
 					<th></th>
-					<th><input id="select_all" type="checkbox"/></th>
-					<th>Select All</th>
-					<th>File Category</th>
-					<th>Size(MB)</th>
-					<th>Keep</th>
-					<th>State</th>
+					<th><input id="select_all" type="checkbox" title="Select/De-select All"/></th>
+					<th>{% trans "dm.actions.fields.dm_files_info.category.label" %}</th>
+					<th>{% trans "dm.actions.fields.dm_files_info.description.label" %}</th>
+					<th>{% trans "dm.actions.fields.dm_files_info.diskspace.label" %}</th>
+					<th>{% trans "dm.actions.fields.dm_files_info.preserve_data.label" %}</th>
+					<th>{% trans "dm.actions.fields.dm_files_info.action_state.label" %}</th>
 				</thead>
 				<tbody>
 				{% for entry in dm_files_info %}
@@ -76,36 +77,45 @@
 			{% if isDMDebug %}
 				<a href="{% url "dm_action_selected" results_pks 'test' %}" name="Test" class="btn dm_action_btn" title="Show files in the log file">Print Selected</a>
 			{% endif %}
-			<a href="{% url "dm_action_selected" results_pks 'delete' %}" name="Delete" class="btn dm_action_btn" title="Delete all files in selected categories">Delete Selected</a>
-			<a href="{% url "dm_action_selected" results_pks 'archive' %}" name="Archive" class="btn dm_action_btn" title="Move all files in selected categories off local filesystem">Archive Selected</a>
-			<a href="{% url "dm_action_selected" results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Copies all files in selected categories">Export Selected</a>
-			<a class="btn" href="#" data-dismiss="modal">Close</a>
+			<a href="{% url "dm_action_selected" results_pks 'delete' %}" name="Delete" class="btn dm_action_btn"
+               title="{% trans "dm.actions.action.delete.tooltip" %}"
+               data-confirm-title="{% trans "dm.actions.action.delete.confirm-message" %}"
+               data-confirm-directory-label="{% trans "dm.actions.action.delete.confirm-directory-label" %}">{% trans "dm.actions.action.delete.label" %}</a>
+			<a href="{% url "dm_action_selected" results_pks 'archive' %}" name="Archive" class="btn dm_action_btn"
+               title="{% trans "dm.actions.action.archive.tooltip" %}"
+               data-confirm-title="{% trans "dm.actions.action.archive.confirm-message" %}"
+               data-confirm-directory-label="{% trans "dm.actions.action.archive.confirm-directory-label" %}">{% trans "dm.actions.action.archive.label" %}</a>
+			<a href="{% url "dm_action_selected" results_pks 'export' %}" name="Export" class="btn dm_action_btn"
+               title="{% trans "dm.actions.action.export.tooltip" %}"
+               data-confirm-title="{% trans "dm.actions.action.export.confirm-message" %}"
+               data-confirm-directory-label="{% trans "dm.actions.action.export.confirm-directory-label" %}">{% trans "dm.actions.action.export.label" %}</a>
+			<a class="btn pull-left" href="#" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
 		</div>
 		<div id="confirm_action" style="text-align:center; display: none;">
 			<form class="form-inline" id="modal_dm_actions_confirm_form">
 				<h2></h2>
 				<div id="backup_directory" class="control-group">
-					<label for="select_backup_dir" class="control-label">Archive Directory:</label>
+					<label for="select_backup_dir" class="control-label">s</label>
 					<select id="select_backup_dir" style="width:270px">
-						<option value="default">Use Configured Archive Directories</option>
+						<option value="default">{% trans "dm.actions.confirm.fields.select_backup_dir.choice.0" %}</option>
 						{% for dir in backup_dirs %}
 						<option value={{dir.0}}>{{dir.1}}</option>
 						{% endfor %}
 					</select>
-					<a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>Browse</a>
+					<a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>{% trans "dm.actions.confirm.action.browse_backup_dirs.label" %}</a>
 				</div>
 				<div class="control-group">
-					<label for="dm_comment" class="control-label">Comment:</label>
-					<input id="dm_comment" type="text" placeholder="No comment">
-					<a href="#" class="btn" id="confirm_action_btn">Confirm</a>
+					<label for="dm_comment" class="control-label">{% trans "dm.actions.confirm.fields.comment.label" %}</label>
+					<input id="dm_comment" type="text" placeholder="{% trans "dm.actions.confirm.fields.comment.placeholder" %}">
+					<a href="#" class="btn btn-primary" id="confirm_action_btn">{% trans "dm.actions.confirm.action.submit" %}</a>
 				</div>
 				<div id="error-messages" class="alert alert-error" style="display:none;"></div>
 			</form>
 		</div>
 		<div id="confirm_warning" style="text-align:center; display:none;">
 			<form class="form-inline" id="modal_dm_actions_confirm_warning_form">
-				<label for="confirm_warning_btn" style="font-weight:bold;">PROCEED WITH WARNINGS?</label>
-				<a href="#" class="btn" id="confirm_warning_btn">Yes</a>
+				<label for="confirm_warning_btn" style="font-weight:bold;">{% trans "dm.actions.confirm.messages.proceedwithwarnings" %}</label>
+				<a href="#" class="btn btn-primary" id="confirm_warning_btn">{% trans "global.action.yes" %}</a>
 			</form>
 		</div>
 	{% endif %}
@@ -164,11 +174,14 @@
 		var url = $(this).attr('href');
 		var action = $(this).attr("name");
 		var confirmed = false;
+		var confirmTitle = $(this).data('confirmTitle');
+		var confirmDirectoryLabel = $(this).data('confirmDirectoryLabel');
 
 		// show confirmation dialog
-		$('#modal_dm_actions #confirm_action h2').text(action + " selected files, Proceed?");
+		$('#modal_dm_actions #confirm_action h2').text(confirmTitle);
 		$('#modal_dm_actions #error-messages').empty().hide();
 		$('#modal_dm_actions #confirm_action').show();
+		$('#modal_dm_actions #backup_directory label').html(confirmDirectoryLabel);
 		if (action!='Delete'){
 			$('#modal_dm_actions #backup_directory').show();
 		} else {
@@ -186,7 +199,7 @@
 			e.preventDefault();
 			categories = $( "input[name=file_category]:checked" ).map(function(){ return this.value; }).toArray();
 			if (categories.length < 1){
-				$('#modal_dm_actions #error-messages').empty().append('<p class="error"> Please select one or more File Categories. </p>').show();
+				$('#modal_dm_actions #error-messages').empty().append('<p class="error"> {% trans "dm.actions.messages.validation.category.required" %} </p>').show();
 				return;
 			}
 			var json = {
@@ -209,7 +222,7 @@
 					data = JSON.parse(data);
 					console.log('done:', data);
 					if ('warning' in data){
-						$('#modal_dm_actions #error-messages').empty().append('<p class="error">WARNING: ' + data.warning + '</p>').show();
+						$('#modal_dm_actions #error-messages').empty().append('<p class="error">{% trans "global.messages.warning.label" %}: ' + data.warning + '</p>').show();
 						$('#modal_dm_actions #confirm_warning').show();
 						return
 					}
@@ -218,7 +231,7 @@
 			})
 			.fail(function(data) {
 				console.log("fail:", data);
-				$('#modal_dm_actions #error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+				$('#modal_dm_actions #error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
 			});
 		});
 	});
@@ -268,12 +281,13 @@
 		$.post($(this).attr('href'), data, function(data){
 			$('#modal_dm_actions #modal-error-messages').empty().hide();
 		}).fail(function(data) {
-			$('#modal_dm_actions #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+			$('#modal_dm_actions #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
 			that.prop('checked', !checked);
 		});
 	});
 	
 	// allow second modal popup window
 	$.fn.modal.Constructor.prototype.enforceFocus = function () {};
+	//# sourceURL=templates/rundb/data/modal_dm_actions.html.js
 </script>
 </div>

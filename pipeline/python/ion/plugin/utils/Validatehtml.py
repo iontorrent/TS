@@ -3,7 +3,7 @@
 # First stage plugin driver script that uses user input to generate document.json with the help of django template
 # This template takes user.json in the form of individual contents - table, images
 
-__version__ = '1.0'
+__version__ = "1.0"
 
 import os, sys, logging
 from optparse import OptionParser
@@ -29,7 +29,10 @@ class Validatehtml(Utility):
         self.section = section
         self.section["id"] = self.generateID()
         if "title" not in self.section:
-            logging.error("title field for section type %s missing. Using default one" % self.section["type"])
+            logging.error(
+                "title field for section type %s missing. Using default one"
+                % self.section["type"]
+            )
             self.section["title"] = "HTML Section"
 
         if "content" not in self.section:
@@ -37,5 +40,6 @@ class Validatehtml(Utility):
         logging.debug("HTML section generated %s" % self.section["content"])
         return self.section
 
+
 if __name__ == "__main__":
-    print "in main block"
+    print("in main block")

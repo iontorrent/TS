@@ -1,26 +1,31 @@
 {% extends "rundb/plan/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
 <script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
 
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
-<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
 <script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
-<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
+{% include "rundb/common/head_uni-form-validation.jquery.js.html" %} <!-- Using updated uni-form JS -->
 
 <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
 <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
+<script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
+
 <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <script src="{% static "js/date.min.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 
 <style type="text/css">
 .search-field {
@@ -55,9 +60,9 @@ tbody .btn.dropdown-toggle {
 
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url "plan_templates" %}">Templates</a></li>
-    <li><a href="{% url "samplesets" %}">Samples</a></li>
-    <li><a href="{% url "planned" %}">Planned Runs</a></li>
+    <li class="active"><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+    <li><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+    <li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 {% endblock sub-nav %}
 
 
@@ -87,107 +92,110 @@ tbody .btn.dropdown-toggle {
                 <h3 style="float:left;"><img src="{% static category.img %}" border="0" width='24px;'>&nbsp;{{category.displayedName}}</h3>
                 <div class="clearfix">
                     <div class="pull-right">
-                        <div class="btn-group"><a rel="tooltip" title="Upload plans, templates, or panels" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">Upload <span class="caret"></span></a>
+                        <div class="btn-group"><a rel="tooltip" title="{% trans "template.action.upload.tooltip" %}" class="btn btn-primary dropdown-toggle" href="#" id="plan_csv_upload" data-toggle="dropdown">{% trans "template.action.upload.label" %}<span class="caret"></span></a>
                             <ul class="dropdown-menu">
-                                <li><a href="{% url "upload_plans_for_template" %}" class="upload-plan" >Upload Plans</a></li>
-                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template">Upload Template</a></li>
-                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template_json_bundle">Upload Design/Panel Zip Archive</a></li>
+                                <li><a href="{% url "upload_plans_for_template" %}" class="upload-plan" >{% trans "template.action.upload.menu.upload_plans_for_template" %}</a></li>
+                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template">{% trans "template.action.upload.menu.import_plan_template" %}</a></li>
+                                {% if featureflags.IMPORT_PANEL_ARCHIVE %}
+                                <li><a href="#" data-toggle="modal" data-target="#modal_load_template_json_bundle">{% trans "template.action.upload.menu.upload_design_panel_archive" %}</a></li>
+                                {% endif %}
                             </ul>
                         </div>
+                        {% if featureflags.AMPLISEQ %}
                         {% if category.ampliSeq_upload %}
-                        <div class="btn-group"><a  rel="tooltip" title="Import template from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>
-                            <ul class="dropdown-menu">
-                                <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
-                                <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
-                                <li><a href="{% url "configure_ampliseq" "RNA" %}">AmpliSeq RNA</a></li>
-                            </ul>
+                        <div class="btn-group">
+                            <a  rel="tooltip" title="Import template from AmpliSeq.com" class="btn" href="{% url "configure_ampliseq" %}" id="ampliseq_import_dropdown_toggle">AmpliSeq.com <i class="icon-upload"></i>
+                                </a>
                         </div>
                         {% endif %}
+                        {% endif %}
                         &nbsp;|
-                        <a href="{% url "page_plan_new_template" category.code %}" rel="tooltip" title="Create new template for run planning">Add New Template</a>
+                        <a href="{% url "page_plan_new_template" category.code %}" rel="tooltip" title="{% trans "template.action.add.tooltip" %}">{% trans "template.action.add.label" %}</a>
                         &nbsp;| 
-                        <a href="{% url "page_plan_new_plan_from_code" category.code %}" rel="tooltip" title="Create new plan">Plan New Run</a>
+                        <a href="{% url "page_plan_new_plan_from_code" category.code %}" rel="tooltip" title="{% trans "plan.action.add.tooltip" %}">{% trans "plan.action.add.label" %}</a>
                     </div>
                 </div>
                 <div class="alert alert-warning template_warnings" style="max-height: 100px; overflow-y: scroll; margin-bottom:0;"></div>
 
                 <div id="{{category.tag}}_search_bar" class="row-fluid">
                     <div class="input-append search-field">
-                        <input name="search_text" type="text" placeholder="Search by Template Name"
+                        <input name="search_text" type="text" data-placeholder-prefix="" placeholder="{% trans "template.search_bar.fields.search_text.choice.planName" %}"
                                data-selected_filter="planName" style="width:160px;" />
             
                         <div class="btn-group">
-                            <a name="search_subject_nav" class="btn dropdown-toggle" title="Search by Template Name" data-toggle="dropdown" style="border-radius:0;">
+                            <a name="search_subject_nav" class="btn dropdown-toggle" data-title-prefix="" title="{% trans "template.search_bar.fields.search_text.choice.planName" %}" data-toggle="dropdown" style="border-radius:0;">
                                 <i class="icon-search" border="0"></i><span class="caret"></span>
                             </a>
                             <ul name="plan_search_dropdown_menu" class="dropdown-menu pull-right">
-                                <li><a data-filter="planName"><span class="icon-check"></span>Template Name</a></li>
-                                <li><a data-filter="iraccount"><span class="icon-white"></span>IR Account</a></li>
-                                <li><a data-filter="irworkflow"><span class="icon-white"></span>IR Workflow</a></li>
+                                <li><a data-filter="planName"><span class="icon-check"></span>{% trans "template.search_bar.fields.search_text.choice.planName" %}</a></li>
+                                {% if featureflags.IONREPORTERUPLOADER %}
+                                <li><a data-filter="iraccount"><span class="icon-white"></span>{% trans "template.search_bar.fields.search_text.choice.iraccount" %}</a></li>
+                                <li><a data-filter="irworkflow"><span class="icon-white"></span>{% trans "template.search_bar.fields.search_text.choice.irworkflow" %}</a></li>
+                                {% endif %}
                             </ul>
-                            <button class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">Go</button>
+                            <button class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">{% trans "template.search_bar.fields.search_text.label" %}</button>
                         </div>
                     </div>
                     <div class="search-field">
-                        <input type="text" name="dateRange" placeholder="Date" style="width:140px;"/>
+                        <input type="text" name="dateRange" placeholder="{% trans "template.search_bar.fields.dateRange.placeholder" %}" style="width:140px;"/>
                     </div>
                     <div class="search-field">
-                        <select name="instrument" class="selectpicker" data-width="140px" title="Instrument:" data-persist-title="true">
-                            <option value="">All</option>
-                            <option value="pgm">PGM</option>
-                            <option value="proton">Proton</option>
-                            <option value="s5">S5</option>
+                        <select name="instrument" class="selectpicker" data-width="140px" title="{% trans "template.search_bar.fields.instrument.title" %}" data-persist-title="true">
+                            <option value="">{% trans "template.search_bar.fields.instrument.choice.default" %}</option>
+                            {% for value, display in instruments %}
+                            <option value="{{ value }}">{{ display }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="search-field">
-                        <select name="sampleprep" class="selectpicker" data-width="140px" title="Sample Prep:" data-persist-title="true">
-                            <option value="">All</option>
-                            <option value="OT">OneTouch</option>
-                            <option value="IC">IonChef</option>
-                            <option value="IA">IA</option>
+                        <select name="sampleprep" class="selectpicker" data-width="140px" title="{% trans "template.search_bar.fields.sampleprep.title" %}" data-persist-title="true">
+                            <option value="">{% trans "template.search_bar.fields.sampleprep.choice.default" %}</option>
+                            <option value="OT">{% trans "template.search_bar.fields.sampleprep.choice.OT" %}</option>
+                            <option value="IC">{% trans "template.search_bar.fields.sampleprep.choice.IC" %}</option>
+                            <option value="IA">{% trans "template.search_bar.fields.sampleprep.choice.IA" %}</option>
                         </select>
                     </div>
                     <div class="search-field">
-                        <select name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                                data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                                title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                        <select name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "template.search_bar.fields.project.count-selected-text" %}"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "template.search_bar.fields.project.remove-button-title" %}" data-live-search="true"
+                                data-live-search-placeholder="{% trans "template.search_bar.fields.project.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="{% trans "template.search_bar.fields.project.title" %}" data-select-all-text="{% trans "template.search_bar.fields.project.select-all-text" %}" data-deselect-all-text="{% trans "template.search_bar.fields.project.deselect-all-text" %}" data-none-selected-text="{% trans "template.search_bar.fields.project.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                             {% for project in projects %}
                                 <option value="{{ project }}">{{ project }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="search-field">
-                        <button class="btn toggle_more_filters" type="button" data-more-text="More Filters" data-less-text="Less Filters">More Filters</button>
+                        <button class="btn toggle_more_filters" type="button" data-more-text="{% trans "template.search_bar.action.toggle_more_filters.more-text" %}" data-less-text="{% trans "template.search_bar.action.toggle_more_filters.less-text" %}">{% trans "template.search_bar.action.toggle_more_filters.more-text" %}</button>
                     </div>
                     <div class="search-field">
-                        <button class="btn clear_filters" type="button">Clear All</button>
+                        <button class="btn clear_filters" type="button">{% trans "template.search_bar.action.clear_filters.label" %}</button>
                     </div>
 
                     <div class="search-field optional hide" style="clear:left; margin-left:435px;">
-                        <select name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                                data-live-search-placeholder="Find Barcodes..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                                title="Barcodes:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                        <select name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "template.search_bar.fields.barcodes.count-selected-text" %}"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "template.search_bar.fields.barcodes.remove-button-title" %}" data-live-search="true"
+                                data-live-search-placeholder="{% trans "template.search_bar.fields.barcodes.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="{% trans "template.search_bar.fields.barcodes.title" %}" data-select-all-text="{% trans "template.search_bar.fields.barcodes.select-all-text" %}" data-deselect-all-text="{% trans "template.search_bar.fields.barcodes.deselect-all-text" %}" data-none-selected-text="{% trans "template.search_bar.fields.barcodes.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                             {% for barcode in barcodes %}
                                 <option value="{{ barcode }}">{{ barcode }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="search-field optional hide">
-                        <select name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                                data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                                title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                        <select name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "template.search_bar.fields.reference.count-selected-text" %}"
+                                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "template.search_bar.fields.reference.remove-button-title" %}" data-live-search="true"
+                                data-live-search-placeholder="{% trans "template.search_bar.fields.reference.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                                title="{% trans "template.search_bar.fields.reference.title" %}" data-select-all-text="{% trans "template.search_bar.fields.reference.select-all-text" %}" data-deselect-all-text="{% trans "template.search_bar.fields.reference.deselect-all-text" %}" data-none-selected-text="{% trans "template.search_bar.fields.reference.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                             {% for reference in references %}
                                 <option value="{{ reference }}">{{ reference }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="search-field optional hide">
-                        <select name="user" class="selectpicker" data-width="140px" title="Source:" data-persist-title="true">
-                            <option value="">All</option>
-                            <option value="_system">System Pre-loaded</option>
+                        <select name="user" class="selectpicker" data-width="140px" title="{% trans "template.search_bar.fields.user.title" %}" data-persist-title="true">
+                            <option value="">{% trans "template.search_bar.fields.user.choice.default" %}</option>
+                            <option value="_system">{% trans "template.search_bar.fields.user.choice._system" %}</option>
                             {% for user in usernames %}
                                 <option value="{{ user }}">{{ user }}</option>
                             {% endfor %}
@@ -203,43 +211,94 @@ tbody .btn.dropdown-toggle {
     </div>
 </div>
 
+
+<script id="ImportPlanTemplateFailureTemplate" type="text/x-kendo-template">
+    <p>{% trans "global.messages.error.file.upload" %}</p>
+</script>
+<script id="ImportPlanTemplateResponseTemplate" type="text/x-kendo-template">
+    # var rowMsgFormat = '{{ rowWarningsFormat|safe }}'; #
+    # var columnMsgFormat = '{{ columnWarningsFormat|safe }}'; #
+    # var fieldMsgFormat = '{{ fieldWarningsFormat|safe }}'; #
+
+    # if (data.status === 'failed') { #
+    #   var rowMsgFormat = '{{ rowErrorsFormat|safe }}'; #
+    #   var columnMsgFormat = '{{ columnErrorsFormat|safe }}'; #
+    #   var fieldMsgFormat = '{{ fieldErrorsFormat|safe }}'; #
+    # } #
+
+    <p>#= data.status_msg #</p>
+    # if (data.msg) { #
+        # for (var key in data.msg) { #
+        <ul class='unstyled'>
+            # if ($.isNumeric(key)) { #
+                <li><strong>#=interpolate(rowMsgFormat, {'n': key}, true)#</strong>
+                    # if (data.msg[key]) { #
+                        <ul>
+                        # $.each(data.msg[key], function(columnName, columnErrors) { #
+                            # if ($.isNumeric(columnName)) { #
+                                <li>#=columnErrors#</li>
+                            # } else { #
+                                <li>#=interpolate(columnMsgFormat, {'columnName': columnName, 'columnErrors': columnErrors}, true)#</li>
+                            # } #
+                        # }); #
+                        </ul>
+                    # } #
+                </li>
+            # } else { #
+                <li>#=interpolate(columnMsgFormat, {'columnName': columnName, 'columnErrors': columnErrors}, true)#</li>
+            # } #
+        </ul>
+        # } #
+    # } #
+</script>
+
 <div id="modal_load_template" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Import Plan Template</h3>
+        <h3>{% trans "import_plan_template.title" %}</h3>
     </div>
     <div class="modal-body">
         <div class="alert alert-error hide"></div>
-        <div class="alert alert-success hide">Success!</div>
+        <div class="alert alert-success hide">{% trans "import_plan_template.messages.success" %}</div>
         <div class="alert alert-warning hide"></div>
         <form id="importTemplateForm" method="POST" action="{% url "import_plan_template" %}" enctype="multipart/form-data">
             <div id="csv_load" class="control-group">
                 <div class="controls">
-                <label for="file" class="control-label">Select a CSV File</label>
-                <input type="file" name="csv_file" class="input-xxlarge input-file required">
+                <label for="csv_file" class="control-label">{% trans "import_plan_template.fields.file.label" %}</label>
+                <div class="fileupload fileupload-new" data-provides="fileupload"><input type="hidden">
+                        <div class="input-append">
+                          <div class="uneditable-input span4"><i class="icon-file fileupload-exists"></i><span class="fileupload-preview" style=""></span></div>
+                          <span class="btn btn-file">
+                              <span class="fileupload-new">{% trans "import_plan_template.fields.file.select" %}</span>
+                              <span class="fileupload-exists">{% trans "import_plan_template.fields.file.change" %}</span>
+                              <input type="file" id="csv_file" name="csv_file" class="input-xxlarge input-file required" accept=".csv" title="{% trans "import_plan_template.fields.file.select" %}">
+                          </span>
+                          <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">{% trans "import_plan_template.fields.file.unselect" %}</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a id="upload_template" class="btn btn-primary" href="#">Load</a>
-        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">Close</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a id="upload_template" class="btn btn-primary" href="#">{% trans "import_plan_template.action.submit" %}</a>
+        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">{% trans "import_plan_template.action.close " %}</a>
     </div>
 </div>
 
 <div id="modal_load_template_json_bundle" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Import Panel from Zip Archive</h3>
+        <h3>{% trans "import_panel_archive.title" %}</h3>
     </div>
     <div class="modal-body">
     	{% include "rundb/common/plan_template_zip_bundle_upload.html" %}
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Close</a>
-        <a id="upload_button" class="btn btn-primary" >Upload Panel from Zip Archive</a>        
-        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">Close</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a id="upload_button" class="btn btn-primary" >{% trans "import_panel_archive.action.submit" %}</a>
+        <a id="close_on_success" class="btn hide" href="#" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
     </div>
 </div>
 
@@ -258,25 +317,31 @@ var username = '{{user.username}}';
 <script id="PlanDisplayedNameTemplate" type="text/x-kendo-template">
     # var _id = id; #
  
-    <a title="Notes: #= notes #" href="#= '{% url "page_plan_new_plan" 999999 %}'.replace('999999',_id)#">#= planDisplayedName #</a> 
+    <a title="{% trans "template.fields.note.label" %}: #= notes #" href="#= '{% url "page_plan_new_plan" 999999 %}'.replace('999999',_id)#">#= planDisplayedName #</a>
     </span>
     
 </script>
 
 <script id="SeqInstrumentTemplate" type="text/x-kendo-template">
-    # var _instrumentType = sequencingInstrumentType.toUpperCase();# 
+    # var _instrumentType = sequencingInstrumentType.toUpperCase();#
 
-    <span rel="tooltip" title="#= _instrumentType#">
     # if (_instrumentType == "PGM") { #
+        <span rel="tooltip" title="{{ instruments_dict.pgm }}">
         <img src="{% static "resources/img/PGM_small.png" %}" width="24px" height="24px" />
+        </span>
     # } else if (_instrumentType == "PROTON") { #
-        <img src="{% static "resources/img/Proton_small.png" %}" width="24px" height="24px" /> 
+        <span rel="tooltip" title="{{ instruments_dict.proton }}">
+        <img src="{% static "resources/img/Proton_small.png" %}" width="24px" height="24px" />
+        </span>
     # } else if (_instrumentType == "S5") { #
-        <img src="{% static "resources/img/s5-icon2.png" %}" width="24px" height="24px" /> 
+        <span rel="tooltip" title="{{ instruments_dict.S5 }}">
+        <img src="{% static "resources/img/s5-icon2.png" %}" width="24px" height="24px" />
+        </span>
     # } else { #
-        #= _instrumentType #             
+        <span rel="tooltip" title="#= _instrumentType #">
+        #= _instrumentType #
+        </span>
     # } #
-    </span> 
 </script>
 
 <script id="BarcodeKitNameTemplate" type="text/x-kendo-template">
@@ -293,16 +358,16 @@ var username = '{{user.username}}';
 
     # var _fullHotSpotRegionBedFile = getDisplayedValue(hotSpotRegionBedFile); #
     # var _shortHotSpotRegionBedFile = getDisplayedBedFileValue(hotSpotRegionBedFile); #
-    
-   <span rel="tooltip" title="Target: #= _fullTargetRegionBedFile #, HotSpot: #= _fullHotSpotRegionBedFile #"/>
+
+    <span>
     #= getDisplayedValue(_reference) #
     # if (_fullTargetRegionBedFile || _fullHotSpotRegionBedFile) { #
 
          # if (_fullTargetRegionBedFile) { #
-            <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">Target: #= _shortTargetRegionBedFile #</li> 
+            <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">{% trans "template.fields.targetRegionBedFile.label" %}: #= _shortTargetRegionBedFile #</li>
          # } #
          # if (_fullHotSpotRegionBedFile) { #
-            <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">Hotspot: #= _shortHotSpotRegionBedFile #</li> 
+            <li style="font-size:80%; word-wrap: break-word; word-break: break-all;">{% trans "template.fields.hotSpotRegionBedFile.label" %}: #= _shortHotSpotRegionBedFile #</li>
          # } #            
 
     # } # 
@@ -333,28 +398,34 @@ var username = '{{user.username}}';
 
 <script id="TemplatePrepInstrumentTemplate" type="text/x-kendo-template">
     # var _instrumentType = templatePrepInstrumentType;# 
-    
-    <span rel="tooltip" title="#= _instrumentType#">
+
     # if (_instrumentType == "OneTouch") { #
+        <span rel="tooltip" title="{% trans "template.fields.templatePrepInstrumentType.choice.OT" %}">
         <img src="{% static "resources/img/oneTouch_24x24.png" %}" width="24px" height="24px" />
+        </span>
     # } else if (_instrumentType == "IonChef") { #
+        <span rel="tooltip" title="{% trans "template.fields.templatePrepInstrumentType.choice.IC" %}">
         <img src="{% static "resources/img/ionChef_24x24.png" %}" width="24px" height="24px" />
+        </span>
     # } else if (_instrumentType == "Isothermal Amplification") { #
+        <span rel="tooltip" title="{% trans "template.fields.templatePrepInstrumentType.choice.IA" %}">
         <img src="{% static "resources/img/isoAmp_24x24.png" %}" width="24px" height="24px" />
+        </span>
     # } else { #
+        <span rel="tooltip" title="#= _instrumentType#">
         #= _instrumentType #
+        </span>
     # } #
-    </span> 
 </script>
 
 <script id="IsSystemTemplate" type="text/x-kendo-template">
     # var _isSystem = isSystem;# 
     
     # if (_isSystem) { #
-        <span rel="tooltip" title="System Pre-loaded">
+        <span rel="tooltip" title="{% trans "template.fields.user.choice._system.tooltip" %}">
         <img src="{% static "resources/img/ionTorrent_56x20.png" %}" width="56px" height="20px" />        
     # } else { #
-        <span rel="tooltip" title="User created">   
+        <span rel="tooltip" title="{% trans "template.fields.user.tooltip" %}">
         <i class="icon-user"></i>    
     # } #
     # if (username) { #
@@ -373,34 +444,34 @@ var username = '{{user.username}}';
     <ul class="dropdown-menu pull-right">
         <li>
             # if (_isFavorite) { #
-                <a href="#= '{% url "toggle_template_favorite" 999999 %}'.replace('999999', _id)#" class="toggle-template-favorite">Remove from Favorite</a>
+                <a href="#= '{% url "toggle_template_favorite" 999999 %}'.replace('999999', _id)#" class="toggle-template-favorite">{% trans "template.action.unsetfavorite" %}</a>
             # } else { #
-                <a href="#= '{% url "toggle_template_favorite" 999999 %}'.replace('999999', _id)#" class="toggle-template-favorite">Set as Favorite</a>            
+                <a href="#= '{% url "toggle_template_favorite" 999999 %}'.replace('999999', _id)#" class="toggle-template-favorite">{% trans "template.action.setfavorite" %}</a>
             # } #
         </li>    
         <li class="divider"></li>        
         <li>
-            <a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
+            <a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">{% trans "template.action.review" %}</a>
         </li>
         <li>
-            <a href="#= '{% url "page_plan_new_plan" 999999 %}'.replace('999999',_id)#">Plan Run</a>
+            <a href="#= '{% url "page_plan_new_plan" 999999 %}'.replace('999999',_id)#">{% trans "template.action.planrun" %}</a>
         </li>
         <li>
-            <a href="#= '{% url "batch_plans_from_template" 999999 %}'.replace('999999',_id)#" class="batch-plan" >Plan Multiple</a>
+            <a href="#= '{% url "batch_plans_from_template" 999999 %}'.replace('999999',_id)#" class="batch-plan" >{% trans "template.action.batchplanrun" %}</a>
         </li>           
         <li>
-            <a href="#= '{% url "page_plan_copy_template" 999999 %}'.replace('999999',_id)#">Copy</a>
+            <a href="#= '{% url "page_plan_copy_template" 999999 %}'.replace('999999',_id)#">{% trans "template.action.copy" %}</a>
         </li> 
         <li>
-            <a href="#= '{% url "export_plan_template" 999999 %}'.replace('999999',_id)#">Export</a>
+            <a href="#= '{% url "export_plan_template" 999999 %}'.replace('999999',_id)#">{% trans "template.action.export" %}</a>
         </li>
         # if (!_isSystem) { #
             <li class="divider"></li>
             <li>
-            <a href="#= '{% url "page_plan_edit_template" 999999 %}'.replace('999999',_id)#">Edit</a>
+            <a href="#= '{% url "page_plan_edit_template" 999999 %}'.replace('999999',_id)#">{% trans "template.action.edit" %}</a>
             </li>                  
             <li>
-                <a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
+                <a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">{% trans "template.action.delete" %}</a>
             </li>
         # } #        
     </ul>
@@ -412,6 +483,13 @@ var username = '{{user.username}}';
 
 <script type="text/javascript">
 var username = '{{user.username}}';
+{% if featureflags.IONREPORTERUPLOADER %}
+kendo_customize_callback = function($grid) {
+    $kGrid = $grid.data("kendoGrid");
+    $kGrid.showColumn('irAccountName');
+    $kGrid.showColumn('irworkflow');
+};
+{% endif %}
 </script>
 
 <script type="text/javascript" src="{% static "resources/scripts/plan/plan_templates.html.js"%}"></script>

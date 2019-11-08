@@ -13,7 +13,7 @@
 
 using namespace std;
 
-hid_t H5CreateOrOpenGroup(hid_t &file_id, string &group_name);
+hid_t H5CreateOrOpenGroup(hid_t &file_id, const string &group_name);
 
 class ErrorData {
 public:
@@ -201,9 +201,9 @@ class PerReadFlowMatrix {
 
 public:
 
-  PerReadFlowMatrix() : read_buffer_size_(0), h5_group_counter_(0), n_read_(0), n_flow_(0) {}
+  PerReadFlowMatrix() : read_buffer_size_(0), n_read_(0), n_flow_(0) {}
 
-  void Initialize(unsigned int n_flow, unsigned int read_buffer_size = 1e5, unsigned int h5_group_counter = 0);
+  void Initialize(unsigned int n_flow, unsigned int read_buffer_size = 1e5);
   void InitializeNewH5(string h5_out_file);
   void CloseH5(void);
   int Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp=true);
@@ -223,8 +223,8 @@ public:
   const vector<int8_t> & err_flow()         { return err_flow_; }
   
 private:
+  static unsigned int h5_group_counter_;
   unsigned int read_buffer_size_;
-  unsigned int h5_group_counter_;
   unsigned int n_read_;
   unsigned int n_flow_;
   string h5_out_file_;

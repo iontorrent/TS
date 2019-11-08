@@ -7,13 +7,45 @@
 - name: Install packages for webserver
   apt: name={{ item }} state=present force=yes
   with_items:
-    - apache2-mpm-prefork
     - apache2
     - apache2-utils
     - libapache2-mod-wsgi
-    - libapache2-mod-php5
+
+- name: Install additional apache packages for 18.04
+  apt: name={{ item }} state=present force=yes
+  with_items:
+    - libapache2-mod-php
+  when: ansible_distribution_version == "18.04"
   notify: restart apache
-  
+
+- name: Install additional apache packages for 14.04
+  apt: name={{ item }} state=present force=yes
+  with_items:
+    - apache2-mpm-prefork
+    - libapache2-mod-php5
+  when: ansible_distribution_version == "14.04"
+  notify: restart apache
+
+- name: Install php configuration for 18.04 (php7.2)
+  template:
+    src: php.conf.j2
+    dest: /etc/apache2/mods-available/php7.2.conf
+    mode: 0644
+    owner: root
+    group: root
+  when: ansible_distribution_version == "18.04"
+  notify: restart apache
+
+- name: Install php configuration for 14.04 (php5)
+  template:
+    src: php.conf.j2
+    dest: /etc/apache2/mods-available/php5.conf
+    mode: 0644
+    owner: root
+    group: root
+  when: ansible_distribution_version == "14.04"
+  notify: restart apache
+
 - name: Modify apache2 logfile rotation criteria - keep 10 logs
   lineinfile: dest={{ configfile }}
                 state=present

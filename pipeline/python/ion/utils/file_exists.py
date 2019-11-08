@@ -20,8 +20,9 @@ def file_exists(filepath, block=30, delay=1):
                 finished = time.time() > got_time
                 time.sleep(delay)
         return False
-    except:
+    except Exception:
         raise
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(file_exists(sys.argv[1]))

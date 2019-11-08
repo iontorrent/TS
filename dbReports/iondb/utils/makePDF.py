@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import urllib
 import glob
-import Image
+from PIL import Image
 import math
 from django import shortcuts
 
@@ -27,13 +27,13 @@ PLUGIN_PDF = "plugins.pdf"
 
 
 def write_report_pdf(_result_pk, output_dir=None):
-    '''Writes pdf file of the Report Page'''
+    """Writes pdf file of the Report Page"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     result_obj = shortcuts.get_object_or_404(models.Results, pk=_result_pk)
     report_dir = result_obj.get_report_dir()
     if not output_dir:
         output_dir = report_dir
-    
+
     pdf_dir = os.path.join(report_dir, "pdf")
     # create pdf dir if does not exist
     try:
@@ -49,7 +49,9 @@ def write_report_pdf(_result_pk, output_dir=None):
     for major_plugin in plugins:
         try:
             # list all of the _blocks for the major plugins, just use the first one
-            majorPluginFile = glob.glob(os.path.join(major_plugin.path(), "*_block.html"))[0]
+            majorPluginFile = glob.glob(
+                os.path.join(major_plugin.path(), "*_block.html")
+            )[0]
             pluginPath, pluginFile = os.path.split(majorPluginFile)
             pluginName = major_plugin.plugin.name
         except IndexError:
@@ -57,7 +59,11 @@ def write_report_pdf(_result_pk, output_dir=None):
 
         try:
             pluginOutLink = pluginPath.replace(report_dir, result_obj.reportLink)
-            url = "http://" + LOCALHOST + os.path.normpath(os.path.join(pluginOutLink, pluginFile))
+            url = (
+                "http://"
+                + LOCALHOST
+                + os.path.normpath(os.path.join(pluginOutLink, pluginFile))
+            )
             image_path = os.path.join(pdf_dir, pluginName + ".png")
             # create png file
             _wkhtmltopdf_create_image(url, image_path, js_str)
@@ -76,11 +82,15 @@ def write_report_pdf(_result_pk, output_dir=None):
         "-output-directory",
         output_dir,
         "-interaction",
-        "batchmode"
+        "batchmode",
     ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=output_dir)
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=output_dir
+    )
     stdout, stderr = proc.communicate()
-    if proc.returncode > 1:     # Why does pdflatex return non-zero status despite creating the pdf file?
+    if (
+        proc.returncode > 1
+    ):  # Why does pdflatex return non-zero status despite creating the pdf file?
         logger.warn("Error executing %s" % cmd[0])
         logger.warn(" stdout: %s" % stdout)
         logger.warn(" stderr: %s" % stderr)
@@ -92,7 +102,7 @@ def write_report_pdf(_result_pk, output_dir=None):
 
 
 def write_plugin_pdf(_result_pk, directory=None):
-    '''Writes pdf files of the plugin results pages'''
+    """Writes pdf files of the plugin results pages"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
 
     result_obj = shortcuts.get_object_or_404(models.Results, pk=_result_pk)
@@ -100,28 +110,30 @@ def write_plugin_pdf(_result_pk, directory=None):
     if directory:
         report_dir = directory
 
-    #==========================================================================
+    # ==========================================================================
     # Get list of plugins and their output html pages
-    #==========================================================================
+    # ==========================================================================
     host = "http://%s" % LOCALHOST
     djangoURL = "%s/rundb/api/v1/pluginresult/?result=%s" % (host, _result_pk)
     pageOpener = urllib2.build_opener()
     jsonPage = pageOpener.open(djangoURL)
     djangoJSON = jsonPage.read()
-    decodedJSON = json.loads(djangoJSON)['objects']
+    decodedJSON = json.loads(djangoJSON)["objects"]
 
     plugins = []
     for JSON in decodedJSON:
-        files = JSON['files']
+        files = JSON["files"]
         if files:
             filename = files[0]
-            plugins.append({
-                'name': JSON['pluginName'],
-                'id': JSON['id'],
-                'url': os.path.join(JSON['URL'], filename),
-                'path': os.path.join(JSON['path'], filename),
-                'filename': filename
-            })
+            plugins.append(
+                {
+                    "name": JSON["pluginName"],
+                    "id": JSON["id"],
+                    "url": os.path.join(JSON["URL"], filename),
+                    "path": os.path.join(JSON["path"], filename),
+                    "filename": filename,
+                }
+            )
 
     # if there is no plugin output return false
     if not plugins:
@@ -133,47 +145,36 @@ def write_plugin_pdf(_result_pk, directory=None):
     except OSError:
         pass
 
-    #=========================================================================
+    # =========================================================================
     # Create pdf for each html file
-    #=========================================================================
+    # =========================================================================
     plugin_pdf_files = []
     # for plugins using Kendo tables this javascript will show all rows on single page
     js_str = "$('.k-grid table').each(function(){var dataSource=$(this).data('kendoGrid').dataSource; dataSource.pageSize(dataSource.total());})"
     for plugin in plugins:
         # create the url
-        full_url = host + plugin['url']
+        full_url = host + plugin["url"]
         # check to see if it returns a 200 code
         if get_status_code(full_url) == 200:
-            outpath = os.path.join(report_dir, "pdf", "%s.%s.pdf" % (plugin['filename'], plugin['id']) )
-            _wkhtmltopdf_create_pdf(full_url, outpath, plugin['filename'], plugin['path'], js_str)
+            outpath = os.path.join(
+                report_dir, "pdf", "%s.%s.pdf" % (plugin["filename"], plugin["id"])
+            )
+            _wkhtmltopdf_create_pdf(
+                full_url, outpath, plugin["filename"], plugin["path"], js_str
+            )
             plugin_pdf_files.append(outpath)
         else:
             logger.debug("Did NOT get 200 response from " + full_url)
 
-    #=========================================================================
+    # =========================================================================
     # Concatenate all the individual plugin pdf files into single pdf
-    #=========================================================================
-    cmd = "/usr/bin/pdftk " + ' '.join(plugin_pdf_files) + " cat output " + os.path.join(report_dir, "plugins.pdf")
-    logger.debug("Command String is:\"%s\"" % cmd)
-
-    try:
-        retcode = subprocess.call(cmd, shell=True)
-        if retcode < 0:
-            logger.error("Child was terminated by signal %d" % (-retcode))
-            return None
-        else:
-            logger.info("Child returned %d" % (retcode))
-            return os.path.join(report_dir, PLUGIN_PDF)
-    except OSError as e:
-        logger.error("Execution failed: %s" % e)
-        if os.path.exists(os.path.join(report_dir, PLUGIN_PDF)):
-            return os.path.join(report_dir, PLUGIN_PDF)
-        else:
-            return None
+    # =========================================================================
+    merged = pdf_merge(plugin_pdf_files, os.path.join(report_dir, PLUGIN_PDF))
+    return merged
 
 
 def write_summary_pdf(_result_pk, directory=None):
-    '''Writes pdf file combining Report Page and Plugin Pages'''
+    """Writes pdf file combining Report Page and Plugin Pages"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
 
     result_obj = shortcuts.get_object_or_404(models.Results, pk=_result_pk)
@@ -182,16 +183,12 @@ def write_summary_pdf(_result_pk, directory=None):
         report_dir = directory
     pdf_reportfile = write_report_pdf(_result_pk)
     pdf_pluginfile = write_plugin_pdf(_result_pk)
-    pdf_summaryfile = os.path.join(report_dir, os.path.basename(report_dir)+"-full.pdf")
+    pdf_summaryfile = os.path.join(
+        report_dir, os.path.basename(report_dir) + "-full.pdf"
+    )
     if pdf_reportfile and os.path.exists(pdf_reportfile):
         if pdf_pluginfile and os.path.exists(pdf_pluginfile):
-
-            cmd = ['pdftk', pdf_reportfile, pdf_pluginfile, 'cat', 'output', pdf_summaryfile]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            if proc.returncode != 0:
-                logger.error(stdout)
-                logger.error(stderr)
+            pdf_merge([pdf_reportfile, pdf_pluginfile], pdf_summaryfile)
 
         if not os.path.exists(pdf_summaryfile):
             shutil.copyfile(pdf_reportfile, pdf_summaryfile)
@@ -201,14 +198,39 @@ def write_summary_pdf(_result_pk, directory=None):
 
     try:
         cleanup_latex_files(report_dir)
-    except:
+    except Exception:
         pass
 
     return os.path.join(pdf_summaryfile)
 
 
+def pdf_merge(pdf_files_list, output_file):
+    try:
+        # use pdftk to merge, if available
+        pdftk = subprocess.check_output(["which", "pdftk"]).strip()
+    except Exception:
+        pdftk = None
+
+    pdf_files = " ".join(pdf_files_list)
+    if pdftk:
+        cmd = "%s %s cat output %s" % (pdftk, pdf_files, output_file)
+    else:
+        cmd = "gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=%s %s" % (
+            output_file,
+            pdf_files,
+        )
+
+    logger.debug("Merge pdf files: %s" % cmd)
+    try:
+        retcode = subprocess.check_call(cmd, shell=True)
+        if os.path.exists(output_file):
+            return output_file
+    except Exception as e:
+        logger.error("Failed: %s" % e)
+
+
 def get_summary_pdf(pkR):
-    '''Report Page + Plugins Page PDF'''
+    """Report Page + Plugins Page PDF"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     filename = write_summary_pdf(pkR)
     if filename:
@@ -218,7 +240,7 @@ def get_summary_pdf(pkR):
 
 
 def get_plugin_pdf(pkR):
-    '''Plugins Page PDF'''
+    """Plugins Page PDF"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     filename = write_plugin_pdf(pkR)
     if filename:
@@ -228,7 +250,7 @@ def get_plugin_pdf(pkR):
 
 
 def get_report_pdf(pkR):
-    '''Report Page PDF'''
+    """Report Page PDF"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     filename = write_report_pdf(pkR)
     if filename:
@@ -238,10 +260,10 @@ def get_report_pdf(pkR):
 
 
 def cleanup_latex_files(_report_dir):
-    '''Cleanup intermediate files created by latex'''
+    """Cleanup intermediate files created by latex"""
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     # Clean up intermediate files
-    for filename in ['report.tex', 'report.aux', 'report.log']:
+    for filename in ["report.tex", "report.aux", "report.log"]:
         filepath = os.path.join(_report_dir, filename)
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -262,7 +284,7 @@ def long_slice(image_path, out_name, out_dir, slice_size):
 
     upper = 0
 
-    slices = int(math.ceil(height/slice_size))
+    slices = int(math.ceil(height / slice_size))
 
     for i, _ in enum(range(slices)):
         left = 0
@@ -274,7 +296,9 @@ def long_slice(image_path, out_name, out_dir, slice_size):
         bbox = (left, upper, width, lower)
         working_slice = img.crop(bbox)
         upper += slice_size
-        working_slice.save(os.path.join(out_dir, "slice_" + out_name + "_" + str(i)+".png"))
+        working_slice.save(
+            os.path.join(out_dir, "slice_" + out_name + "_" + str(i) + ".png")
+        )
 
 
 def get_status_code(url):
@@ -289,20 +313,21 @@ def get_status_code(url):
 
 # NOTE: May not work as advertised
 def get_pdf_for_report_directory(directory):
-    '''
+    """
     Instead of using the database primary key of a report, use a report directory
     to generate a PDF.
-    '''
+    """
     # Isolate the Report Directory from the fullpath
     reportnamedir = os.path.split(os.path.abspath(directory))[1]
     # Strip off the underscore and experiment PK to get the Report Name
-    reportname = reportnamedir.replace("_"+reportnamedir.rsplit("_")[-1], "")
+    reportname = reportnamedir.replace("_" + reportnamedir.rsplit("_")[-1], "")
     # Lookup the Report Name in the database
     pkR = models.Results.objects.get(resultsName=reportname).id
-    print "Got PK = %d" % (pkR)
+    print("Got PK = %d" % (pkR))
     pdfpath = write_summary_pdf(pkR)
-    print "Wrote file: %s" % (pdfpath)
+    print("Wrote file: %s" % (pdfpath))
     return
+
 
 # NOTE: May not work as advertised
 
@@ -314,38 +339,58 @@ def generate_pdf_from_archived_report(source_dir):
         # Isolate the Report Directory from the fullpath
         reportnamedir = os.path.split(os.path.abspath(directory))[1]
         # Strip off the underscore and experiment PK to get the Report Name
-        reportname = reportnamedir.replace("_"+reportnamedir.rsplit("_")[-1], "")
+        reportname = reportnamedir.replace("_" + reportnamedir.rsplit("_")[-1], "")
         # Lookup the Report Name in the database
         reportPK = models.Results.objects.get(resultsName=reportname)
         return reportPK
 
     result = get_reportPK(source_dir)
-    dmfilestat = result.get_filestat('Output Files')
+    dmfilestat = result.get_filestat("Output Files")
     report_dir = result.get_report_dir()
     # set archivepath for get_report_dir to find files when generating pdf
-    print "Current archivepath: %s" % (dmfilestat.archivepath)
-    print "Changing to: %s" % (source_dir)
+    print("Current archivepath: %s" % (dmfilestat.archivepath))
+    print("Changing to: %s" % (source_dir))
     dmfilestat.archivepath = source_dir
     dmfilestat.save()
 
     if False:
         pdfpath = write_summary_pdf(result.pk)
-        print "Wrote file: %s" % (pdfpath)
-        shutil.copyfile(pdfpath, os.path.join(os.path.abspath(os.path.split(pdfpath)[0]), 'backupPDF.pdf'))
+        print("Wrote file: %s" % (pdfpath))
+        shutil.copyfile(
+            pdfpath,
+            os.path.join(os.path.abspath(os.path.split(pdfpath)[0]), "backupPDF.pdf"),
+        )
     else:
         # create report pdf via latex
-        latex_filepath = os.path.join('/tmp', os.path.basename(report_dir)+'-full.tex')
+        latex_filepath = os.path.join(
+            "/tmp", os.path.basename(report_dir) + "-full.tex"
+        )
         url = "http://127.0.0.1/report/" + str(result.pk) + "/?latex=1"
         urllib.urlretrieve(url, latex_filepath)
-        pdf = ["pdflatex", "-output-directory", "/tmp", "-interaction", "batchmode", latex_filepath]
-        proc = subprocess.Popen(pdf, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=source_dir)
+        pdf = [
+            "pdflatex",
+            "-output-directory",
+            "/tmp",
+            "-interaction",
+            "batchmode",
+            latex_filepath,
+        ]
+        proc = subprocess.Popen(
+            pdf, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=source_dir
+        )
         _, stderr = proc.communicate()
         if stderr:
-            logger.error('Error: ' + stderr)
+            logger.error("Error: " + stderr)
         else:
-            _copy_to_dir(os.path.join('/tmp', os.path.basename(report_dir)+'-full.pdf'), '/tmp', report_dir)
-            shutil.copyfile(os.path.join('/tmp', os.path.basename(report_dir)+'-full.pdf'),
-                            os.path.join(report_dir, 'backupPDF.pdf'))
+            _copy_to_dir(
+                os.path.join("/tmp", os.path.basename(report_dir) + "-full.pdf"),
+                "/tmp",
+                report_dir,
+            )
+            shutil.copyfile(
+                os.path.join("/tmp", os.path.basename(report_dir) + "-full.pdf"),
+                os.path.join(report_dir, "backupPDF.pdf"),
+            )
     return
 
 
@@ -353,12 +398,14 @@ def _wkhtmltopdf_create_image(url, outputFile, js_str=""):
     pdf_str = "/opt/ion/iondb/bin/wkhtmltoimage-amd64"
     if js_str:
         pdf_str += ' --run-script "%s"' % js_str.replace("$", "\$")
-    pdf_str += ' --javascript-delay 1200'
-    pdf_str += ' --width 1024 --crop-w 1024'
-    pdf_str += ' ' + url
-    pdf_str += ' ' + outputFile
+    pdf_str += " --javascript-delay 1200"
+    pdf_str += " --width 1024 --crop-w 1024"
+    pdf_str += " " + url
+    pdf_str += " " + outputFile
 
-    proc = subprocess.Popen(pdf_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    proc = subprocess.Popen(
+        pdf_str, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+    )
     stdout, stderr = proc.communicate()
     if proc.returncode:
         logger.warn("Error executing %s" % pdf_str)
@@ -368,41 +415,50 @@ def _wkhtmltopdf_create_image(url, outputFile, js_str=""):
 
 
 def _wkhtmltopdf_create_pdf(url, outputFile, name, filePath="", js_str=""):
-    '''Creates pdf of plugin's output page'''
-    pdf_str = '/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q'
+    """Creates pdf of plugin's output page"""
+    pdf_str = "/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q"
     if js_str:
         pdf_str += ' --run-script "%s"' % js_str.replace("$", "\$")
 
-    pdf_str += ' --javascript-delay 1200'
-    pdf_str += ' --zoom 0.8 --margin-top 5 --margin-bottom 5 --margin-left 2 --margin-right 2'
+    pdf_str += " --javascript-delay 1200"
+    pdf_str += (
+        " --zoom 0.8 --margin-top 5 --margin-bottom 5 --margin-left 2 --margin-right 2"
+    )
     pdf_str += ' --footer-left "' + name + '"'
     pdf_str += ' --footer-right "Page [page] of [toPage]"'
     pdf_str += ' --header-left "[title]"'
-    pdf_str += ' --footer-font-size 12'
-    pdf_str += ' --header-font-size 12'
-    pdf_str += ' --disable-internal-links'
-    pdf_str += ' --disable-external-links'
-    pdf_str += ' --outline'
-    pdf_str += ' %s '
+    pdf_str += " --footer-font-size 12"
+    pdf_str += " --header-font-size 12"
+    pdf_str += " --disable-internal-links"
+    pdf_str += " --disable-external-links"
+    pdf_str += " --outline"
+    pdf_str += " %s "
     pdf_str += outputFile
     # prevent stuck wkhtmltopdf jobs
     pdf_str = "timeout 5m " + pdf_str
 
     try:
-        p = subprocess.Popen(pdf_str % url, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(
+            pdf_str % url, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+        )
         stdout, stderr = p.communicate()
         # known issue in wkhtmltopdf: sometimes it returns exit code 2 but the pdf file is actually created
         if p.returncode and p.returncode != 2:
-            logger.error("wkhtmltopdf_create_pdf from %s returned %d %s" % (url, p.returncode, stderr))
+            logger.error(
+                "wkhtmltopdf_create_pdf from %s returned %d %s"
+                % (url, p.returncode, stderr)
+            )
             # retry from html file path directly
             if filePath:
                 retcode = subprocess.call(pdf_str % filePath, shell=True)
-                logger.debug("wkhtmltopdf_create_pdf from %s returned %d" % (filePath,retcode))
+                logger.debug(
+                    "wkhtmltopdf_create_pdf from %s returned %d" % (filePath, retcode)
+                )
     except Exception:
         logger.exception("create_pdf error for %s" % name)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # if(len(sys.argv) > 1):
     #    write_report_pdf(sys.argv[1], directory = "./")
     # else:
@@ -410,4 +466,4 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         generate_pdf_from_archived_report(sys.argv[1])
     else:
-        print "Need to provide a Report's pk"
+        print("Need to provide a Report's pk")

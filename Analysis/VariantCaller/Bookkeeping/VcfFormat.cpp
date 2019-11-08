@@ -117,6 +117,8 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
   << "##INFO=<ID=MLLD,Number=A,Type=Float,Description=\"Mean log-likelihood delta per read.\">" << endl
   << "##INFO=<ID=FWDB,Number=A,Type=Float,Description=\"Forward strand bias in prediction.\">" << endl
   << "##INFO=<ID=REVB,Number=A,Type=Float,Description=\"Reverse strand bias in prediction.\">" << endl
+  << "##INFO=<ID=FWDBA,Number=A,Type=Float,Description=\"Flow signal adjustment on the delta direction of the allele being applied to the reads on the forward strand.\">" << endl
+  << "##INFO=<ID=REVBA,Number=A,Type=Float,Description=\"Flow signal adjustment on the delta direction of the allele being applied to the reads on the reverse strand.\">" << endl
   << "##INFO=<ID=REFB,Number=A,Type=Float,Description=\"Reference Hypothesis bias in prediction.\">" << endl
   << "##INFO=<ID=VARB,Number=A,Type=Float,Description=\"Variant Hypothesis bias in prediction.\">" << endl
   << "##INFO=<ID=STB,Number=A,Type=Float,Description=\"Strand bias in variant relative to reference.\">" << endl
@@ -124,14 +126,18 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
   << "##INFO=<ID=RBI,Number=A,Type=Float,Description=\"Distance of bias parameters from zero.\">" << endl
   << "##INFO=<ID=QD,Number=1,Type=Float,Description=\"QualityByDepth as 4*QUAL/FDP (analogous to GATK)\">" << endl
   << "##INFO=<ID=FXX,Number=1,Type=Float,Description=\"Flow Evaluator failed read ratio\">" << endl
-  << "##INFO=<ID=FR,Number=.,Type=String,Description=\"Reason why the variant was filtered.\">" << endl
+  << "##INFO=<ID=FR,Number=A,Type=String,Description=\"Reason why the variant was filtered.\">" << endl
+  << "##INFO=<ID=MISC,Number=.,Type=String,Description=\"Miscellaneous information about the call.\">" << endl
   << "##INFO=<ID=INFO,Number=.,Type=String,Description=\"Information about variant realignment and healing.\">" << endl
   << "##INFO=<ID=SSSB,Number=A,Type=Float,Description=\"Strand-specific strand bias for allele.\">" << endl
   << "##INFO=<ID=SSEN,Number=A,Type=Float,Description=\"Strand-specific-error prediction on negative strand.\">" << endl
   << "##INFO=<ID=SSEP,Number=A,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
   << "##INFO=<ID=PB,Number=A,Type=Float,Description=\"Bias of relative variant position in reference reads versus variant reads. Equals Mann-Whitney U rho statistic P(Y>X)+0.5P(Y=X)\">" << endl
   << "##INFO=<ID=PBP,Number=A,Type=Float,Description=\"Pval of relative variant position in reference reads versus variant reads.  Related to GATK ReadPosRankSumTest\">" << endl
+  << "##INFO=<ID=PPD,Number=A,Type=Integer,Description=\"Number of extra prefix paddings added to the alternative allele\">" << endl
+  << "##INFO=<ID=SPD,Number=A,Type=Integer,Description=\"Number of extra suffix paddings added to the alternative allele\">" << endl
   << "##INFO=<ID=FDVR,Number=A,Type=Integer,Description=\"Level of Flow Disruption of the alternative allele versus reference.\">" << endl;
+
 
   // If we want to output multiple min-allele-freq
   if (parameters->program_flow.is_multi_min_allele_freq){
@@ -230,8 +236,9 @@ void ClearVal(vcf::Variant &var, const char *clear_me){
 //clear all the info tags, in case of a HotSpot VCF react Info tags might contain prior values
 void clearInfoTags(vcf::Variant &var) {
   const vector<string> tag_to_clear =
-  	  {"RO", "AO", "MDP", "MAO", "MRO", "MAF", "SAF", "SAR", "SRF", "SRR",
-	   "DP", "RBI", "HRUN", "SSSB", "SSEN", "SSEP", "STB", "STBP", "PBP", "PB",
+  	  {"RO", "AO", "MDP", "MAO", "MRO", "MAF", "SAF", "SAR", "SRF", "SRR", "DP",
+	   "RBI", "FWDB", "REVB", "REFB", "VARB",
+	   "HRUN", "SSSB", "SSEN", "SSEP", "STB", "STBP", "PBP", "PB",
 	   "FDP", "FRO", "FAO", "FSRF", "FSRR", "FSAF", "FSAR", "FXX", "QD", "TGSM",
 	   "PPA", "VFSH", "MUQUAL", "MUGT", "MUGQ", "MLLD", "LOD"};
   for (vector<string>::const_iterator tag_it = tag_to_clear.begin(); tag_it != tag_to_clear.end(); ++tag_it)
@@ -338,8 +345,8 @@ void AddFilterReason(vcf::Variant &candidate_variant, string &additional_reason,
   candidate_variant.info["FR"][alt_allele_index] += "&" + additional_reason;
 }
 
-void AddInfoReason(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name){
-  candidate_variant.info["FR"].push_back(additional_reason);
+void AddMiscellaneousInfo(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name){
+  candidate_variant.info["MISC"].push_back(additional_reason);
 }
 
 // if, for example, missing data
@@ -493,7 +500,7 @@ void RemoveFilteredAlleles(vcf::Variant &candidate_variant, vector<int> &filtere
       candidate_variant.removeAlt(altStr);
       candidate_variant.updateAlleleIndexes();
       // if we are deleting alleles, indicate data potentially damaged at this location
-      AddInfoReason(candidate_variant, my_healing_glow, sample_name);
+      AddMiscellaneousInfo(candidate_variant, my_healing_glow, sample_name);
     }
   }
 }

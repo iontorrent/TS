@@ -678,6 +678,7 @@ def parseCmdArgs():
   parser.add_option('-p', '--purge_results', help='Remove all folders and most files from output results folder.', action="store_true", dest='purge_results')
   parser.add_option('-s', '--skip_analysis', help='Skip re-generation of existing files but make new report.', action="store_true", dest='skip_analysis')
   parser.add_option('-x', '--stop_on_error', help='Stop processing barcodes after one fails. Otherwise continue to the next.', action="store_true", dest='stop_on_error')
+  parser.add_option('-i', '--isDx', help='platform specific environmental variable', dest='isDx', default='')
 
   (cmdOptions, args) = parser.parse_args()
   if( len(args) != 2 ):
@@ -873,7 +874,12 @@ def loadPluginParams():
 
   # TODO: replace this with url_plugindir when available from startplugin.json
   resurl = jsonParams['runinfo'].get('results_dir','.')
-  plgpos = resurl.find('plugin_out')
+
+  if pluginParams['cmdOptions'].isDx:
+    plgpos = resurl.find('plugins')
+  else:
+    plgpos = resurl.find('plugin_out')
+
   if plgpos >= 0:
     pluginParams['results_url'] = os.path.join( jsonParams['runinfo'].get('url_root','.'), resurl[plgpos:] )
 

@@ -1,27 +1,50 @@
+{% load i18n %}
+{% if validationError %}
+<div id="modal_confirm_delete" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>{{ i18n.title|safe }}</h3>
+    </div>
+    <div class="modal-body">
+        <p>{{ i18n.validationmsg|safe }}</p>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">{{ i18n.cancel }}</a>
+    </div>
+    <script type="text/javascript">
+        $('#modal_confirm_delete').on('hidden', function() {
+            $('body #modal_confirm_delete').remove();
+        });
+        //# sourceURL=templates/rundb/common/modal_confirm_delete.html?validationError={{ validationError }}
+    </script>
+</div>
+{% else %}
 <div id="modal_confirm_delete" title="" class="modal hide" action="{{action}}" method="{{method}}">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="single_h3">Confirm Delete {{type|title}}</h3>
-        <h3 id="plural_h3" style="display:none;">Confirm Deletion of {{type|title}}s</h3>
+        <h3>{{ i18n.title|safe }}</h3>
     </div>
     <div class="modal-body">
-        <p id="single_msg">Are you sure you want to delete this {{type|lower}} <b>{{names}}</b> ({{id}})?</p>
-        <p id="plural_msg" style="display:none;">Are you sure you want to delete these {{type|lower}}s: <b>{{names}}</b> (<span id="ids_list"></span>)?</p>
-        
+        <p>{{ i18n.confirmmsg|safe }}</p>
+        {% if isMultiple and items %}
+            <ul>
+            {% for item in items %}
+                <li><b>{{ item.name }}</b> ({{ item.id }})</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" class="btn btn-danger">Yes, Delete!</a>
+        <a href="#" class="btn" data-dismiss="modal">{{ i18n.cancel }}</a>
+        <a href="#" class="btn btn-danger">{{ i18n.submit }}</a>
     </div>
 
+{% if isMultiple %}
     <script type="text/javascript">
-    var ids ={{ids|safe}};
-    var actions = {{actions|safe}};
-    if (ids.length > 1) {
-        $('#ids_list').text(ids.join());
-        $('#modal_confirm_delete *[id^="single_"]').hide();
-        $('#modal_confirm_delete *[id^="plural_"]').show();
+        var ids ={{ids|safe}};
+        var actions = {{actions|safe}};
+
         $('#modal_confirm_delete .btn-danger').click(function(e) {
             var that = this;
             e.preventDefault();
@@ -51,10 +74,17 @@
                 $('#modal_confirm_delete').modal("hide");
             }).fail(function(data) {
                 console.log("error:", data);
-                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">Error: '+data.status+' '+data.statusText+'</p>').show();
+                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: '+data.status+' '+data.statusText+'</p>').show();
             });
         });
-    } else {
+
+        $('#modal_confirm_delete').on('hidden', function() {
+            $('body #modal_confirm_delete').remove();
+        });
+        //# sourceURL=templates/rundb/common/modal_confirm_delete.html?isMultiple={{ isMultiple }}
+    </script>
+{% else %}
+    <script type="text/javascript">
         $('#modal_confirm_delete .btn-danger').click(function(e) {
             var that = this;
             e.preventDefault();
@@ -79,16 +109,18 @@
                 });
                 $('#modal_confirm_delete').modal("hide");
             }).fail(function(data) {
-                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">Error: '+data.status+' '+data.statusText+'</p>').show();
+                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: '+data.status+' '+data.statusText+'</p>').show();
                 console.log("error:", data);
 
             }).always(function(data) {/*console.log("complete:", data);*/
             });
         });
-    }
-    $('#modal_confirm_delete').on('hidden', function() {
-        $('body #modal_confirm_delete').remove();
-    });
-    </script>
 
+        $('#modal_confirm_delete').on('hidden', function() {
+            $('body #modal_confirm_delete').remove();
+        });
+        //# sourceURL=templates/rundb/common/modal_confirm_delete.html?isMultiple={{ isMultiple }}
+    </script>
+{% endif %}
 </div>
+{% endif %}

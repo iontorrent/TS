@@ -2,8 +2,8 @@
 from django.test import TestCase
 from iondb.security.models import SecureString
 
-MY_STRING = 'nothing to see here, move along'
-NAME = 'test'
+MY_STRING = "nothing to see here, move along"
+NAME = "test"
 
 
 class SecureStringTestCase(TestCase):
@@ -26,7 +26,7 @@ class SecureStringTestCase(TestCase):
             SecureString.create(unencrypted="", name=NAME).save()
 
         with self.assertRaises(Exception):
-            SecureString(encrypted_string='something', name=NAME).save()
+            SecureString(encrypted_string="something", name=NAME).save()
 
     def test_create(self):
         """test the objects create method"""

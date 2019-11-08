@@ -8,7 +8,7 @@ import csv
 
 @staticmethod
 def parseJsonFile(jsonFile):
-    with open(jsonFile, 'r') as f:
+    with open(jsonFile, "r") as f:
         content = f.read()
         result = json.loads(content)
         return result
@@ -38,6 +38,7 @@ class VerifyJson(object):
 
     def checkTemplates(self):
         pass
+
 
 if __name__ == "__main__":
 

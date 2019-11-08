@@ -1151,7 +1151,7 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 						// Count the family based coverage: One family or read can cover multiple targets
 						for (vector<int>::iterator target_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_it != fam_it->all_family_members[0]->target_coverage_indices.end(); ++target_it){
 							TargetStat& my_stat = stat_of_targets[*target_it];
-							my_stat.read_coverage += consensus_fam_size;
+							my_stat.read_coverage_in_families += consensus_fam_size;
 							++(my_stat.family_coverage);
 							++(my_stat.fam_size_hist[consensus_fam_size]);
 						}
@@ -1163,14 +1163,14 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 						int best_target_idx = (*read_it)->best_coverage_target_idx;
 						if (best_target_idx > -1) {
 							TargetStat& my_stat = stat_of_targets[best_target_idx];
-							++my_stat.read_coverage_by_best_target;
+							++my_stat.read_coverage_in_families_by_best_target;
 						}
 						// If not use_mol_tag, the assumption where all reads in a family have the same target_coverage_indices does not hold.
 						// Need to iterate over all reads and the target_coverage_indices of one read.
 						if (not use_mol_tag){
 							for (vector<int>::iterator target_it = (*read_it)->target_coverage_indices.begin(); target_it != (*read_it)->target_coverage_indices.end(); ++target_it){
 								TargetStat& my_stat = stat_of_targets[*target_it];
-								++my_stat.read_coverage;
+								++my_stat.read_coverage_in_families;
 							}
 						}
 					}

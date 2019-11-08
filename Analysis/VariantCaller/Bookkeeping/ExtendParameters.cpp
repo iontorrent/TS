@@ -215,6 +215,7 @@ void VariantCallerHelp() {
   MolecularTagTrimmer::PrintHelp(true);
   printf("     --indel-func-size-offset           INT         require family of size >= (min-tag-fam-size + this value) to be functional when calling HP-INDEL [0]\n");
   printf("     --min-callable-prob                FLOAT       minimum callable probability for LOD calculation [0.98]\n");
+  printf("     --suppress-called-allele-lod       on/off      suppress the LOD reporting of a variant allele that is called [off]\n");
   printf("\n");
 
 
@@ -263,6 +264,7 @@ ControlCallAndFilters::ControlCallAndFilters() {
   position_bias_pval = 0.05f;         // pval for observed > threshold
 
   min_callable_prob = 0.98f;
+  suppress_called_allele_lod = false;
   tag_sim_max_cov = 20;
 
   // VCF record filters (applied during vcf merging) XXX
@@ -631,12 +633,13 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   // if we reject half the reads from evaluator, something badly wrong with this position
   read_rejection_threshold              = RetrieveParameterDouble(opts, tvc_params, '-', "read-rejection-threshold",0.5f);
 
-  use_position_bias                     = RetrieveParameterBool(opts, tvc_params, '-', "use-position-bias", false);
+  use_position_bias                     = RetrieveParameterBool  (opts, tvc_params, '-', "use-position-bias", false);
   position_bias_ref_fraction            = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias-ref-fraction",0.05f);
   position_bias                         = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias",0.75f);
   position_bias_pval                    = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias-pval",0.05f);
 
   min_callable_prob                     = RetrieveParameterDouble(opts, tvc_params, '-', "min-callable-prob",0.98f);
+  suppress_called_allele_lod            = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-called-allele-lod", false);
 
   tag_sim_max_cov                       = RetrieveParameterInt   (opts, tvc_params, '-', "tag-sim-max-cov", 20);
   downSampleCoverage                    = RetrieveParameterInt   (opts, tvc_params, '-', "downsample-to-coverage", 2000);
@@ -649,16 +652,16 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   //xbias_tune                            = RetrieveParameterDouble(opts, tvc_params, '-', "tune-xbias", 0.005f);
   sbias_tune                            = RetrieveParameterDouble(opts, tvc_params, '-', "tune-sbias", 0.01f);
 
-  suppress_reference_genotypes          = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-reference-genotypes", true);
-  suppress_nocall_genotypes             = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-nocall-genotypes", true);
-  suppress_no_calls                     = RetrieveParameterBool   (opts, tvc_params, '-', "suppress-no-calls", true);
+  suppress_reference_genotypes          = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-reference-genotypes", true);
+  suppress_nocall_genotypes             = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-nocall-genotypes", true);
+  suppress_no_calls                     = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-no-calls", true);
 
   // Deprecate heal-snps
-  cleanup_unlikely_candidates           = RetrieveParameterBool   (opts, tvc_params, '-', "heal-snps", true);
-  cleanup_unlikely_candidates           = RetrieveParameterBool   (opts, tvc_params, '-', "cleanup-unlikely-candidates", cleanup_unlikely_candidates);
-  report_ppa                            = RetrieveParameterBool   (opts, tvc_params, '-', "report-ppa", false);
-  hotspots_as_de_novo                   = RetrieveParameterBool   (opts, tvc_params, '-', "hotspots-as-de-novo", false);
-  disable_filters                       = RetrieveParameterBool   (opts, tvc_params, '-', "disable-filters", false);
+  cleanup_unlikely_candidates           = RetrieveParameterBool  (opts, tvc_params, '-', "heal-snps", true);
+  cleanup_unlikely_candidates           = RetrieveParameterBool  (opts, tvc_params, '-', "cleanup-unlikely-candidates", cleanup_unlikely_candidates);
+  report_ppa                            = RetrieveParameterBool  (opts, tvc_params, '-', "report-ppa", false);
+  hotspots_as_de_novo                   = RetrieveParameterBool  (opts, tvc_params, '-', "hotspots-as-de-novo", false);
+  disable_filters                       = RetrieveParameterBool  (opts, tvc_params, '-', "disable-filters", false);
 
   // Flow-disruption related
   fd_nonsnp_min_var_cov                 = RetrieveParameterInt   (opts, tvc_params, '-', "fd-nonsnp-min-var-cov", 0);
@@ -1049,7 +1052,19 @@ ExtendParameters::ExtendParameters(int argc, char** argv)
   bool overrideLimits          = RetrieveParameterBool  (opts, tvc_params, '-', "override-limits", false);
 
   prefixExclusion =  opts.GetFirstInt('-', "prefix-exclude", 6);
-  cerr << "prefix-exclude = " <<  prefixExclusion << endl;
+  //cerr << "prefix-exclude = " <<  prefixExclusion << endl;
+
+  if (my_controls.report_ppa) {
+    if ( useBestNAlleles < 4) {
+	useBestNAlleles = 4;
+	cout << setw(35) << "use-best-n-alleles" << " = " << setw(10) << 4 << " (integer, " << " reset by report-ppa=true " << ")" << endl;
+    }
+    if (useBestNTotalAlleles > 0) {
+	useBestNTotalAlleles = 0;
+	cout << setw(35) << "use-best-n-nonsnp-alleles" << " = " << setw(10) << 0 << " (integer, " << " reset by report-ppa=true " << ")" << endl;
+    }
+  }
+
 
   params_meta_name = params_meta.get("name",string()).asString();
   params_meta_details = params_meta.get("configuration_name", string()).asString();

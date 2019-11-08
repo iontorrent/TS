@@ -1,7 +1,39 @@
+{% load i18n %}
+
 <div class="control-group">
-	<label class="control-label" for="cancerType">Cancer Type</label>
+	<label class="control-label" for="sampleCollectionDate">{% trans "samplesets.samplesetitem.fields.sampleCollectionDate.label" %}</label>
 	<div class="controls">
-		<select id="cancerType" name="cancerType"style="height:28px;">
+		{% if intent == "edit" %}
+			<input type=text id="sampleCollectionDate" name="sampleCollectionDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleCollectionDate.placeholder" %}" value="{{sampleSetItem.sampleCollectionDate|date:'Y-m-d'}}" />
+		{% elif intent == "edit_pending" %}
+			<input type=text id="sampleCollectionDate" name="sampleCollectionDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleCollectionDate.placeholder" %}" value="{{pending_sampleSetItem.sampleCollectionDate}}" />
+		{% else %}
+			<input type=text id="sampleCollectionDate" name="sampleCollectionDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleCollectionDate.placeholder" %}"/>
+		{% endif %}
+	</div>
+</div>
+<div class="control-group">
+	<label class="control-label" for="sampleReceiptDate">{% trans "samplesets.samplesetitem.fields.sampleReceiptDate.label" %}</label>
+	<div class="controls">
+		{% if intent == "edit" %}
+			<input type=text id="sampleReceiptDate" name="sampleReceiptDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleReceiptDate.placeholder" %}" value="{{sampleSetItem.sampleReceiptDate|date:'Y-m-d'}}" />
+		{% elif intent == "edit_pending" %}
+			<input type=text id="sampleReceiptDate" name="sampleReceiptDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleReceiptDate.placeholder" %}" value="{{pending_sampleSetItem.sampleReceiptDate}}" />
+		{% else %}
+			<input type=text id="sampleReceiptDate" name="sampleReceiptDate" class="string" placeholder="{% trans "samplesets.samplesetitem.fields.sampleReceiptDate.placeholder" %}"/>
+		{% endif %}
+
+		<div class="help-block">
+			{% trans "samplesets.samplesetitem.fields.sampleReceiptDate.helptext" %}
+		</div>
+	</div>
+</div>
+
+
+<div class="control-group">
+	<label class="control-label" for="cancerType">{% trans "samplesets.samplesetitem.fields.cancerType.label" %}</label>
+	<div class="controls">
+		<select id="cancerType" name="cancerType" style="height:28px;">
 		<option value="" >.....</option>
 		{% if intent == "edit" %}
 			{% for cancer in cancerType_CV_list %}
@@ -33,93 +65,168 @@
 		</select>
 
 		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.cancerType.helptext" %}
+		</div>
+	</div>
+</div>
+<div class="control-group">
+	<label class="control-label" for="population">{%  trans "samplesets.samplesetitem.fields.population.label" %}</label>
+	<div class="controls">
+		<select id="population" name="population" style="height:28px;">
+        <option value="" >.....</option>
+		{% if intent == "edit" %}
+			{% for population in population_CV_list %}
+				{% ifequal sampleSetItem.population population.value %}
+					<option SELECTED value="{{sampleSetItem.population}}">{{sampleSetItem.population}}</option>
+				{% else %}
+					{% if population.isActive %}
+						<option value="{{population.value}}" >{{population.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}
+			{% for population in population_CV_list %}
+				{% ifequal pending_sampleSetItem.population population.value %}
+					<option SELECTED value="{{pending_sampleSetItem.population}}">{{pending_sampleSetItem.population}}</option>
+				{% else %}
+					{% if population.isActive %}
+						<option value="{{population.value}}" >{{population.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% else %}
+			{% for population in population_CV_list %}
+				{% if population.isActive %}
+					<option value="{{population.value}}" >{{population.value}}</option>
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		</select>
+
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.population.helptext" %}
 		</div>
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="cellularityPct">Cellularity %</label>
+	<label class="control-label" for="mouseStrains">{%  trans "samplesets.samplesetitem.fields.mouseStrains.label" %}</label>
+	<div class="controls">
+		<select id="mouseStrains" name="mouseStrains" style="height:28px;">
+        <option value="" >.....</option>
+		{% if intent == "edit" %}
+			{% for mouseStrains in mouseStrains_CV_list %}
+				{% ifequal sampleSetItem.mouseStrains mouseStrains.value %}
+					<option SELECTED value="{{sampleSetItem.mouseStrains}}">{{sampleSetItem.mouseStrains}}</option>
+				{% else %}
+					{% if mouseStrains.isActive %}
+						<option value="{{mouseStrains.value}}" >{{mouseStrains.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}
+			{% for mouseStrains in mouseStrains_CV_list %}
+				{% ifequal pending_sampleSetItem.mouseStrains mouseStrains.value %}
+					<option SELECTED value="{{pending_sampleSetItem.mouseStrains}}">{{pending_sampleSetItem.mouseStrains}}</option>
+				{% else %}
+					{% if mouseStrains.isActive %}
+						<option value="{{mouseStrains.value}}" >{{mouseStrains.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% else %}
+			{% for mouseStrains in mouseStrains_CV_list %}
+				{% if mouseStrains.isActive %}
+					<option value="{{mouseStrains.value}}" >{{mouseStrains.value}}</option>
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		</select>
+
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.mouseStrains.helptext" %}
+		</div>
+	</div>
+</div>
+
+<div class="control-group">
+	<label class="control-label" for="cellularityPct">{% trans "samplesets.samplesetitem.fields.cellularityPct.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			{% if sampleSetItem.cellularityPct %}
-				<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="{{sampleSetItem.cellularityPct}}" />
-			{% else %}
-				<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="" />                            
-			{% endif %}
+			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.cellularityPct.placeholder" %}" value="{{sampleSetItem.cellularityPct|default_if_none:''}}" />
 		{% elif intent == "edit_pending" %}
-			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)" value="{{pending_sampleSetItem.cellularityPct}}" />                        
+			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.cellularityPct.placeholder" %}" value="{{pending_sampleSetItem.cellularityPct|default_if_none:''}}" />
 		{% else %}
-			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="whole number (Optional)"/>
+			<input id="cellularityPct" name="cellularityPct" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.cellularityPct.placeholder" %}"/>
 		{% endif %}
 
 		<div class="help-block">                        
-			FYI: A whole number between 0 to 100.
+			{% trans "samplesets.samplesetitem.fields.cellularityPct.helptext" %}
 		</div>                                  
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="biopsyDays">Biopsy Days</label>
+	<label class="control-label" for="biopsyDays">{% trans "samplesets.samplesetitem.fields.biopsyDays.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			{% if sampleSetItem.biopsyDays %}
-				<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="{{sampleSetItem.biopsyDays}}" />
-			{% else %}
-				<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="" />                            
-			{% endif %}
+			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.biopsyDays.placeholder" %}" value="{{sampleSetItem.biopsyDays|default_if_none:''}}" />
 		{% elif intent == "edit_pending" %}
-			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)" value="{{pending_sampleSetItem.biopsyDays}}" />                        
+			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.biopsyDays.placeholder" %}" value="{{pending_sampleSetItem.biopsyDays|default_if_none:''}}" />
 		{% else %}
-			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="whole number (Optional)"/>
+			<input id="biopsyDays" name="biopsyDays" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.biopsyDays.placeholder" %}"/>
 		{% endif %}
 
 		<div class="help-block"> 
-			FYI: A whole number.                            
+			{% trans "samplesets.samplesetitem.fields.biopsyDays.helptext" %}
 		</div>                                  
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="cellNum">Cell Number</label>
+	<label class="control-label" for="cellNum">{% trans "samplesets.samplesetitem.fields.cellNum.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional" value="{{sampleSetItem.cellNum}}" />
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="{% trans "samplesets.samplesetitem.fields.cellNum.placeholder" %}" value="{{sampleSetItem.cellNum}}" />
 		{% elif intent == "edit_pending" %}
-			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional" value="{{pending_sampleSetItem.cellNum}}" />                        
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="{% trans "samplesets.samplesetitem.fields.cellNum.placeholder" %}" value="{{pending_sampleSetItem.cellNum}}" />
 		{% else %}
-			<input maxlength="127" id="cellNum" name="cellNum" placeholder="Optional"></input>
+			<input maxlength="127" id="cellNum" name="cellNum" placeholder="{% trans "samplesets.samplesetitem.fields.cellNum.placeholder" %}"></input>
 		{% endif %}
-		<div class="help-block"> 
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.cellNum.helptext" %}
 		</div>                                  
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="coupleId">Couple ID</label>
+	<label class="control-label" for="coupleId">{% trans "samplesets.samplesetitem.fields.coupleId.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional" value="{{sampleSetItem.coupleId}}" />
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="{% trans "samplesets.samplesetitem.fields.coupleId.placeholder" %}" value="{{sampleSetItem.coupleId}}" />
 		{% elif intent == "edit_pending" %}
-			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional" value="{{pending_sampleSetItem.coupleId}}" />                        
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="{% trans "samplesets.samplesetitem.fields.coupleId.placeholder" %}" value="{{pending_sampleSetItem.coupleId}}" />
 		{% else %}
-			<input maxlength="127" id="coupleId" name="coupleId" placeholder="Optional"></input>
+			<input maxlength="127" id="coupleId" name="coupleId" placeholder="{% trans "samplesets.samplesetitem.fields.coupleId.placeholder" %}"></input>
 		{% endif %}
-		<div class="help-block"> 
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.coupleId.helptext" %}
 		</div>                                  
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="embryoId">Embryo ID</label>
+	<label class="control-label" for="embryoId">{% trans "samplesets.samplesetitem.fields.embryoId.label" %}</label>
 	<div class="controls">
 		 {% if intent == "edit" %}
-			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional" value="{{sampleSetItem.embryoId}}" />
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="{% trans "samplesets.samplesetitem.fields.embryoId.placeholder" %}" value="{{sampleSetItem.embryoId}}" />
 		{% elif intent == "edit_pending" %}
-			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional" value="{{pending_sampleSetItem.embryoId}}" />                        
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="{% trans "samplesets.samplesetitem.fields.embryoId.placeholder" %}" value="{{pending_sampleSetItem.embryoId}}" />
 		{% else %}
-			<input maxlength="127" id="embryoId" name="embryoId" placeholder="Optional"></input>
+			<input maxlength="127" id="embryoId" name="embryoId" placeholder="{% trans "samplesets.samplesetitem.fields.embryoId.placeholder" %}"></input>
 		{% endif %}
-		<div class="help-block"> 
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.embryoId.helptext" %}
 		</div>                                  
 	</div>
 </div>

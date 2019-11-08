@@ -16,33 +16,15 @@ include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
 set(Boost_USE_STATIC_LIBS False)
 find_package(Boost REQUIRED COMPONENTS python)
 
 
-# Determine python site-packages or dist-packages directory
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
-        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
-        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
-        OUTPUT_VARIABLE PYTHON_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/usr" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_TORRENTPY_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_TORRENTPY_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_TORRENTPY_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 
@@ -120,8 +102,7 @@ if (PYTHON_EXECUTABLE)
          cython,
          libpq-dev,
          libgfortran3,
-         liblapack-dev,
-         liblapack3gf")
+         liblapack-dev")
 
     set(CPACK_PACKAGE_DESCRIPTION "A package provides Python methods for working with, analyzing, and visualizing Ion Torrent data.")
     set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

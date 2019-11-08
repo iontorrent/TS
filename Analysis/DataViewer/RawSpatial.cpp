@@ -38,10 +38,119 @@ void RawSpatial::SetOption(QString txt, int state)
         MaskReads = state;
     else if(txt == "StdDev")
         stdState = state;
+    else if(txt == "noPCA")
+        noPCAState = state;
+    else if(txt == "T0Correct")
+        t0CorrectState = state;
+    else if(txt == "Navigate")
+    	display_blocks = state;
+    else if(txt == "Histogram")
+    	display_histogram = state;
 
     render();
 }
 
+void RawSpatial::getBlockSize(QString dir, int &blockRows, int &blockCols)
+{
+	dir += "/explog_final.txt";
+	QByteArray qb = dir.toLatin1();
+
+	char buf[1024];
+	int len=0;
+	FILE *fp = fopen(qb.data(),"r");
+	if(fp){
+		// the file exists
+		while ((len = fread(buf,1,sizeof(buf)-1,fp)) > 0){
+			buf[len]=0; // null terminate the string
+			char *ptr = strstr(buf,"Rows:");
+			if(ptr){
+				ptr += 5;
+				sscanf(ptr,"%d",&blockRows);
+				blockRows /= 8;
+			}
+			ptr = strstr(buf,"Columns:");
+			if(ptr){
+				ptr += 8;
+				sscanf(ptr,"%d",&blockCols);
+				blockCols /= 12;
+			}
+		}
+		fclose(fp);
+	}
+
+    qDebug() << __PRETTY_FUNCTION__ << ": blockRows=" << blockRows << " blockCols=" << blockCols;
+}
+
+void RawSpatial::DoubleClick(int x, int y)
+{
+	qDebug() << __PRETTY_FUNCTION__ << ": " << x << " - " << y;
+
+	if (display_blocks && cols > 0 && rows > 0) {
+		// is thumbnail in the directory name right now?
+		int blockRows = 0, blockCols = 0;
+
+		// open this block.
+		int xIdx = x / (cols / 12);
+		int yIdx = y / (rows / 8);
+
+		QString newFname = fname;
+		// replace the directory name with the new directory..
+		int pos = 0;
+		int nextLastPos = 0;
+		int lastPos = 0;
+		qDebug() << __PRETTY_FUNCTION__ << ": newFname=" << newFname;
+		while ((pos = newFname.indexOf(QString('/'), pos + 1)) > 0) {
+			nextLastPos = lastPos;
+			lastPos = pos;
+		}
+		if (nextLastPos > 0 && lastPos > 0) {
+			QString fN = newFname.right(newFname.size() - lastPos - 1);
+			QString dirN = newFname.left(nextLastPos);
+			qDebug() << __PRETTY_FUNCTION__ << ": lastPos=" << lastPos
+					<< "nextLastPos=" << nextLastPos << " dirN=" << dirN;
+			if ((fname.indexOf("/thumbnail/", 0)) > 0) {
+				// switch to the clicked on block data
+
+				fN.replace("_spa", "");
+				qDebug() << __PRETTY_FUNCTION__ << ": fN=" << fN;
+
+				getBlockSize(dirN, blockRows, blockCols);
+
+				if (blockRows > 0 && blockCols > 0) {
+					QString newFn = dirN + "/X"
+							+ QString::number(xIdx * blockCols) + "_Y"
+							+ QString::number(yIdx * blockRows) + "/" + fN;
+
+					qDebug() << __PRETTY_FUNCTION__ << ": old=" << fname
+							<< " new=" << newFn;
+
+					emit fileNameChanged(newFn);
+					//fname = newFn; // load this file..
+					//render();
+
+					// change the check box name to thumb
+				}
+			} else {
+				// switch to the thumbnail data
+				fN.push_back("_spa");
+				QString newFn = dirN + "/thumbnail/" + fN;
+				qDebug() << __PRETTY_FUNCTION__ << ": old=" << fname
+						<< " new=" << newFn;
+
+				emit fileNameChanged(newFn);
+				//fname = newFn; // load this file..
+				//render();
+			}
+		}
+	}
+	else {
+		SpatialPlot::DoubleClick(x,y);
+	}
+}
+
+//void RawSpatial::fileNameChanged(QString fname)
+//{
+//}
 
 void RawSpatial::doConvert(int &loading)
 {
@@ -54,8 +163,10 @@ void RawSpatial::doConvert(int &loading)
             (ColFlApplied && !ColFlState) ||
             (EmptySubApplied && !EmptySubState) ||
             (AdvcApplied && !AdvcState) ||
-            (stdApplied && !stdState)){
-        // re-load the image....
+            (stdApplied && !stdState) ||
+            (noPCAApplied != noPCAState) ||
+            (lastcurDisplayFlow != curDisplayFlow)){
+        // re-load the image.0...+1
         last_fname.clear();
     }
 
@@ -67,7 +178,9 @@ void RawSpatial::doConvert(int &loading)
     }
     if (last_fname != _fname){
         // load a new dat file
+        char fnameBuf[4096];
         loading=1;
+        lastcurDisplayFlow=curDisplayFlow;
         printf("triggered %s %s\n",last_fname.toLatin1().data(),_fname.toLatin1().data());
         last_fname = _fname;
         if(out)
@@ -84,7 +197,36 @@ void RawSpatial::doConvert(int &loading)
 
 
         QByteArray ba = fname.toLatin1();
-        char * fn = ba.data();
+        strcpy(fnameBuf,ba.data());
+        char * fn = fnameBuf;
+        char *sptr=fn;
+
+        if(noPCAState && !strstr(fn,"_noPCA")){
+                char tmpName[4096];
+                struct stat statBuf;
+                sprintf(tmpName,"%s_noPCA",fn);
+                if(stat(tmpName,&statBuf) == 0){
+                    strcpy(fn,tmpName); // only copy if the file exists
+                }
+        }
+        noPCAApplied=noPCAState;
+
+        if(curDisplayFlow >= 0){
+            // change the raw dat name to this flow
+            char *ptr = sptr;
+            char *lptr=NULL;
+            while((ptr = strstr(ptr,"acq_"))){
+                lptr = ptr;
+                ptr++;
+            }
+            if(lptr){
+                lptr += strlen("acq_");
+                char saveChar=lptr[4];
+                sprintf(lptr,"%04d",lastcurDisplayFlow);
+                lptr[4]=saveChar;
+            }
+
+        }
         printf("about to call deInterlace with %s\n",fn);
         deInterlace_c (fn, &out, &timestamps,
                        &rows, &cols, &frames, &uncompFrames,
@@ -124,6 +266,8 @@ void RawSpatial::doConvert(int &loading)
 
     if(out){
 
+        // determine t0's for each 100x100 block
+        FindT0s();
 
         //we have loaded a image into memory..
         if(!rowNoiseRemoved && RowNoiseState){
@@ -181,6 +325,43 @@ void RawSpatial::doConvert(int &loading)
     }
 }
 
+
+extern int32_t DCT0Finder(float *trace, uint32_t trace_length, FILE *logfp);
+
+void RawSpatial::FindT0s()
+{
+    // make a map of the t0 values for each 100x100 region
+    t0Height=(rows+99)/100; // round up
+    t0Width =(cols+99)/100; // round up
+
+    if(t0Map)
+        free(t0Map);
+    t0Map = (int32_t *)malloc(t0Height*t0Width*sizeof(t0Map[0]));
+
+    for(int th=0;th<t0Height;th++){
+        for(int tw=0;tw<t0Width;tw++){
+
+            float avgTrace[frames];
+            for(int frame=0;frame<frames;frame++){
+                // get an average for this block..
+                uint64_t sum=0;
+                uint64_t sumCnt=0;
+                for(int y=th*100;y<((th+1)*100) && y < rows;y++){
+                    for(int x=tw*100;x<((tw+1)*100) && x < cols;x++){
+                        sum += out[frame*cols*rows + y*cols + x];
+                        sumCnt++;
+                    }
+                }
+                avgTrace[frame] = (float)sum/(float)sumCnt;
+            }
+
+            // now, find t0 for this average trace..
+            t0Map[th*t0Width + tw] = DCT0Finder(avgTrace,frames,NULL);
+        }
+    }
+}
+
+
 void RawSpatial::TakeStdDev()
 {
     int spanW=2;
@@ -222,12 +403,27 @@ void RawSpatial::TakeStdDev()
 float RawSpatial::Get_Data(int frame, int y, int x)
 {
     float rc = 0;
+    //float t0=0;
     if(out){
+        if(t0CorrectState){
+            int th = y/100;
+            int tw = x/100;
+            int t0 = t0Map[th*t0Width + tw];
+            frame += t0;
+            if(frame >= frames)
+                frame = frames-1;
+        }
         rc = out[frame*rows*cols + y*cols + x];
         if(zeroState)
             rc -= out[0*rows*cols + y*cols + x];
         if(MaskReads && mMask && mMask[y*cols+x])
             rc = 0; // only display non-masked items
+        if(display_blocks){
+        	int ym = y%(rows/8);
+        	int xm = x%(cols/12);
+        	if(ym < 3 || xm < 3)
+        		rc = 0;
+        }
     }
     return rc;
 }
@@ -252,10 +448,11 @@ inline bool EmptyWell ( uint16_t maskVal )
 {
   // is this well a valid reference coming out of beadfind?
   bool isEmpty = ((maskVal & MaskEmpty) == MaskEmpty);
-  bool isIgnoreOrAmbig = ((maskVal & MaskIgnore) == MaskIgnore);
-  bool isPinned = ((maskVal & MaskPinned) == MaskPinned);
+  bool isReference = ((maskVal & MaskReference) == MaskReference);
+  //bool isIgnoreOrAmbig = ((maskVal & MaskIgnore) == MaskIgnore);
+  //bool isPinned = ((maskVal & MaskPinned) == MaskPinned);
 
-  return ( isEmpty && !isPinned && !isIgnoreOrAmbig );
+  return ( isEmpty && isReference); //!isPinned && !isIgnoreOrAmbig );
 }
 
 void RawSpatial::GainCorrect(short int *raw, int h, int w, int npts)
@@ -349,9 +546,9 @@ void RawSpatial::NeighborSubtract(short int *raw, int h, int w, int npts, uint16
                 if(thumbnail){
                     // were limited to this 100x100 block
                     start_x=x-(x%100);
-                    end_x=(x%100) + 100;
+                    end_x=start_x + 100;
                     start_y=y-(y%100);
-                    end_y=(y%100)+100;
+                    end_y=start_y+100;
                 }
 
                 if(start_x < 0)

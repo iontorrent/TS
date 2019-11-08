@@ -38,7 +38,10 @@ public:
 
   //! @brief  Initialize the object.
   //! @param  opts                Command line options
-  void InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset, const string & key_norm_method);
+  void InitializeFromOptArgs(OptArgs& opts,
+                             const ion::ChipSubset & chip_subset,
+                             const string & key_norm_method,
+                             bool compress_multi_tap);
 
   //! @brief  Perform phasing estimation using appropriate algorithm.
   //! @param  wells               Wells reader object
@@ -199,6 +202,7 @@ protected:
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
   vector<KeySequence>   keys_;                    //!< Key sequences, 0 = library, 1 = TFs.
   string                key_norm_method_;         //!< Method to do key normalization;
+  bool                  compress_multi_taps_;     //!< Compress the signal of multi-tap flows
   RawWells              *wells_;                  //!< Wells file reader
   Mask                  *mask_;                   //!< Beadfind and filtering outcomes for wells
   int                   region_size_x_;           //!< Wells hdf5 dataset chunk width

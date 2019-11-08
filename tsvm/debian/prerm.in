@@ -5,7 +5,7 @@
 echo "prerm $@"
 case "$1" in
     remove)
-        cd @ION_INSTALL_PREFIX@
+        cd @ION_TSVM_PREFIX@
         vagrant halt
         echo "TS-VM has been halted, but VM files remain."
     ;;

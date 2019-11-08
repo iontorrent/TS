@@ -10,16 +10,20 @@ case "$1" in
     mkdir -p /var/log/ion
     chmod a+w /var/log/ion
 
-    # remove the entries
-    sed -i '/.*TSchkconfig.*/d' /etc/rc.local
-    sed -i '/qdel.*/d' /etc/rc.local
-    sed -i '/clear/d' /etc/rc.local
+    if [ -e /etc/rc.local ]; then
+        # remove the entries
+        sed -i '/.*TSchkconfig.*/d' /etc/rc.local
+        sed -i '/qdel.*/d' /etc/rc.local
+        sed -i '/clear/d' /etc/rc.local
 
-    sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
-    sed -i 's:^exit 0.*:qdel -u \"\*\" 2>\&1 > /tmp/qdel_out.startup\n&:' /etc/rc.local
-    # make sure clear is last before exit 0
-    sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
+        sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
+        sed -i 's:^exit 0.*:qdel -u \"\*\" 2>\&1 > /tmp/qdel_out.startup\n&:' /etc/rc.local
+        # make sure clear is last before exit 0
+        sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
+    fi
 
+    # override LOCALHEADNODE on install
+    sed -i "s/LOCALHEADNODE.*/$HOSTNAME ansible_connection=local/g" /usr/share/ion-tsconfig/ansible/torrentsuite_hosts
     ;;
 esac
 

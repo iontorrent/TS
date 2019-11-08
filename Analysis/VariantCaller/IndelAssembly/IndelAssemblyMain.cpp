@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 
   BamAlignment alignment;
   while (bam_reader.GetNextAlignment(alignment)) {  
-    if (!indel_assembly.processRead(alignment, indel_target)) {break;}
+    if (!indel_assembly.processRead(alignment, indel_target, false)) {break;}
   }
   indel_assembly.onTraversalDone(true);
 

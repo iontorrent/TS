@@ -51,6 +51,9 @@ TMAP_SORT_INIT(tmap_map_sam_sort_score, tmap_map_sam_t, __tmap_map_sam_sort_scor
 // sorts integers
 TMAP_SORT_INIT(tmap_map_driver_sort_isize, int32_t, tmap_sort_lt_generic);
 
+int32_t local_ovrs = 0; // global variable - counter of local (per-amplicon) logging overrides in BED file, if any.
+
+
 static void
 tmap_map_driver_do_init(tmap_map_driver_t *driver, tmap_refseq_t *refseq)
 {
@@ -502,7 +505,15 @@ static uint8_t fully_clipped (uint32_t* cigar, int32_t n_cigar)
     return 1;
 }
 
-void realign_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sams_t* sams, struct RealignProxy* realigner, tmap_map_stats_t *stat, uint32_t log_text_als)
+void realign_read 
+(
+    tmap_seq_t* qryseq,
+    tmap_refseq_t* refseq,
+    tmap_map_sams_t* sams,
+    struct RealignProxy* realigner,
+    tmap_map_stats_t *stat, 
+    tmap_map_opt_t *stage_opt
+)
 {
         // extract query
     const char* qryname = tmap_seq_get_name (qryseq)->s;
@@ -513,6 +524,39 @@ void realign_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sams_t* s
     {
         // extract packed cigar and it's length
         tmap_map_sam_t* match = sams->sams + matchidx;
+        // check if we need to re-align this match
+
+        if (  (match->param_ovr && match->param_ovr->do_realign.over && !match->param_ovr->do_realign.value)
+            ||(!match->param_ovr && !stage_opt->do_realign))
+                continue;
+
+        // check if parameters are overriden
+        // following parameters are used:
+        // do_hp_weight, gap_scale_mode, softclip_type, realign_mat_score, realign_mis_score, realign_gip_score, realign_gep_score, realign_bandwidth
+        // supply overriden parameters if needed
+        if (match->param_ovr)
+        {
+
+            if (match->param_ovr->realign_bandwidth.over && match->param_ovr->realign_bandwidth.value != stage_opt->realign_bandwidth)
+                realigner_set_bandwidth (realigner, match->param_ovr->realign_bandwidth.value);
+
+            if (match->param_ovr->realign_cliptype.over && match->param_ovr->realign_cliptype.value != stage_opt->realign_cliptype)
+                realigner_set_clipping (realigner, match->param_ovr->realign_cliptype.value);
+
+            if ((match->param_ovr->realign_mat_score.over && match->param_ovr->realign_mat_score.value != stage_opt->realign_mat_score) ||
+                (match->param_ovr->realign_mis_score.over && match->param_ovr->realign_mis_score.value != stage_opt->realign_mis_score) ||
+                (match->param_ovr->realign_gip_score.over && match->param_ovr->realign_gip_score.value != stage_opt->realign_gip_score) ||
+                (match->param_ovr->realign_gep_score.over && match->param_ovr->realign_gep_score.value != stage_opt->realign_gep_score))
+            {
+                double mat = match->param_ovr->realign_mat_score.over ? match->param_ovr->realign_mat_score.value : stage_opt->realign_mat_score;
+                double mis = match->param_ovr->realign_mis_score.over ? match->param_ovr->realign_mis_score.value : stage_opt->realign_mis_score;
+                double gep = match->param_ovr->realign_gep_score.over ? match->param_ovr->realign_gep_score.value : stage_opt->realign_gep_score;
+                double gip = match->param_ovr->realign_gip_score.over ? match->param_ovr->realign_gip_score.value : stage_opt->realign_gip_score;
+                realigner_set_scores (realigner, mat, mis, gep, gip);
+            }
+        }
+
+
         unsigned orig_cigar_sz = match->n_cigar;
         uint32_t* orig_cigar = tmap_calloc (orig_cigar_sz, sizeof (uint32_t), "orig_cigar");
         memcpy (orig_cigar, match->cigar, match->n_cigar * sizeof (uint32_t));
@@ -653,29 +697,56 @@ void realign_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sams_t* s
             else if (apo != stat->num_realign_already_perfect)
                 al_proc_class = "PERFECT";
         }
-        // log 
-        tmap_log_record_begin ();
-        tmap_log ("REALIGN: %s(%s) vs %s:%d %s. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, al_proc_class);
-        if (al_mod)
+        // if parameters were overriden, restore them back to default values
+        if (match->param_ovr)
         {
-            tmap_log ("orig (%d op) at %d: ", orig_cigar_sz, ref_off);
-            cigar_log (orig_cigar, orig_cigar_sz);
-            tmap_log ("; new (%d op) at %d: ", cigar_dest_sz, new_ref_offset);
-            cigar_log (cigar_dest, cigar_dest_sz);
+            if (match->param_ovr->realign_bandwidth.over && match->param_ovr->realign_bandwidth.value != stage_opt->realign_bandwidth)
+                realigner_set_bandwidth (realigner, stage_opt->realign_bandwidth);
 
-            if (log_text_als)
-            {
-                tmap_map_log_text_align ("  Before realignment:\n", orig_cigar, orig_cigar_sz, qry, qrybases->l, forward, (const char*) ref, ref_off);
-                tmap_map_log_text_align ("  After realignment:\n", match->cigar, match->n_cigar, qry, qrybases->l, forward, (const char*) (ref + (new_ref_offset - ref_off)), new_ref_offset);
-            }
+            if (match->param_ovr->realign_cliptype.over && match->param_ovr->realign_cliptype.value != stage_opt->realign_cliptype)
+                realigner_set_clipping (realigner, stage_opt->realign_cliptype);
+
+            if ((match->param_ovr->realign_mat_score.over && match->param_ovr->realign_mat_score.value != stage_opt->realign_mat_score) ||
+                (match->param_ovr->realign_mis_score.over && match->param_ovr->realign_mis_score.value != stage_opt->realign_mis_score) ||
+                (match->param_ovr->realign_gip_score.over && match->param_ovr->realign_gip_score.value != stage_opt->realign_gip_score) ||
+                (match->param_ovr->realign_gep_score.over && match->param_ovr->realign_gep_score.value != stage_opt->realign_gep_score))
+                realigner_set_scores (realigner, stage_opt->realign_mat_score, stage_opt->realign_mis_score, stage_opt->realign_gep_score, stage_opt->realign_gip_score);
         }
-        tmap_log ("\n");
-        tmap_log_record_end ();
+        // log 
+        if (tmap_log_enabled () && 
+            (!local_ovrs || (match->param_ovr && match->param_ovr->specific_log.over && match->param_ovr->specific_log.value)))
+        {
+            tmap_log_record_begin ();
+            tmap_log ("REALIGN: %s(%s) vs %s:%d %s. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, al_proc_class);
+            if (al_mod)
+            {
+                tmap_log ("orig (%d op) at %d: ", orig_cigar_sz, ref_off);
+                cigar_log (orig_cigar, orig_cigar_sz);
+                tmap_log ("; new (%d op) at %d: ", cigar_dest_sz, new_ref_offset);
+                cigar_log (cigar_dest, cigar_dest_sz);
+
+                if (stage_opt->debug_log || (match->param_ovr->debug_log.over && match->param_ovr->debug_log.value))
+                {
+                    tmap_map_log_text_align ("  Before realignment:\n", orig_cigar, orig_cigar_sz, qry, qrybases->l, forward, (const char*) ref, ref_off);
+                    tmap_map_log_text_align ("  After realignment:\n", match->cigar, match->n_cigar, qry, qrybases->l, forward, (const char*) (ref + (new_ref_offset - ref_off)), new_ref_offset);
+                }
+            }
+            tmap_log ("\n");
+            tmap_log_record_end ();
+        }
         free (orig_cigar);
     }
 }
 
-void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sams_t* sams, struct RealignProxy* context, tmap_map_stats_t *stat, int32_t log_text_als)
+void context_align_read 
+(
+    tmap_seq_t* qryseq, 
+    tmap_refseq_t* refseq, 
+    tmap_map_sams_t* sams, 
+    struct RealignProxy* context, 
+    tmap_map_stats_t *stat, 
+    tmap_map_opt_t *stage_opt
+)
 {
     // context_align_read (qryseq, refseq, sams)
     // extract query
@@ -689,6 +760,12 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
     {
         // extract packed cigar and it's length
         tmap_map_sam_t* match = sams->sams + matchidx;
+
+        // check if we need to context-align this match
+        if (  (match->param_ovr && match->param_ovr->do_hp_weight.over && !match->param_ovr->do_hp_weight.value)
+            ||(!match->param_ovr && !stage_opt->do_hp_weight))
+                continue;
+
         uint32_t* orig_cigar = match->cigar;
         unsigned orig_cigar_sz = match->n_cigar;
         // extract seqid 
@@ -731,8 +808,36 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
         unsigned cigar_dest_sz;
         unsigned new_ref_offset, new_qry_offset, new_ref_len, new_qry_len;
         ++(stat->num_hpcost_invocations);
-        // compute the alignment
 
+        // check if parameters are overriden
+        // following parameters are used:
+        // do_hp_weight, gap_scale_mode, softclip_type, context_mat_score, context_mis_score, context_gip_score, context_gep_score, context_extra_bandwidth
+        // supply overriden parameters if needed
+        if (match->param_ovr)
+        {
+            if (match->param_ovr->gap_scale_mode.over && match->param_ovr->gap_scale_mode.value != stage_opt->gap_scale_mode)
+                realigner_set_gap_scale_mode (context, match->param_ovr->gap_scale_mode.value);
+
+            if (match->param_ovr->context_extra_bandwidth.over && match->param_ovr->context_extra_bandwidth.value != stage_opt->context_extra_bandwidth)
+                realigner_set_bandwidth (context, match->param_ovr->context_extra_bandwidth.value);
+
+            if (match->param_ovr->softclip_type.over && match->param_ovr->softclip_type.value != stage_opt->softclip_type)
+                realigner_set_clipping (context, match->param_ovr->softclip_type.value);
+
+            if ((match->param_ovr->context_mat_score.over && match->param_ovr->context_mat_score.value != stage_opt->context_mat_score) ||
+                (match->param_ovr->context_mis_score.over && match->param_ovr->context_mis_score.value != stage_opt->context_mis_score) ||
+                (match->param_ovr->context_gip_score.over && match->param_ovr->context_gip_score.value != stage_opt->context_gip_score) ||
+                (match->param_ovr->context_gep_score.over && match->param_ovr->context_gep_score.value != stage_opt->context_gep_score))
+            {
+                double mat = match->param_ovr->context_mat_score.over ? match->param_ovr->context_mat_score.value : stage_opt->context_mat_score;
+                double mis = match->param_ovr->context_mis_score.over ? match->param_ovr->context_mis_score.value : stage_opt->context_mis_score;
+                double gep = match->param_ovr->context_gep_score.over ? match->param_ovr->context_gep_score.value : stage_opt->context_gep_score;
+                double gip = match->param_ovr->context_gip_score.over ? match->param_ovr->context_gip_score.value : stage_opt->context_gip_score;
+                realigner_set_scores (context, mat, mis, gep, gip);
+            }
+        }
+
+        // compute the alignment
         if (realigner_compute_alignment (context, 
             qry, 
             qry_len,
@@ -756,7 +861,8 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
             // check if changes were introduced
             if (new_ref_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (*orig_cigar)))
             {
-                if (tmap_log_enabled ())
+                if (tmap_log_enabled () && 
+                   (!local_ovrs || (match->param_ovr && match->param_ovr->specific_log.over && match->param_ovr->specific_log.value)))
                 {
                     tmap_log_record_begin ();
                     tmap_log ("CONTEXT-GAP: %s(%s) vs %s:%d MODIFIED: ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
@@ -766,7 +872,7 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
                     cigar_log (cigar_dest, cigar_dest_sz);
                     tmap_log ("\n");
 
-                    if (log_text_als)
+                    if (stage_opt->debug_log)
                     {
                         tmap_map_log_text_align ("  Before context realignment:\n", orig_cigar, orig_cigar_sz, qry, qrybases->l, forward, (const char*) ref, ref_off);
                         tmap_map_log_text_align ("  After context realignment:\n", cigar_dest, cigar_dest_sz, qry, qrybases->l, forward, (const char*) (ref + (new_ref_offset - ref_off)), new_ref_offset);
@@ -796,12 +902,35 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
 
             }
             else
-                tmap_log_s ("CONTEXT-GAP: %s(%s) vs %s:%d UNCHANGED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+            {
+                if (!local_ovrs || (match->param_ovr && match->param_ovr->specific_log.over && match->param_ovr->specific_log.value))
+                    tmap_log_s ("CONTEXT-GAP: %s(%s) vs %s:%d UNCHANGED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+            }
         }
         else
         {
             ++(stat->num_hpcost_skipped);
-            tmap_log_s ("CONTEXT-GAP: %s(%s) vs %s:%d SKIPPED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+            if (!local_ovrs || (match->param_ovr && match->param_ovr->specific_log.over && match->param_ovr->specific_log.value))
+                tmap_log_s ("CONTEXT-GAP: %s(%s) vs %s:%d SKIPPED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+        }
+
+        // if parameters were overriden, restore them back to default values
+        if (match->param_ovr)
+        {
+            if (match->param_ovr->gap_scale_mode.over && match->param_ovr->gap_scale_mode.value != stage_opt->gap_scale_mode)
+                realigner_set_gap_scale_mode (context, stage_opt->gap_scale_mode);
+
+            if (match->param_ovr->context_extra_bandwidth.over && match->param_ovr->context_extra_bandwidth.value != stage_opt->context_extra_bandwidth)
+                realigner_set_bandwidth (context, stage_opt->context_extra_bandwidth);
+
+            if (match->param_ovr->softclip_type.over && match->param_ovr->softclip_type.value != stage_opt->softclip_type)
+                realigner_set_clipping (context, stage_opt->softclip_type);
+
+            if ((match->param_ovr->context_mat_score.over && match->param_ovr->context_mat_score.value != stage_opt->context_mat_score) ||
+                (match->param_ovr->context_mis_score.over && match->param_ovr->context_mis_score.value != stage_opt->context_mis_score) ||
+                (match->param_ovr->context_gip_score.over && match->param_ovr->context_gip_score.value != stage_opt->context_gip_score) ||
+                (match->param_ovr->context_gep_score.over && match->param_ovr->context_gep_score.value != stage_opt->context_gep_score))
+                realigner_set_scores (context, stage_opt->context_mat_score, stage_opt->context_mis_score, stage_opt->context_gep_score, stage_opt->context_gip_score);
         }
     }
 
@@ -809,7 +938,17 @@ void context_align_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sam
 
 const unsigned MAX_PERIOD = 10;
 
-void tail_repeats_clip_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map_sams_t* sams, struct RealignProxy* realigner, tmap_map_stats_t *stat, int32_t repclip_continuation)
+void tail_repeats_clip_read 
+(
+    tmap_seq_t* qryseq,
+    tmap_refseq_t* refseq,
+    tmap_map_sams_t* sams,
+    struct RealignProxy* realigner,
+    tmap_map_stats_t *stat,
+    int32_t repclip_continuation,
+    int32_t repclip_flag,
+    int32_t use_param_ovr
+)
 {
     // extract query
     const char* qryname = tmap_seq_get_name (qryseq)->s;
@@ -828,6 +967,18 @@ void tail_repeats_clip_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map
             sams->sams [filtered] = sams->sams [matchidx];
             sams->sams [matchidx] = tmp;
         }
+        // check for parameters override
+        tmap_map_locopt_t* po = sams->sams [filtered].param_ovr;
+        if (use_param_ovr && po)
+        {
+            if (po->do_repeat_clip.over)
+                repclip_flag = po->do_repeat_clip.value;
+            if (po->repclip_continuation.over)
+                repclip_continuation = po->repclip_continuation.value;
+        }
+        if (!repclip_flag)
+            return;
+
         // extract packed cigar and it's length
         uint32_t* orig_cigar = sams->sams [filtered].cigar;
         unsigned orig_cigar_sz = sams->sams [filtered].n_cigar;
@@ -905,21 +1056,26 @@ void tail_repeats_clip_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map
                 if (!forward)
                     sams->sams [filtered].pos += ref_rep_off;
 
-                tmap_log_record_begin ();
-                tmap_log ("TAIL_REP_TRIM: %s(%s) vs %s:%d TRIMMED %d bases. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, q_al_end - qry_rep_off);
-                tmap_log ("orig (%d op) at %d: ", orig_cigar_sz, ref_off);
-                cigar_log (orig_cigar, orig_cigar_sz);
-                tmap_log ("; new (%d op) at %d: ", trimmed_cigar_sz, sams->sams [filtered].pos);
-                cigar_log (sams->sams [filtered].cigar, trimmed_cigar_sz);
-                tmap_log ("\n");
-                tmap_log_record_end ();
+                if (tmap_log_enabled () &&
+                    (!local_ovrs || (sams->sams [filtered].param_ovr && sams->sams [filtered].param_ovr->specific_log.over && sams->sams [filtered].param_ovr->specific_log.value)))
+                {
+                    tmap_log_record_begin ();
+                    tmap_log ("TAIL_REP_TRIM: %s(%s) vs %s:%d TRIMMED %d bases. ", qryname, (forward ? "FWD":"REV"), ref_name, ref_off, q_al_end - qry_rep_off);
+                    tmap_log ("orig (%d op) at %d: ", orig_cigar_sz, ref_off);
+                    cigar_log (orig_cigar, orig_cigar_sz);
+                    tmap_log ("; new (%d op) at %d: ", trimmed_cigar_sz, sams->sams [filtered].pos);
+                    cigar_log (sams->sams [filtered].cigar, trimmed_cigar_sz);
+                    tmap_log ("\n");
+                    tmap_log_record_end ();
+                }
 
                 stat->bases_tailclipped += q_al_end - qry_rep_off; // with respect to the read
                 filtered ++;
             }
             else
             {
-                tmap_log_s ("TAIL_REP_TRIM: %s(%s) vs %s:%d REMOVED (FULLY TRIMMED)\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+                if (!local_ovrs || (sams->sams [filtered].param_ovr && sams->sams [filtered].param_ovr->specific_log.over && sams->sams [filtered].param_ovr->specific_log.value))
+                    tmap_log_s ("TAIL_REP_TRIM: %s(%s) vs %s:%d REMOVED (FULLY TRIMMED)\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
                 stat->bases_tailclipped += q_al_end;
                 stat->bases_fully_tailclipped += q_al_end;
                 ++ stat->num_fully_tailclipped;
@@ -929,13 +1085,15 @@ void tail_repeats_clip_read (tmap_seq_t* qryseq, tmap_refseq_t* refseq, tmap_map
         }
         else
         {
-            tmap_log_s ("TAIL_REP_TRIM: %s(%s) vs %s:%d UNCHANGED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
+            if (!local_ovrs || (sams->sams [filtered].param_ovr && sams->sams [filtered].param_ovr->specific_log.over && sams->sams [filtered].param_ovr->specific_log.value))
+                tmap_log_s ("TAIL_REP_TRIM: %s(%s) vs %s:%d UNCHANGED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
             ++ filtered;
         }
     } // end alignment processing
     sams->n = filtered;
 }
 
+#if 0
 void realign_reads (tmap_seqs_t *seqs_buffer, tmap_refseq_t* refseq, tmap_map_record_t* record, struct RealignProxy* realigner, tmap_map_stats_t *stat, int32_t log_text_als)
 {
     unsigned seqidx;
@@ -954,7 +1112,7 @@ void context_align_reads (tmap_seqs_t *seqs_buffer, tmap_refseq_t* refseq, tmap_
     {
         tmap_map_sams_t* sams = record->sams [seqidx];
         tmap_seq_t* qryseq = seqs_buffer->seqs [seqidx];
-        context_align_read (qryseq, refseq, sams, realigner, stat, log_text_als);
+        context_align_read (qryseq, refseq, sams, realigner, stat, log_text_als, 0);
     }
 }
 
@@ -968,6 +1126,7 @@ void tail_repeat_clip_reads (tmap_seqs_t *seqs_buffer, tmap_refseq_t* refseq, tm
         tail_repeats_clip_read (qryseq, refseq, sams, realigner, stat, repclip_continuation);
     }
 }
+#endif
 
 void
 tmap_map_driver_core_worker(sam_header_t *sam_header,
@@ -1057,13 +1216,22 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
             records [low] = tmap_map_record_init (num_ends);
 
             // go through each stage
-            for (i = 0; i < driver->num_stages; i++) 
+            int32_t stage_ord;
+            for (stage_ord = 0; stage_ord < driver->num_stages; ++stage_ord) 
             { // for each stage
 
-                tmap_map_driver_stage_t *stage = driver->stages [i];
-                tmap_sw_param_t sw_par;
+                tmap_map_driver_stage_t *stage = driver->stages [stage_ord];
+                //// tmap_sw_param_t sw_par;
                 // stage may have special sw parameters
-                tmap_map_util_populate_sw_par (&sw_par, stage->opt);
+                // DK here handling of global arrays matrix and iupac_matrix is completely messed up.
+                // The threads would randomly and concurrently override the matix as each of them go through stages.
+                // Safe fix would be to allocate matrix locally here and populate it.
+                // That would be unnecessary extra work per each read (which is performed here anyway)
+                // Better option is to allocate per-stage parameters storage and compute them once per stage.
+                // Implementing the latter
+                // To avoid race when filling in the stage params, init them when thread data gets initialized.
+
+                // tmap_map_util_populate_sw_par_iupac (&(stage->sw_param), stage->opt);
 
                 // stage stats
                 stage_stat = tmap_map_stats_init ();
@@ -1075,8 +1243,8 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                     // should we seed using the whole read?
                     if(0 < stage->opt->stage_seed_max_length && stage->opt->stage_seed_max_length < tmap_seq_get_bases_length (seqs [j][0])) 
                     {
-                        stage_seqs = tmap_calloc (4, sizeof (tmap_seq_t*), "seqs[i]");
-                        tmap_map_driver_init_seqs (stage_seqs, seqs_buffer [low]->seqs [i], stage->opt->stage_seed_max_length);
+                        stage_seqs = tmap_calloc (4, sizeof (tmap_seq_t*), "seqs[]");
+                        tmap_map_driver_init_seqs (stage_seqs, seqs_buffer [low]->seqs [stage_ord], stage->opt->stage_seed_max_length);
                     }
                     else 
                         stage_seqs = seqs [j];
@@ -1084,7 +1252,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                     { // for each algorithm
                         tmap_map_driver_algorithm_t *algorithm = stage->algorithms [k];
                         tmap_map_sams_t *sams = NULL;
-                        if (i + 1 != algorithm->opt->algo_stage) 
+                        if (stage_ord + 1 != algorithm->opt->algo_stage) 
                             tmap_bug();
                         // map
                         sams = algorithm->func_thread_map (&algorithm->thread_data [tid], stage_seqs, index, hash, rand, algorithm->opt);
@@ -1147,7 +1315,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
 
 
                 // filter if we have more stages
-                if (i < driver->num_stages-1) 
+                if (stage_ord < driver->num_stages-1) 
                 {
                     for (j = 0; j < num_ends; j++) // for each end
                         tmap_map_sams_filter2 (records [low]->sams [j], stage->opt->stage_score_thr, stage->opt->stage_mapq_thr);
@@ -1191,14 +1359,11 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                 { 
                     tmap_map_sams_t* sams = records [low]->sams [j];
                     tmap_seq_t* seq = seqs_buffer [low]->seqs [j];
-
-                    //if (0 == strcmp (seq->data.sam->name->s, "K0BK3:04849:06835"))
-                    //    tmap_progress_print2 ("here");
                     tmap_seq_t** seq_variants = seqs [j];
                     // if there are no mappings, continue
                     if (!sams->n)
                         continue;
-                    // find alignment starqts
+                    // find alignment starts
                     sams = records [low]->sams [j] = tmap_map_util_find_align_starts 
                     (
                         index->refseq,      // reference server
@@ -1207,42 +1372,57 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                         seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
                         stage->opt,         // stage parameters
                         &target,            // target cache control structure
-                        stat
+                        stat                // statistics accumulator
                     );
                     if (!sams->n) 
                         continue;
+
+                    // map to amplicons (if BED is given and parameters override enabled)
+                    if (index->refseq->bed_exist && (stage->opt->use_param_ovr || stage->opt->use_bed_in_end_repair))
+                        tmap_map_find_amplicons (
+                                                    stage_ord,                  // stage index
+                                                    stage->opt,         // stage options
+                                                    &(stage->sw_param), // stage sw parameters
+                                                    index->refseq,      // reference server
+                                                    sams                // mappings 
+                                                );
+
                     // reference alignment
-                    tmap_map_util_align 
+                    tmap_map_util_align
                     (
                         index->refseq,      // reference server
                         sams,               // mappings to compute alignments for
                         seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
                         &target,            // target cache control structure
+                        stage_ord,          // processing stage index
+                        &(stage->sw_param), // Smith-Waterman scoring parameters
                         &path_buf,          // buffer for traceback path
                         &path_buf_sz,       // used portion and allocated size of traceback path. 
-                        &sw_par,            // Smith-Waterman scoring parameters
-                        stat
+                        stat                // statistics accumulator
                     );
                     // realign in flowspace or with context, if requested
-                    if (driver->opt->aln_flowspace)
+                    if (stage->opt->aln_flowspace || stage->opt->use_param_ovr)
                         // NB: seqs_buffer should have its key sequence if 0 < key_seq_len
                         tmap_map_util_fsw 
                         (
                             seq, 
                             sams, 
                             index->refseq, 
-                            driver->opt->bw, 
-                            driver->opt->softclip_type, 
-                            driver->opt->score_thr,
-                            driver->opt->score_match, 
-                            driver->opt->pen_mm, 
-                            driver->opt->pen_gapo,
-                            driver->opt->pen_gape, 
-                            driver->opt->fscore, 
-                            1 - driver->opt->ignore_flowgram,
+                            stage->opt->bw, 
+                            stage->opt->softclip_type, 
+                            stage->opt->score_thr,
+                            stage->opt->score_match, 
+                            stage->opt->pen_mm, 
+                            stage->opt->pen_gapo,
+                            stage->opt->pen_gape, 
+                            stage->opt->fscore, 
+                            1 - stage->opt->ignore_flowgram,
+                            stage->opt->aln_flowspace,
+                            stage->opt->use_param_ovr,
                             stat
                         );
-                    else if (driver->opt->do_hp_weight)
+                    // context-sensitive (hp-indel-liberal) realignment
+                    if (stage->opt->do_hp_weight || stage->opt->use_param_ovr)
                         context_align_read 
                         (
                             seq, 
@@ -1250,10 +1430,10 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             sams, 
                             context, 
                             stat, 
-                            driver->opt->log_text_als
+                            stage->opt
                         );
                     // perform anti-dyslexic realignment if enabled
-                    if (driver->opt->do_realign)
+                    if (stage->opt->do_realign || stage->opt->use_param_ovr)
                     {
                         realign_read 
                         (
@@ -1262,24 +1442,25 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             sams, 
                             realigner, 
                             stat, 
-                            driver->opt->log_text_als
+                            stage->opt
                         );
                     }
                     // salvage ends
-                    if (0 < driver->opt->pen_gapl)
+                    if (stage->opt->pen_gapl >= 0 || stage->opt->use_param_ovr)
                         tmap_map_util_salvage_edge_indels 
                         (
                             index->refseq,      // reference server
                             sams,               // mappings to compute alignments for
                             seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                            stage->opt,         // tmap parameters
-                            &sw_par,            // Smith-Waterman scoring parameters
                             &target,            // target cache control structure
+                            stage->opt,         // tmap parameters
+                            stage_ord,          // processing stage index
+                            &stage->sw_param,   // Smith-Waterman scoring parameters
                             &path_buf,          // buffer for traceback path
                             &path_buf_sz,        // used portion and allocated size of traceback path. 
                             stat
                         );
-                    // trim key
+                    // trim key (no local overriding for this option)
                     if (1 == stage->opt->softclip_key)
                         tmap_map_util_trim_key 
                         (
@@ -1291,7 +1472,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             stat
                         );
                     // end repair
-                    if (stage->opt->end_repair)
+                    if (stage->opt->end_repair != 0 || stage->opt->use_param_ovr)
                         tmap_map_util_end_repair_bulk 
                         (
                             index->refseq,      // reference server
@@ -1299,33 +1480,37 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             seq,                // read
                             seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
                             stage->opt,         // tmap parameters
+                            &stage->sw_param,   // swage SW parameters
                             &target,            // target cache control structure
                             &path_buf,          // buffer for traceback path
                             &path_buf_sz,       // used portion and allocated size of traceback path. 
                             stat
                         );
                     // explicitly fix 5' softclip is required
-                    if (!stage->opt->end_repair_5_prime_softclip && (stage->opt->softclip_type == 2 || stage->opt->softclip_type == 3))
+                    if ((!stage->opt->end_repair_5_prime_softclip && (stage->opt->softclip_type == 2 || stage->opt->softclip_type == 3))
+                        || stage->opt->use_param_ovr)
                     {
                         int i;
                         for (i = 0; i != sams->n; ++i)
                         {
+                            tmap_map_sam_t* s = sams->sams + i;
                             tmap_map_util_remove_5_prime_softclip 
                             (
                                 index->refseq,
-                                sams->sams + i,
+                                s,
                                 seq,
                                 seq_variants,
                                 &target,
                                 &path_buf,
                                 &path_buf_sz,
-                                &sw_par,
+                                stage_ord,
+                                &(stage->sw_param),
                                 stage->opt,
                                 stat
                             );
                         }
                     }
-                    if (stage->opt->cigar_sanity_check)  // do this before tail repeat clipping as the latter does not update alignment box. TODO: update box in tail clip and move this to the very end of alignment post processing
+                    if (stage->opt->cigar_sanity_check || stage->opt->use_param_ovr)  // do this before tail repeat clipping as the latter does not update alignment box. TODO: update box in tail clip and move this to the very end of alignment post processing
                     {
                         int i;
                         for (i = 0; i != sams->n; ++i)
@@ -1342,7 +1527,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                         }
                     }
                     // clip repeats
-                    if (driver->opt->do_repeat_clip)
+                    if (driver->opt->do_repeat_clip || stage->opt->use_param_ovr)
                         tail_repeats_clip_read 
                         (
                             seq, 
@@ -1350,7 +1535,9 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             sams, 
                             realigner, 
                             stat, 
-                            driver->opt->repclip_continuation
+                            stage->opt->repclip_continuation,
+                            stage->opt->do_repeat_clip,
+                            stage->opt->use_param_ovr
                         );
 
                     stage_stat->num_with_mapping++;
@@ -1760,7 +1947,6 @@ tmap_map_driver_thread_io_worker (void *arg)
 #endif
 
 
-
 void 
 tmap_map_driver_core (tmap_map_driver_t *driver)
 {
@@ -1777,6 +1963,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
   tmap_map_bams_t **bams=NULL;// buffer for the mapped BAM data
   tmap_index_t *index = NULL; // reference indes
   tmap_map_stats_t *stat = NULL; // alignment statistics
+  local_ovrs = 0; // count of local (per-amplicon) logging overrides
 #ifdef HAVE_LIBPTHREAD
   pthread_attr_t *attr = NULL;
   pthread_attr_t attr_io;
@@ -1792,8 +1979,8 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 
   time_t start_time = time (NULL);
 
-  if (driver->opt->report_stats)
-      tmap_file_stdout = tmap_file_fdopen(fileno(stdout), "wb", TMAP_FILE_NO_COMPRESSION);
+  // if (driver->opt->report_stats)
+  //  tmap_file_stdout = tmap_file_fdopen (fileno (stdout), "wb", TMAP_FILE_NO_COMPRESSION);
 
 // DVK - realignment
 #ifdef HAVE_LIBPTHREAD
@@ -1820,7 +2007,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
   tmap_progress_print("running with %d threads (%s)",
                        driver->opt->num_threads,
                        (0 == driver->opt->num_threads_autodetected) ? "user set" : "autodetected");
-  
+
   // print out the algorithms and stages
   for(i=0;i<driver->num_stages;i++) {
       for(j=0;j<driver->stages[i]->num_algorithms;j++) {
@@ -1841,8 +2028,11 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 
   // initialize the driver->options and print any relevant information
   tmap_map_driver_do_init(driver, index->refseq);
-  if (!tmap_refseq_read_bed(index->refseq, driver->opt->bed_file)) 
+  if (!tmap_refseq_read_bed(index->refseq, driver->opt->bed_file, driver->opt->use_param_ovr, driver->opt->use_bed_read_ends_stat, &local_ovrs)) 
     tmap_error ("Bed file read error", Exit, OutOfRange );
+
+  if (local_ovrs && !driver->opt->realign_log)
+    tmap_warning ("Amplicon-specific logging will have no effect since log file is not specified on command line (%s option)", "--log");
 
   // allocate the buffer
   if(-1 == driver->opt->reads_queue_size) {
@@ -1908,9 +2098,8 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             realigner_set_scores (context [i], driver->opt->context_mat_score, driver->opt->context_mis_score, -driver->opt->context_gip_score, -driver->opt->context_gep_score);
             realigner_set_bandwidth (context [i], driver->opt->context_extra_bandwidth);
             realigner_set_gap_scale_mode (context [i], driver->opt->gap_scale_mode);
-            realigner_set_debug (context [i], driver->opt->context_debug_log);
-            // WARNING! not a thread-safve operation! Enable only in single-threaded mode!
-            if (driver->opt->context_debug_log && logfile)
+            realigner_set_debug (context [i], driver->opt->debug_log);
+            if (driver->opt->debug_log && logfile) // WARNING! not a thread-safve operation. Disabled through cmd line options check for multithreaded runs
                 realigner_set_log (context [i], fileno (logfile));
         }
     #else
@@ -1924,7 +2113,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
         realigner_set_bandwidth (context, driver->opt->context_extra_bandwidth);
         realigner_set_gap_scale_mode (context, driver->opt->gap_scale_mode);
         realigner_set_debug (context, driver->opt->context_debug_log);
-        if (driver->opt->context_debug_log && logfile)
+        if (driver->opt->debug_log && logfile)
             realigner_set_log (context, fileno (logfile));
 #endif
     }
@@ -2124,77 +2313,77 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
     if (driver->opt->report_stats)
     {
         time_t end_time = time (NULL);
-        tmap_file_printf ("\nMapping completed in %d seconds.\n", end_time-start_time);
-        tmap_file_printf ("                    Total reads:  %llu\n",         stat->num_reads);
-        tmap_file_printf ("                   Mapped reads:  %llu (%.2f%%)\n", stat->num_with_mapping, stat->num_with_mapping * 100.0 / (double)stat->num_reads);
-        tmap_file_printf ("                  After seeding:  %llu\n", stat->num_after_seeding);
-        tmap_file_printf ("                 After grouping:  %llu\n", stat->num_after_grouping);
-        tmap_file_printf ("                  After scoring:  %llu\n", stat->num_after_scoring);
-        tmap_file_printf ("             After dups removal:  %llu\n", stat->num_after_rmdup);
-        tmap_file_printf ("                After filtering:  %llu\n", stat->num_after_filter);
+        tmap_file_fprintf (tmap_file_stderr, "\nMapping completed in %d seconds.\n", end_time-start_time);
+        tmap_file_fprintf (tmap_file_stderr, "                    Total reads:  %llu\n",         stat->num_reads);
+        tmap_file_fprintf (tmap_file_stderr, "                   Mapped reads:  %llu (%.2f%%)\n", stat->num_with_mapping, stat->num_with_mapping * 100.0 / (double)stat->num_reads);
+        tmap_file_fprintf (tmap_file_stderr, "                  After seeding:  %llu\n", stat->num_after_seeding);
+        tmap_file_fprintf (tmap_file_stderr, "                 After grouping:  %llu\n", stat->num_after_grouping);
+        tmap_file_fprintf (tmap_file_stderr, "                  After scoring:  %llu\n", stat->num_after_scoring);
+        tmap_file_fprintf (tmap_file_stderr, "             After dups removal:  %llu\n", stat->num_after_rmdup);
+        tmap_file_fprintf (tmap_file_stderr, "                After filtering:  %llu\n", stat->num_after_filter);
 
         if (!driver->opt->do_realign)
-            tmap_file_printf (  "No realignment perormed\n");
+            tmap_file_fprintf (tmap_file_stderr,   "No realignment perormed\n");
         else
         {
-            tmap_file_printf ("Realignment statistics:\n");
-            tmap_file_printf ("        Realignment invocations:  %llu\n", stat->num_realign_invocations);
-            tmap_file_printf ("           Not realigned (good):  %llu\n");
+            tmap_file_fprintf (tmap_file_stderr, "Realignment statistics:\n");
+            tmap_file_fprintf (tmap_file_stderr, "        Realignment invocations:  %llu\n", stat->num_realign_invocations);
+            tmap_file_fprintf (tmap_file_stderr, "           Not realigned (good):  %llu\n");
             if (stat->num_realign_sw_failures)
-                tmap_file_printf ("             Algorithm failures:  %llu\n", stat->num_realign_sw_failures);
+                tmap_file_fprintf (tmap_file_stderr, "             Algorithm failures:  %llu\n", stat->num_realign_sw_failures);
             if (stat->num_realign_unclip_failures)
-                tmap_file_printf ("           Un-clipping failures:  %llu\n", stat->num_realign_sw_failures);
-            tmap_file_printf ("             Altered alignments:  %llu", stat->num_realign_changed);
+                tmap_file_fprintf (tmap_file_stderr, "           Un-clipping failures:  %llu\n", stat->num_realign_sw_failures);
+            tmap_file_fprintf (tmap_file_stderr, "             Altered alignments:  %llu", stat->num_realign_changed);
             if (stat->num_realign_invocations)
-                tmap_file_printf (" (%.2f%% total)", ((double) stat->num_realign_changed) * 100 / stat->num_realign_invocations);
-            tmap_file_printf ("\n");
-                tmap_file_printf ("              Altered positions:  %llu", stat->num_realign_shifted);
+                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% total)", ((double) stat->num_realign_changed) * 100 / stat->num_realign_invocations);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
+                tmap_file_fprintf (tmap_file_stderr, "              Altered positions:  %llu", stat->num_realign_shifted);
             if (stat->num_realign_shifted)
-                tmap_file_printf (" (%.2f%% total, %.2f%% changed)", ((double) stat->num_realign_shifted) * 100 / stat->num_realign_invocations, ((double) stat->num_realign_shifted) * 100 / stat->num_realign_changed);
-            tmap_file_printf ("\n");
+                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% total, %.2f%% changed)", ((double) stat->num_realign_shifted) * 100 / stat->num_realign_invocations, ((double) stat->num_realign_shifted) * 100 / stat->num_realign_changed);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
         }
 
         if (!driver->opt->do_hp_weight)
-            tmap_file_printf ("No realignment with context-dependent gap cost performed\n");
+            tmap_file_fprintf (tmap_file_stderr, "No realignment with context-dependent gap cost performed\n");
         else
         {
-            tmap_file_printf ("Context-dependent realignment statistics:\n");
-            tmap_file_printf ("                    Invocations:  %llu\n", stat->num_hpcost_invocations);
-            tmap_file_printf ("             Skipped (too long):  %llu\n", stat->num_hpcost_skipped);
-            tmap_file_printf ("             Altered alignments:  %llu", stat->num_hpcost_modified);
+            tmap_file_fprintf (tmap_file_stderr, "Context-dependent realignment statistics:\n");
+            tmap_file_fprintf (tmap_file_stderr, "                    Invocations:  %llu\n", stat->num_hpcost_invocations);
+            tmap_file_fprintf (tmap_file_stderr, "             Skipped (too long):  %llu\n", stat->num_hpcost_skipped);
+            tmap_file_fprintf (tmap_file_stderr, "             Altered alignments:  %llu", stat->num_hpcost_modified);
             if (stat->num_hpcost_invocations)
-                tmap_file_printf (" (%.2f%% total)", ((double) stat->num_hpcost_modified) * 100 / stat->num_hpcost_invocations);
+                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% total)", ((double) stat->num_hpcost_modified) * 100 / stat->num_hpcost_invocations);
             if (stat->num_hpcost_invocations - stat->num_hpcost_skipped)
             {
                 double percent = ((double) stat->num_hpcost_modified * 100) / (stat->num_hpcost_invocations - stat->num_hpcost_skipped);
-                tmap_file_printf (" (%.2f%% realigned)", percent);
+                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% realigned)", percent);
             }
-            tmap_file_printf ("\n");
-            tmap_file_printf ("              Altered positions:  %llu\n", stat->num_hpcost_shifted);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
+            tmap_file_fprintf (tmap_file_stderr, "              Altered positions:  %llu\n", stat->num_hpcost_shifted);
         }
 
         if (!(0 < driver->opt->pen_gapl))
-            tmap_file_printf ("No edge long indel salvage performed\n");
+            tmap_file_fprintf (tmap_file_stderr, "No edge long indel salvage performed\n");
         else
         {
-            tmap_file_printf ("Long tail indels salvage       : %llu reads\n", stat->reads_salvaged);
-            tmap_file_printf ("                                  %8s %8s %8s %8s", "5'fwd", "3'fwd", "5'rev", "3'rev\n");
-            tmap_file_printf ("             Salvaged read ends:  %8llu %8llu %8llu %8llu\n",
+            tmap_file_fprintf (tmap_file_stderr, "Long tail indels salvage       : %llu reads\n", stat->reads_salvaged);
+            tmap_file_fprintf (tmap_file_stderr, "                                  %8s %8s %8s %8s", "5'fwd", "3'fwd", "5'rev", "3'rev\n");
+            tmap_file_fprintf (tmap_file_stderr, "             Salvaged read ends:  %8llu %8llu %8llu %8llu\n",
                               stat->num_salvaged [F5P], 
                               stat->num_salvaged [F3P], 
                               stat->num_salvaged [R5P], 
                               stat->num_salvaged [R3P]);
-            tmap_file_printf ("            Average query bases:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "            Average query bases:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_salvaged [F5P]?(((double) stat->bases_salvaged_qry [F5P]) / stat->num_salvaged [F5P]):0., 
                               stat->num_salvaged [F3P]?(((double) stat->bases_salvaged_qry [F3P]) / stat->num_salvaged [F3P]):0., 
                               stat->num_salvaged [R5P]?(((double) stat->bases_salvaged_qry [R5P]) / stat->num_salvaged [R5P]):0.,
                               stat->num_salvaged [R3P]?(((double) stat->bases_salvaged_qry [R3P]) / stat->num_salvaged [R3P]):0.);
-            tmap_file_printf ("        Average reference bases:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "        Average reference bases:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_salvaged [F5P]?(((double) stat->bases_salvaged_ref [F5P]) / stat->num_salvaged [F5P]):0., 
                               stat->num_salvaged [F3P]?(((double) stat->bases_salvaged_ref [F3P]) / stat->num_salvaged [F3P]):0., 
                               stat->num_salvaged [R5P]?(((double) stat->bases_salvaged_ref [R5P]) / stat->num_salvaged [R5P]):0.,
                               stat->num_salvaged [R3P]?(((double) stat->bases_salvaged_ref [R3P]) / stat->num_salvaged [R3P]):0.);
-            tmap_file_printf ("           Average score change:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "           Average score change:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_salvaged [F5P]?(((double) stat->score_salvaged_total [F5P]) / stat->num_salvaged [F5P]):0., 
                               stat->num_salvaged [F3P]?(((double) stat->score_salvaged_total [F3P]) / stat->num_salvaged [F3P]):0., 
                               stat->num_salvaged [R5P]?(((double) stat->score_salvaged_total [R5P]) / stat->num_salvaged [R5P]):0.,
@@ -2202,34 +2391,34 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
         }
 
         if (!driver->opt->end_repair)
-            tmap_file_printf ("No end repair performed\n");
+            tmap_file_fprintf (tmap_file_stderr, "No end repair performed\n");
         else if (driver->opt->end_repair <= 2)
-            tmap_file_printf ("\"Old-style\" end repair performed, no statistics collected\n");
+            tmap_file_fprintf (tmap_file_stderr, "\"Old-style\" end repair performed, no statistics collected\n");
         else
         {
-            tmap_file_printf ("End repair                     : %d reads softclipped, %d extended.\n", stat->reads_end_repair_clipped, stat->reads_end_repair_extended);
-            tmap_file_printf ("                                  %8s %8s %8s %8s\n", "5'fwd", "3'fwd", "5'rev", "3'rev");
-            tmap_file_printf ("              Clipped read ends:  %8llu %8llu %8llu %8llu\n",
+            tmap_file_fprintf (tmap_file_stderr, "End repair                     : %d reads softclipped, %d extended.\n", stat->reads_end_repair_clipped, stat->reads_end_repair_extended);
+            tmap_file_fprintf (tmap_file_stderr, "                                  %8s %8s %8s %8s\n", "5'fwd", "3'fwd", "5'rev", "3'rev");
+            tmap_file_fprintf (tmap_file_stderr, "              Clipped read ends:  %8llu %8llu %8llu %8llu\n",
                               stat->num_end_repair_clipped [F5P], 
                               stat->num_end_repair_clipped [F3P], 
                               stat->num_end_repair_clipped [R5P], 
                               stat->num_end_repair_clipped [R3P]);
-            tmap_file_printf ("          Average bases clipped:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "          Average bases clipped:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_end_repair_clipped [F5P]?(((double) stat->bases_end_repair_clipped [F5P]) / stat->num_end_repair_clipped [F5P]):0., 
                               stat->num_end_repair_clipped [F3P]?(((double) stat->bases_end_repair_clipped [F3P]) / stat->num_end_repair_clipped [F3P]):0., 
                               stat->num_end_repair_clipped [R5P]?(((double) stat->bases_end_repair_clipped [R5P]) / stat->num_end_repair_clipped [R5P]):0.,
                               stat->num_end_repair_clipped [R3P]?(((double) stat->bases_end_repair_clipped [R3P]) / stat->num_end_repair_clipped [R3P]):0.);
-            tmap_file_printf ("             Extended read ends:  %8llu %8llu %8llu %8llu\n",
+            tmap_file_fprintf (tmap_file_stderr, "             Extended read ends:  %8llu %8llu %8llu %8llu\n",
                               stat->num_end_repair_extended [F5P], 
                               stat->num_end_repair_extended [F3P], 
                               stat->num_end_repair_extended [R5P], 
                               stat->num_end_repair_extended [R3P]);
-            tmap_file_printf ("         Average bases extended:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "         Average bases extended:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_end_repair_extended [F5P]?(((double) stat->bases_end_repair_extended [F5P]) / stat->num_end_repair_extended [F5P]):0., 
                               stat->num_end_repair_extended [F3P]?(((double) stat->bases_end_repair_extended [F3P]) / stat->num_end_repair_extended [F3P]):0., 
                               stat->num_end_repair_extended [R5P]?(((double) stat->bases_end_repair_extended [R5P]) / stat->num_end_repair_extended [R5P]):0.,
                               stat->num_end_repair_extended [R3P]?(((double) stat->bases_end_repair_extended [R3P]) / stat->num_end_repair_extended [R3P]):0.);
-            tmap_file_printf ("        Average indels inserted:  %8.1f %8.1f %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "        Average indels inserted:  %8.1f %8.1f %8.1f %8.1f\n", 
                               stat->num_end_repair_extended [F5P]?(((double) stat->total_end_repair_indel [F5P]) / stat->num_end_repair_extended [F5P]):0., 
                               stat->num_end_repair_extended [F3P]?(((double) stat->total_end_repair_indel [F3P]) / stat->num_end_repair_extended [F3P]):0., 
                               stat->num_end_repair_extended [R5P]?(((double) stat->total_end_repair_indel [R5P]) / stat->num_end_repair_extended [R5P]):0.,
@@ -2238,62 +2427,62 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
         if (driver->opt->end_repair)
         {
             if (driver->opt->end_repair_5_prime_softclip)
-                tmap_file_printf ("5' soft-clipping is allowed for end repair, no softclip removal performed\n");
+                tmap_file_fprintf (tmap_file_stderr, "5' soft-clipping is allowed for end repair, no softclip removal performed\n");
             else if  (driver->opt->softclip_type != 2 && driver->opt->softclip_type != 3)
-                tmap_file_printf ("5' soft-clipping is explicitly allowed through option \"-g %d\" on command line, no softclip removal performed\n", driver->opt->softclip_type);
+                tmap_file_fprintf (tmap_file_stderr, "5' soft-clipping is explicitly allowed through option \"-g %d\" on command line, no softclip removal performed\n", driver->opt->softclip_type);
             else
             {
-            tmap_file_printf ("5' softclip removed on %llu reads\n", stat->num_5_softclips [0] + stat->num_5_softclips [1]);
-            tmap_file_printf ("                                  %8s %8s\n", "fwd", "rev");
-            tmap_file_printf ("            Recovered read ends:  %8llu %8llu\n",
+            tmap_file_fprintf (tmap_file_stderr, "5' softclip removed on %llu reads\n", stat->num_5_softclips [0] + stat->num_5_softclips [1]);
+            tmap_file_fprintf (tmap_file_stderr, "                                  %8s %8s\n", "fwd", "rev");
+            tmap_file_fprintf (tmap_file_stderr, "            Recovered read ends:  %8llu %8llu\n",
                             stat->num_5_softclips [0], 
                             stat->num_5_softclips [1]);
-            tmap_file_printf ("  Average query bases recovered:  %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "  Average query bases recovered:  %8.1f %8.1f\n", 
                             stat->num_5_softclips [0]?(((double) stat->bases_5_softclips_qry [0]) / stat->num_5_softclips [0]):0., 
                             stat->num_5_softclips [1]?(((double) stat->bases_5_softclips_qry [1]) / stat->num_5_softclips [1]):0.);
-            tmap_file_printf ("    Average ref bases recovered:  %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "    Average ref bases recovered:  %8.1f %8.1f\n", 
                             stat->num_5_softclips [0]?(((double) stat->bases_5_softclips_ref [0]) / stat->num_5_softclips [0]):0., 
                             stat->num_5_softclips [1]?(((double) stat->bases_5_softclips_ref [1]) / stat->num_5_softclips [1]):0.);
-            tmap_file_printf ("        Average recovered score:  %8.1f %8.1f\n", 
+            tmap_file_fprintf (tmap_file_stderr, "        Average recovered score:  %8.1f %8.1f\n", 
                             stat->num_5_softclips [0]?(((double) stat->score_5_softclips_total [0]) / stat->num_5_softclips [0]):0., 
                             stat->num_5_softclips [1]?(((double) stat->score_5_softclips_total [1]) / stat->num_5_softclips [1]):0.); 
             }
         }
 
         if (!driver->opt->do_repeat_clip)
-            tmap_file_printf ("No tail repeat clipping performed\n");
+            tmap_file_fprintf (tmap_file_stderr, "No tail repeat clipping performed\n");
         else
         {
-            tmap_file_printf (  " Alignments tail-clipped: %llu", stat->num_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr,   " Alignments tail-clipped: %llu", stat->num_tailclipped);
             if (stat->num_seen_tailclipped)
-                tmap_file_printf (                              " (%.2f%% seen)", ((double) stat->num_tailclipped) * 100 / stat->num_seen_tailclipped);
-            tmap_file_printf ("\n");
-            tmap_file_printf (  "      Tail-clipped bases: %llu", stat->bases_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% seen)", ((double) stat->num_tailclipped) * 100 / stat->num_seen_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
+            tmap_file_fprintf (tmap_file_stderr,   "      Tail-clipped bases: %llu", stat->bases_tailclipped);
             if (stat->bases_seen_tailclipped)
-                tmap_file_printf (                              " (%.2f%% seen)", ((double) stat->bases_tailclipped) * 100 / stat->bases_seen_tailclipped);
-            tmap_file_printf ("\n");
-            tmap_file_printf (  "Completely clipped reads: %llu", stat->num_fully_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% seen)", ((double) stat->bases_tailclipped) * 100 / stat->bases_seen_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
+            tmap_file_fprintf (tmap_file_stderr,   "Completely clipped reads: %llu", stat->num_fully_tailclipped);
             if (stat->num_seen_tailclipped)
-                tmap_file_printf (                              " (%.2f%% clipped)", ((double) stat->num_fully_tailclipped) * 100 / stat->num_tailclipped);
-            tmap_file_printf (", contain %llu bases", stat->bases_fully_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% clipped)", ((double) stat->num_fully_tailclipped) * 100 / stat->num_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr, ", contain %llu bases", stat->bases_fully_tailclipped);
             if (stat->bases_tailclipped)
-                tmap_file_printf (" (%.2f%% clipped)", ((double) stat->bases_fully_tailclipped) * 100 / stat->bases_tailclipped);
-            tmap_file_printf ("\n");
+                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% clipped)", ((double) stat->bases_fully_tailclipped) * 100 / stat->bases_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr, "\n");
             if (stat->num_seen_tailclipped)
             {
-                tmap_file_printf (    "   Average bases clipped:\n");
-                tmap_file_printf (    "                    per read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_seen_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,     "   Average bases clipped:\n");
+                tmap_file_fprintf (tmap_file_stderr,     "                    per read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_seen_tailclipped);
                 if (stat->num_tailclipped)
-                    tmap_file_printf ("            per clipped read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_tailclipped);
+                    tmap_file_fprintf (tmap_file_stderr, "            per clipped read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_tailclipped);
                 if (stat->num_fully_tailclipped)
-                    tmap_file_printf ("      per fully clipped read: %.1f\n", ((double) stat->bases_fully_tailclipped) / stat->num_fully_tailclipped);
+                    tmap_file_fprintf (tmap_file_stderr, "      per fully clipped read: %.1f\n", ((double) stat->bases_fully_tailclipped) / stat->num_fully_tailclipped);
             }
         }
         if (!driver->opt->min_al_len && !driver->opt->min_al_cov && !driver->opt->min_identity)
-            tmap_file_printf ("No alignment filtering performed\n");
+            tmap_file_fprintf (tmap_file_stderr, "No alignment filtering performed\n");
         else
         {
-            tmap_file_printf (  "  Filtered alignments: %llu\n", stat->num_filtered_als);
+            tmap_file_fprintf (tmap_file_stderr,   "  Filtered alignments: %llu\n", stat->num_filtered_als);
         }
   }
 
@@ -2403,8 +2592,10 @@ tmap_map_driver_stage_init(int32_t stage)
   tmap_map_driver_stage_t *s = NULL;
   s = tmap_calloc(1, sizeof(tmap_map_driver_stage_t), "stage");
   s->stage = stage;
-  s->opt = tmap_map_opt_init(TMAP_MAP_ALGO_STAGE);
+  s->opt = tmap_map_opt_init (TMAP_MAP_ALGO_STAGE);
   s->opt->algo_stage = stage;
+  s->sw_param.matrix_owned = 0;
+  s->sw_param.matrix = NULL;
   return s;
 }
 
@@ -2434,6 +2625,8 @@ tmap_map_driver_stage_destroy(tmap_map_driver_stage_t *stage)
   }
   tmap_map_opt_destroy(stage->opt);
   free(stage->algorithms);
+  if (stage->sw_param.matrix_owned)
+      free (stage->sw_param.matrix);
   free(stage);
 }
 
@@ -2457,15 +2650,19 @@ tmap_map_driver_add(tmap_map_driver_t *driver,
                     tmap_map_opt_t *opt)
 {
   // make more stages
-  if(driver->num_stages < opt->algo_stage) {
+  if(driver->num_stages < opt->algo_stage) 
+  {
       driver->stages = tmap_realloc(driver->stages, sizeof(tmap_map_driver_stage_t*) * opt->algo_stage, "driver->stages");
-      while(driver->num_stages < opt->algo_stage) {
+      while(driver->num_stages < opt->algo_stage) 
+      {
           driver->num_stages++;
           driver->stages[driver->num_stages-1] = tmap_map_driver_stage_init(driver->num_stages);
           // copy global options into this stage
           tmap_map_opt_copy_global(driver->stages[driver->num_stages-1]->opt, driver->opt);
           // copy stage options into this stage
           tmap_map_opt_copy_stage(driver->stages[driver->num_stages-1]->opt, opt);
+          // populate stage's SW params using stage options just filled in
+          tmap_map_util_populate_stage_sw_par (&(driver->stages[driver->num_stages-1]->sw_param), driver->stages[driver->num_stages-1]->opt);
       }
   }
 

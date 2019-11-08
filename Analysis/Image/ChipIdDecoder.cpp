@@ -11,32 +11,35 @@ ChipIdEnum ChipIdDecoder::glob_chip_id = ChipIdUnknown;
 
 ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] = 
 {
-  { "316", ChipId316    },
-  { "316v2",  ChipId316v2    },
-  { "318", ChipId318    },
-  { "314", ChipId314    },
-  { "p1.1.17", ChipId1_1_17    },
-  { "p1.2.18", ChipId1_2_18    },
-  { "p1.0.19", ChipId1_0_19    },
-  { "p2.2.1", ChipId2_2_1    }, //first version of the chip. kept temporarily for compatibility
-  { "p2.2.2", ChipId2_2_2    },
-  { "900", ChipId_old_P1    },  //for backward compatibility  and basecalling of old old chips
-  { "p1.0.20", ChipId1_0_20    },
-  { "560", ChipId560    },
-  { "550", ChipId550    },
-  { "540", ChipId540    },
-  { "530", ChipId530    },
-  { "520", ChipId520    },
-  { "551", ChipId551    },
-  { "541", ChipId541    },
-  { "531", ChipId531    },
-  { "521", ChipId521    },
-  { "522", ChipId522    }, 
-  { "p2.0.1", ChipId2_0_1    },
-  { "p2.1.1", ChipId2_1_1    },
-  { "p2.3.1", ChipId2_3_1    },
-  { "p1.1.541", ChipId1_1_541    },
-  { NULL,   ChipIdUnknown },
+  { "316"     ,  ChipId316       },
+  { "316v2"   ,  ChipId316v2     },
+  { "318"     ,  ChipId318       },
+  { "314"     ,  ChipId314       },
+  { "p1.1.17" ,  ChipId1_1_17    },
+  { "p1.2.18" ,  ChipId1_2_18    },
+  { "p1.0.19" ,  ChipId1_0_19    },
+  { "p2.2.1"  ,  ChipId2_2_1     }, //first version of the chip. kept temporarily for compatibility
+  { "p2.2.2"  ,  ChipId2_2_2     },
+  { "900"     ,  ChipId_old_P1   },  //for backward compatibility  and basecalling of old old chips
+  { "p1.0.20" ,  ChipId1_0_20    },
+  { "560"     ,  ChipId560       },
+  { "550"     ,  ChipId550       },
+  { "540"     ,  ChipId540       },
+  { "530"     ,  ChipId530       },
+  { "520"     ,  ChipId520       },
+  { "551"     ,  ChipId551       },
+  { "541"     ,  ChipId541       },
+  { "531"     ,  ChipId531       },
+  { "521"     ,  ChipId521       },
+  { "522"     ,  ChipId522       }, 
+  { "p2.0.1"  ,  ChipId2_0_1     },
+  { "p2.1.1"  ,  ChipId2_1_1     },
+  { "p2.3.1"  ,  ChipId2_3_1     },
+  { "p1.1.541",  ChipId1_1_541   },
+  { "541v2"   ,  ChipId541v2     },
+  { "gx5v2"   ,  ChipIdGX5v2     },
+  { "gx7v1"   ,  ChipIdGX7v1     },
+  {  NULL     ,  ChipIdUnknown   },
 };
 
 char * ChipIdDecoder::chipType = NULL;
@@ -108,6 +111,9 @@ bool ChipIdDecoder::IsProtonChip(){
     case ChipId2_1_1:
     case ChipId2_3_1:
     case ChipId1_1_541:
+    case ChipId541v2:
+    case ChipIdGX5v2:
+    case ChipIdGX7v1:
       return true;
       break;
     default:
@@ -140,6 +146,8 @@ bool ChipIdDecoder::IsPone(){
     case ChipId2_1_1:
     case ChipId2_3_1:
     case ChipId1_1_541:
+    case ChipId541v2:
+    case ChipIdGX5v2:
       return true;
       break;
     default:
@@ -154,6 +162,7 @@ bool ChipIdDecoder::IsPtwo(){
     case ChipId2_2_2:
     case ChipId551:
     case ChipId560:
+    case ChipIdGX7v1:
       return true;
       break;
     default:
@@ -229,6 +238,9 @@ bool ChipIdDecoder::BigEnoughForGPU(){
     case ChipId2_1_1:
     case ChipId2_3_1:
     case ChipId1_1_541:
+    case ChipId541v2:
+    case ChipIdGX5v2:
+    case ChipIdGX7v1:
       return true;
     case ChipId314:
     case ChipId316:

@@ -2,6 +2,7 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% load pagetools %}
+{% load i18n %}
 
 {% block extra_head %}
     {{ block.super }}
@@ -17,10 +18,10 @@
 {% block main-title %}
 <div class="row-fluid">
     <div class="clearfix">
-        Select plugins to execute, then click Next.
+        {% trans "workflow.step.plugins.subtitle" %}
         <div class="pull-right" style="margin-right:10px;">
-            <a href="#" id="selectAllPlugins" class="btn ">Select All</a>
-            <a href="#" id="clearPluginSelections" class="btn ">Clear</a>
+            <a href="#" id="selectAllPlugins" class="btn " title="{% trans "workflow.step.plugins.action.selectall.tooltip" %}">{% trans "workflow.step.plugins.action.selectall.label" %}</a>
+            <a href="#" id="clearPluginSelections" class="btn " title="{% trans "workflow.step.plugins.action.clear.tooltip" %}">{% trans "workflow.step.plugins.action.clear.label" %}</a>
         </div>
     </div>
 </div>
@@ -42,7 +43,7 @@
                         <a id="configure_plugin_{{plugin_id}}" href="#configModal"
                         data-plugin-id="{{plugin_id}}"
                         data-href="/configure/plugins/plugin/{{plugin_id}}/configure/plan/?applicationGroup={{helper.getStepDict.Application.getCurrentSavedFieldDict.applicationGroupName}}&runTypeId={{helper.getStepDict.Application.getCurrentSavedFieldDict.runType}}"
-                        data-toggle="modal" style="display: none;">Configure</a>
+                        data-toggle="modal" style="display: none;" title="{% trans "workflow.step.plugins.action.configureplugin.tooltip" %}">{% trans "workflow.step.plugins.action.configureplugin.label" %}</a>
                         <input id="plugin_config_{{plugin_id}}" name="plugin_config_{{plugin_id}}" style="display: none;" value="{{values.config|default_if_none:""}}"/>
                     {% endif %}
                 </label>
@@ -52,7 +53,7 @@
     </div>
     <div class="row-fluid">
         {% for plugin_name, plugin_validation_errors in step.validationErrors.items %}
-            <h4 style="color: red">{{ plugin_name }} - Invalid Configuration</h4>
+            <h4 style="color: red">{{ plugin_name }} - {% trans "workflow.step.plugins.messages.validate.validationErrors.title" %}</h4>
             <ul>
                 {% for plugin_validation_error in plugin_validation_errors %}
                     <li style="color: red">{{ plugin_validation_error }}</li>
@@ -65,16 +66,16 @@
 <div id="configModal" class="modal container hide modal-overflow" tabindex="-1" role="dialog" aria-labelledby="configModalLabel" aria-hidden="true" data-modal-overflow="true">
      <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="configModalLabel">Configure Plugin</h3>
+        <h3 id="configModalLabel">{% trans "workflow.step.plugins.configureplugin.title" %}</h3>
     </div>
     <div class="modal-body">
         <iframe id="pluginConfigIframe" class="" scrolling="no" frameborder="0">
-            WARNING: Your browser does not support iFrames.
+            {% trans "workflow.step.plugins.configureplugin.messages.noiframe" %}
         </iframe>
     </div>
     <div class="modal-footer">
-        <button class="btn" data-dismiss="modal">Close</button>
-        <button class="btn btn-primary" id="configSaveChanges" data-dismiss="modal">Save Changes</button>
+        <button class="btn" data-dismiss="modal">{% trans "workflow.step.plugins.configureplugin.action.cancel" %}</button>
+        <button class="btn btn-primary" id="configSaveChanges" data-dismiss="modal">{% trans "workflow.step.plugins.configureplugin.action.save" %}</button>
     </div>
 </div>
 {% endblock page-plan-content %}

@@ -25,8 +25,6 @@ INSTALL(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         PATTERN "parameter_sets.json" EXCLUDE
        )
 
-INCLUDE(CPack)
-
 add_custom_target(parameter_sets ALL
                    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/pluginMedia/parameter_sets/build_parameter_sets.py" "${CMAKE_CURRENT_BINARY_DIR}/parameter_sets.json"
                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/pluginMedia/parameter_sets/"
@@ -47,6 +45,9 @@ if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/../../../build/Analysis")
 endif()
 
 if(DEFINED ANALYSIS_BUILD_DIR)
+    SET(CPACK_PACKAGE_VERSION "${VERSION}-${LSB_RELEASE_CODENAME}")
+    SET(CPACK_PACKAGE_FILE_NAME "ion-plugin-${DEB_PLUGIN_NAME}-${CPACK_PACKAGE_VERSION}")
+    message(STATUS "Adding Ubuntu codename to the version: ${CPACK_PACKAGE_VERSION}")
     message(STATUS "Adding tmap from Analysis build")
     install(PROGRAMS "${ANALYSIS_BUILD_DIR}/TMAP/tmap" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
     message(STATUS "Adding tvc from Analysis build")
@@ -54,3 +55,5 @@ if(DEFINED ANALYSIS_BUILD_DIR)
     message(STATUS "Adding tvcutils from Analysis build")
     install(PROGRAMS "${ANALYSIS_BUILD_DIR}/tvcutils" DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/variantCaller/bin/")
 endif()
+
+INCLUDE(CPack)

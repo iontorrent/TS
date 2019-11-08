@@ -71,7 +71,8 @@ typedef int32_t (*tmap_map_driver_func_cleanup)(void **data);
 /*!
   A mapping algorithm with associate functions and workspace.
  */
-typedef struct {
+typedef struct 
+{
     tmap_map_driver_func_init func_init; /*!< this function will be run once per program to initialize persistent data across the program */
     tmap_map_driver_func_thread_init func_thread_init; /*!< this function will be run once per thread to initialize persistent data across that thread */
     tmap_map_driver_func_thread_map func_thread_map; /*!< this function will be run once per thread per input sequence to map the sequence */
@@ -80,27 +81,37 @@ typedef struct {
     tmap_map_opt_t *opt; /*!< the program options specific to this algorithm */
     void *data; /*< the program persistent data for the algorithm */
     void **thread_data; /*< the thread persistent data for the algorithm */
-} tmap_map_driver_algorithm_t;
+}
+tmap_map_driver_algorithm_t;
 
 /*!
   A collection of mapping algorithms to be applied in a specific stage.
  */
-typedef struct {
+typedef struct 
+{
     int32_t stage; /*!< the stage for these algorithms (one-based) */
     tmap_map_driver_algorithm_t **algorithms; /*!< the algorithms to run */
     int32_t num_algorithms; /*!< the number of algorithms to run */
     tmap_map_opt_t *opt; /*!< stage specific options */
-} tmap_map_driver_stage_t;
+    // DK: fix for:
+    //   a) race condition in access to iupac_matrix from threads at different stages of different reads
+    //   b) unnecessaary repeated re-population of iupac_matrix for every read 
+    tmap_sw_param_t sw_param;
+    int32_t matrix [IUPAC_MATRIX_SIZE];
+}
+tmap_map_driver_stage_t;
 
 /*!
   The mapping driver object, composed of multiple stages of algorithms.
   */
-typedef struct {
+typedef struct 
+{
     tmap_map_driver_stage_t **stages; /*!< the stages for the algorithms */
     int32_t num_stages; /*< the number of stages */
     tmap_map_driver_func_mapq func_mapq; /*!< this function will be run to calculate the mapping quality */
     tmap_map_opt_t *opt; /*!< the global mapping options */
-} tmap_map_driver_t;
+}
+tmap_map_driver_t;
 
 /*! 
   @param  algo_id    the one-base algorithm identifier

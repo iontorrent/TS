@@ -1,5 +1,6 @@
 {% load ion_readable %}
 {% load humanize %}
+{% load i18n %}
 <script>
     function modal_barcode_len(name, url) {
         console.log(name + " " + url);
@@ -23,16 +24,16 @@
         <table id="barcodes" class="table-striped" style="table-layout: auto;">
             <thead>
             <tr>
-                <th>Barcode Name</th>
-                <th>Sample</th>
-                <th rel='tooltip' title="Post filtering base output per barcode">Bases</th>
+                <th>{% trans "report.section.output.barcodes.fields.barcode_name.label" %}</th>
+                <th>{% trans "report.section.output.barcodes.fields.sample.label" %}</th>
+                <th rel='tooltip' title="{% trans "report.section.output.barcodes.fields.total_bases.tooltip" %}">{% trans "report.section.output.barcodes.fields.total_bases.label" %}</th>
                 {% if isToShowExtraStats %}
-                	<th>>=Q20 Bases</th>
+                	<th>{% trans "report.section.output.barcodes.fields.Q20_bases.label" %}</th>
                 {% endif %}              
-                <th>Reads</th>
-                <th>Mean Read Length</th>
-                <th rel='tooltip' title="Read length for each barcode">Read Length Histogram</th>
-                <th rel='tooltip' title="Files for each barcode">Files</th>
+                <th>{% trans "report.section.output.barcodes.fields.read_count.label" %}</th>
+                <th>{% trans "report.section.output.barcodes.fields.mean_read_length.label" %}</th>
+                <th rel='tooltip' title="{% trans "report.section.output.barcodes.read_len_histogram.tooltip" %}">{% trans "report.section.output.barcodes.read_len_histogram.label" %}</th>
+                <th rel='tooltip' title="{% trans "report.section.output.barcodes.files.tooltip" %}">{% trans "report.section.output.barcodes.files.label" %}</th>
             </tr>
             </thead>
             <tbody>
@@ -43,31 +44,31 @@
        </table>
         <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
             <tr>
-                <td> #= (barcode_name) ? barcode_name : "No barcode" #</td>
-                <td> #= (barcode_name) ? sample : "None" #</td>
+                <td> #= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #</td>
+                <td> #= (barcode_name) ? sample : "{% trans "report.section.output.barcodes.messages.sample.none" %}" #</td>
                 <td> #=numberWithCommas(total_bases)# </td>
                 # if (isToShowExtraStats) { #
                      <td> #=numberWithCommas(Q20_bases)# </td>
                 # } #
                 <td> #=numberWithCommas(read_count)# </td>
                 <td> ${mean_read_length} </td>
-                <td><img onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "No barcode" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
+                <td><img name="read_len_histogram" onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
                 <td>
                     <span class="btn-group">
                         # if (basecaller_bam_link) { #
-                            <a class="btn" href="${basecaller_bam_link}">UBAM</a>
+                            <a download class="btn" href="${basecaller_bam_link}" title="{% trans "report.section.output.unaligned.basecaller_bam.tooltip" %}">{% trans "report.section.output.unaligned.basecaller_bam.label" %}</a>
                         # } else { #
-                            <span class="btn disabled">UBAM</span>
+                            <span class="btn disabled" title="{% trans "report.section.output.unaligned.basecaller_bam.tooltip" %}">{% trans "report.section.output.unaligned.basecaller_bam.label" %}</span>
                         # } #
                         # if (bam_link) { #
-                            <a class="btn" href="${bam_link}">BAM</a>
+                            <a download class="btn" href="${bam_link}" title="{% trans "report.section.output.aligned.bam.tooltip" %}">{% trans "report.section.output.aligned.bam.label" %}</a>
                         # } else { #
-                            <span class="btn disabled">BAM</span>
+                            <span class="btn disabled" title="{% trans "report.section.output.aligned.bam.tooltip" %}">{% trans "report.section.output.aligned.bam.label" %}</span>
                         # } #
                         # if (bai_link) { #
-                            <a class="btn" href="${bai_link}">BAI</a>
+                            <a download class="btn" href="${bai_link}" title="{% trans "report.section.output.aligned.bai.tooltip" %}">{% trans "report.section.output.aligned.bai.label" %}</a>
                         # } else { #
-                            <span class="btn disabled">BAI</span>
+                            <span class="btn disabled" title="{% trans "report.section.output.aligned.bai.tooltip" %}">{% trans "report.section.output.aligned.bai.label" %}</span>
                         # } #
                     </span>
                 </td>
@@ -122,12 +123,12 @@
 <div id="modal_barcode_len" class="modal hide" style="width: 830px; margin-left: -415px;">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-        <h3 id="modal_barcode_len_name">Barcode Read Lengths</h3>
+        <h3 id="modal_barcode_len_name">{% trans "report.section.output.barcodes.read_len_histogram.details.title" %}</h3>
     </div>
     <div class="modal-body">
         <p id="modal_barcode_len_images"></p>
     </div>
     <div class="modal-footer">
-        <a href="#" data-dismiss="modal" class="btn">Close</a>
+        <a href="#" data-dismiss="modal" class="btn">{% trans "global.action.modal.close" %}</a>
     </div>
 </div>

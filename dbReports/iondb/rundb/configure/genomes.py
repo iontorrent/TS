@@ -1,4 +1,6 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import print_function
+
 import csv
 import datetime
 import os
@@ -18,18 +20,33 @@ import re
 import subprocess
 import urllib2
 import traceback
+
 from django.contrib.auth.decorators import login_required
+from django.core.urlresolvers import reverse
 from django.shortcuts import render_to_response, get_object_or_404
-from django.http import HttpResponse, HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponseServerError
+from django.http import (
+    HttpResponse,
+    HttpResponsePermanentRedirect,
+    HttpResponseRedirect,
+    HttpResponseServerError,
+)
 from django.template import RequestContext
 from django.conf import settings
 from django.core import urlresolvers
 from django.core.files import File
+from iondb.utils import i18n_errors, validation
 
 from iondb.rundb.ajax import render_to_json
 from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import ReferenceGenome, ContentUpload, Content, FileMonitor, Publisher
-from iondb.rundb import tasks, publishers
+from iondb.rundb.models import (
+    ReferenceGenome,
+    ContentUpload,
+    Content,
+    FileMonitor,
+    Publisher,
+)
+from iondb.rundb import tasks, publishers, labels
+from django.utils.translation import ugettext_lazy as _, ugettext
 
 from iondb.rundb.configure.util import plupload_file_upload
 
@@ -38,12 +55,10 @@ logger = logging.getLogger(__name__)
 JOBSERVER_HOST = "127.0.0.1"
 
 
-@login_required
 def file_upload(request):
     return plupload_file_upload(request, settings.TEMP_PATH)
 
 
-@login_required
 def delete_genome(request, pk):
     """delete a reference genome
     the filesystem file deletions should be done with a method on the model"""
@@ -51,19 +66,30 @@ def delete_genome(request, pk):
     if request.method == "POST":
         ref_genome = get_object_or_404(ReferenceGenome, pk=pk)
 
-        #delete dir by default
+        # delete dir by default
         try_delete = ref_genome.delete()
 
         if not try_delete:
-            #the file could not be deleted, present the user with an error message.
-            return render_to_json({"status": " <strong>Error</strong> <p>Genome could not be deleted.</p> \
-                                          <p>Check the file permissions for the genome on the file system at: </p> \
-                                          <p><strong>" + str(ref_genome.reference_path) + "</p></strong> "})
+            # the file could not be deleted, present the user with an error message.
+            return render_to_json(
+                {
+                    "status": _("entity.ReferenceGenome.messages.delete.error").format(
+                        reference_path=str(ref_genome.reference_path)
+                    )
+                }
+            )  #  <strong>Error</strong> <p>Genome could not be deleted.</p><p>Check the file permissions for the genome on the file system at: </p><p><strong>{reference_path}</p></strong>
 
-        return render_to_json({"status": "Genome was deleted successfully"})
+        return render_to_json(
+            {"status": _("entity.ReferenceGenome.messages.delete.success")}
+        )  # "Genome was deleted successfully"
 
-    if request.method == "GET":
-        return render_to_json({"status": "This must be accessed via post"})
+    return render_to_json(
+        {
+            "status": i18n_errors.fatal_unsupported_http_method_expected(
+                request.method, "POST"
+            )
+        }
+    )
 
 
 def _change_genome_name(rg, new_name, old_full_name, new_full_name):
@@ -75,8 +101,8 @@ def _change_genome_name(rg, new_name, old_full_name, new_full_name):
     4) rewrite the reference_list.txt files, which is being done from the calling function
     """
 
-    if (new_name != rg.short_name):
-        #we also really need to check to see if the file exsits.
+    if new_name != rg.short_name:
+        # we also really need to check to see if the file exsits.
         old_files = glob.glob(rg.reference_path + "/" + rg.short_name + ".*")
 
         def rreplace(s, old, new, occurrence):
@@ -91,20 +117,20 @@ def _change_genome_name(rg, new_name, old_full_name, new_full_name):
 
     info = os.path.join(settings.TMAP_DIR, new_name, new_name + ".info.txt")
 
-    #this will rewrite the genome.info.text file
+    # this will rewrite the genome.info.text file
     for line in fileinput.input(info, inplace=1):
-        if line.split('\t')[0] == "genome_name":
-            print line.replace(old_full_name, new_full_name),
+        if line.split("\t")[0] == "genome_name":
+            print(line.replace(old_full_name.encode("utf-8"), new_full_name), end=" ")
         else:
-            print line,
+            print(line, end=" ")
 
 
 def _write_genome_info(info_path, _dict):
     """write genome info to file from dict
     """
     try:
-        genome_info = open(info_path, 'w')
-        for key, value in _dict.items():
+        genome_info = open(info_path, "w")
+        for key, value in list(_dict.items()):
             genome_info.write(str(key))
             genome_info.write("\t")
             genome_info.write(str(value))
@@ -123,14 +149,16 @@ def _read_genome_info(info_path):
     here we will find and return that as a string
     if False is returned the genome can be considered broken
     """
-    #build a dict with the values from the info.txt
+    # build a dict with the values from the info.txt
     genome_dict = {"genome_name": None, "genome_version": None, "index_version": None}
     try:
-        for line in csv.reader(open(info_path), dialect='excel-tab'):
+        for line in csv.reader(open(info_path), dialect="excel-tab"):
             if len(line) == 2:
                 genome_dict[line[0]] = line[1]
     except IOError as err:
-        logger.error("Could not read genome info file '{0}': {1}".format(info_path, err))
+        logger.error(
+            "Could not read genome info file '{0}': {1}".format(info_path, err)
+        )
         return None
 
     return genome_dict
@@ -163,23 +191,24 @@ def _verbose_error_trim(verbose_error):
     try:
         verbose_error = json.loads(verbose_error)
         verbose_error = verbose_error[1:-1]
-    except:
+    except Exception:
         return False
 
     if "validate_reference" in verbose_error[0]:
-        pretty = ["FASTA file failed validation. Please review the error below and modify the FASTA file to correct the problem."]
+        pretty = [
+            ugettext("entity.ReferenceGenome.messages.validation.fasta.invalid")
+        ]  # "FASTA file failed validation. Please review the error below and modify the FASTA file to correct the problem."
         try:
-            lines = verbose_error[0].split('\n\n')
+            lines = verbose_error[0].split("\n\n")
             pretty.append(lines[-2].split(": ")[1])
             pretty.append(lines[1])
             return pretty
-        except:
+        except Exception:
             return verbose_error
 
     return verbose_error
 
 
-@login_required
 def edit_genome(request, pk_or_name):
     """Make changes to an existing genome database reference,
     or create a new one if ``pk`` is zero."""
@@ -187,10 +216,15 @@ def edit_genome(request, pk_or_name):
         rg = ReferenceGenome.objects.get(pk=pk_or_name)
     except (ValueError, ReferenceGenome.DoesNotExist):
         rg = get_object_or_404(ReferenceGenome, short_name=pk_or_name)
+    confirm_delete_message = _(
+        "entity.ReferenceGenome.messages.delete.confirmmsg"
+    ).format(
+        name=rg.short_name
+    )  # 'Are you sure you want to delete {name}?  Once you delete this, it can not be recovered.'
 
     uploads = ContentUpload.objects.filter(publisher__name="BED")
     relevant = [u for u in uploads if u.meta.get("reference", "") == rg.short_name]
-    #TODO give an indication if it is a hotspot BED file
+    # TODO give an indication if it is a hotspot BED file
     bedFiles, processingBedFiles = [], []
     for upload in relevant:
         info = {"path": os.path.basename(upload.file_path), "pk": upload.pk}
@@ -199,42 +233,53 @@ def edit_genome(request, pk_or_name):
         else:
             info["status"] = upload.status
             processingBedFiles.append(info)
-    bedFiles.sort(key=lambda x: x['path'].lower())
-    processingBedFiles.sort(key=lambda x: x['path'].lower())
+    bedFiles.sort(key=lambda x: x["path"].lower())
+    processingBedFiles.sort(key=lambda x: x["path"].lower())
 
-    #Annotation Details Page
+    # Annotation Details Page
     refAnnotFiles, processingRefAnnotFiles = [], []
     try:
         uploadsAnnot = ContentUpload.objects.filter(publisher__name="refAnnot")
-    except:
+    except Exception:
         uploadsAnnot = None
     if uploadsAnnot:
-        relevantAnnot = [u for u in uploadsAnnot if u.meta.get("reference", "") == rg.short_name]
+        relevantAnnot = [
+            u for u in uploadsAnnot if u.meta.get("reference", "") == rg.short_name
+        ]
         for uploadAnnot in relevantAnnot:
-            annotInfo = {"path": os.path.basename(uploadAnnot.file_path), "pk": uploadAnnot.pk}
+            annotInfo = {
+                "path": os.path.basename(uploadAnnot.file_path),
+                "pk": uploadAnnot.pk,
+            }
             if uploadAnnot.status == "Successfully Completed":
                 refAnnotFiles.append(annotInfo)
             else:
                 annotInfo["status"] = uploadAnnot.status
                 processingRefAnnotFiles.append(annotInfo)
-        refAnnotFiles.sort(key=lambda x: x['path'].lower())
-        processingRefAnnotFiles.sort(key=lambda x: x['path'].lower())
+        refAnnotFiles.sort(key=lambda x: x["path"].lower())
+        processingRefAnnotFiles.sort(key=lambda x: x["path"].lower())
 
     if request.method == "POST":
         rfd = EditReferenceGenome(request.POST)
         if rfd.is_valid():
-            rg.notes = rfd.cleaned_data['notes']
-            rg.enabled = rfd.cleaned_data['enabled']
+            rg.notes = rfd.cleaned_data["notes"]
+            rg.enabled = rfd.cleaned_data["enabled"]
             rg.date = datetime.datetime.now()
 
-            if (rg.short_name != rfd.cleaned_data['name'] or rg.name != rfd.cleaned_data['NCBI_name']):
-                _change_genome_name(rg, rfd.cleaned_data['name'], rg.name, rfd.cleaned_data['NCBI_name'])
+            if (
+                rg.short_name != rfd.cleaned_data["name"]
+                or rg.name != rfd.cleaned_data["NCBI_name"]
+            ):
+                _change_genome_name(
+                    rg, rfd.cleaned_data["name"], rg.name, rfd.cleaned_data["NCBI_name"]
+                )
 
-            #make sure to only set the new name after the _change_genome_name call - it needs the old full name
-            rg.name = rfd.cleaned_data['NCBI_name']
-            rg.short_name = rfd.cleaned_data['name']
+            # make sure to only set the new name after the _change_genome_name call - it needs the old full name
+            rg.name = rfd.cleaned_data["NCBI_name"]
+            rg.short_name = rfd.cleaned_data["name"]
+            rg.version = rfd.cleaned_data["version"]
 
-            #Update the reference path
+            # Update the reference path
             if rg.enabled:
                 rg.enable_genome()
             else:
@@ -248,23 +293,35 @@ def edit_genome(request, pk_or_name):
             verbose_error = _verbose_error_trim(rg.verbose_error)
             genome_fasta, genome_size = _genome_get_fasta(rg.pk)
 
-            ctxd = {"temp": rfd, "name": rg.short_name, "reference": rg, "key": rg.pk, "enabled": rg.enabled,
-                    "genome_dict": genome_dict, "status": rg.status, "verbose_error": verbose_error,
-                    "genome_fasta": genome_fasta, "genome_size": genome_size,
-                    "bedFiles": bedFiles, "processingBedFiles": processingBedFiles,
-                    "index_version": rg.index_version
-                    }
+            ctxd = {
+                "temp": rfd,
+                "name": rg.short_name,
+                "reference": rg,
+                "key": rg.pk,
+                "enabled": rg.enabled,
+                "genome_dict": genome_dict,
+                "status": rg.status,
+                "verbose_error": verbose_error,
+                "genome_fasta": genome_fasta,
+                "genome_size": genome_size,
+                "bedFiles": bedFiles,
+                "processingBedFiles": processingBedFiles,
+                "index_version": rg.index_version,
+                "confirm_delete_message": confirm_delete_message,
+            }
             ctx = RequestContext(request, ctxd)
-            return render_to_response("rundb/configure/edit_reference.html",
-                                      context_instance=ctx)
+            return render_to_response(
+                "rundb/configure/edit_reference.html", context_instance=ctx
+            )
     elif request.method == "GET":
         temp = EditReferenceGenome()
-        temp.fields['NCBI_name'].initial = rg.name
-        temp.fields['name'].initial = rg.short_name
-        temp.fields['notes'].initial = rg.notes
-        temp.fields['enabled'].initial = rg.enabled
-        temp.fields['genome_key'].initial = rg.pk
-        temp.fields['index_version'].initial = rg.index_version
+        temp.fields["NCBI_name"].initial = rg.name
+        temp.fields["name"].initial = rg.short_name
+        temp.fields["notes"].initial = rg.notes
+        temp.fields["enabled"].initial = rg.enabled
+        temp.fields["genome_key"].initial = rg.pk
+        temp.fields["index_version"].initial = rg.index_version
+        temp.fields["version"].initial = rg.version
 
         genome_dict = _read_genome_info(rg.info_text()) or {}
         genome_fasta, genome_size = _genome_get_fasta(rg.pk)
@@ -272,31 +329,72 @@ def edit_genome(request, pk_or_name):
         verbose_error = _verbose_error_trim(rg.verbose_error)
         fastaOrig = rg.fastaOrig()
 
-        stale_index = rg.index_version != settings.TMAP_VERSION and rg.status != "Rebuilding index"
+        stale_index = (
+            rg.index_version != settings.TMAP_VERSION
+            and rg.status != "Rebuilding index"
+        )
 
-        ctxd = {"temp": temp, "name": rg.short_name, "reference": rg, "key": rg.pk, "enabled": rg.enabled,
-                "genome_dict": genome_dict, "status": rg.status, "verbose_error": verbose_error,
-                "genome_fasta": genome_fasta, "genome_size": genome_size,
-                "index_version": rg.index_version, "fastaOrig": fastaOrig,
-                "bedFiles": bedFiles, "processingBedFiles": processingBedFiles,
-                "stale_index": stale_index,
-                "refAnnotFiles": refAnnotFiles, "processingRefAnnotFiles": processingRefAnnotFiles,
-                }
+        ctxd = {
+            "temp": temp,
+            "name": rg.short_name,
+            "reference": rg,
+            "key": rg.pk,
+            "enabled": rg.enabled,
+            "genome_dict": genome_dict,
+            "status": rg.status,
+            "verbose_error": verbose_error,
+            "genome_fasta": genome_fasta,
+            "genome_size": genome_size,
+            "index_version": rg.index_version,
+            "fastaOrig": fastaOrig,
+            "bedFiles": bedFiles,
+            "processingBedFiles": processingBedFiles,
+            "refAnnotFiles": refAnnotFiles,
+            "processingRefAnnotFiles": processingRefAnnotFiles,
+            "confirm_delete_message": confirm_delete_message,
+        }
+        if stale_index:
+            stale_index_alert = _(
+                "entity.ReferenceGenome.messages.staleindex.1"
+            ).format(
+                name=rg.short_name
+            )  # 'Due to the upgrade of TMAP, the TMAP specific index files for {name} are stale, and need to be rebuilt by TMAP before this reference can be used for alignments.  This may take a few hours for larger genomes during which time use of the server is unadvisable.'
+            stale_index_alert2 = _(
+                "entity.ReferenceGenome.messages.staleindex.2"
+            ).format(
+                url=reverse("configure_references")
+            )  # 'We recommend you rebuild all indices as a group at the end of the work day. You will find controls to do this on the <a href="{url}">References</a>.'
+            stale_index_alert_action = _(
+                "entity.ReferenceGenome.messages.staleindex.action"
+            ).format(
+                name=rg.short_name
+            )  # 'Rebuild {name} Now'
+            stale_index_alert_action_success = _(
+                "entity.ReferenceGenome.messages.staleindex.action.success"
+            ).format(
+                name=rg.short_name
+            )  # 'Now Rebuilding {name}!'
+            ctxd["stale_index"] = {
+                "alert": stale_index_alert,
+                "alert2": stale_index_alert2,
+                "alert_action": stale_index_alert_action,
+                "alert_action_success": stale_index_alert_action_success,
+            }
         ctx = RequestContext(request, ctxd)
-        return render_to_response("rundb/configure/edit_reference.html",
-                                  context_instance=ctx)
+        return render_to_response(
+            "rundb/configure/edit_reference.html", context_instance=ctx
+        )
 
 
-@login_required
 def genome_status(request, reference_id):
     """Provide a way for the index creator to let us know when the index has been created"""
 
     if request.method == "POST":
         rg = get_object_or_404(ReferenceGenome, pk=reference_id)
-        status = request.POST.get('status', False)
-        enabled = request.POST.get('enabled', False)
-        verbose_error = request.POST.get('verbose_error', "")
-        index_version = request.POST.get('index_version', "")
+        status = request.POST.get("status", False)
+        enabled = request.POST.get("enabled", False)
+        verbose_error = request.POST.get("verbose_error", "")
+        index_version = request.POST.get("index_version", "")
 
         if not status:
             return render_to_json({"status": "error genome status not given"})
@@ -318,49 +416,63 @@ def search_for_genomes():
     """
     Searches for new genomes.  This will sync the file system and the genomes know by the database
     """
+
     def set_common(dest, genome_dict, ref_dir, lib):
         try:
             dest.name = genome_dict["genome_name"]
             dest.version = genome_dict["genome_version"]
             dest.index_version = genome_dict["index_version"]
-            dest.reference_path = os.path.join(ref_dir, dest.index_version, dest.short_name)
-        except:
+            dest.reference_path = os.path.join(
+                ref_dir, dest.index_version, dest.short_name
+            )
+        except Exception:
             dest.name = lib
             dest.status = "missing info.txt"
         return dest
 
-    ref_dir = '/results/referenceLibrary'
+    ref_dir = "/results/referenceLibrary"
 
     lib_versions = []
 
     for folder in os.listdir(ref_dir):
-        if os.path.isdir(os.path.join(ref_dir, folder)) and folder.lower().startswith("tmap"):
+        if os.path.isdir(os.path.join(ref_dir, folder)) and folder.lower().startswith(
+            "tmap"
+        ):
             lib_versions.append(folder)
     logger.debug("Reference genome scanner found %s" % ",".join(lib_versions))
     for lib_version in lib_versions:
         if os.path.exists(os.path.join(ref_dir, lib_version)):
             libs = os.listdir(os.path.join(ref_dir, lib_version))
             for lib in libs:
-                genome_info_text = os.path.join(ref_dir, lib_version, lib, lib + ".info.txt")
+                genome_info_text = os.path.join(
+                    ref_dir, lib_version, lib, lib + ".info.txt"
+                )
                 genome_dict = _read_genome_info(genome_info_text)
-                #TODO: we have to take into account the genomes that are queue for creation of in creation
+                # TODO: we have to take into account the genomes that are queue for creation of in creation
+                if not genome_dict:
+                    continue
 
-                if genome_dict:
-                    #here we trust that the path the genome is in, is also the short name
+                try:
+                    # here we trust that the path the genome is in, is also the short name
                     existing_reference = ReferenceGenome.objects.filter(
-                        short_name=lib).order_by("-index_version")[:1]
+                        short_name=lib
+                    ).order_by("-index_version")[:1]
                     if existing_reference:
                         rg = existing_reference[0]
                         if rg.index_version != genome_dict["index_version"]:
-                            logger.debug("Updating genome status to 'found' for %s id=%d index=%s" % (
-                            str(rg), rg.id, rg.index_version))
+                            logger.debug(
+                                "Updating genome status to 'found' for %s id=%d index=%s"
+                                % (str(rg), rg.id, rg.index_version)
+                            )
                             rg.status = "complete"
                             rg = set_common(rg, genome_dict, ref_dir, lib)
                             rg.save()
                     else:
-                        logger.info("Found new genome %s index=%s" % (
-                            lib, genome_dict["genome_version"]))
-                        #the reference was not found, add it to the db
+                        logger.info(
+                            "Found new genome %s index=%s"
+                            % (lib, genome_dict["genome_version"])
+                        )
+                        # the reference was not found, add it to the db
                         rg = ReferenceGenome()
                         rg.short_name = lib
                         rg.date = datetime.datetime.now()
@@ -374,22 +486,25 @@ def search_for_genomes():
                         rg = set_common(rg, genome_dict, ref_dir, lib)
 
                         rg.save()
-                        logger.info("Created new reference genome %s id=%d" % (
-                            str(rg), rg.id))
+                        logger.info(
+                            "Created new reference genome %s id=%d" % (str(rg), rg.id)
+                        )
+                except Exception:
+                    logger.error("Unable to update database from %s" % genome_info_text)
+                    logger.error(traceback.format_exc())
 
 
-@login_required
 def add_custom_genome(request):
-    ''' Import custom genome via file upload or URL '''
+    """ Import custom genome via file upload or URL """
     if request.method == "POST":
         url = request.POST.get("reference_url", None)
-        target_file = request.POST.get('target_file', False)
+        target_file = request.POST.get("target_file", False)
         reference_args = {
             "short_name": request.POST.get("short_name"),
-            "name": request.POST.get("name"),
-            "version": request.POST.get("version", ""),
-            "notes": request.POST.get("notes", ""),
-            "index_version": ""
+            "name": request.POST.get("name").encode("utf-8"),
+            "version": request.POST.get("version", "").encode("utf-8"),
+            "notes": request.POST.get("notes", "").encode("utf-8"),
+            "index_version": "",
         }
 
         if target_file:
@@ -399,13 +514,15 @@ def add_custom_genome(request):
 
             # check expected file size
             failed = False
-            reported_file_size = request.POST.get('reported_file_size', False)
+            reported_file_size = request.POST.get("reported_file_size", False)
             try:
                 uploaded_file_size = str(os.path.getsize(reference_path))
                 if reported_file_size and (reported_file_size != uploaded_file_size):
-                    failed = "Upload error: uploaded file size is incorrect"
+                    failed = _(
+                        "add_custom_genome.messages.reported_file_size.invalid"
+                    )  # "Upload error: uploaded file size is incorrect"
             except OSError:
-                failed = "Upload error: temporary file not found"
+                failed = validation.invalid_not_found_error(reference_path)
 
             try:
                 new_reference_genome(reference_args, None, target_file)
@@ -416,7 +533,9 @@ def add_custom_genome(request):
                 try:
                     os.remove(reference_path)
                 except OSError:
-                    failed += " The FASTA file could not be deleted."
+                    failed += " " + ugettext(
+                        "add_custom_genome.messages.reference_path.unabletodelete"
+                    )  # " The FASTA file could not be deleted."s
 
                 logger.error("Failed uploading genome file: " + failed)
                 return render_to_json({"status": failed, "error": True})
@@ -430,13 +549,17 @@ def add_custom_genome(request):
             except Exception as e:
                 return render_to_json({"status": str(e), "error": True})
             else:
-                return HttpResponseRedirect(urlresolvers.reverse("configure_references"))
+                return HttpResponseRedirect(
+                    urlresolvers.reverse("configure_references")
+                )
 
     elif request.method == "GET":
-        return render_to_response("rundb/configure/modal_references_new_genome.html", context_instance=RequestContext(request, {}))
+        return render_to_response(
+            "rundb/configure/modal_references_new_genome.html",
+            context_instance=RequestContext(request, {}),
+        )
 
 
-@login_required
 def start_index_rebuild(request, reference_id):
     def rebuild_index(reference):
         """Add a job to rebuild the reference index for reference to the SGE queue
@@ -446,40 +569,57 @@ def start_index_rebuild(request, reference_id):
         result = tasks.build_tmap_index.delay(reference.id)
         reference.celery_task_id = result.task_id
         reference.save()
+
     data = {"references": []}
     if reference_id == "all":
-        references = ReferenceGenome.objects.exclude(index_version=settings.TMAP_VERSION)
-        logger.info("Rebuilding TMAP reference indices for %s" %
-                    ", ".join(r.short_name for r in references))
+        references = ReferenceGenome.objects.exclude(
+            index_version=settings.TMAP_VERSION
+        )
+        logger.info(
+            "Rebuilding TMAP reference indices for %s"
+            % ", ".join(r.short_name for r in references)
+        )
         for reference in references:
             rebuild_index(reference)
-            data["references"].append({"id": reference.pk,
-                                       "short_name": reference.short_name})
+            data["references"].append(
+                {"id": reference.pk, "short_name": reference.short_name}
+            )
     else:
         reference = ReferenceGenome.objects.get(pk=reference_id)
         rebuild_index(reference)
-        data["references"].append({"id": reference.pk,
-                                   "short_name": reference.short_name})
+        data["references"].append(
+            {"id": reference.pk, "short_name": reference.short_name}
+        )
     return HttpResponse(json.dumps(data), mimetype="application/json")
 
 
 def get_references():
     h = httplib2.Http()
     response, content = h.request(settings.REFERENCE_LIST_URL)
-    if response['status'] == '200':
+    if response["status"] == "200":
         references = json.loads(content)
-        id_hashes = [r['meta']['identity_hash'] for r in references if r['meta']['identity_hash']]
-        installed = dict((r.identity_hash, r) for r in ReferenceGenome.objects.filter(identity_hash__in=id_hashes))
+        id_hashes = [
+            r["meta"]["identity_hash"] for r in references if r["meta"]["identity_hash"]
+        ]
+        installed = dict(
+            (r.identity_hash, r)
+            for r in ReferenceGenome.objects.filter(identity_hash__in=id_hashes)
+        )
         for ref in references:
             ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
-            ref["notes"] = ref["meta"].get("notes", '')
-            ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
+            ref["notes"] = ref["meta"].get("notes", "")
+            ref["installed"] = installed.get(ref["meta"]["identity_hash"], None)
             if not ref["installed"]:
-                preInstalled = ReferenceGenome.objects.filter(short_name=ref["meta"]['short_name'],
-                                               index_version=settings.TMAP_VERSION, enabled=True)
+                preInstalled = ReferenceGenome.objects.filter(
+                    short_name=ref["meta"]["short_name"],
+                    index_version=settings.TMAP_VERSION,
+                    enabled=True,
+                )
                 if preInstalled:
                     ref["preInstalled"] = preInstalled[0]
-            ref["annotation_encoded"] = base64.b64encode(json.dumps(ref.get("annotation", "")))
+            ref["annotation_encoded"] = base64.b64encode(
+                json.dumps(ref.get("annotation", ""))
+            )
             ref["reference_mask_encoded"] = ref.get("reference_mask", None)
             ref["bedfiles"] = ref.get("bedfiles", [])
             ref["bedfiles_encoded"] = base64.b64encode(json.dumps(ref["bedfiles"]))
@@ -494,25 +634,29 @@ def download_genome_annotation(annotation_lists, reference_args, username):
         remoteAnnotUpdateVersion = item.get("updateVersion", None)
 
         if remoteAnnotUrl:
-            tasks.new_annotation_download.delay(remoteAnnotUrl, remoteAnnotUpdateVersion, username, **reference_args)
+            tasks.new_annotation_download.delay(
+                remoteAnnotUrl, remoteAnnotUpdateVersion, username, **reference_args
+            )
 
 
 def get_bedfile_status(bedfile, reference):
     # Checks the status of BED file available for Pre-loaded references
-    url = bedfile['source']
+    url = bedfile["source"]
 
     # check if file already installed
-    bedfile_path = '/%s/unmerged/detail/%s' % (reference, os.path.basename(url))
+    bedfile_path = "/%s/unmerged/detail/%s" % (reference, os.path.basename(url))
     found = Content.objects.filter(publisher__name="BED", path=bedfile_path)
     if found:
         return "_installed"
 
     # check if download is in progress
-    monitor = FileMonitor.objects.filter(tags="bedfile", url=url).order_by('-pk')
+    monitor = FileMonitor.objects.filter(tags="bedfile", url=url).order_by("-pk")
     if monitor:
         if monitor[0].status == "Complete":
             # check if installation is in progress
-            upload = ContentUpload.objects.filter(publisher__name='BED', file_path__contains=os.path.basename(url)).order_by('-pk')
+            upload = ContentUpload.objects.filter(
+                publisher__name="BED", file_path__contains=os.path.basename(url)
+            ).order_by("-pk")
             if upload:
                 return upload[0].status
 
@@ -523,20 +667,22 @@ def get_bedfile_status(bedfile, reference):
 
 def get_annotationfile_status(annotationfile, reference):
     # Checks the status of Annotation file available for Pre-loaded references
-    url = annotationfile['url']
+    url = annotationfile["url"]
 
     # check if file already installed
-    annotfile_path = '/%s/%s' % (reference, os.path.basename(url))
+    annotfile_path = "/%s/%s" % (reference, os.path.basename(url))
     found = Content.objects.filter(publisher__name="refAnnot", path=annotfile_path)
     if found:
         return "_installed"
 
     # check if download is in progress
-    monitor = FileMonitor.objects.filter(tags="annotation", url=url).order_by('-pk')
+    monitor = FileMonitor.objects.filter(tags="annotation", url=url).order_by("-pk")
     if monitor:
         if monitor[0].status == "Complete":
             # check if installation is in progress
-            upload = ContentUpload.objects.filter(publisher__name='refAnnot', file_path__contains=os.path.basename(url)).order_by('-pk')
+            upload = ContentUpload.objects.filter(
+                publisher__name="refAnnot", file_path__contains=os.path.basename(url)
+            ).order_by("-pk")
             if upload:
                 return upload[0].status
 
@@ -545,7 +691,6 @@ def get_annotationfile_status(annotationfile, reference):
     return ""
 
 
-@login_required
 def download_genome(request):
     # called by "Import Preloaded Ion References"
     if request.method == "POST":
@@ -557,7 +702,9 @@ def download_genome(request):
         logger.debug("Downloading {0} with meta {1}".format(url, reference_meta))
         if url is not None:
             try:
-                new_reference_genome(reference_args, url, reference_mask_filename=reference_mask_info)
+                new_reference_genome(
+                    reference_args, url, reference_mask_filename=reference_mask_info
+                )
             except Exception as e:
                 return render_to_json({"status": str(e), "error": True})
 
@@ -565,44 +712,62 @@ def download_genome(request):
 
     elif request.method == "GET":
         references = get_references() or []
-        downloads = FileMonitor.objects.filter(tags__in=["reference","bedfile","annotation"]).order_by('-created')
+        downloads = FileMonitor.objects.filter(
+            tags__in=["reference", "bedfile", "annotation"]
+        ).order_by("-created")
 
         # update BED files available for pre-loaded references
         for ref in references:
-            if ref['installed'] or ref.get('preInstalled'):
+            if ref["installed"] or ref.get("preInstalled"):
                 bedfiles = []
-                for bedfile in ref.get('bedfiles',[]):
-                    status = get_bedfile_status(bedfile, ref['meta']['short_name'])
+                for bedfile in ref.get("bedfiles", []):
+                    status = get_bedfile_status(bedfile, ref["meta"]["short_name"])
                     if status != "_installed":
-                        bedfile['status'] = status
+                        bedfile["status"] = status
                         bedfiles.append(bedfile)
 
-                ref['bedfiles'] = bedfiles
+                ref["bedfiles"] = bedfiles
 
                 annotationfiles = []
-                #if ref['meta']['short_name'] is "hg19":
-                #import pdb;pdb.set_trace()
-                for annotationfile in ref.get('annotation', []):
-                    status = get_annotationfile_status(annotationfile, ref['meta']['short_name'])
+                # if ref['meta']['short_name'] is "hg19":
+                # import pdb;pdb.set_trace()
+                for annotationfile in ref.get("annotation", []):
+                    status = get_annotationfile_status(
+                        annotationfile, ref["meta"]["short_name"]
+                    )
                     if status != "_installed":
-                        annotationfile['status'] = status
+                        annotationfile["status"] = status
                         annotationfiles.append(annotationfile)
 
-                ref['annotationfiles'] = annotationfiles
+                ref["annotationfiles"] = annotationfiles
 
         # set up page to refresh
-        _in_progress_status = ["Queued", "Starting", "Downloading", "Preprocessing", "Indexing"]
+        _in_progress_status = [
+            "Queued",
+            "Starting",
+            "Downloading",
+            "Preprocessing",
+            "Indexing",
+        ]
         _in_progress_status += [s.lower() for s in _in_progress_status]
         downloading = downloads.filter(status__in=_in_progress_status)
-        id_hashes = [r['meta']['identity_hash'] for r in references if r['meta']['identity_hash']]
-        processing = ReferenceGenome.objects.filter(identity_hash__in=id_hashes, status__in=_in_progress_status)
+        id_hashes = [
+            r["meta"]["identity_hash"] for r in references if r["meta"]["identity_hash"]
+        ]
+        processing = ReferenceGenome.objects.filter(
+            identity_hash__in=id_hashes, status__in=_in_progress_status
+        )
 
         ctx = {
-            'downloads': downloads,
-            'references': references,
-            'refresh_progress': downloading.count() > 0 or processing.count() > 0
+            "downloads": downloads,
+            "references": references,
+            "refresh_progress": downloading.count() > 0 or processing.count() > 0,
         }
-        return render_to_response("rundb/configure/reference_download.html", ctx, context_instance=RequestContext(request))
+        return render_to_response(
+            "rundb/configure/reference_download.html",
+            ctx,
+            context_instance=RequestContext(request),
+        )
 
 
 def validate_annotation_url(remoteAnnotUrl):
@@ -611,31 +776,39 @@ def validate_annotation_url(remoteAnnotUrl):
     try:
         req = urllib2.urlopen(remoteAnnotUrl)
         url = req.geturl()
-    except urllib2.HTTPError, err:
+    except urllib2.HTTPError as err:
         isValid = False
         if err.code == 404:
-            logger.debug("HTTP Error: {0}. Please contact TS administrator  {1}".format(err, remoteAnnotUrl))
-            ctx['msg'] = "HTTP Error: {0}. Please contact TS administrator.".format(err.msg)
+            logger.debug(
+                "HTTP Error: {0}. Please contact TS administrator  {1}".format(
+                    err, remoteAnnotUrl
+                )
+            )
+            ctx["msg"] = "HTTP Error: {0}. Please contact TS administrator.".format(
+                err.msg
+            )
         else:
             logger.debug("Error in validate_annotation_url({0})".format(err))
-            ctx['msg'] = err
-    except urllib2.URLError, err:
+            ctx["msg"] = err
+    except urllib2.URLError as err:
         logger.debug("Connection Error in validate_annotation_url: ({0})".format(err))
         isValid = False
-        ctx['msg'] = "Connection Error. Please contact TS administrator.".format(err.reason)
+        ctx["msg"] = "Connection Error. Please contact TS administrator.".format(
+            err.reason
+        )
 
-    ctx['isValid'] = isValid
+    ctx["isValid"] = isValid
     return ctx
 
 
 def get_annotation(references, downloads_annot):
     for ref in references:
-        annotation_meta = ref.get('annotation_encoded', None)
+        annotation_meta = ref.get("annotation_encoded", None)
         annotation_data = json.loads(base64.b64decode(annotation_meta))
         missingAnnotation = []
 
         if not annotation_data:
-            ref["refAnnotNotAvailable"] = 'N/A'
+            ref["refAnnotNotAvailable"] = "N/A"
         else:
             for item in annotation_data:
                 remoteAnnotUrl = item.get("url", None)
@@ -645,81 +818,132 @@ def get_annotation(references, downloads_annot):
                     for download in downloads_annot:
                         isValid = True
                         isValidNetwork = True
-                        if (download.url == remoteAnnotUrl):
+                        if download.url == remoteAnnotUrl:
                             ctx = validate_annotation_url(remoteAnnotUrl)
-                            isValidNetwork = ctx['isValid']
+                            isValidNetwork = ctx["isValid"]
                         try:
                             fm_pk = FileMonitor.objects.get(pk=download.id)
                         except Exception as Err:
-                            logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                            logger.debug(
+                                "get_annotation() Error: {0} {1}".format(
+                                    remoteAnnotUrl, str(download.status)
+                                )
+                            )
                             logger.debug(Err)
                         if isValidNetwork:
                             tagsInfo = download.tags
                             try:
-                                updateVersion = tagsInfo.split("reference_annotation_")[1]
-                            except:
-                                logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                                updateVersion = tagsInfo.split("reference_annotation_")[
+                                    1
+                                ]
+                            except Exception:
+                                logger.debug(
+                                    "get_annotation() Error: {0} {1}".format(
+                                        remoteAnnotUrl, str(download.status)
+                                    )
+                                )
                                 updateVersion = None
                             download.updateVersion = updateVersion
                             filemonitor_status = fm_pk.status
                             filemonitor_status = filemonitor_status.lower()
-                            if (filemonitor_status == 'downloading'):
+                            if filemonitor_status == "downloading":
                                 newAnnotFlag = False
                             # Check if there is any newer version of annotation file has been posted
-                            if ((fm_pk.url == remoteAnnotUrl)  and (float(updateVersion) >= float(remoteAnnotUpdateVersion))):
+                            if (fm_pk.url == remoteAnnotUrl) and (
+                                float(updateVersion) >= float(remoteAnnotUpdateVersion)
+                            ):
                                 newAnnotFlag = False
                                 if fm_pk.status == "Complete":
-                                    ref['isAnnotCompleted'] = "complete"
+                                    ref["isAnnotCompleted"] = "complete"
                                 else:
                                     isValid = True
-                                    if 'Error' in str(download.status) or 'Error' in str(fm_pk.status):
-                                        logger.debug("Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
+                                    if "Error" in str(
+                                        download.status
+                                    ) or "Error" in str(fm_pk.status):
+                                        logger.debug(
+                                            "Error: {0} {1}".format(
+                                                remoteAnnotUrl, str(download.status)
+                                            )
+                                        )
                                         isValid = False
-                                        ctx['msg'] = fm_pk.status
-                                    if (filemonitor_status not in ["starting", "downloading", "download failed"]):
-                                        logger.debug("get_annotation() Error: Status is not in the expected state: {0}".format(fm_pk.status))
-                                        if ((not download.status) and (not fm_pk.status)):
+                                        ctx["msg"] = fm_pk.status
+                                    if filemonitor_status not in [
+                                        "starting",
+                                        "downloading",
+                                        "download failed",
+                                    ]:
+                                        logger.debug(
+                                            "get_annotation() Error: Status is not in the expected state: {0}".format(
+                                                fm_pk.status
+                                            )
+                                        )
+                                        if (not download.status) and (not fm_pk.status):
                                             # Query FileMonitor and Get the status if there was any lag in the network/celery task
-                                            fm_pk = FileMonitor.objects.get(pk=download.id)
+                                            fm_pk = FileMonitor.objects.get(
+                                                pk=download.id
+                                            )
                                             status = str(fm_pk.status)
-                                            if (not fm_pk.status):
+                                            if not fm_pk.status:
                                                 isValid = False
                                                 download.status = "Connection error. Please contact Torrent Suite Administrator"
-                                                ctx['msg'] = fm_pk.status
+                                                ctx["msg"] = fm_pk.status
                                             else:
-                                                status = status.replace("Complete", "complete")
-                                            ref['isAnnotCompleted'] = status
+                                                status = status.replace(
+                                                    "Complete", "complete"
+                                                )
+                                            ref["isAnnotCompleted"] = status
                                         else:
-                                            ref['isAnnotCompleted'] = str(fm_pk.status)
+                                            ref["isAnnotCompleted"] = str(fm_pk.status)
                                     else:
-                                        ref['isAnnotCompleted'] = str(fm_pk.status)
+                                        ref["isAnnotCompleted"] = str(fm_pk.status)
                         if not isValidNetwork or not isValid:
                             newAnnotFlag = False
-                            ref['noLink'] = "True"
-                            ref['noLinkMsg'] = ctx['msg']
-                            ref['errURL'] = download.url
+                            ref["noLink"] = "True"
+                            ref["noLinkMsg"] = ctx["msg"]
+                            ref["errURL"] = download.url
                             try:
                                 if fm_pk:
                                     fm_pk.delete()
                             except Exception as err:
-                                logger.debug("get_annotation() Error: {0} {1}".format(remoteAnnotUrl, str(download.status)))
-                            ref['isAnnotCompleted'] = str(fm_pk.status)
+                                logger.debug(
+                                    "get_annotation() Error: {0} {1}".format(
+                                        remoteAnnotUrl, str(download.status)
+                                    )
+                                )
+                            ref["isAnnotCompleted"] = str(fm_pk.status)
 
                     if newAnnotFlag:
                         missingAnnotation.append(item)
-                        ref['isNewAnnotPosted'] = remoteAnnotUrl
-                        ref['isAnnotCompleted'] = None
+                        ref["isNewAnnotPosted"] = remoteAnnotUrl
+                        ref["isAnnotCompleted"] = None
 
         ref["missingAnnotation_meta"] = base64.b64encode(json.dumps(missingAnnotation))
-        ref["missingAnnotation_data"] = json.loads(base64.b64decode(ref["missingAnnotation_meta"]))
+        ref["missingAnnotation_data"] = json.loads(
+            base64.b64decode(ref["missingAnnotation_meta"])
+        )
 
     return (references, downloads_annot)
 
 
-def new_reference_genome(reference_args, url=None, reference_file=None, callback_task=None, reference_mask_filename=None):
+def new_reference_genome(
+    reference_args,
+    url=None,
+    reference_file=None,
+    callback_task=None,
+    reference_mask_filename=None,
+):
     # check if the genome already exists
-    if ReferenceGenome.objects.filter(short_name=reference_args['short_name'], index_version=settings.TMAP_VERSION):
-        raise Exception("Failed - Genome %s already exists" % reference_args['short_name'])
+    if ReferenceGenome.objects.filter(
+        short_name=reference_args["short_name"], index_version=settings.TMAP_VERSION
+    ):
+        raise Exception(
+            validation.invalid_entity_field_unique(
+                labels.ReferenceGenome.verbose_name,
+                _("add_custom_genome.fields.short_name.verbose_name")
+                + " "
+                + reference_args["short_name"],
+            )
+        )
 
     reference = ReferenceGenome(**reference_args)
     reference.enabled = False
@@ -727,18 +951,29 @@ def new_reference_genome(reference_args, url=None, reference_file=None, callback
     reference.save()
 
     if url:
-        async_result = start_reference_download(url, reference, callback_task, reference_mask_filename=reference_mask_filename)
+        async_result = start_reference_download(
+            url,
+            reference,
+            callback_task,
+            reference_mask_filename=reference_mask_filename,
+        )
     elif reference_file:
-        async_result = tasks.install_reference.apply_async(((reference_file, None), reference.id), link=callback_task)
+        async_result = tasks.install_reference.apply_async(
+            ((reference_file, None), reference.id), link=callback_task
+        )
     else:
-        raise Exception('Failed creating new genome reference: No source file')
+        raise Exception(
+            _("add_custom_genome.messages.nosourcefile")
+        )  # 'Failed creating new genome reference: No source file'
 
     reference.celery_task_id = async_result.task_id
     reference.save()
     return reference
 
 
-def start_reference_download(url, reference, callback=None, reference_mask_filename=None):
+def start_reference_download(
+    url, reference, callback=None, reference_mask_filename=None
+):
     monitor = FileMonitor(url=url, tags="reference")
     monitor.save()
     reference.status = "downloading"
@@ -746,43 +981,59 @@ def start_reference_download(url, reference, callback=None, reference_mask_filen
     reference.save()
     try:
         download_args = (url, monitor.id, settings.TEMP_PATH)
-        install_callback = tasks.install_reference.subtask((reference.id, reference_mask_filename))
+        install_callback = tasks.install_reference.subtask(
+            (reference.id, reference_mask_filename)
+        )
         if callback:
             install_callback.link(callback)
-        async_result = tasks.download_something.apply_async(download_args, link=install_callback)
+        async_result = tasks.download_something.apply_async(
+            download_args, link=install_callback
+        )
         return async_result
     except Exception as err:
         monitor.status = "System Error: " + str(err)
         monitor.save()
 
+
 def start_install_bedfiles(request):
     from iondb.rundb.tasks import install_BED_files
 
-    bedfiles = request.POST.getlist('bedfiles',[])
-    bedfiles_meta = json.loads(base64.b64decode(request.POST.get('bedfiles_meta','')))
+    bedfiles = request.POST.getlist("bedfiles", [])
+    bedfiles_meta = json.loads(base64.b64decode(request.POST.get("bedfiles_meta", "")))
 
-    bedfileList = [bed for bed in bedfiles_meta if os.path.basename(bed['source']) in bedfiles]
+    bedfileList = [
+        bed for bed in bedfiles_meta if os.path.basename(bed["source"]) in bedfiles
+    ]
     try:
         install_BED_files.delay(bedfileList, request.user.username)
     except Exception as e:
         logger.error(traceback.format_exc())
-        return HttpResponseServerError('Error: ' + str(e))
+        return HttpResponseServerError("Error: " + str(e))
 
-    return HttpResponsePermanentRedirect(urlresolvers.reverse("references_genome_download"))
+    return HttpResponsePermanentRedirect(
+        urlresolvers.reverse("references_genome_download")
+    )
+
 
 def start_install_annotationfiles(request):
     from iondb.rundb.tasks import install_refAnnot_files
 
-    annotationfiles = request.POST.getlist('annotationfiles',[])
-    annotfiles_meta = json.loads(base64.b64decode(request.POST.get('annotationfiles_meta','')))
+    annotationfiles = request.POST.getlist("annotationfiles", [])
+    annotfiles_meta = json.loads(
+        base64.b64decode(request.POST.get("annotationfiles_meta", ""))
+    )
 
-    annotfileList = [annotFile for annotFile in annotfiles_meta if os.path.basename(annotFile['url']) in annotationfiles]
+    annotfileList = [
+        annotFile
+        for annotFile in annotfiles_meta
+        if os.path.basename(annotFile["url"]) in annotationfiles
+    ]
     try:
         install_refAnnot_files.delay(annotfileList, request.user.username)
     except Exception as e:
         logger.error(traceback.format_exc())
-        return HttpResponseServerError('Error: ' + str(e))
+        return HttpResponseServerError("Error: " + str(e))
 
-    return HttpResponsePermanentRedirect(urlresolvers.reverse("references_genome_download"))
-
-
+    return HttpResponsePermanentRedirect(
+        urlresolvers.reverse("references_genome_download")
+    )

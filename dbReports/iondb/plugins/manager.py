@@ -5,24 +5,21 @@
 from __future__ import absolute_import
 from django.conf import settings
 import os
-import shutil
 import re
 import json
-import celery.exceptions
+import apt
 import iondb.rundb.models
 from distutils.version import LooseVersion
-import iondb.rundb.tasks  ## circular import
 from iondb.utils.utils import getPackageName
 import iondb.plugins.tasks
-import json
 import datetime
 import logging
-import xmlrpclib
 import subprocess
-from iondb.utils.utils import getPackageName
+
 logger = logging.getLogger(__name__)
 
 LEGACY_PLUGIN_SCRIPT = "launch.sh"
+
 
 class PluginManager(object):
     """Class for managing plugin installation and versioning activities.
@@ -46,13 +43,19 @@ class PluginManager(object):
     def __init__(self, gc=None):
         self.default_plugin_script = LEGACY_PLUGIN_SCRIPT
         self.pluginroot = os.path.normpath(settings.PLUGIN_PATH or "/results/plugins/")
+        self.apt_cache = None
 
     def rescan(self, plugins=[]):
         """ Convenience function to purge missing and find new plugins. Logs info message"""
         removed = self.inactivate_missing(plugins)
         installed = self.search_for_plugins([plugin.name for plugin in plugins])
         if removed or installed:
-            logger.info("Rescan Plugins '%s': %d installed/updated and %d removed", self.pluginroot, installed, removed)
+            logger.info(
+                "Rescan Plugins '%s': %d installed/updated and %d removed",
+                self.pluginroot,
+                installed,
+                removed,
+            )
         return
 
     def inactivate_missing(self, plugins=None):
@@ -71,7 +74,7 @@ class PluginManager(object):
         scanned = 0
         for plugin in plugins:
             # if specified folder does not exist
-            if plugin.path == '' or not os.path.isdir(plugin.path):
+            if plugin.path == "" or not os.path.isdir(plugin.path):
                 if plugin.active:
                     plugin.active = False
                     plugin.save()
@@ -94,7 +97,7 @@ class PluginManager(object):
         # Legacy Launch Script
         launchsh = os.path.join(pluginpath, self.default_plugin_script)
         # [3.0] Plugin Python class
-        plugindef = os.path.join(pluginpath, pluginname + '.py')
+        plugindef = os.path.join(pluginpath, pluginname + ".py")
 
         # NOTE launch.sh is preferred and will be used FIRST if both exist.
         # This may change in later releases, once python class matures.
@@ -105,11 +108,15 @@ class PluginManager(object):
             pluginscript = plugindef
             islaunch = False
         else:
-            logger.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
+            logger.error(
+                "Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef
+            )
         return (pluginscript, islaunch)
 
     @staticmethod
-    def get_plugininfo(pluginname, pluginscript, existing_pk, context=None, use_cache=False):
+    def get_plugininfo(
+        pluginname, pluginscript, existing_pk, context=None, use_cache=False
+    ):
         """
         :parameter pluginname: The simple name of the plugin
         :parameter pluginscript: The path to the script
@@ -118,12 +125,16 @@ class PluginManager(object):
         :parameter  use_cache: An optional flag to use the context instead of re-probing the file system
         Query plugin script for a block of json info.
         """
-        if use_cache and context and 'plugin' in context:
+        if use_cache and context and "plugin" in context:
             # Return current content immediately without waiting
-            logger.debug("Using cached plugindata: %s %s", pluginname, context['plugin'].version)
-            return context['plugin'].info()
+            logger.debug(
+                "Using cached plugindata: %s %s", pluginname, context["plugin"].version
+            )
+            return context["plugin"].info()
 
-        return iondb.plugins.tasks.scan_plugin(pluginname, pluginscript, existing_pk, False)
+        return iondb.plugins.tasks.scan_plugin(
+            pluginname, pluginscript, existing_pk, False
+        )
 
     def get_plugininfo_list(self, updatelist):
         info = {}
@@ -132,7 +143,7 @@ class PluginManager(object):
 
         return info
 
-    def set_pluginconfig(self, plugin, configfile='pluginconfig.json'):
+    def set_pluginconfig(self, plugin, configfile="pluginconfig.json"):
         """ if there is data in pluginconfig json
             set the plugin.config value in the database """
         # FIXME - move to plugin model?
@@ -148,7 +159,7 @@ class PluginManager(object):
                 logger.info("Setting/Refreshing pluginconfig: '%s'", pluginconfigfile)
                 plugin.config = config
                 return True
-        except:
+        except Exception:
             logger.exception("Failed to load pluginconfig from '%s'", pluginconfigfile)
 
         # Invalid, or Unchanged
@@ -162,7 +173,9 @@ class PluginManager(object):
         # Basedir - typically '/results/plugins', passed in args
         if not os.path.exists(basedir):
             return None
-        plugin_directories = plugin_name_list if plugin_name_list else os.listdir(basedir)
+        plugin_directories = (
+            plugin_name_list if plugin_name_list else os.listdir(basedir)
+        )
 
         # reset permissions assuming for all of the non supported plugins
         for i in plugin_directories:
@@ -170,8 +183,14 @@ class PluginManager(object):
                 continue
             if not getPackageName(os.path.join(basedir, i)):
                 try:
-                    subprocess.check_call(['sudo', '/opt/ion/iondb/bin/ion_plugin_migrate_permissions.py', i])
-                except:
+                    subprocess.check_call(
+                        [
+                            "sudo",
+                            "/opt/ion/iondb/bin/ion_plugin_migrate_permissions.py",
+                            i,
+                        ]
+                    )
+                except Exception:
                     logger.exception("Failed to change permissions")
 
         logger.debug("Scanning %s for plugin folders", basedir)
@@ -186,7 +205,12 @@ class PluginManager(object):
                 continue
             (plugin_script, islaunch) = self.find_pluginscript(full_path, i)
             if not plugin_script or not os.path.exists(plugin_script):
-                logger.info("Non-plugin in plugin folder '%s': '%s', '%s'", basedir, i, plugin_script)
+                logger.info(
+                    "Non-plugin in plugin folder '%s': '%s', '%s'",
+                    basedir,
+                    i,
+                    plugin_script,
+                )
                 continue
             # Candidate Plugin Found
             folder_list.append((i, full_path, plugin_script))
@@ -197,7 +221,9 @@ class PluginManager(object):
         try:
             infocache = iondb.plugins.tasks.scan_all_plugins(pluginlist)
         except Exception as exc:
-            logger.exception("Failed to rescan plugin info in background task" + str(exc))
+            logger.exception(
+                "Failed to rescan plugin info in background task" + str(exc)
+            )
 
         count = 0
         for pname, full_path, plugin_script in folder_list:
@@ -208,7 +234,7 @@ class PluginManager(object):
                 logger.error("Missing info for %s", plugin_script)
                 continue
 
-            if 'version' not in info:
+            if "version" not in info:
                 logger.error("Missing VERSION info for %s", plugin_script)
                 # Cannot install versionless plugin
                 continue
@@ -219,9 +245,14 @@ class PluginManager(object):
 
             # For now, install handles "reinstall" or "refresh" cases.
             try:
-                (newplugin, updated) = self.install(pname, full_path, plugin_script, info)
+                (newplugin, updated) = self.install(
+                    pname, full_path, plugin_script, info
+                )
             except ValueError:
-                logger.exception("Plugin not installable due to error querying name and version '%s'", full_path)
+                logger.exception(
+                    "Plugin not installable due to error querying name and version '%s'",
+                    full_path,
+                )
             if updated:
                 count += 1
 
@@ -244,8 +275,10 @@ class PluginManager(object):
             logger.error("Path specified for install does not exist '%s'", full_path)
 
         # Check Plugin Blacklist:
-        if pname in ('scratch', 'implementations'):
-            logger.error("Scratch and Implementations are reserved folders, and cannot be installed.")
+        if pname in ("scratch", "implementations"):
+            logger.error(
+                "Scratch and Implementations are reserved folders, and cannot be installed."
+            )
             return None, False
 
         if not launch_script:
@@ -255,42 +288,55 @@ class PluginManager(object):
         if not info:
             # Worst case, should have been pre-fetched above
             logger.error("Need to rescan plugin info..")
-            info = PluginManager.get_plugininfo(pname, launch_script, existing_pk=None, use_cache=False)
+            info = PluginManager.get_plugininfo(
+                pname, launch_script, existing_pk=None, use_cache=False
+            )
             logger.debug("Plugin Rescan Info: %s", info)
         if info is None:
             raise ValueError("No plugininfo for '%s' in '%s'" % (pname, launch_script))
 
-        version = info.get('version', "0")
-        majorBlock = info.get('major_block', False)
+        version = info.get("version", "0")
+        majorBlock = info.get("major_block", False)
 
         # Only used if new plugin record is created
         packageName = getPackageName(full_path)
-        plugin_defaults={
-            'path':full_path,
-            'date':datetime.datetime.now(),
-            'active':True, # auto activate new versions
-            'selected': True, # Auto enable new plugins
-            'majorBlock': majorBlock,
-            'description': info.get('docs', None),
-            'userinputfields': info.get('config', None),
-            'packageName' : packageName if not 'ion-plugins' in packageName else ''
+        plugin_defaults = {
+            "path": full_path,
+            "date": datetime.datetime.now(),
+            "active": True,  # auto activate new versions
+            "selected": True,  # Auto enable new plugins
+            "majorBlock": majorBlock,
+            "description": info.get("docs", None),
+            "userinputfields": info.get("config", None),
+            "packageName": packageName if not "ion-plugins" in packageName else "",
         }
 
-        logger.debug("Plugin Install/Upgrade checking for plugin: %s %s", pname, version)
+        logger.debug(
+            "Plugin Install/Upgrade checking for plugin: %s %s", pname, version
+        )
         # needs_save is aka created. Tracks if anything changed.
-        p, needs_save = iondb.rundb.models.Plugin.objects.get_or_create(name=pname, version=version, defaults=plugin_defaults)
+        p, needs_save = iondb.rundb.models.Plugin.objects.get_or_create(
+            name=pname, version=version, defaults=plugin_defaults
+        )
 
         # update the plugin package name
-        if plugin_defaults['packageName'] != p.packageName:
-            p.packageName = plugin_defaults['packageName']
+        if plugin_defaults["packageName"] != p.packageName:
+            p.packageName = plugin_defaults["packageName"]
             p.save()
 
         if needs_save:
             # Newly created plugin - never before seen with this name and version
-            logger.info("Installing New Plugin %s v%s at '%s'", pname, version, full_path)
+            logger.info(
+                "Installing New Plugin %s v%s at '%s'", pname, version, full_path
+            )
             # Set pluginconfig.json if needed - only for new installs / version changes
             if self.set_pluginconfig(p):
-                logger.info("Loaded new pluginconfig.json values for Plugin %s v%s at '%s'", pname, version, full_path)
+                logger.info(
+                    "Loaded new pluginconfig.json values for Plugin %s v%s at '%s'",
+                    pname,
+                    version,
+                    full_path,
+                )
         else:
             logger.debug("Existing plugin found: %s %s [%d]", p.name, p.version, p.pk)
 
@@ -310,15 +356,27 @@ class PluginManager(object):
         if not p.path:
             # 1. path was empty - set path and reactivate
             # Reinstall previously removed and inactive plugin - files were restored
-            logger.info("Reactivating previously uninstalled Plugin %s v%s at '%s'", pname, version, full_path)
+            logger.info(
+                "Reactivating previously uninstalled Plugin %s v%s at '%s'",
+                pname,
+                version,
+                full_path,
+            )
             if self.enable(p, full_path):
-                needs_save=True
+                needs_save = True
 
         elif not os.path.exists(p.path):
             # 2. path was set, but folder is missing - replace
             # Prior path was invalid, but caller insists full_path exists
-            needs_save = (p.path == full_path) # only if changed
-            if needs_save: logger.info("Changing Plugin path value %s v%s to '%s' (was '%s')", pname, version, full_path, p.path)
+            needs_save = p.path == full_path  # only if changed
+            if needs_save:
+                logger.info(
+                    "Changing Plugin path value %s v%s to '%s' (was '%s')",
+                    pname,
+                    version,
+                    full_path,
+                    p.path,
+                )
 
             if os.path.exists(full_path):
                 self.enable(p, full_path)
@@ -327,7 +385,13 @@ class PluginManager(object):
             # 3. path was set and exists
             # FIXME - for now, replace old plugin with new.
             # TODO - With multi-version install, ignore duplicate of same version
-            logger.info("Found relocated Plugin %s v%s at '%s' (was '%s')", pname, version, full_path, p.path)
+            logger.info(
+                "Found relocated Plugin %s v%s at '%s' (was '%s')",
+                pname,
+                version,
+                full_path,
+                p.path,
+            )
 
             # uninstall the plugin
             iondb.rundb.models.Plugin.Uninstall(p.id)
@@ -337,27 +401,40 @@ class PluginManager(object):
 
         # If the path exists, it is an active. Inactive plugins are removed
         if not p.active and os.path.exists(p.path):
-            logger.info("Reactivating plugin marked inactive but present on filesystem %s v%s at '%s'", pname, version, full_path)
+            logger.info(
+                "Reactivating plugin marked inactive but present on filesystem %s v%s at '%s'",
+                pname,
+                version,
+                full_path,
+            )
             self.enable(p)
 
         if not p.script:
             p.script = os.path.basename(launch_script)
             if launch_script != os.path.join(p.path, p.script):
-                logger.error("Launch Script is not in plugin folder: '%s' '%s'", p.path, launch_script)
+                logger.error(
+                    "Launch Script is not in plugin folder: '%s' '%s'",
+                    p.path,
+                    launch_script,
+                )
             needs_save = True
 
-        #create media symlinks if needed
-        pluginMediaSrc =  os.path.join(p.path,"pluginMedia")
+        # create media symlinks if needed
+        pluginMediaSrc = os.path.join(p.path, "pluginMedia")
         if os.path.exists(pluginMediaSrc):
-            pluginMediaDst = os.path.join("/results/pluginMedia",p.name)
+            pluginMediaDst = os.path.join("/results/pluginMedia", p.name)
             try:
                 if os.path.lexists(pluginMediaDst):
                     os.unlink(pluginMediaDst)
                 # note os.path.exists returns False for broken symlinks
-                os.symlink(os.path.join(p.path,"pluginMedia"),
-                        os.path.join("/results/pluginMedia",p.name))
+                os.symlink(
+                    os.path.join(p.path, "pluginMedia"),
+                    os.path.join("/results/pluginMedia", p.name),
+                )
             except OSError:
-                logger.exception("Failed to create pluginMedia Symlink: %s", pluginMediaDst)
+                logger.exception(
+                    "Failed to create pluginMedia Symlink: %s", pluginMediaDst
+                )
             # No need to set needs_save - no db data changed
 
         # Update majorBlock to current setting
@@ -382,11 +459,15 @@ class PluginManager(object):
         oldplugin = None
 
         # Get all plugins with the same name and different version
-        for oldp in iondb.rundb.models.Plugin.objects.filter(name=plugin.name).exclude(version=plugin.version):
+        for oldp in iondb.rundb.models.Plugin.objects.filter(name=plugin.name).exclude(
+            version=plugin.version
+        ):
             # FIXME - multi-version support needs new behavior here
             if oldp.active or oldp.path:
-                logger.info("Disabling old version of plugin %s v%s", oldp.name, oldp.version)
-                count+=1
+                logger.info(
+                    "Disabling old version of plugin %s v%s", oldp.name, oldp.version
+                )
+                count += 1
             else:
                 continue
 
@@ -399,16 +480,21 @@ class PluginManager(object):
                 # farm the uninstall off to the plugin daemon
                 iondb.rundb.models.Plugin.Uninstall(oldp.id)
             else:
-                oldp.path=''
+                oldp.path = ""
             if oldp.active:
-                oldp.active=False
+                oldp.active = False
             oldp.save()
 
             # Important! This is passed back to preserve autorun and selected settings
             oldplugin = oldp
 
         if count:
-            logger.debug('Deactivated %d old versions while upgrading to %s v%s', count, plugin.name, plugin.version)
+            logger.debug(
+                "Deactivated %d old versions while upgrading to %s v%s",
+                count,
+                plugin.name,
+                plugin.version,
+            )
 
         return count, oldplugin
 
@@ -441,20 +527,97 @@ class PluginManager(object):
                 return False
 
             if plugin.path != path:
-                plugin.path=path
-                plugin.date=datetime.datetime.now()
+                plugin.path = path
+                plugin.date = datetime.datetime.now()
 
         if not plugin.path:
             logger.error("Cannot enable plugin with no path information")
             return False
 
         if not plugin.pluginscript:
-            logger.error("No plugin script found at path '%s'. Unable to enable plugin", plugin.path)
+            logger.error(
+                "No plugin script found at path '%s'. Unable to enable plugin",
+                plugin.path,
+            )
             return False
 
-        plugin.active=True
+        plugin.active = True
         plugin.save()
         return True
+
+    def refresh_apt_cache(self):
+        try:
+            self.apt_cache = apt.Cache()
+        except Exception as err:
+            logger.error("Error getting apt cache: %s" % err)
+            self.apt_cache = []
+
+    def availableAptVersions(self, packageName):
+        """
+        For supported plugins only, this will get all of the versions available for the plugin
+        :return: A list of verison names
+        """
+        if self.apt_cache is None:
+            self.refresh_apt_cache()
+
+        if packageName in self.apt_cache:
+            return sorted(
+                list(self.apt_cache[packageName].versions.keys()),
+                key=LooseVersion,
+                reverse=True,
+            )
+        else:
+            return list()
+
+    def isUpgradable(self, packageName):
+        """
+        For supported plugins this will indicate if an upgrade is available
+        :return: True if the supported plugin has an aptitude version available, false otherwise
+        """
+        if self.apt_cache is None:
+            self.refresh_apt_cache()
+
+        if packageName in self.apt_cache:
+            return self.apt_cache[packageName].is_upgradable
+        else:
+            return False
+
+    def GetSupportedPlugins(self, pluginNames=list(), onlyUpgradable=False):
+        """
+        Gets a list of all supported plugins
+        :param pluginNames: A list of plugin packages names or leave empty for all
+        :param onlyUpgradable: The list returned will only be filled with upgradable items
+        :return: A dictionary keyed by the names of packages and the values being a list of all of the versions available
+        """
+        self.refresh_apt_cache()
+        if not self.apt_cache:
+            return {}
+
+        if len(pluginNames) == 0:
+            pluginNames = [
+                packageName
+                for packageName in list(self.apt_cache.keys())
+                if packageName.startswith("ion-plugin-")
+            ]
+
+        # construct a dictionary of each plugin and all available versions
+        plugins = dict()
+        for packageName in pluginNames:
+            aptPlugin = self.apt_cache[packageName]
+
+            if onlyUpgradable and not aptPlugin.is_upgradable:
+                continue
+
+            plugin = {
+                "AvailableVersions": self.availableAptVersions(packageName),
+                "UpgradeAvailable": aptPlugin.is_upgradable,
+                "CurrentVersion": aptPlugin.installed.version
+                if aptPlugin.is_installed
+                else "Not Installed",
+            }
+            plugins[packageName] = plugin
+
+        return plugins
 
 
 pluginmanager = PluginManager()

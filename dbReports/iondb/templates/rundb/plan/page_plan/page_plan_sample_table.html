@@ -1,8 +1,12 @@
 {% load static from staticfiles %}
+{% load i18n %}
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.web.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.editable.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.dropdownlist.js"%}"></script>
 <link rel="stylesheet" href="{% static "resources/kendo/styles/kendo.common.min.css"%}" />
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
+<script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
 
 <style>
 .k-dirty{
@@ -46,35 +50,35 @@
 <div class="row-fluid">
     <div class="form-inline">
         <label class="radio inline" style="display: none;">
-            <input type="radio" id="chk_not_barcoded" name="is_barcoded" value="0" {%if not helper.isBarcoded%}checked{%endif%}>No Barcoding - One Sample per Chip
+            <input type="radio" id="chk_not_barcoded" name="is_barcoded" value="0" {%if not helper.isBarcoded%}checked{%endif%}>{% trans "workflow.step.sample.fields.is_barcoded.choice.0" %}
         </label>
         <label class="radio inline" style="display: none;">
-            <input type="radio" id="chk_not_dualBarcoded" name="is_dualBarcoded" value="0" {%if not helper.isDualBarcoded%}checked{%endif%}>No Dual Barcoding
+            <input type="radio" id="chk_not_dualBarcoded" name="is_dualBarcoded" value="0" {%if not helper.isDualBarcoded%}checked{%endif%}>{% trans "workflow.step.sample.fields.is_dualBarcoded.choice.0" %}
         </label>
         <label class="radio inline" style="display: none;">
-            <input type="radio" id="chk_barcoded" name="is_barcoded" value="1" {%if helper.isBarcoded%}checked{%endif%}>Use Barcoding
+            <input type="radio" id="chk_barcoded" name="is_barcoded" value="1" {%if helper.isBarcoded%}checked{%endif%}>{% trans "workflow.step.sample.fields.is_barcoded.choice.1" %}
         </label>
         <label class="radio inline" style="display: none;">
-            <input type="radio" id="chk_dualBarcoded" name="is_dualBarcoded" value="1" {%if helper.isDualBarcoded%}checked{%endif%}>Dual Barcoding
+            <input type="radio" id="chk_dualBarcoded" name="is_dualBarcoded" value="1" {%if helper.isDualBarcoded%}checked{%endif%}>{% trans "workflow.step.sample.fields.is_dualBarcoded.choice.1" %}
         </label>
 
         <label class="checkbox inline" {%if not helper.isDualNucleotideTypeBySample or not helper.isOCPApplicationGroup %} style="display: none;"{%endif%}>
-            <input type="checkbox" id="isOncoSameSample" name="isOncoSameSample" style="vertical-align:top;" {% if step.getCurrentSavedFieldDict.isOncoSameSample %}checked{%endif%}>Same sample for DNA and Fusions?
+            <input type="checkbox" id="isOncoSameSample" name="isOncoSameSample" style="vertical-align:top;" {% if step.getCurrentSavedFieldDict.isOncoSameSample %}checked{%endif%}>{% trans "workflow.step.sample.fields.isOncoSameSample.label" %}
         </label>
     </div>
     </br>
     <div class="form-inline">
-        <label class="span3 form-label" id="numRowsLabel" for="numRows">Number of {%if helper.isBarcodeKitSelectionRequired or step.getCurrentSavedFieldDict.barcodeSet %}barcodes{% else %}chips{% endif %}</label>
+        <label class="span3 form-label" id="numRowsLabel" for="numRows">{%if helper.isBarcodeKitSelectionRequired or step.getCurrentSavedFieldDict.barcodeSet %}{% trans "workflow.step.sample.fields.numRows.label.barcodes" %}{% else %}{% trans "workflow.step.sample.fields.numRows.label.chips" %}{% endif %}</label>
         <input type="text" id="numRows" name="numRows" value="{{step.prepopulatedFields.numberOfSamples}}" class="integer input-small span2" style="vertical-align: top;"/>
-        <a id="numRowsClick" title="Change number of rows below for plan creation" class="btn"><i class="icon-ok-sign"></i></a>
-        <a id="loadTable" href="#" title="Load samples table from csv file" class="btn pull-right" data-toggle="modal" data-target="#modal_load_samples_table">Load Samples Table</a>
-        <a id="saveTable" href="{% url "page_plan_save_samples_table" %}" title="Save samples table to csv file" class="btn pull-right">Save Samples Table</a>
+        <a id="numRowsClick" title="{% trans "workflow.step.sample.fields.numRows.tooltip" %}" class="btn"><i class="icon-ok-sign"></i></a>
+        <a id="loadTable" style="margin-left: 4px" href="#" title="{% trans "workflow.step.sample.action.load_samples_table.tooltip" %}" class="btn pull-right" data-toggle="modal" data-target="#modal_load_samples_table">{% trans "workflow.step.sample.action.load_samples_table.label" %}</a>
+        <a id="saveTable" href="{% url "page_plan_save_samples_table" %}" title="{% trans "workflow.step.sample.action.save_samples_table.tooltip" %}" class="btn pull-right">{% trans "workflow.step.sample.action.save_samples_table.label" %}</a>
     </div>
 </div>
 
 <div class="row-fluid" {%if not helper.isBarcoded or not helper.isPlanBySample %}style="display: none;"{%endif%}>
     <div class="form-inline">
-        <label class="span3 control-label" for="barcodingKit">Barcoding Set</label>
+        <label class="span3 control-label" for="barcodingKit">{% trans "workflow.step.sample.fields.barcodeSet.label" %}</label>
         <select id="barcodeSet" name="barcodeSet" class="span4">
             <option></option>
             {% for barcode in step.getPrePopulatedFieldDict.barcodeSets %}  
@@ -88,7 +92,7 @@
 
 <div class="row-fluid endBarcodeSet" {%if not helper.isDynamicDualBarcoding %}style="display: none;"{%endif%}>
     <div class="form-inline">
-        <label class="span3 control-label" for="endBarcodeSet">End Barcode Set</label>
+        <label class="span3 control-label" for="endBarcodingKit">{% trans "workflow.step.sample.fields.endBarcodeSet.label" %}</label>
         <select id="endBarcodeSet" name="endBarcodeSet" class="span4">
             <option></option>
             {% for barcode in step.getPrePopulatedFieldDict.endBarcodeSets %}  
@@ -102,7 +106,7 @@
 
 <div class="row-fluid barcoded" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
     <div class="form-inline">
-        <label for="barcodeSampleTubeLabel" class="span3 control-label">Sample Tube Label</label>
+        <label for="barcodeSampleTubeLabel" class="span3 control-label">{% trans "workflow.step.sample.fields.barcodeSampleTubeLabel.label" %}</label>
         <input class="span4" style="width: 300px;" id="barcodeSampleTubeLabel" name="barcodeSampleTubeLabel" 
             value="{{step.getCurrentSavedFieldDict.barcodeSampleTubeLabel|default_if_none:""}}"
             {% ifequal helper.getStepDict.Application.prepopulatedFields.planStatus "reserved" %}
@@ -116,7 +120,7 @@
 
 <div class="row-fluid barcoded" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
     <div class="form-inline">
-        <label for="chipBarcodeLabel" class="span3 control-label">Chip Barcode</label>
+        <label for="chipBarcodeLabel" class="span3 control-label">{% trans "workflow.step.sample.fields.chipBarcodeLabel.label" %}</label>
         <input class="span4" style="width: 300px;" id="chipBarcodeLabel" name="chipBarcodeLabel"
             value="{{step.getCurrentSavedFieldDict.chipBarcodeLabel|default_if_none:""}}"
             {% if helper.getStepDict.Application.prepopulatedFields.planStatus == "reserved" or helper.isEditRun %}
@@ -128,34 +132,37 @@
 
 <div class="row-fluid barcoded" {%if not helper.isBarcoded%}style="display: none;"{%endif%}>
     <div class="form-label">
-    Enter a sample name for each barcode used (require at least one sample)
+    {% trans "workflow.step.sample.messages.sampleperbarcode" %}
+    {% if featureflags.IONREPORTERUPLOADER %}
     {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
         <a title="Refresh IonReporter Information" class="refresh-uploader-information" ><i class="icon-refresh"></i></a>
         <img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
     {% endifnotequal %}
-    
+    {% endif %}
     {% if not helper.isPlanBySample %}
-    <a title="Auto generate sample names" class="btn" id="fillSampleNames"><i class="icon-arrow-down"></i></a>
-    <a title="Clear sample names" class="btn" id="clearSampleNames"><i class="icon-trash"></i></a>
+    <a title="{% trans "workflow.step.sample.action.fillSampleNames.tooltip" %}" class="btn" id="fillSampleNames">{% trans "workflow.step.sample.action.fillSampleNames.label" %}<i class="icon-arrow-down"></i></a>
+    <a title="{% trans "workflow.step.sample.action.clearSampleNames.tooltip" %}" class="btn" id="clearSampleNames">{% trans "workflow.step.sample.action.clearSampleNames.label" %}<i class="icon-trash"></i></a>
     {% endif %}
     </div>
 </div>
 <div class="row-fluid nonbarcoded" {%if helper.isBarcoded%}style="display: none;"{%endif%}>
     <div class="form-label">
-        Enter a sample name for each plan (require at least one sample)
+        {% trans "workflow.step.sample.messages.sampleperplan" %}
+        {% if featureflags.IONREPORTERUPLOADER %}
         {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
-                <a title="Refresh IonReporter Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
+                <a title="{% trans "workflow.step.sample.action.refreshIonReporterInformation.tooltip" %}" class="refresh-uploader-information">{% trans "workflow.step.sample.action.refreshIonReporterInformation.label" %}<i class="icon-refresh"></i></a>
                 <img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
         {% endifnotequal %}
+        {% endif %}
     </div>
 </div>
 
 <div class="row-fluid products"  {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId == "0" or not helper.isPlan %} style="display: none;"{%endif%}>
     <div class="span2">
-        <input type="radio" id="isOnco" name="isOnco_Pgs"  {% if helper.hasOncoData %}checked="checked"{% endif %} style="vertical-align:top" value="Oncology"> Oncology
+        <input type="radio" id="isOnco" name="isOnco_Pgs"  {% if helper.hasOncoData %}checked="checked"{% endif %} style="vertical-align:top" value="Oncology">{% trans "workflow.step.sample.fields.isOnco_Pgs.choice.Oncology" %}
     </div>
     <div class="span4">    
-        <input type="radio" id="isPgs" name="isOnco_Pgs"  {% if helper.hasPgsData %}checked="checked"{% endif %}  style="vertical-align:top" value="Pgs"> Pre-implantation Genetic Screening
+        <input type="radio" id="isPgs" name="isOnco_Pgs"  {% if helper.hasPgsData %}checked="checked"{% endif %}  style="vertical-align:top" value="Pgs">{% trans "workflow.step.sample.fields.isOnco_Pgs.choice.Pgs" %}
     </div>
 </div>
 
@@ -202,6 +209,8 @@
 
     var controlTypes = [];
     var cancerTypes = [];
+    var populations = [];
+    var mouseStrains = [];
     {% for obj in step.prepopulatedFields.sampleAnnotations %}
         {% if obj.annotationType == "controlType" %}
             controlTypes.push({
@@ -210,6 +219,16 @@
             });
         {% elif obj.annotationType == "cancerType" %}
             cancerTypes.push({
+               "value": "{{obj.value}}",
+               "display": "{{obj.value}}" || "None"
+            });
+        {% elif obj.annotationType == "population" %}
+            populations.push({
+               "value": "{{obj.value}}",
+               "display": "{{obj.value}}" || "None"
+            });
+        {% elif obj.annotationType == "mouseStrains" %}
+            mouseStrains.push({
                "value": "{{obj.value}}",
                "display": "{{obj.value}}" || "None"
             });
@@ -233,6 +252,8 @@
     USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
     USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
     USERINPUT.iruUploadMode ="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.iru_UploadMode}}";
+    USERINPUT.sampleCollectionDate = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irSampleCollectionDate}}"
+    USERINPUT.sampleReceiptDate = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irSampleReceiptDate}}"
 
     USERINPUT.ir_sample_to_tss_sample = {};
     {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
@@ -294,20 +315,30 @@
 <div id="modal_load_samples_table" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Load Samples Table</h3>
+        <h3>{% trans "workflow.step.sample.load_samples_table.title" %}</h3>
     </div>
     <div class="modal-body">
         <div id="modal_error" class="alert alert-error hide"></div>
     <div id="csv_load" class="control-group">
         <div class="controls">
-        <label for="file" class="control-label">Select a CSV File</label>
-        <input type="file" name="csv_file" class="input-xxlarge input-file required">
+            <label for="file" class="control-label">{% trans "workflow.step.sample.load_samples_table.fields.file.label" %}</label>
+            <div class="fileupload fileupload-new" data-provides="fileupload"><input type="hidden">
+                <div class="input-append">
+                  <div class="uneditable-input span4"><i class="icon-file fileupload-exists"></i><span class="fileupload-preview" style=""></span></div>
+                  <span class="btn btn-file">
+                      <span class="fileupload-new">{% trans "workflow.step.sample.load_samples_table.fields.file.select" %}</span>
+                      <span class="fileupload-exists">{% trans "workflow.step.sample.load_samples_table.fields.file.change" %}</span>
+                      <input type="file" name="csv_file" class="input-xxlarge input-file required" accept=".csv" title="{% trans "workflow.step.sample.load_samples_table.fields.file.select" %}">
+                  </span>
+                  <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">{% trans "workflow.step.sample.load_samples_table.fields.file.unselect" %}</a>
+                </div>
+            </div>
         </div>
     </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a class="btn btn-primary csv_load" href="{% url "page_plan_load_samples_table" %}" >Load</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "workflow.step.sample.load_samples_table.action.cancel" %}</a>
+        <a class="btn btn-primary csv_load" href="{% url "page_plan_load_samples_table" %}" >{% trans "workflow.step.sample.load_samples_table.action.save" %}</a>
     </div>
 </div>
 

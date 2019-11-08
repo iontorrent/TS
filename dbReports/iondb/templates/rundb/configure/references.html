@@ -2,21 +2,22 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-references %}
-    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
 {% endblock tab-configure-references %}
 {% block extra_head %}
   <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
   <script type="text/javascript" src="{% static "js/date.min.js"%}"></script>
   <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
-  <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+  {% include "rundb/common/head_jqueryui_script.html" %}
 
   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
   <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
   <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 
-  <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+  {% include "rundb/common/head_uni-form-validation.jquery.js.html" %} <!-- Using updated uni-form JS -->
   <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
 
   <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
@@ -34,43 +35,45 @@
        <li class="active" id="references-nav">
          <a href="#references">
            <i class="icon-chevron-right"></i>
-           Reference Sequences
+           {% trans "configure_references.section.references.title" %}
          </a>
        </li>
+       {% if featureflags.CONFIGURE_REFERENCES_OBSOLETEREFERENCES %}
        <li class="" id="obsolete-references-nav">
          <a href="#obsolete-references" >
            <i class="icon-chevron-right"></i>
-           Obsolete Reference Sequences
+           {% trans "configure_references.section.obsoletereferences.title" %}
          </a>
        </li>
+       {% endif %}
        <li class="" id="target-regions-nav">
          <a href="#target-regions">
            <i class="icon-chevron-right"></i>
-           Target Regions
+           {% trans "configure_references.section.targetregions.title" %}
          </a>
        </li>
        <li class="" id="hotspots-nav">
          <a href="#hotspots">
            <i class="icon-chevron-right"></i>
-           Hotspots
+           {% trans "configure_references.section.hotspots.title" %}
          </a>
        </li>
        <li class="" id="test-fragments-nav">
          <a href="#test-fragments">
            <i class="icon-chevron-right"></i>
-           Test Fragments
+           {% trans "configure_references.section.testfragments.title" %}
          </a>
        </li>
        <li class="" id="barcodes-nav">
          <a href="#barcodes">
            <i class="icon-chevron-right"></i>
-           Barcodes
+           {% trans "configure_references.section.barcodes.title" %}
          </a>
        </li>
        <li class="" id="uploads-nav">
          <a href="#uploads">
            <i class="icon-chevron-right"></i>
-           Upload History
+           {% trans "configure_references.section.uploads.title" %}
          </a>
        </li>
      </ul>
@@ -79,30 +82,33 @@
     <div class="span9" id="my-tabs">
       <div id="references-tab">
         <div class="clearfix">
-          <h1 style="float:left;">Reference Sequences</h1>
+          <h1 style="float:left;">{% trans "configure_references.section.references.title" %}</h1>
           <div class="pull-right">
-            <a href="{% url "references_genome_download" %}" class="btn btn-primary">Import Preloaded Ion References</a>
-            <a href="{% url "add_custom_genome" %}" class="btn btn-primary" id="add_genome">Import Custom Reference</a>
+            {% if featureflags.CONFIGURE_REFERENCES_REFERENCES_IMPORT_PRELOADED_ION_REFERENCES %}
+            <a href="{% url "references_genome_download" %}" class="btn btn-primary">{% trans "configure_references.action.references_genome_download" %}</a>
+            {% endif %}
+            <a href="{% url "add_custom_genome" %}" class="btn btn-primary" id="add_genome">{% trans "configure_references.action.add_custom_genome" %}</a>
           </div>
         </div>
         <div id="referenceSequences"></div>
       </div>
 
+    {% if featureflags.CONFIGURE_REFERENCES_OBSOLETEREFERENCES %}
       <div id="obsolete-references-tab" style="display: none;">
-        <h1>Obsolete Reference Sequences</h1>
+        <h1>{% trans "configure_references.section.obsoletereferences.title" %}</h1>
         <div id="obsoleteReferenceSequences"></div>
       </div>
-
-      <div id="target-regions-tab" style="display: none;"">
+    {% endif %}
+      <div id="target-regions-tab" style="display: none;">
         <form action="/rundb/content/targetregions/add" method="get">
-        <h1>Target Regions</h1>
+        <h1>{% trans "configure_references.section.targetregions.title" %}</h1>
         <div class="clearfix">
           <div class="pull-left">
-              <input id="targets-search" type="text" class="search-query" placeholder="Search" data-prev="">
+              <input id="targets-search" type="text" class="search-query" placeholder="{% trans "configure_references.section.targetregions.search_bar.search_text.placeholder" %}" data-prev="" style="margin-right:10px;">
           </div>
           <div class="pull-left">
             <select id="targets-ref-dropdown" name="reference" class="selectpicker"
-                   title="Reference:" data-persist-title="true" data-width="350px" data-live-search="true">
+                   title="{% trans "configure_references.section.targetregions.search_bar.reference.title" %}" data-persist-title="true" data-width="350px" data-live-search="true">
             <option value="">All</option>
             {% for ref in active_references %}
               <option value="{{ ref.short_name }}">{{ ref.short_name }} ({{ ref.name }})</option>
@@ -110,7 +116,7 @@
             </select>
           </div>
           <div class="pull-right">
-            <input class="btn btn-primary" type="submit" value="Add Target Regions"/>
+            <input class="btn btn-primary" type="submit" value="{% trans "configure_references.section.targetregions.action.add.label" %}"/>
           </div>
         </div>
         </form>
@@ -119,14 +125,14 @@
 
       <div id="hotspots-tab" style="display: none;">
         <form action="/rundb/content/hotspots/add" method="get">
-        <h1>Hotspots</h1>
+        <h1>{% trans "configure_references.section.hotspots.title" %}</h1>
         <div class="clearfix">
           <div class="pull-left">
-            <input id="hotspots-search" type="text" class="search-query" placeholder="Search" data-prev="">
+            <input id="hotspots-search" type="text" class="search-query" placeholder="{% trans "configure_references.section.hotspots.search_bar.search_text.placeholder" %}" data-prev="" style="margin-right:10px;">
           </div>
           <div class="pull-left">
             <select id="hotspots-ref-dropdown" name="reference" class="selectpicker"
-                    title="Reference:" data-persist-title="true" data-width="350px" data-live-search="true">
+                   title="{% trans "configure_references.section.hotspots.search_bar.reference.title" %}" data-persist-title="true" data-width="350px" data-live-search="true">
             <option value="">All</option>
             {% for ref in active_references %}
               <option value="{{ ref.short_name }}">{{ ref.short_name }} ({{ ref.name }})</option>
@@ -134,7 +140,7 @@
             </select>
           </div>
           <div class="pull-right">
-            <input class="btn btn-primary" type="submit" value="Add Hotspots"/>
+            <input class="btn btn-primary" type="submit" value="{% trans "configure_references.section.hotspots.action.add.label" %}"/>
           </div>
         </div>
         </form>
@@ -143,23 +149,27 @@
 
       <div id="test-fragments-tab" style="display: none;">
         <div class="clearfix">
-          <h1 style="float:left;">Test Fragments</h1>
-          <a href="{% url "references_TF_edit" %}" class="btn btn-primary add_tf" style="float:right;">Add Test Fragment</a>
+          <h1 style="float:left;">{% trans "configure_references.section.testfragments.title" %}</h1>
+{% if featureflags.TESTFRAGMENT_ACTIONS %}
+          <a href="{% url "references_TF_edit" %}" class="btn btn-primary add_tf" style="float:right;">{% trans "configure_references.section.testfragments.action.add.label" %}</a>
+{% endif %}
         </div>
         <div id="testFragments"></div>
       </div>
 
       <div id="barcodes-tab" style="display: none;">
         <div class="clearfix">
-          <h1 style="float:left;" id="DNABarcodes">DNA Barcodes</h1>
-          <a href="{% url "references_barcodeset_add" %}" class="btn btn-primary add_barcodeset" style="float:right;">Add new DNA Barcodes</a>
+          <h1 style="float:left;" id="DNABarcodes">{% trans "configure_references.section.barcodes.title" %}</h1>
+{% if featureflags.BARCODESET_ACTIONS %}
+          <a href="{% url "references_barcodeset_add" %}" class="btn btn-primary add_barcodeset" style="float:right;">{% trans "configure_references.section.barcodes.action.add.label" %}</a>
+{% endif %}
         </div>
         <div id="barcodes"></div>
       </div>
 
       <div id="uploads-tab" style="display: none;">
         <div class="clearfix">
-          <h1>Upload History</h1>
+          <h1>{% trans "configure_references.section.uploads.title" %}</h1>
         </div>
         <div id="uploads"></div>
       </div>
@@ -194,10 +204,10 @@ $(function () {
     var grid = null;
     if (newhash == 'references')
       grid = $("#referenceSequences").data("kendoGrid");
-
+{% if featureflags.CONFIGURE_REFERENCES_OBSOLETEREFERENCES %}
     if (newhash == 'obsolete-references')
       grid = $("#obsoleteReferenceSequences").data("kendoGrid");
-
+{% endif %}
     if (newhash == 'target-regions')
       grid = $("#targetRegions").data("kendoGrid");
 
@@ -260,10 +270,10 @@ $(document).ready(function() {
       sortable: true,
       pageable: false,
       columns: [
-        { field: "name", title: "Uploaded File", width: '40%', sortable: false, template: "<a href='/rundb/uploadstatus/${id}/'>${name}</a>"},
-        { field: "upload_type", title: "Type", width: '20%', template: '#=upload_types[upload_type] ? upload_types[upload_type] : upload_type #'},
-        { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'},
-        { field: "status", title: "Status", width: '25%', template: kendo.template($("#uploadStatusTemplate").html())}
+        { field: "name", title: "{% trans "configure_references.section.uploads.field.name.label" %}", width: '40%', sortable: false, template: "<a href='/rundb/uploadstatus/${id}/'>${name}</a>"},
+        { field: "upload_type", title: "{% trans "configure_references.section.uploads.field.upload_type.label" %}", width: '20%', template: '#=upload_types[upload_type] ? upload_types[upload_type] : upload_type #'},
+        { field: "upload_date", title: "{% trans "configure_references.section.uploads.field.upload_date.label" %}", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'},
+        { field: "status", title: "{% trans "configure_references.section.uploads.field.status.label" %}", width: '25%', template: kendo.template($("#uploadStatusTemplate").html())}
       ]
     });
 
@@ -300,12 +310,12 @@ $(document).ready(function() {
         sortable: true,
         pageable: false,
         columns: [
-            { field: "name", title: "Name", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
-            { field: "description", title: "Description", width: '20%'},
-            { field: "notes", title: "Notes", width: '20%'},
-            { field: "extra", title: "Reference", width: '20%'},
-            { field: "enabled", title: "Enabled", width: '55px'},
-            { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
+            { field: "name", title: "{% trans "configure_references.section.targetregions.name.label" %}", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
+            { field: "description", title: "{% trans "configure_references.section.targetregions.description.label" %}", width: '20%'},
+            { field: "notes", title: "{% trans "configure_references.section.targetregions.notes.label" %}", width: '20%'},
+            { field: "extra", title: "{% trans "configure_references.section.targetregions.reference.label" %}", width: '20%'},
+            { field: "enabled", title: "{% trans "configure_references.section.targetregions.enabled.label" %}", width: '55px'},
+            { field: "upload_date", title: "{% trans "configure_references.section.targetregions.upload_date.label" %}", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
         ]
     });
 
@@ -341,12 +351,12 @@ $(document).ready(function() {
         sortable: true,
         pageable: false,
         columns: [
-            { field: "name", title: "Name", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
-            { field: "description", title: "Description", width: '20%'},
-            { field: "notes", title: "Notes", width: '20%'},
-            { field: "extra", title: "Reference", width: '20%'},
-            { field: "enabled", title: "Enabled", width: '55px'},
-            { field: "upload_date", title: "Upload Date", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
+            { field: "name", title: "{% trans "configure_references.section.hotspots.name.label" %}", width: '25%', sortable: false, template: "<a href='/rundb/uploadstatus/${upload_id}'>${name}</a>"},
+            { field: "description", title: "{% trans "configure_references.section.hotspots.description.label" %}", width: '20%'},
+            { field: "notes", title: "{% trans "configure_references.section.hotspots.notes.label" %}", width: '20%'},
+            { field: "extra", title: "{% trans "configure_references.section.hotspots.reference.label" %}", width: '20%'},
+            { field: "enabled", title: "{% trans "configure_references.section.hotspots.enabled.label" %}", width: '55px'},
+            { field: "upload_date", title: "{% trans "configure_references.section.hotspots.upload_date.label" %}", width: '15%', template:'#= kendo.toString(new Date(Date._parse(upload_date)),"MMM d yyyy") #'}
         ]
     });
     
@@ -399,10 +409,10 @@ $(document).ready(function() {
         # } #
     </li>
       <li>
-          <a href="#= '{% url "references_barcodeset_csv" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">Download</a>
+          <a href="#= '{% url "references_barcodeset_csv" '999999' %}'.replace('999999',id)#" class="edit_barcodeset">{% trans "configure_references.section.barcodes.action.references_barcodeset_csv.label" %}</a>
       </li>
     <li>
-      <a href="#= '{% url "references_barcodeset_delete" '999999' %}'.replace('999999',id)#" class="delete_barcodeset">Delete</a>
+      <a href="#= '{% url "references_barcodeset_delete" '999999' %}'.replace('999999',id)#" class="delete_barcodeset">{% trans "configure_references.section.barcodes.action.references_barcodeset_delete.label" %}</a>
     </li>
   </ul>
 </div>
@@ -466,17 +476,17 @@ $(document).ready(function(){
     , columns: [
       {
                 field: "short_name"
-                , title: "Short Name"
+                , title: "{% trans "entity.ReferenceGenome.fields.short_name.verbose_name" %}"
                 , width: '20%'
                 , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
-                , title: "Description"
+                , title: "{% trans "entity.ReferenceGenome.fields.name.verbose_name" %}"
                 , sortable: true
                 , width: '20%'
             } , {
                 field: "notes"
-                , title: "Notes"
+                , title: "{% trans "entity.ReferenceGenome.fields.notes.verbose_name" %}"
                 , sortable: true
                 , width: '20%'
             } , {
@@ -486,7 +496,7 @@ $(document).ready(function(){
                 , width: '10%'
             } , {
                 field: "date"
-                , title: "Date"
+                , title: "{% trans "entity.ReferenceGenome.fields.date.verbose_name" %}"
                 , sortable: true
                 , width: '10%'
                 , template: '#= kendo.toString(new Date(Date._parse(date)),"MMM d yyyy") #'
@@ -505,7 +515,8 @@ $(document).ready(function(){
     });
 
     // Obsolete Reference Sequences
-    var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
+{% if featureflags.CONFIGURE_REFERENCES_OBSOLETEREFERENCES %}
+  var obsoleteReferenceSequences = $("#obsoleteReferenceSequences").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -548,35 +559,36 @@ $(document).ready(function(){
     , columns: [
       {
                 field: "short_name"
-                , title: "Name"
+                , title: "{% trans "entity.ReferenceGenome.fields.short_name.verbose_name" %}"
                 , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
-                , title: "Description"
+                , title: "{% trans "entity.ReferenceGenome.fields.name.verbose_name" %}"
                 , sortable: true
             } , {
                 field: "notes"
-                , title: "Notes"
+                , title: "{% trans "entity.ReferenceGenome.fields.notes.verbose_name" %}"
                 , sortable: true
             } , {
                 field: "date"
-                , title: "Date"
+                , title: "{% trans "entity.ReferenceGenome.fields.date.verbose_name" %}"
                 , sortable: true
                 , template: '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
             } , {
                 field: "index_version"
-                , title: "Index version"
+                , title: "{% trans "entity.ReferenceGenome.fields.index_version.verbose_name" %}"
                 , sortable: true
             } , {
                 field: "status"
-                , title: "Status"
+                , title: "{% trans "entity.ReferenceGenome.fields.status.verbose_name" %}"
                 , sortable: true
             }
         ]
     });
+{% endif %}
 
-    // Test Fragments
-    var testFragments = $("#testFragments").kendoGrid({
+  // Test Fragments
+  var testFragments = $("#testFragments").kendoGrid({
         dataSource: {
           type: "json"
       , transport: {
@@ -618,33 +630,39 @@ $(document).ready(function(){
     , columns: [
       {
                 field: "name"
-                , title: "Name"
+                , title: "{% trans "configure_references.section.testfragments.field.name.label" %}"
+{% if featureflags.TESTFRAGMENT_ACTIONS %}
                 , template: "<a href='/configure/references/tf/${id}' class='add_tf'>${name}</a>"
+{% endif %}
                 , width: '10%'
             } , {
                 field: "key"
-                , title: "Key"
+                , title: "{% trans "configure_references.section.testfragments.field.key.label" %}"
                 , sortable: true
                 , width: '10%'
             } , {
                 field: "comments"
-                , title: "Comments"
+                , title: "{% trans "configure_references.section.testfragments.field.comments.label" %}"
                 , sortable: true
                 , width: '20%'
             } , {
                 field: "sequence"
-                , title: "Sequence"
+                , title: "{% trans "configure_references.section.testfragments.field.sequence.label" %}"
                 , sortable: true
                 , width: '50%'
+                , attributes: {
+                    style: 'word-wrap: break-word; text-overflow: unset;'
+                }
             } , {
                 field: "isofficial"
-                , title: "Enabled"
+                , title: "{% trans "configure_references.section.testfragments.field.isofficial.label" %}"
                 , sortable: true
-                , template: "#= kendo.toString((isofficial) ? 'Yes': 'No') #"
+                , template: "#= kendo.toString((isofficial) ? '{% trans "global.choice.yes" %}': '{% trans "global.choice.no" %}') #"
                 , width: '5%'
             }
         ]
     , dataBound: function() {
+{% if featureflags.TESTFRAGMENT_ACTIONS %}
       $('.add_tf').unbind("click").click(function (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -656,6 +674,7 @@ $(document).ready(function(){
           return false;
         });
       });
+{% endif %}
     }
     });
 
@@ -698,7 +717,7 @@ $(document).ready(function(){
         , columns: [
             {
                 field: "name"
-                , title: "Name"
+                , title: "{% trans "configure_references.section.barcodes.field.name.label" %}"
                 , template: kendo.template($("#barcodeNameCellTemplate").html())
             }
             ,{
@@ -707,12 +726,14 @@ $(document).ready(function(){
                 , sortable: false
                 , template: kendo.template($("#barcodeSystemCellTemplate").html())
             }
+{% if featureflags.BARCODESET_ACTIONS %}
             , {
-                title: "Action",
+                title: "{% trans "global.column.action" %}",
                 sortable: false,
                 width: 100,
                 template: kendo.template($("#barcodesActionColumnTemplate").html())
             }
+{% endif %}
         ]
         , dataBound: function() {
       $('.delete_barcodeset').click(function (e) {
@@ -732,7 +753,7 @@ $(document).ready(function(){
           })
           .fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
             console.log("error:", data);
           });
       });
@@ -748,7 +769,7 @@ $(document).ready(function(){
       $( '#modal_references_new_genome' ).modal("show");
     }).fail(function(data) {
       $('#error-messages').empty().show();
-        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+        $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
         console.log("error:", data);
     });
   });
@@ -776,7 +797,7 @@ $(document).ready(function(){
       })
       .fail(function(data) {
         $('#error-messages').empty().show();
-        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+        $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
         console.log("error:", data);
 
       })

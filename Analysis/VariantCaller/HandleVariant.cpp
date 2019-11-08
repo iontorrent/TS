@@ -14,37 +14,51 @@
 #include "DiagnosticJson.h"
 #include "ExtendParameters.h"
 
-void SummarizeInfoFieldsFromEnsemble(EnsembleEval &my_ensemble, vcf::Variant &candidate_variant, int _cur_allele_index, const string &sample_name) {
-
-  float mean_ll_delta;
-
-  my_ensemble.ScanSupportingEvidence(mean_ll_delta, _cur_allele_index);
-
-  candidate_variant.info["MLLD"].push_back(convertToString(mean_ll_delta));
-
-  float radius_bias, fwd_bias, rev_bias, ref_bias,var_bias;
+void SummarizeInfoFieldsFromEnsemble(EnsembleEval &my_ensemble, vcf::Variant &candidate_variant, const string &sample_name) {
   int fwd_strand = 0;
   int rev_strand = 1;
+  bool has_bias_adj = not my_ensemble.allele_eval.cur_state.bias_checker.stranded_bias_adj.empty();
 
-  int var_hyp = 1;
+  // Add FWDBA/REVBA only if they are active.
+  if (has_bias_adj){
+	  candidate_variant.info["FWDBA"] = {};
+	  candidate_variant.info["REVBA"] = {};
+  }else{
+	  candidate_variant.info.erase("FWDBA");
+	  candidate_variant.info.erase("REVBA");
+  }
 
-  // get bias terms from cur_allele within a single multi-allele structure
-  var_hyp = _cur_allele_index+1;
-  radius_bias = my_ensemble.allele_eval.cur_state.bias_generator.RadiusOfBias(_cur_allele_index);
-  fwd_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias[fwd_strand][_cur_allele_index];
-  rev_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias[rev_strand][_cur_allele_index];
-  //@TODO: note the disconnect in indexing; inconsistent betwen objects
-  ref_bias = my_ensemble.allele_eval.cur_state.bias_checker.ref_bias_v[var_hyp];
-  var_bias = my_ensemble.allele_eval.cur_state.bias_checker.variant_bias_v[var_hyp];
+  for (unsigned int _cur_allele_index = 0; _cur_allele_index < my_ensemble.allele_identity_vector.size(); ++_cur_allele_index){
+	float mean_ll_delta = 0.0f, radius_bias = 0.0f, fwd_bias = 0.0f, rev_bias = 0.0f, ref_bias = 0.0f, var_bias = 0.0f;
+	unsigned int var_hyp = _cur_allele_index+1;
 
-  candidate_variant.info["RBI"].push_back(convertToString(radius_bias));
-  // this is by strand
-  candidate_variant.info["FWDB"].push_back(convertToString(fwd_bias));
-  candidate_variant.info["REVB"].push_back(convertToString(rev_bias));
-  // this is by hypothesis
-  candidate_variant.info["REFB"].push_back(convertToString(ref_bias));
-  candidate_variant.info["VARB"].push_back(convertToString(var_bias));
+	// MLLD
+	my_ensemble.ScanSupportingEvidence(mean_ll_delta, _cur_allele_index);
+	candidate_variant.info["MLLD"].push_back(convertToString(mean_ll_delta));
 
+	// get bias terms from cur_allele within a single multi-allele structure
+	radius_bias = my_ensemble.allele_eval.cur_state.bias_generator.RadiusOfBias(_cur_allele_index);
+	fwd_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias[fwd_strand][_cur_allele_index];
+	rev_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias[rev_strand][_cur_allele_index];
+	//@TODO: note the disconnect in indexing; inconsistent between objects
+	ref_bias = my_ensemble.allele_eval.cur_state.bias_checker.ref_bias_v[var_hyp];
+	var_bias = my_ensemble.allele_eval.cur_state.bias_checker.variant_bias_v[var_hyp];
+	// Site-specific bias adjustment. Add FWDBA/REVBA only if they are active.
+	if (has_bias_adj){
+	  float fwdb_adj = (not my_ensemble.allele_eval.cur_state.bias_checker.stranded_bias_adj[fwd_strand].empty())? my_ensemble.allele_eval.cur_state.bias_checker.stranded_bias_adj[fwd_strand][_cur_allele_index] : 0.0f;
+	  float revb_adj = (not my_ensemble.allele_eval.cur_state.bias_checker.stranded_bias_adj[rev_strand].empty())? my_ensemble.allele_eval.cur_state.bias_checker.stranded_bias_adj[rev_strand][_cur_allele_index] : 0.0f;
+	  candidate_variant.info["FWDBA"].push_back(convertToString(fwdb_adj));
+	  candidate_variant.info["REVBA"].push_back(convertToString(revb_adj));
+	}
+
+	candidate_variant.info["RBI"].push_back(convertToString(radius_bias));
+	// this is by strand
+	candidate_variant.info["FWDB"].push_back(convertToString(fwd_bias));
+	candidate_variant.info["REVB"].push_back(convertToString(rev_bias));
+	// this is by hypothesis
+	candidate_variant.info["REFB"].push_back(convertToString(ref_bias));
+	candidate_variant.info["VARB"].push_back(convertToString(var_bias));
+  }
 }
 
 void EnsembleEval::MultiMinAlleleFreq(const vector<float>& multi_min_allele_freq){
@@ -97,7 +111,7 @@ void GlueOutputVariant(EnsembleEval &my_ensemble, VariantCandidate &candidate_va
     DecisionTreeData my_decision(*(my_ensemble.variant));
     my_decision.use_molecular_tag = my_ensemble.allele_eval.total_theory.GetIsMolecularTag();
     my_decision.tune_sbias = parameters.my_controls.sbias_tune;
-    my_decision.SetupFromMultiAllele(&(my_ensemble.allele_identity_vector), &(my_ensemble.info_fields));
+    my_decision.SetupFromMultiAllele(&(my_ensemble.allele_identity_vector), &(my_ensemble.misc_info_fields));
 
     if (my_ensemble.read_id_.empty()){
         cerr << "ERROR: Can't GlueOutputVariant with empty read id." << endl;
@@ -106,9 +120,7 @@ void GlueOutputVariant(EnsembleEval &my_ensemble, VariantCandidate &candidate_va
     my_decision.all_summary_stats.AssignStrandToHardClassifiedReads(my_ensemble.strand_id_, my_ensemble.read_id_, my_ensemble.dist_to_left_, my_ensemble.dist_to_right_);
     my_decision.all_summary_stats.FillBiDirFamBook(my_ensemble.alt_fam_indices_, my_ensemble.allele_eval.total_theory.my_eval_families, my_ensemble.allele_eval.total_theory.my_hypotheses);
 
-	for (unsigned int _alt_allele_index = 0; _alt_allele_index < my_decision.allele_identity_vector->size(); _alt_allele_index++) {
-		SummarizeInfoFieldsFromEnsemble(my_ensemble, *(my_ensemble.variant), _alt_allele_index, sample_name);
-    }
+	SummarizeInfoFieldsFromEnsemble(my_ensemble, *(my_ensemble.variant), sample_name);
 
 	if (my_ensemble.allele_eval.total_theory.GetIsMolecularTag()){
 		my_ensemble.variant->info["TGSM"].clear();

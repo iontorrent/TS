@@ -71,7 +71,7 @@
       $.blockUI();
       $.each(friends, hey);
 
-      $.getJSON("/admin/network/check", function(data) {
+      $.getJSON("/rundb/api/v1/network/", function(data) {
         var detected = '<span class="happy">Detected ✔</span>';
         var missing = '<span class="sad">Missing x</span>';
         if (data.eth_device === null || data.route === null || data.ip_addr === null) {
@@ -82,7 +82,7 @@
         } else {
           $("#eth_device").append(missing + '<p>The outbound network port is not up.</p>');
         }
-        if (data.ip_addr) {
+        if (data.internal_ip) {
           $("#ip_addr").append(detected);
         } else {
           $("#ip_addr").append(missing + '<p>Make sure the network cable is connected. If the green light on the ethernet port is on, then perhaps this network does not supply an IP address with DHCP?  If that is the case then the IT department may need to configure the server with a static address.</p>');
@@ -92,16 +92,10 @@
         } else {
           $("#route").append(missing + "<p>Double check connectivity.  Possibly something didn't work in the IP configuration.  Maybe try rebooting the server to force it to pick up it's IP address again, then retry this test.</p>");
         }
-      });
-
-      $.ajax({
-        url: "/admin/network/external_ip/",
-        dataType: "text",
-        success: function (address) {
-          $("#externalIP").text(address);
-        },
-        error: function () {
-          $("#externalIP").text("Unable to determine")
+        if (data.external_ip) {
+          $("#externalIP").text(data.external_ip);
+        } else {
+          $("#externalIP").text("Unable to determine");
         }
       });
 

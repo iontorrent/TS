@@ -89,7 +89,7 @@ python-amqp
 )
 
 for pkg in ${pkgs[@]}; do
-    apt-get remove --purge --assume-yes --force-yes $pkg
+    apt-get remove --purge --assume-yes --allow-unauthenticated $pkg
 done
 
 apt-get autoremove --assume-yes

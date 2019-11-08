@@ -1,3 +1,4 @@
+{% load i18n %}
 <div id="modal_configure_edit_email" title="" class="modal modal-750 hide">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -19,8 +20,8 @@
 	    </form>
     </div>
     <div class="modal-footer">
-	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-		<a id="submit_email" class="btn btn-primary" href="#">Save</a>    
+	    <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+		<a id="submit_email" class="btn btn-primary" href="#">{% trans "global.action.save" %}</a>
 	</div>
 <script type="text/javascript">
 	$('#submit_email').click(function(){
@@ -40,7 +41,7 @@
 			},
 			error: function (data) {
 				$("#email_group").addClass("error");
-				$("#email_help").html("Invalid email");
+				$("#email_help").html("{% trans "configure_configure.email.messages.error" %}");
 			}
 		});
 		return false;

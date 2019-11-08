@@ -19,7 +19,7 @@ def urlinline(filename, mime=None):
 
     Base-64 encodes the data.
     """
-    infile = open(filename, 'rb')
+    infile = open(filename, "rb")
     text = infile.read()
     infile.close()
     enc = b64.standard_b64encode(text)

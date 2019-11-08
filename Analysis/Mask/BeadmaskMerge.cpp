@@ -64,7 +64,8 @@ int main ( int argc, char *argv[] )
   std::vector<std::string> folders;
   int c;
   char* excludeFileName = NULL;
-  while ( ( c = getopt ( argc, argv, "i:o:e:hm:v" ) ) != -1 ) {
+  bool initWithExclude = false;
+  while ( ( c = getopt ( argc, argv, "i:o:e:hm:v:c" ) ) != -1 ) {
     switch ( c ) {
     case 'i':
       beadfindFileName = strdup ( optarg );
@@ -82,6 +83,9 @@ int main ( int argc, char *argv[] )
       break;
     case 'e':
       excludeFileName = strdup ( optarg );
+      break;
+    case 'c':
+      initWithExclude = true;
       break;
     default:
       fprintf ( stdout, "whatever" );
@@ -127,7 +131,10 @@ int main ( int argc, char *argv[] )
     exit ( 1 );
   }
 
-  Mask fullmask ( wt,ht );
+  Mask fullmask (wt, ht);
+  if(initWithExclude){
+	  fullmask.SetAllExclude();
+  }
 
   //  mask value
   uint16_t mask = 0;

@@ -161,6 +161,14 @@ float BasicBiasGenerator::RadiusOfBias(int o_alt){
 // also, it iterates over hypotheses, not over strands+hypotheses
 // although possibly it should
 
+void BiasChecker::SetBiasAdj(const vector<vector<float> >& stranded_bias_adjustment){
+	stranded_bias_adj = stranded_bias_adjustment;
+}
+
+void BiasChecker::ClearBiasAdj(){
+	stranded_bias_adj.clear();
+}
+
 void BiasChecker::ResetUpdate(){
   update_variant_bias_v.assign(update_variant_bias_v.size(),0.0f);
   weight_variant_v.assign(weight_variant_v.size(), 0.0f);
@@ -177,6 +185,7 @@ void BiasChecker::Init(int num_hyp_no_null){
   weight_ref_v.assign(num_hyp_no_null, 0.0f);
   damper_bias = 30.0f;  // keep things implicitly near zero bias - phrase as precision?
   soft_clip = 0.1f; // shut down data points that are extremely marginal
+  stranded_bias_adj.clear();
 }
 
 void BiasChecker::DoUpdate(){

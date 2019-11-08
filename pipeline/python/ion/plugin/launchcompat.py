@@ -39,9 +39,9 @@ class IonLaunchPlugin(IonPlugin):
     def getContent(cls):
         if not cls._content:
             try:
-                with open(cls._launchsh, 'r') as f:
+                with open(cls._launchsh, "r") as f:
                     cls._content = f.readlines()
-            except:
+            except Exception:
                 logger.error("Unable to read launch.sh script: '%s'", cls._launchsh)
         return cls._content
 
@@ -50,13 +50,15 @@ class IonLaunchPlugin(IonPlugin):
         if cls._pluginsettings:
             return cls._pluginsettings
 
-        pluginsettingsjson = os.path.join(os.path.dirname(cls._launchsh), 'pluginsettings.json')
+        pluginsettingsjson = os.path.join(
+            os.path.dirname(cls._launchsh), "pluginsettings.json"
+        )
         if not os.path.exists(pluginsettingsjson):
             return cls._pluginsettings
         try:
-            with open(pluginsettingsjson, 'r') as f:
+            with open(pluginsettingsjson, "r") as f:
                 cls._pluginsettings = json.load(f)
-        except:
+        except Exception:
             logger.error("Unable to read pluginsettings.json: '%s'", pluginsettingsjson)
 
         return cls._pluginsettings
@@ -68,7 +70,7 @@ class IonLaunchPlugin(IonPlugin):
         # Leading values ignored, usually '#VERSION' or '# VERSION'
         # Must be all-caps VERSION
         # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-        VERSION = re.compile(r'VERSION\s*=\s*\"?\'?([\d\.\w\-\_]+)\"?\'?')
+        VERSION = re.compile(r"VERSION\s*=\s*\"?\'?([\d\.\w\-\_]+)\"?\'?")
         for line in cls.getContent():
             m = VERSION.search(line)
             if m:
@@ -78,10 +80,14 @@ class IonLaunchPlugin(IonPlugin):
                 try:
                     v = LooseVersion(v)
                 except ValueError:
-                    logger.warning("Version in file does not conform to LooseVersion rules: ", v)
+                    logger.warning(
+                        "Version in file does not conform to LooseVersion rules: ", v
+                    )
                 return str(v)
         else:
-            logger.warning("Plugin launch script does not define VERSION '%s'", cls._launchsh)
+            logger.warning(
+                "Plugin launch script does not define VERSION '%s'", cls._launchsh
+            )
         return "0"
 
     @classmethod
@@ -101,7 +107,7 @@ class IonLaunchPlugin(IonPlugin):
             return cls._runtypes
 
         ret = []
-        for k in pluginsettings.get('runtype', pluginsettings.get('runtypes', [])):
+        for k in pluginsettings.get("runtype", pluginsettings.get("runtypes", [])):
             c = k  # lookupEnum(RunType, k)
             if c:
                 ret.append(c)
@@ -114,7 +120,7 @@ class IonLaunchPlugin(IonPlugin):
             return cls._features
 
         ret = []
-        for k in pluginsettings.get('feature', pluginsettings.get('features', [])):
+        for k in pluginsettings.get("feature", pluginsettings.get("features", [])):
             c = k  # lookupEnum(Feature, k)
             if c:
                 ret.append(c)
@@ -127,7 +133,7 @@ class IonLaunchPlugin(IonPlugin):
             return cls._runlevels
 
         ret = []
-        for k in pluginsettings.get('runlevel', pluginsettings.get('runlevels', [])):
+        for k in pluginsettings.get("runlevel", pluginsettings.get("runlevels", [])):
             c = k  # lookupEnum(RunLevel, k)
             if c:
                 ret.append(c)
@@ -140,7 +146,7 @@ class IonLaunchPlugin(IonPlugin):
             return cls._depends
 
         ret = []
-        for k in pluginsettings.get('depend', pluginsettings.get('depends', [])):
+        for k in pluginsettings.get("depend", pluginsettings.get("depends", [])):
             c = k  # lookupEnum(Feature, k)
             if c:
                 ret.append(c)
@@ -154,10 +160,14 @@ class IonLaunchPlugin(IonPlugin):
         if not os.path.exists(self._launchsh):
             self.log.error("Unable to find launch.sh at '%s'", self._launchsh)
             return False
-        outputpath = self.data['analysis_dir']
-        ret = subprocess.call(["ionPluginShell", self._launchsh, "-j", "startplugin.json"], env=lenv, cwd=outputpath)
+        outputpath = self.data["analysis_dir"]
+        ret = subprocess.call(
+            ["ionPluginShell", self._launchsh, "-j", "startplugin.json"],
+            env=lenv,
+            cwd=outputpath,
+        )
         self.exit_status = ret
-        return (ret == 0)
+        return ret == 0
 
 
 def get_launch_class(pluginname, launch_script, add_to_store=True):
@@ -165,9 +175,11 @@ def get_launch_class(pluginname, launch_script, add_to_store=True):
     # Our class name
     if pluginname is not None:
         clsname = str(pluginname)  # de-unicodify
-        m = re.match('^'+tokenize.Name+'$', clsname)
+        m = re.match("^" + tokenize.Name + "$", clsname)
         if not m:
-            logger.warn("Plugin Name: '%s' is not a valid python identifier", pluginname)
+            logger.warn(
+                "Plugin Name: '%s' is not a valid python identifier", pluginname
+            )
             clsname = None
         if keyword.iskeyword(pluginname):
             logger.warn("Plugin Name: '%s' is a python reserved keyword", pluginname)
@@ -179,4 +191,13 @@ def get_launch_class(pluginname, launch_script, add_to_store=True):
         clsname = "P" + md5(launch_script).hexdigest()
         logger.warn("Using '%s' for plugin '%s'", clsname, pluginname)
 
-    return type(clsname, (IonLaunchPlugin,), {'name': pluginname, '_launchsh': launch_script, '__doc__': '', 'add_to_store': add_to_store})
+    return type(
+        clsname,
+        (IonLaunchPlugin,),
+        {
+            "name": pluginname,
+            "_launchsh": launch_script,
+            "__doc__": "",
+            "add_to_store": add_to_store,
+        },
+    )

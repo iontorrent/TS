@@ -15,9 +15,12 @@ Dialog::Dialog()
     tabWidget->addTab((mGainTab = new GainTab("Gain",this)), tr("Gain"));
     tabWidget->addTab((mWellsTab = new WellsTab("Wells",this)), tr("1.wells"));
     tabWidget->addTab((mAlignmentTab = new AlignmentTab("Alignment",this)), tr("Alignment"));
+    tabWidget->addTab((mNumpyTab = new NumpyTab("Numpy",this)), tr("Numpy"));
+    tabWidget->addTab((mMicroscopeTab = new MicroscopeTab("Microscope",this)), tr("Microscope"));
 
     connect(tabWidget,SIGNAL(currentChanged(int)), this, SLOT(currentChanged(int)));
 
+    connect(mRawTab,SIGNAL(fileNameChanged(QString)), this, SLOT(fileNameChanged(QString)));
     QVBoxLayout *mainLayout = new QVBoxLayout;
     mainLayout->addWidget(tabWidget);
 
@@ -27,6 +30,7 @@ Dialog::Dialog()
 
     setWindowTitle(tr("Ion Dat Explorer"));
     QMenu *fileMenu = menuBar()->addMenu(tr("&File"));
+    menuBar()->setNativeMenuBar(false);
 
     QAction *dummyAct = new QAction(tr(""),this);
     fileMenu->addAction(dummyAct);
@@ -61,6 +65,18 @@ Dialog::Dialog()
     connect(OpenBamAct, SIGNAL(triggered()), this, SLOT(browseBamDir()));
     fileMenu->addAction(OpenBamAct);
 
+    OpenNumpyAct = new QAction(tr("&Open Numpy file"), this);
+    OpenNumpyAct->setStatusTip(tr("Open Numpy file"));
+    connect(OpenNumpyAct, SIGNAL(triggered()), this, SLOT(browseNumpyDir()));
+    fileMenu->addAction(OpenNumpyAct);
+
+    OpenMicroscopeAct = new QAction(tr("&Open Microscope file"), this);
+    OpenMicroscopeAct->setStatusTip(tr("Open Microscope file"));
+    connect(OpenMicroscopeAct, SIGNAL(triggered()), this, SLOT(browseMicroscopeDir()));
+    fileMenu->addAction(OpenMicroscopeAct);
+
+    dummyAct = new QAction(tr(""),this);
+
     QAction *ClearAct = new QAction(tr("&Clear"), this);
     ClearAct->setStatusTip(tr("Clear"));
     connect(ClearAct, SIGNAL(triggered()), this, SLOT(Clear()));
@@ -92,6 +108,7 @@ void Dialog::Clear()
     NoiseFileName="";
     GainFileName="";
     WellsFileName="";
+    NumpyFileName="";
     RawExpmtDir = "";
     RawExpmt_X = -1;
     RawExpmt_Y = -1;
@@ -121,6 +138,8 @@ void Dialog::Save()
             mNoiseTab->Save(out);
             mGainTab->Save(out);
             mAlignmentTab->Save(out);
+            mNumpyTab->Save(out);
+            mMicroscopeTab->Save(out);
             file.close();
         }
     }
@@ -140,6 +159,14 @@ void Dialog::browseDatDir()
                                tr("Open Dat File"), DatFileName,"*.dat*");
 
     printf("%s: %s\n",__FUNCTION__,fileName.toLatin1().data());
+
+    fileNameChanged(fileName);
+}
+
+void Dialog::fileNameChanged(QString fileName)
+{
+	qDebug() << __PRETTY_FUNCTION__ << ": recevied fileNameChanged";
+
     if (!fileName.isEmpty()) {
         DatFileName=fileName;
         mRawTab->setfilename(DatFileName);
@@ -301,9 +328,47 @@ void Dialog::browseBamDir()
     if (!fileName.isEmpty()) {
         QFileInfo file(fileName);
         //file.absoluteDir();
-        BamFileName=file.absolutePath();
+        if(fileName.contains(".bam"))
+            BamFileName=fileName;
+        else
+            BamFileName=file.absolutePath();
+
         mAlignmentTab->setfilename(BamFileName);
         currentChanged(5);
+    }
+}
+
+void Dialog::browseNumpyDir()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+                               tr("Open Numpy File"), NumpyFileName,"*.npy");
+
+    printf("%s: %s\n",__FUNCTION__,fileName.toLatin1().data());
+    if (!fileName.isEmpty()) {
+        NumpyFileName=fileName;
+        mNumpyTab->setfilename(NumpyFileName);
+        currentChanged(6);
+    }
+}
+
+void Dialog::browseMicroscopeDir()
+{
+    QString fileName = QFileDialog::getOpenFileName(this,
+                               tr("Open Microscope File"), MicroscopeFileName,"*.png");
+
+    printf("%s: %s\n",__FUNCTION__,fileName.toLatin1().data());
+    QFileInfo file(fileName);
+    if (!fileName.isEmpty() && file.exists()) {
+        QString fileNameCsv = QFileDialog::getOpenFileName(this,
+                                   tr("Open Microscope Csv File"), MicroscopeFileName,"*.csv");
+
+        printf("%s: %s\n",__FUNCTION__,fileNameCsv.toLatin1().data());
+        QFileInfo fileCsv(fileNameCsv);
+        if (!fileNameCsv.isEmpty() && fileCsv.exists()) {
+            MicroscopeFileName=fileName;
+            mMicroscopeTab->SetDualFileName(MicroscopeFileName,fileNameCsv);
+            currentChanged(7);
+        }
     }
 }
 
@@ -315,9 +380,17 @@ void Dialog::currentChanged(int index)
     else if(index == 1)
         MainString += "(" + BfMaskFileName + ")";
     else if(index == 2)
-        MainString += "(" + WellsFileName + ")";
+        MainString += "(" + NoiseFileName + ")";
     else if(index == 3)
+        MainString += "(" + GainFileName + ")";
+    else if(index == 4)
+        MainString += "(" + WellsFileName + ")";
+    else if(index == 5)
         MainString += "(" + BamFileName + ")";
+    else if(index == 6)
+        MainString += "(" + NumpyFileName + ")";
+    else if(index == 7)
+        MainString += "(" + MicroscopeFileName + ")";
 
     setWindowTitle(MainString);
 

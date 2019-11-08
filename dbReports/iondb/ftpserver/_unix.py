@@ -4,6 +4,7 @@ try:
 except ImportError:
     pass
 else:
+
     class UnixPersonateUser(object):
         def __init__(self, file_access_user):
             self.file_access_user = file_access_user

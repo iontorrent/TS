@@ -116,6 +116,12 @@ queues:
 #----------------------------------------------------------------------------
 UPDATE_SYSTEM: True
 
+
+#----------------------------------------------------------------------------
+# Enable OEM specific actions
+#----------------------------------------------------------------------------
+is_oem: False
+
 #==============================================================================
 # End of user customizable section
 #==============================================================================
@@ -187,3 +193,13 @@ common_syspkg_list:
     - timelimit
     - dkms
     - expect
+
+ion_services_list:
+    - rabbitmq-server
+    - celeryd
+    - celerybeat
+    - DjangoFTP
+    - ionCrawler
+    - ionJobServer
+    - ionPlugin
+

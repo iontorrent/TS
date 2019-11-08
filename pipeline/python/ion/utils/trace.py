@@ -6,15 +6,14 @@ Utilities for working with time series data (traces).
 
 import numpy
 
-_RISE_TIME = 'Rise Time'
-_SLOPE = 'Slope'
-_RMS_AMPLITUDE = 'RMS Amplitude'
+_RISE_TIME = "Rise Time"
+_SLOPE = "Slope"
+_RMS_AMPLITUDE = "RMS Amplitude"
 
 TRACE_STAT_NAMES = [_RISE_TIME, _SLOPE, _RMS_AMPLITUDE]
 
 
-def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
-                as_dict=False):
+def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None, as_dict=False):
     """
     @TODO: jhoon
     """
@@ -25,8 +24,8 @@ def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
     trace = numpy.array(trace)
     peak = max(trace)
     peakIndex = numpy.argmax(trace)
-    upper = endfrac*peak
-    lower = startfrac*peak
+    upper = endfrac * peak
+    lower = startfrac * peak
     beginIndex = 0
     trlen = len(trace)
     while trace[beginIndex] < lower and beginIndex < trlen:
@@ -39,18 +38,15 @@ def trace_stats(trace, startfrac, endfrac, lbound=None, rbound=None,
     if lbound is not None:
         endIndex += lbound
     if endIndex > beginIndex:
-        slope = numpy.polyfit(numpy.arange(beginIndex, endIndex),
-                              trace[beginIndex:endIndex], 1)[0]
+        slope = numpy.polyfit(
+            numpy.arange(beginIndex, endIndex), trace[beginIndex:endIndex], 1
+        )[0]
         riseTime = endIndex - beginIndex
     else:
         slope = None
         riseTime = None
-    rmsAmpl = numpy.sqrt(numpy.average(numpy.square(1000.0 * trace/sum(trace))))
+    rmsAmpl = numpy.sqrt(numpy.average(numpy.square(1000.0 * trace / sum(trace))))
     if as_dict:
-        return {
-            _RISE_TIME: riseTime,
-            _SLOPE: slope,
-            _RMS_AMPLITUDE: rmsAmpl
-        }
+        return {_RISE_TIME: riseTime, _SLOPE: slope, _RMS_AMPLITUDE: rmsAmpl}
     else:
         return riseTime, slope, rmsAmpl

@@ -18,9 +18,10 @@ import ion.plugin.base
     """
 
 import logging
+
 LOG = logging.getLogger(__name__)
 
-__all__ = ('PluginCLI', 'cli',)
+__all__ = ("PluginCLI", "cli")
 
 
 # atexit handler
@@ -39,7 +40,9 @@ class PluginCLI(object):
             # Guess module from caller
             frm = inspect.stack()[1]
             pluginmod = inspect.getmodule(frm[0])
-            (name, suffix, mode, module_type) = inspect.getmoduleinfo(pluginmod.__file__)
+            (name, suffix, mode, module_type) = inspect.getmoduleinfo(
+                pluginmod.__file__
+            )
             # name = inspect.getmodulename(pluginmod)
             self.cls = getattr(pluginmod, name)
         elif isinstance(plugin, types.TypeType):
@@ -50,11 +53,17 @@ class PluginCLI(object):
             # cache.load_module(module.__name__)
             # FIXME - iterate through all module attrs to find the class
             for name, obj in inspect.getmembers(plugin):
-                if hasattr(obj, "__bases__") and ion.plugin.base.IonPluginBase in obj.__bases__:
+                if (
+                    hasattr(obj, "__bases__")
+                    and ion.plugin.base.IonPluginBase in obj.__bases__
+                ):
                     self.cls = obj
                     break
             else:
-                LOG.error("Unable to find class in module '%s' which implements IonPlugin", plugin.__name__)
+                LOG.error(
+                    "Unable to find class in module '%s' which implements IonPlugin",
+                    plugin.__name__,
+                )
                 self.cls = plugin
         elif isinstance(plugin, ion.plugin.base.IonPluginBase):
             # Got plugin instance
@@ -62,10 +71,13 @@ class PluginCLI(object):
             self.instance = plugin
         elif isinstance(plugin, basestring):
             from ion.plugin.loader import cache
+
             self.cls = ion.plugin.loader.cache.load_module(plugin)
         else:
             LOG.fatal("Unable to recognize %s as plugin definition", plugin)
-            raise ValueError("PluginCLI must be called with a class instance or string class name")
+            raise ValueError(
+                "PluginCLI must be called with a class instance or string class name"
+            )
         self.ret = None
 
         status = self.run()
@@ -81,12 +93,14 @@ class PluginCLI(object):
 
         if self.options.inspect:
             from ion.plugin.info import PluginInfo
-            print PluginInfo.from_instance(plugin)
+
+            print(PluginInfo.from_instance(plugin))
             return self.EXIT_SUCCESS
 
         if self.options.bctable_columns:
             from ion.plugin.barcodetable_columns import available_columns
-            print json.dumps(available_columns(), indent=1)
+
+            print(json.dumps(available_columns(), indent=1))
             return
 
         if self.options.runmode == "launch":
@@ -98,27 +112,37 @@ class PluginCLI(object):
                 return self.EXIT_ERROR
             return plugin.block(self.options.block)
 
-
     def parse_command_line(self):
-        version = getattr(self.cls, '__version__', getattr(self.cls, 'version', "(Unknown)"))
-        docstring = inspect.getdoc(self.cls) or ''
-        parser = argparse.ArgumentParser(description='Ion Plugin Command Line Interface\n' + docstring)
-        parser.add_argument('--version', action='version', version='Ion Torrent Plugin - %(prog)s v' + self.cls.__version__)
-        parser.add_argument('-v', '--verbose', action='count', default=0)
+        version = getattr(
+            self.cls, "__version__", getattr(self.cls, "version", "(Unknown)")
+        )
+        docstring = inspect.getdoc(self.cls) or ""
+        parser = argparse.ArgumentParser(
+            description="Ion Plugin Command Line Interface\n" + docstring
+        )
+        parser.add_argument(
+            "--version",
+            action="version",
+            version="Ion Torrent Plugin - %(prog)s v" + self.cls.__version__,
+        )
+        parser.add_argument("-v", "--verbose", action="count", default=0)
 
-        parser.add_argument('--dry-run', action='store_true')
-        parser.add_argument('--inspect', '--info', action='store_true')
-        parser.add_argument('--runmode', default="launch")
-        parser.add_argument('--block', default=None)
-        parser.add_argument('--bctable-columns', action='store_true')
+        parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--inspect", "--info", action="store_true")
+        parser.add_argument("--runmode", default="launch")
+        parser.add_argument("--block", default=None)
+        parser.add_argument("--bctable-columns", action="store_true")
         self.options = parser.parse_args()
 
         log_lvl = logging.ERROR
-        if self.options.verbose: log_lvl = logging.INFO
-        if self.options.verbose > 1: log_lvl = logging.DEBUG
+        if self.options.verbose:
+            log_lvl = logging.INFO
+        if self.options.verbose > 1:
+            log_lvl = logging.DEBUG
         logging.basicConfig(level=log_lvl)
 
         LOG.debug("Called with: %s", self.options)
         return
+
 
 cli = PluginCLI

@@ -534,7 +534,11 @@ int IonstatsAlignment(OptArgs &opts, const string &program_str)
   // Processing complete, write summary data
   writeIonstatsAlignmentJson(opt.OutputJsonFilename(), opt.AqErrorRate(), opt.BcAdjust(), opt.EvaluateFlow(), opt.NSubregions(), alignment_summary[0]);
   if(opt.OutputH5Filename() != "") {
-    bool append_h5_file = opt.EvaluatePerReadPerFlow();
+    bool append_h5_file = false;
+    if (opt.EvaluatePerReadPerFlow()) {
+      append_h5_file = true;
+      alignment_summary[0].PerReadFlowCloseH5();
+    }
     writeIonstatsH5(opt.OutputH5Filename(), append_h5_file, opt.RegionName(), alignment_summary[0]);
   }
 
@@ -2713,7 +2717,6 @@ void * processAlignments(void *in) {
   if(pac->opt->EvaluatePerReadPerFlow() && !pac->alignment_summary->PerReadFlowBufferEmpty()) {
     pthread_mutex_lock(pac->results_mutex);
     pac->alignment_summary->PerReadFlowForcedFlush();
-    pac->alignment_summary->PerReadFlowCloseH5();
     pthread_mutex_unlock(pac->results_mutex);
   }
 

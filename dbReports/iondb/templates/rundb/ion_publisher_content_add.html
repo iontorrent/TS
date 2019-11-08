@@ -1,6 +1,6 @@
 {% extends "rundb/configure/base.html" %}
 {% load static from staticfiles %}
-
+{% load i18n %}
 {% block extra_head %}
   <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
   <style type="text/css">
@@ -16,11 +16,7 @@
 <div class="content">
 
   <div class="modal-header">
-  {% if hotspot %}
-  <h1>New Hotspots</h1>
-  {% else %}
-  <h1>New Target Regions</h1>
-  {% endif %}
+  <h1>{{ title }}</h1>
   </div>
   
   <div>
@@ -29,17 +25,17 @@
         <div id="errors" class="alert alert-error hide"></div>
         <div id="bedPublish" class="control-group">
           {% if hotspot %}
-          <label for="pickfile" class="control-label">Hotspots File</label>
+          <label for="pickfile" class="control-label">{{ HotspotsContent.pickfile.verbose_name }}</label>
           {% else %}
-          <label for="pickfile" class="control-label">Target Regions File</label>
+          <label for="pickfile" class="control-label">{{ TargetRegionsContent.pickfile.verbose_name }}</label>
           {% endif %}
           <div class="controls">
-            <div><a id="pickfile" name="pickfile" class="btn">Select File</a><div id="file_item"></div></div>
+            <div><a id="pickfile" name="pickfile" class="btn">{% trans "global.fields.pickfile.select" %}</a><div id="file_item"></div></div>
           </div>
         </div>
         
         <div class="control-group">
-          <label for="reference" class="control-label">Reference</label>
+          <label for="reference" class="control-label">{{ Content.reference.verbose_name }}</label>
           <div class="controls">
             <select class="input-xlarge" name="reference" id="reference" style="width:400px;">
               {% for ref in references %}
@@ -50,16 +46,16 @@
         </div>
         
         <div class="control-group">
-          <label for="description" class="control-label">Description</label>
+          <label for="description" class="control-label">{{ Content.description.verbose_name }}</label>
           <div class="controls">
-            <textarea name="description" id="description" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
+            <textarea name="description" id="description" placeholder='{% trans "entity.Content.fields.description.placeholder" %}' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
           </div>
         </div>
         
         <div class="control-group">
-          <label for="notes" class="control-label">Notes</label>
+          <label for="notes" class="control-label">{{ Content.notes.verbose_name }}</label>
           <div class="controls">
-            <textarea name="notes" id="notes" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
+            <textarea name="notes" id="notes" placeholder='{% trans "entity.Content.fields.notes.placeholder" %}' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
           </div>
         </div>
       </fieldset>
@@ -70,11 +66,11 @@
   
   <div class="modal-footer">    
     {% if hotspot %}
-    <a id="uploadfile" class="btn btn-primary pull-left" href="#">Upload Hotspots File</a>
-    <a class="btn pull-left" href="/configure/references/#hotspots">Cancel</a>
+    <a id="uploadfile" class="btn btn-primary pull-left" href="#">{% trans "content_add_hotspots.action.submit" %}</a>
+    <a class="btn pull-left" href="/configure/references/#hotspots">{% trans "global.action.cancel" %}</a>
     {% else %}
-    <a id="uploadfile" class="btn btn-primary pull-left" href="#">Upload Target Regions File</a>
-    <a class="btn pull-left" href="/configure/references/#target-regions">Cancel</a>
+    <a id="uploadfile" class="btn btn-primary pull-left" href="#">{% trans "content_add_targetregions.action.submit" %}</a>
+    <a class="btn pull-left" href="/configure/references/#target-regions">{% trans "global.action.cancel" %}</a>
     {% endif %}
   </div>
 
@@ -103,9 +99,9 @@
       uploader.bind('Init', function (up, params) {
         $("#pickfile").show();
         {% if hotspot %}
-        $('#upload-help').html("<p>Please select a BED or VCF file to upload.</p>");
+        $('#upload-help').html("<p>{% trans "content_add_hotspots.messages.pickfile.required" %}</p>");
         {% else %}
-        $('#upload-help').html("<p>Please select a BED file to upload.</p>");
+        $('#upload-help').html("<p>{% trans "content_add_targetregions.messages.pickfile.required" %}</p>");
         {% endif %}
       });
       
@@ -121,7 +117,7 @@
       });
 
       uploader.bind('Error', function(up, err) {
-        var msg = 'There was an error during your upload'
+        var msg = '{% trans "global.messages.upload.error"|safe %}'
         if (err.response && !err.response.startsWith('<!')){
           msg = err.response;
         }

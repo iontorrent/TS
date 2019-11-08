@@ -9,7 +9,7 @@
 #include "json/json.h"
 
 #ifdef ION_COMPILE_CUDA
-  #include <host_defines.h>   // for __host__ and __device__
+  #include <cuda_runtime.h>   // for __host__ and __device__
 #endif
 
 // Isolate the over-parameterized 

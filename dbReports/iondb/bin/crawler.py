@@ -37,7 +37,7 @@ import traceback
 import urllib
 import argparse
 
-#from iondb.bin.djangoinit import *
+# from iondb.bin.djangoinit import *
 from iondb.bin import djangoinit
 from django import db
 from django.db import connection
@@ -50,10 +50,12 @@ from twisted.web import xmlrpc, server
 from iondb.rundb import models
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
+
 try:
     import iondb.version as version  # @UnresolvedImport
+
     GITHASH = version.IonVersionGetGitHash()
-except:
+except Exception:
     GITHASH = ""
 
 LOG_BASENAME = "explog.txt"
@@ -68,32 +70,35 @@ class CrawlLog(object):
     Data logged by the ``CrawlLog`` includes the ten most recently saved runs
     to the database, and the crawler service's uptime.
     """
+
     MAX_EXPRS = 10
     BASE_LOG_NAME = "crawl.log"
     PRIVILEGED_BASE = "/var/log/ion"
 
     def __init__(self, _disableautoanalysis):
-        '''Initialization function'''
+        """Initialization function"""
         self.disableautoanalysis = _disableautoanalysis
         self.expr_deque = []
         self.lock = threading.Lock()
         self.expr_count = 0
         self.start_time = None
-        self.current_folder = '(none)'
-        self.state = '(none)'
+        self.current_folder = "(none)"
+        self.state = "(none)"
         self.state_time = datetime.datetime.now()
         self.exp_errors = {}
         # set up debug logging
-        self.errors = logging.getLogger('crawler')
+        self.errors = logging.getLogger("crawler")
         self.errors.propagate = False
         self.errors.setLevel(logging.INFO)
         try:
             fname = os.path.join(self.PRIVILEGED_BASE, self.BASE_LOG_NAME)
-            infile = open(fname, 'a')
+            infile = open(fname, "a")
             infile.close()
         except IOError:
             fname = self.BASE_LOG_NAME
-        rothandle = logging.handlers.RotatingFileHandler(fname, maxBytes=1024 * 1024 * 10, backupCount=5)
+        rothandle = logging.handlers.RotatingFileHandler(
+            fname, maxBytes=1024 * 1024 * 10, backupCount=5
+        )
         # cachehandle = logging.handlers.MemoryHandler(1024, logging.ERROR, rothandle)
         fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
         rothandle.setFormatter(fmt)
@@ -170,34 +175,34 @@ class Status(xmlrpc.XMLRPC):
         self.logger = logger
 
     def xmlrpc_current_folder(self):
-        '''Return current folder'''
+        """Return current folder"""
         return self.logger.current_folder
 
     def xmlrpc_time_elapsed(self):
-        '''Return time_elapsed'''
+        """Return time_elapsed"""
         return tdelt2secs(self.logger.time_elapsed())
 
     def xmlrpc_prev_experiments(self):
-        '''Return previous folder list'''
+        """Return previous folder list"""
         return map(str, self.logger.prev_exprs())
 
     def xmlrpc_experiments_found(self):
-        '''Return number of folders found'''
+        """Return number of folders found"""
         return self.logger.expr_count
 
     def xmlrpc_state(self):
-        '''Return state'''
+        """Return state"""
         msg, dt = self.logger.get_state()
         return (msg, tdelt2secs(datetime.datetime.now() - dt))
 
     def xmlrpc_hostname(self):
-        '''Return hostname'''
+        """Return hostname"""
         return socket.gethostname()
 
     def xmlrpc_exp_errors(self):
-        '''Return list of errors: (date, exp folder, error msg)'''
+        """Return list of errors: (date, exp folder, error msg)"""
         exp_errors = self.logger.get_exp_errors()
-        ret = [(v[0], k, v[1]) for k, v in exp_errors.iteritems()]
+        ret = [(v[0], k, v[1]) for k, v in exp_errors.items()]
         return sorted(ret, key=lambda l: l[0], reverse=True)
 
 
@@ -221,10 +226,11 @@ def construct_crawl_directories(logger):
     Returns an array.
     For every Rig in the database, construct a filesystem path and
     get all subdirectories in that path."""
+
     def dbase_isComplete(name, explist):
-        '''
+        """
         explist consists of tuples containing experiment name and ftpstatus
-        '''
+        """
         for item in explist:
             if name == item[0]:
                 if item[1] in models.Experiment.FTP_STATUS_DONE_ALL:
@@ -243,26 +249,31 @@ def construct_crawl_directories(logger):
             if os.path.exists(rig_folder):
                 logger.errors.debug("Checking %s" % rig_folder)
                 exp_val_list = models.Experiment.objects.filter(
-                    expDir__startswith=rig_folder).values_list('expDir', 'ftpStatus')
+                    expDir__startswith=rig_folder
+                ).values_list("expDir", "ftpStatus")
                 try:
                     subdir_bases = os.listdir(rig_folder)
                     # create array of paths for all directories in Rig's directory
                     s1 = [os.path.join(rig_folder, subd) for subd in subdir_bases]
                     s2 = [subd for subd in s1 if os.path.isdir(subd)]
                     # create array of paths of not complete ftp transfer only
-                    s3 = [subd for subd in s2 if dbase_isComplete(subd, exp_val_list) is False]
+                    s3 = [
+                        subd
+                        for subd in s2
+                        if dbase_isComplete(subd, exp_val_list) is False
+                    ]
                     ret.extend(s3)
-                except:
+                except Exception:
                     logger.errors.error(traceback.format_exc())
-                    logger.set_state('error')
+                    logger.set_state("error")
     return ret
 
 
 def get_filecount(exp):
-    '''Return number of acq files'''
-    if 'tiled' in exp.rawdatastyle:
+    """Return number of acq files"""
+    if "tiled" in exp.rawdatastyle:
         # N.B. Hack - we check ftp status of thumbnail data only
-        expDir = os.path.join(exp.expDir, 'thumbnail')
+        expDir = os.path.join(exp.expDir, "thumbnail")
     else:
         expDir = exp.expDir
 
@@ -280,43 +291,51 @@ def sleep_delay(start, current, delay):
 
 
 def get_name_from_json(exp, key, thumbnail_analysis):
-    '''Return directory name'''
+    """Return directory name"""
     data = exp.log
     name = data.get(key, False)
-    twig = ''
+    twig = ""
     if thumbnail_analysis:
-        twig = '_tn'
+        twig = "_tn"
     # also ignore name if it has the string value "None"
     if not name or name == "None":
-        return 'Auto_%s_%s%s' % (exp.pretty_print(), exp.pk, twig)
+        return "Auto_%s_%s%s" % (exp.pretty_print(), exp.pk, twig)
     else:
-        return '%s_%s%s' % (str(name), exp.pk, twig)
+        return "%s_%s%s" % (str(name), exp.pk, twig)
 
 
 def generate_http_post(exp, logger, thumbnail_analysis=False):
-    '''Send POST to start analysis process'''
-    report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
+    """Send POST to start analysis process"""
+    report_name = get_name_from_json(exp, "autoanalysisname", thumbnail_analysis)
 
-    blockArgs = 'fromRaw'
-    if (exp.getPlatform in ['s5', 'proton']) and not thumbnail_analysis:
-        blockArgs = 'fromWells'  # default pipeline setting for fullchip on-instrument analysis
+    blockArgs = "fromRaw"
+    if ("tiled" in exp.rawdatastyle) and not thumbnail_analysis:
+        blockArgs = (
+            "fromWells"
+        )  # default pipeline setting for fullchip on-instrument analysis
 
-    params = urllib.urlencode({'report_name': report_name,
-                               'do_thumbnail': "%r" % thumbnail_analysis,
-                               'blockArgs': blockArgs
-                               })
+    params = urllib.urlencode(
+        {
+            "report_name": report_name,
+            "do_thumbnail": "%r" % thumbnail_analysis,
+            "blockArgs": blockArgs,
+        }
+    )
 
     status_msg = "Generated POST"
     try:
-        connection_url = 'http://127.0.0.1/report/analyze/%s/0/' % (exp.pk)
+        connection_url = "http://127.0.0.1/report/analyze/%s/0/" % (exp.pk)
         f = urllib.urlopen(connection_url, params)
     except IOError:
-        logger.errors.debug('could not make connection %s' % connection_url)
+        logger.errors.debug("could not make connection %s" % connection_url)
         try:
-            connection_url = 'https://127.0.0.1/report/analyze/%s/0/' % (exp.pk)
+            connection_url = "https://127.0.0.1/report/analyze/%s/0/" % (exp.pk)
             f = urllib.urlopen(connection_url, params)
         except IOError:
-            msg = " !! Failed to start analysis.  could not connect to %s" % connection_url
+            msg = (
+                " !! Failed to start analysis.  could not connect to %s"
+                % connection_url
+            )
             logger.errors.error(msg)
             logger.add_exp_error(exp.unique, msg)
             status_msg = "Failure to generate POST"
@@ -325,57 +344,60 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
     if f:
         error_code = f.getcode()
         if error_code is not 200:
-            msg = " !! Failed to start analysis. URL failed with error code %d for %s" % (
-                error_code, f.geturl())
+            msg = (
+                " !! Failed to start analysis. URL failed with error code %d for %s"
+                % (error_code, f.geturl())
+            )
             msg2 = f.read()
             logger.errors.error(msg)
             logger.errors.error(msg2)
-            logger.add_exp_error(exp.unique, '%s\n Error: %s' % (msg, msg2))
+            logger.add_exp_error(exp.unique, "%s\n Error: %s" % (msg, msg2))
             status_msg = "Failure to generate POST"
 
     return status_msg
 
 
 def generate_updateruninfo_post(_folder, logger):
-    '''Generates a POST event to update the database objects with explog data'''
-    params = urllib.urlencode(
-        {'datapath': _folder}
-    )
+    """Generates a POST event to update the database objects with explog data"""
+    params = urllib.urlencode({"datapath": _folder})
     fhandle = None
     try:
         status_msg = "Generated POST"
-        connection_url = 'http://127.0.0.1/rundb/updateruninfo/'
+        connection_url = "http://127.0.0.1/rundb/updateruninfo/"
         fhandle = urllib.urlopen(connection_url, params)
     except IOError:
-        logger.errors.warn('could not make connection %s' % connection_url)
+        logger.errors.warn("could not make connection %s" % connection_url)
         status_msg = "Failure to generate POST"
     if fhandle:
         error_code = fhandle.getcode()
         if error_code is not 200:
-            msg = " !! Failed to update run info. URL failed with error code %d for %s" % (
-                error_code, fhandle.geturl())
+            msg = (
+                " !! Failed to update run info. URL failed with error code %d for %s"
+                % (error_code, fhandle.geturl())
+            )
             msg2 = "%s" % "".join(fhandle.readlines())
             logger.errors.error(msg)
             logger.errors.error(msg2)
-            logger.add_exp_error(_folder, '%s\n Error: %s' % (msg, msg2))
+            logger.add_exp_error(_folder, "%s\n Error: %s" % (msg, msg2))
             status_msg = "Failure to generate POST"
     return status_msg
 
 
 def usedPostBeadfind(exp):
-    '''Return whether to use postbeadfind files in analysis'''
+    """Return whether to use postbeadfind files in analysis"""
+
     def convert_to_bool(value):
-        '''We must convert the string to a python bool value'''
+        """We must convert the string to a python bool value"""
         v = value.lower()
-        if v == 'yes':
+        if v == "yes":
             return True
         else:
             return False
 
     data = exp.log
     ret = False
-    if 'postbeadfind' in data:
-        ret = convert_to_bool(data['postbeadfind'])
+    if "postbeadfind" in data:
+        ret = convert_to_bool(data["postbeadfind"])
     return ret
 
 
@@ -389,9 +411,9 @@ def check_for_abort(expDir, filelookup):
     """Check if run has been aborted by the user"""
     # parse explog_final.txt
     try:
-        f = open(os.path.join(expDir, filelookup), 'r')
-    except:
-        print "Error opening file: ", os.path.join(expDir, filelookup)
+        f = open(os.path.join(expDir, filelookup), "r")
+    except Exception:
+        print("Error opening file: ", os.path.join(expDir, filelookup))
         return False
 
     # search for the line we need
@@ -411,9 +433,9 @@ def check_for_critical(exp, filelookup):
     """Check if run has been aborted by the PGM software"""
     # parse explog_final.txt
     try:
-        f = open(os.path.join(exp.expDir, filelookup), 'r')
-    except:
-        print "Error opening file: ", os.path.join(exp.expDir, filelookup)
+        f = open(os.path.join(exp.expDir, filelookup), "r")
+    except Exception:
+        print("Error opening file: ", os.path.join(exp.expDir, filelookup))
         return False
 
     # search for the line we need
@@ -437,12 +459,12 @@ def check_for_critical(exp, filelookup):
 
 
 def get_last_file(exp):
-    '''Returns name of latest acq file'''
+    """Returns name of latest acq file"""
     last = exp.flows - 1
-    pre = '0000'
+    pre = "0000"
     final = pre + str(last)
     file_num = final[-4::]
-    filename = 'acq_%s.dat' % file_num
+    filename = "acq_%s.dat" % file_num
     return filename
 
 
@@ -452,18 +474,18 @@ def check_for_completion(exp):
     file_list = []
     file_list.append(get_last_file(exp))
     if exp.usePreBeadfind:
-        file_list.append('beadfind_pre_0003.dat')
+        file_list.append("beadfind_pre_0003.dat")
     if usedPostBeadfind(exp):
-        file_list.append('beadfind_post_0003.dat')
+        file_list.append("beadfind_post_0003.dat")
 
     if check_for_file(exp.expDir, LOG_FINAL_BASENAME):
         # check for critical errors
         if check_for_critical(exp, LOG_FINAL_BASENAME):
             return True  # run is complete; true
 
-        if 'tiled' in exp.rawdatastyle:
+        if "tiled" in exp.rawdatastyle:
             # N.B. Hack - we check status of thumbnail data only
-            expDir = os.path.join(exp.expDir, 'thumbnail')
+            expDir = os.path.join(exp.expDir, "thumbnail")
         else:
             expDir = exp.expDir
 
@@ -480,7 +502,7 @@ def check_for_completion(exp):
 
 
 def ready_to_process(exp):
-    '''Returns if composite is ready to start analyzing'''
+    """Returns if composite is ready to start analyzing"""
     # Rules
     # analyzeearly flag true
     # acq_0000.dat file exists for every analysis job
@@ -491,56 +513,56 @@ def ready_to_process(exp):
     data = exp.log
 
     # Process block raw data
-    if 'tiled' in exp.rawdatastyle:
+    if "tiled" in exp.rawdatastyle:
         readyToStart = True
 
     # Process single image dataset
     else:
-        if 'analyzeearly' in data:
-            readyToStart = data.get('analyzeearly')
+        if "analyzeearly" in data:
+            readyToStart = data.get("analyzeearly")
 
     return readyToStart
 
 
 def ready_to_process_thumbnail(exp):
-    '''Returns if thumbnail is ready to start analyzing'''
-    if 'tiled' in exp.rawdatastyle:
-        if os.path.exists(os.path.join(exp.expDir, 'thumbnail')):
+    """Returns if thumbnail is ready to start analyzing"""
+    if "tiled" in exp.rawdatastyle:
+        if os.path.exists(os.path.join(exp.expDir, "thumbnail")):
             return True
 
     return False
 
 
 def autorun_thumbnail(exp, logger):
-    '''Returns whether thumbnail autorun should be executed'''
-    if 'tiled' in exp.rawdatastyle:
+    """Returns whether thumbnail autorun should be executed"""
+    if "tiled" in exp.rawdatastyle:
         # support for old format
-        for bs in exp.log['blocks']:
-            if bs.find('thumbnail') > 0:
-                arg = bs.split(',')[4].strip()
-                if int(arg.split(':')[1]) == 1:
+        for bs in exp.log["blocks"]:
+            if bs.find("thumbnail") > 0:
+                arg = bs.split(",")[4].strip()
+                if int(arg.split(":")[1]) == 1:
                     # logger.errors.info ("Request to auto-run thumbnail analysis")
                     return True
         # support new format
         try:
-            thumb = exp.log['thumbnail_000']
+            thumb = exp.log["thumbnail_000"]
             logger.errors.debug("THUMB: %s" % thumb)
-            if thumb.find('AutoAnalyze:1') > 0:
+            if thumb.find("AutoAnalyze:1") > 0:
                 return True
-        except:
+        except Exception:
             pass
     return False
 
 
 def reports_exist(exp):
-    '''Determine whether an auto-analysis report has been created'''
+    """Determine whether an auto-analysis report has been created"""
     composite = False
     thumbnail = False
     reports = exp.sorted_results()
     if reports:
         # thumbnail report will have thumb=1 in meta data
         for report in reports:
-            val = report.metaData.get('thumb', 0)
+            val = report.metaData.get("thumb", 0)
             if val == 1:
                 thumbnail = True
             if val == 0:
@@ -554,7 +576,7 @@ def crawl(folders, logger):
     ``logger``."""
 
     def get_expobj(_folder):
-        '''Returns Experiment object associated with given folder'''
+        """Returns Experiment object associated with given folder"""
         exp_set = models.Experiment.objects.filter(unique=_folder)
         if exp_set:
             # Experiment object exists in database
@@ -565,7 +587,7 @@ def crawl(folders, logger):
         return exp
 
     def update_expobj_ftpcompleted(_expobj, folder):
-        '''Update Experiment object with completed ftp status'''
+        """Update Experiment object with completed ftp status"""
         # Store final explog in database
         exptxt = load_log(folder, LOG_FINAL_BASENAME)
         if exptxt is not None:
@@ -587,7 +609,7 @@ def crawl(folders, logger):
         return
 
     def update_expobj_ftptransfer(_expobj):
-        '''Update Experiment object with in-transfer ftp status'''
+        """Update Experiment object with in-transfer ftp status"""
         if _expobj.ftpStatus != _expobj.FTP_STATUS_MISSING:
             _expobj.ftpStatus = get_filecount(_expobj)
             _expobj.save()
@@ -595,7 +617,7 @@ def crawl(folders, logger):
         return
 
     def handle_composite_report(folder, composite_exists, exp):
-        '''Start composite report analysis'''
+        """Start composite report analysis"""
         if composite_exists:
             logger.errors.debug("composite report already exists")
             return
@@ -612,8 +634,8 @@ def crawl(folders, logger):
             logger.errors.debug("  auto-run whole chip analysis has not been requested")
 
     def handle_thumbnail_report(folder, thumbnail_exists, exp):
-        '''Start thumbnail report analysis'''
-        if not 'tiled' in exp.rawdatastyle:
+        """Start thumbnail report analysis"""
+        if not "tiled" in exp.rawdatastyle:
             logger.errors.debug("This is not a block dataset; no thumbnail to process")
             return
 
@@ -636,9 +658,9 @@ def crawl(folders, logger):
     def explog_exists(folder):
         return os.path.isfile(os.path.join(folder, LOG_BASENAME))
 
-    #-----------------------------------------------------------
+    # -----------------------------------------------------------
     # Main
-    #-----------------------------------------------------------
+    # -----------------------------------------------------------
     if folders:
         logger.errors.info("checking %d directories" % len(folders))
 
@@ -654,23 +676,25 @@ def crawl(folders, logger):
                     logger.errors.info("Updating the database records: %s" % (folder))
                     generate_updateruninfo_post(folder, logger)
                 else:
-                    logger.errors.debug("Missing %s" % os.path.join(folder, LOG_BASENAME))
+                    logger.errors.debug(
+                        "Missing %s" % os.path.join(folder, LOG_BASENAME)
+                    )
             else:
-                #--------------------------------
+                # --------------------------------
                 # Update FTP Transfer Status
-                #--------------------------------
+                # --------------------------------
                 if check_for_completion(exp):
                     update_expobj_ftpcompleted(exp, folder)
                 else:
                     update_expobj_ftptransfer(exp)
 
-                #--------------------------------
+                # --------------------------------
                 # Handle auto-run analysis
                 # Conditions for starting auto-analysis:
                 # . ftpStatus is not one of the complete states
                 # . no report(s) exist.
                 # i.e. - if a user deletes all reports after ftp transfer is complete, do not start auto-analysis.
-                #--------------------------------
+                # --------------------------------
                 if not logger.disableautoanalysis:
                     composite_exists, thumbnail_exists = reports_exist(exp)
                     handle_composite_report(folder, composite_exists, exp)
@@ -678,10 +702,10 @@ def crawl(folders, logger):
                 else:
                     logger.errors.info("auto-analysis start has been disabled")
 
-        except:
+        except Exception:
             logger.errors.exception(traceback.format_exc())
 
-    logger.current_folder = '(none)'
+    logger.current_folder = "(none)"
 
 
 def loop(logger, end_event, delay):
@@ -690,26 +714,26 @@ def loop(logger, end_event, delay):
     while not end_event.isSet():
         connection.close()  # Close any db connection to force new one.
         try:
-            logger.set_state('working')
+            logger.set_state("working")
             start = datetime.datetime.now()
             folders = construct_crawl_directories(logger)
             crawl(folders, logger)
-            logger.set_state('sleeping')
+            logger.set_state("sleeping")
 
         except KeyboardInterrupt:
             end_event.set()
         except:
             logger.errors.error(traceback.format_exc())
-            logger.set_state('error')
+            logger.set_state("error")
         sleep_delay(start, datetime.datetime.now(), delay)
         db.reset_queries()
     sys.exit(0)
 
 
 def checkThread(thread, log, reactor):
-    '''Checks thread for aliveness.
+    """Checks thread for aliveness.
     If a valid reactor object is passed, the reactor will be stopped
-    thus stopping the daemon entirely.'''
+    thus stopping the daemon entirely."""
     thread.join(1)
     if not thread.is_alive():
         log.errors.critical("loop thread is dead")
@@ -719,7 +743,7 @@ def checkThread(thread, log, reactor):
 
 
 def main(args):
-    '''Main function'''
+    """Main function"""
     logger = CrawlLog(args.disableautoanalysis)
     logger.errors.info("Crawler Initializing")
 
@@ -744,13 +768,15 @@ def main(args):
     reactor.run()
 
 
-if __name__ == '__main__':
-    '''Command line'''
+if __name__ == "__main__":
+    """Command line"""
     parser = argparse.ArgumentParser(description="ionCrawler daemon")
-    parser.add_argument('--disableautoanalysis',
-                        action="store_true",
-                        default=False,
-                        help='Disable launching analysis when new experiment data is detected')
+    parser.add_argument(
+        "--disableautoanalysis",
+        action="store_true",
+        default=False,
+        help="Disable launching analysis when new experiment data is detected",
+    )
 
     args = parser.parse_args()
     sys.exit(main(args))

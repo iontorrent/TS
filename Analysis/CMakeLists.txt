@@ -1,6 +1,8 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 cmake_minimum_required (VERSION 2.6)
-project (ion-analysis)
+file(STRINGS "project_name.txt" PROJECT_NAME_TXT)
+list(GET PROJECT_NAME_TXT 0 PROJECT_NAME)
+project (${PROJECT_NAME})
 set(PROJECT_DESCRIPTION "Ion Torrent Data Processing Pipeline")
 enable_testing()
 
@@ -20,32 +22,7 @@ endif()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
-
-FIND_PACKAGE(PythonInterp)
-# Determine python site-packages or dist-packages directory
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
-        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
-        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
-        OUTPUT_VARIABLE PYTHON_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
-
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
-set(CPACK_SET_DESTDIR "ON")
-
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 configure_file (
     "${PROJECT_SOURCE_DIR}/debian/postinst.in"
     "${PROJECT_BINARY_DIR}/debian/postinst" @ONLY
@@ -53,14 +30,11 @@ configure_file (
 
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
 
-message(STATUS "BUILD with ION_USE_CUDA ${ION_USE_CUDA}")
-message(STATUS "BUILD with ION_USE_SYSTEM_CUDA ${ION_USE_SYSTEM_CUDA}")
-
 if(ION_USE_CUDA)
 
-    if(NOT ION_USE_SYSTEM_CUDA)
+    #if(NOT ION_USE_SYSTEM_CUDA)
 
-        message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
+     #   message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
 
         #install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib
         #        DESTINATION /usr/local/cuda)
@@ -68,41 +42,22 @@ if(ION_USE_CUDA)
         #install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
         #        DESTINATION /usr/local/cuda)
 
-        install(FILES ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.8.0
-                      ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.8.0.44
-                DESTINATION
-                      /usr/local/cuda/lib64)
-
         #install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc
         #        DESTINATION /usr/local/cuda/bin)
-
-    endif()
-
+        #string(REGEX REPLACE "(.*)\\.[0-9]*" "\\1" CUDA_SHORT_VERSION ${CUDA_VERSION})
+        #install(FILES ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so
+        #              ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.${CUDA_SHORT_VERSION}
+        #              ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so.${CUDA_VERSION}
+	#	        DESTINATION /usr/local/cuda/lib64)
+    #endif()
 
     # from https://pypi.python.org/pypi/nvidia-ml-py/
-    install(FILES pynvml/nvidia_smi.py             DESTINATION ${PYTHON_SITE_PACKAGES})
-    install(FILES pynvml/nvidia_smi.pyc            DESTINATION ${PYTHON_SITE_PACKAGES})
-    install(FILES pynvml/pynvml.py                 DESTINATION ${PYTHON_SITE_PACKAGES})
-    install(FILES pynvml/pynvml.pyc                DESTINATION ${PYTHON_SITE_PACKAGES})
-    install(PROGRAMS pynvml/pynvml_test.py         DESTINATION /usr/local/bin)
-    install(PROGRAMS pynvml/nvidia_smi_test.py     DESTINATION /usr/local/bin)
-
-#
-#     CUDA_ADD_EXECUTABLE(xtalk_sim
-#                         xtalk_sim/xtalk_sim.cpp
-#                         xtalk_sim/DiffEqModel_Init.cpp
-#                         xtalk_sim/DiffEqModel.cpp
-#                         xtalk_sim/DelsqCUDA.cu
-#                         xtalk_sim/utils.cpp
-#                         xtalk_sim/xtalk_sim.cpp
-#                         xtalk_sim/sim_incorp_flux.cpp
-#                         Util/WorkerInfoQueue.cpp)
-# 
-#     target_link_libraries(xtalk_sim pthread)
-# 
-#     add_dependencies(xtalk_sim     cuda_toolkit)
-# 
-#     install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim     DESTINATION gpu)
+    install(FILES pynvml/nvidia_smi.py             DESTINATION ${PYTHON_LOCAL_SITE_PACKAGES})
+    install(FILES pynvml/nvidia_smi.pyc            DESTINATION ${PYTHON_LOCAL_SITE_PACKAGES})
+    install(FILES pynvml/pynvml.py                 DESTINATION ${PYTHON_LOCAL_SITE_PACKAGES})
+    install(FILES pynvml/pynvml.pyc                DESTINATION ${PYTHON_LOCAL_SITE_PACKAGES})
+    install(PROGRAMS pynvml/pynvml_test.py         DESTINATION bin)
+    install(PROGRAMS pynvml/nvidia_smi_test.py     DESTINATION bin)
 
 endif()
 
@@ -139,7 +94,7 @@ include_directories("${PROJECT_SOURCE_DIR}/Wells")
 # CUDA Files
 if(ION_USE_CUDA)
 
-    CUDA_COMPILE(CUDA_TEMP_FILES 
+  CUDA_COMPILE(CUDA_TEMP_FILES 
       BkgModel/CUDA/HosteDeviceDataCubes/MemoryManager.cu
       BkgModel/CUDA/HosteDeviceDataCubes/ResourcePool.cu
       BkgModel/CUDA/HosteDeviceDataCubes/LayoutTranslator.cu  
@@ -360,8 +315,6 @@ add_dependencies(ion-analysis IONVERSION samtools bamtools armadillo_proj hdf5_p
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
     add_dependencies(ion-analysis ${cuda_toolkit})
-    # Changes J30
-    #add_dependencies(ion-analysis ${cuda_toolkit} armadillo_proj)
   endif()
 endif()
 
@@ -372,7 +325,7 @@ else()
     set(EXTRA_LIBS m blas lapack)
 endif()
 
-target_link_libraries(ion-analysis ${ION_HDF5_LIBS} dl ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} file-io z)
+target_link_libraries(ion-analysis ${ION_ARMADILLO_LIBS} ${ION_HDF5_LIBS} dl ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} file-io z rt)
 
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
@@ -619,7 +572,7 @@ if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
 endif()
 
 add_executable(tvc ${tvcSRCS})
-target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z file-io pthread)
+target_link_libraries(tvc ${ION_ARMADILLO_LIBS} ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} z file-io pthread)
 add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
@@ -1137,8 +1090,16 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.h5" DESTINATION ${ION
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.550.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.560.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.560.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.530.flow.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.540.flow.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541v2.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.541v2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX5v2.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX5v2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX7v1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX7v1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.530.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.540.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1169,6 +1130,14 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/args_541_analysis.json" DESTINATION 
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_541_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_550_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_550_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_560_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_560_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_541v2_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_541v2_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX5v2_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX5v2_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX7v1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX7v1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.19_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1226,6 +1195,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_540.param.json" DESTINATION ${I
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_540_ampliseq_exome.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_541.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_550.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_560.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_541v2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_GX5v2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_GX7v1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 #
 #
 #
@@ -1241,7 +1214,15 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.521.json" DESTINATION ${
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.522.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.trace.530.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.550.well.settings.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.GX7v1.well.settings.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.3.1.well.settings.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
+#inline control
+install(FILES "${PROJECT_SOURCE_DIR}/config/inline_controls_ref.fasta" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/inline_controls_ref.fasta.tmap.bwt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/inline_controls_ref.fasta.tmap.sa" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/inline_controls_ref.fasta.tmap.pac" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/inline_controls_ref.fasta.tmap.anno" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 # Recalibration Panel
 install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1250,10 +1231,10 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATI
 # Basecalling structure files
 install(FILES "${PROJECT_SOURCE_DIR}/config/StructureMetaInfo.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
-if(NOT ION_USE_SYSTEM_ARMADILLO)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6" DESTINATION lib)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6.100.0" DESTINATION lib)
-endif()
+#if(NOT ION_USE_SYSTEM_ARMADILLO)
+#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6" DESTINATION lib)
+#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6.100.0" DESTINATION lib)
+#endif()
 
 install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion0/tabix" DESTINATION bin)
 install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion0/bgzip" DESTINATION bin)
@@ -1267,7 +1248,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/alignmentQC.pl" DESTINATION bin)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/getref" DESTINATION bin)
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/updateref.py" DESTINATION bin RENAME updateref)
 
-install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.130/" DESTINATION "/opt/picard/picard-tools-current/")
+install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.130/" DESTINATION "${ION_PICARD_PREFIX}/picard-tools-current/")
 
 add_subdirectory (MapLab)
 
@@ -1281,15 +1262,13 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6,
     libgcc1,
     libgfortran3,
     libstdc++6,
-    perl,
-    ion-gpu (>=2.5.0)")
+    perl")
 
-set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 5.1.5), ion-alignment")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 5.1.5), ion-alignment")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-alignment")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-alignment")
 
-set(CPACK_PACKAGE_DESCRIPTION "ion-analysis provides the command line workflow and supporting tools to process raw DAT files into bam and  fastq files.")
+set(CPACK_PACKAGE_DESCRIPTION "${PROJECT_NAME} provides the command line workflow and supporting tools to process raw DAT files into bam and fastq files.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-    ${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
-    ${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
+	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 )
 include(CPack)

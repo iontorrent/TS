@@ -5,6 +5,7 @@ import re
 import socket
 from glob import glob
 import zipfile
+
 patterns = [
     "/etc/torrentserver/tsconf.conf",
     "/opt/sge/iontorrent/spool/master/messages",
@@ -37,20 +38,21 @@ patterns = [
     "/tmp/stats_sys.txt",
 ]
 
-NATURAL_SORT_PATTERN = re.compile(r'(\d+|\D+)')
+NATURAL_SORT_PATTERN = re.compile(r"(\d+|\D+)")
+
 
 def natsort_key(s):
     return [int(s) if s.isdigit() else s for s in NATURAL_SORT_PATTERN.findall(s)]
 
 
 def get_servicetag():
-    '''Return serialnumber from tsconf.conf.  Else return hostname.
-    '''
+    """Return serialnumber from tsconf.conf.  Else return hostname.
+    """
     try:
         with open("/etc/torrentserver/tsconf.conf") as conf:
             for l in conf:
                 if l.startswith("serialnumber:"):
-                    servicetag = l[len("serialnumber:"):].strip()
+                    servicetag = l[len("serialnumber:") :].strip()
                     break
     except IOError:
         servicetag = socket.gethostname()
@@ -63,15 +65,16 @@ def makeSSA():
     servicetag = get_servicetag()
     archive_name = "%s_systemStats.zip" % servicetag
     archive_path = os.path.join("/tmp", archive_name)
-    ssazip = zipfile.ZipFile(archive_path, mode='w',
-        compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    ssazip = zipfile.ZipFile(
+        archive_path, mode="w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
+    )
     for pattern in patterns:
         files = glob(pattern)
         files.sort(key=natsort_key)
         for filename in files:
             try:
                 ssazip.write(filename, os.path.basename(filename))
-            except:
+            except Exception:
                 pass
     ssazip.close()
     return archive_path, archive_name

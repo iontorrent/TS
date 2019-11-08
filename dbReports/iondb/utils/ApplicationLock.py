@@ -8,7 +8,7 @@ import fcntl
 
 class ApplicationLock(object):
 
-    '''
+    """
     Ensures application is running only once, by using a lock file.
 
     Ensure call to lock works.  Then call unlock at program exit.
@@ -22,19 +22,19 @@ class ApplicationLock(object):
     Instance variables:
         lockfile  -- Full path to lock file
         lockfd    -- File descriptor of lock file exclusively locked
-    '''
+    """
 
     def __init__(self, lockfile):
         self.lockfile = lockfile
         self.lockfd = None
 
     def lock(self):
-        '''
+        """
         Creates and holds on to the lock file with exclusive access.
         Returns True if lock successful, False if it is not, and raises
         an exception upon operating system errors encountered creating the
         lock file.
-        '''
+        """
         try:
             #
             # Create or else open and trucate lock file, in read-write mode.
@@ -46,8 +46,7 @@ class ApplicationLock(object):
             #
             # Could use os.O_EXLOCK, but that doesn't exist yet in my Python
             #
-            self.lockfd = os.open(self.lockfile,
-                                  os.O_TRUNC | os.O_CREAT | os.O_RDWR)
+            self.lockfd = os.open(self.lockfile, os.O_TRUNC | os.O_CREAT | os.O_RDWR)
 
             # Acquire exclusive lock on the file, but don't block waiting for it
             fcntl.flock(self.lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -56,7 +55,7 @@ class ApplicationLock(object):
             os.write(self.lockfd, "My Lockfile")
 
             return True
-        except (OSError, IOError), e:
+        except (OSError, IOError) as e:
             # Lock cannot be acquired is okay, everything else reraise exception
             if e.errno in (errno.EACCES, errno.EAGAIN):
                 return False
@@ -75,16 +74,18 @@ class ApplicationLock(object):
             # lockfile can be erased and everything still works normally.
             pass
 
+
 # Test main routine
-if __name__ == '__main__':
+if __name__ == "__main__":
     import time
-    applock = ApplicationLock('Test.lock')
+
+    applock = ApplicationLock("Test.lock")
     if applock.lock():
         # Hint: try running 2nd program instance while this instance sleeps
-        print "Obtained lock, sleeping 10 seconds"
+        print("Obtained lock, sleeping 10 seconds")
         time.sleep(10)
-        print "Unlocking"
+        print("Unlocking")
         applock.unlock()
     else:
-        print "Unable to obtain lock, exiting"
+        print("Unable to obtain lock, exiting")
 # end of http://code.activestate.com/recipes/576891/ }}}

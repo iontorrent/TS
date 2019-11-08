@@ -1,17 +1,11 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-try:
-    from django.conf.urls import patterns, url, include
-except ImportError:
-    # Compat Django 1.4
-    from django.conf.urls.defaults import patterns, url, include
-
-
+from django.conf.urls import patterns, url, include
 from tastypie.api import Api
 
 from iondb.rundb import api
 from iondb.rundb import mesh_api
 
-v1_api = Api(api_name='v1')
+v1_api = Api(api_name="v1")
 v1_api.register(api.GlobalConfigResource())
 v1_api.register(api.ExperimentResource())
 v1_api.register(api.ResultsResource())
@@ -127,50 +121,78 @@ v1_api.register(api.GetChefCartridgeUsageResource())
 v1_api.register(api.PrepopulatedPlanningSessionResource())
 v1_api.register(api.IonMeshNodeResource())
 
-v1_mesh_api = Api(api_name='v1')
+v1_mesh_api = Api(api_name="v1")
 v1_mesh_api.register(mesh_api.MeshCompositeExperimentResource())
 v1_mesh_api.register(mesh_api.MeshPrefetchResource())
 v1_mesh_api.register(mesh_api.AutoDiscoveredHostsResource())
 
 urlpatterns = patterns(
-    'iondb.rundb',
-    url(r'^$', 'data.views.rundb_redirect'),
-    url(r'^metaDataLog/(?P<pkR>.*)/$', 'views.viewLog', name="report_metadata_log"),
-    (r'^getCSV.csv$', 'views.getCSV'),
-    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
-    (r'^getOldPDF/(?P<pkR>.*)/$', 'views.PDFGenOld'),
-    (r'^tfcsv/$', 'views.tf_csv'),
-    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
+    "iondb.rundb",
+    url(r"^$", "data.views.rundb_redirect"),
+    url(r"^metaDataLog/(?P<pkR>.*)/$", "views.viewLog", name="report_metadata_log"),
+    (r"^getCSV.csv$", "views.getCSV"),
+    (r"^getPDF/(?P<pkR>.*)/$", "views.PDFGen"),
+    (r"^getOldPDF/(?P<pkR>.*)/$", "views.PDFGenOld"),
+    (r"^tfcsv/$", "views.tf_csv"),
+    (r"^getPDF/(?P<pkR>.*)/$", "views.PDFGen"),
+    (r"^islive/(\d+)$", "ajax.analysis_liveness"),
+    (r"^star/(\d+)/(\d)$", "ajax.starRun"),
+    (r"^progress_bar/(\d+)$", "ajax.progress_bar"),
+    (r"^api$", "ajax.apibase"),
+    (r"^changelibrary/(\d+)$", "ajax.change_library"),
+    (r"^reports/progressbox/(\d+)$", "ajax.progressbox"),
+    (r"^report/(\d+)$", "views.displayReport"),
+    (r"^graphiframe/(\d+)/$", "report.classic.graph_iframe"),
+    (
+        r"^publish/api/(?P<pub_name>\w+)$",
+        "publishers.publisher_api_upload",
+    ),  # REFACTOR: move to rundb/configure
+    (
+        r"^publish/plupload/(?P<pub_name>\w+)/$",
+        "publishers.write_plupload",
+    ),  # REFACTOR: move to rundb/configure
+    url(
+        r"^publish/(\w+)$", "publishers.publisher_upload", name="publisher_upload"
+    ),  # REFACTOR: move to rundb/configure
+    url(
+        r"^published/$", "publishers.list_content", name="publisher_history"
+    ),  # REFACTOR: move to rundb/configure
+    (
+        r"^uploadstatus/(\d+)/$",
+        "publishers.upload_status",
+    ),  # REFACTOR: move to rundb/configure
+    (
+        r"^uploadstatus/frame/(\d+)/$",
+        "publishers.upload_status",
+        {"frame": True},
+    ),  # REFACTOR: move to rundb/configure
+    (
+        r"^uploadstatus/download/(\d+)/$",
+        "publishers.upload_download",
+    ),  # REFACTOR: move to rundb/configure
+    url(
+        r"^content/download/(\d+)/$",
+        "publishers.content_download",
+        name="publisher_content_download",
+    ),  # REFACTOR: move to rundb/configure
+    url(
+        r"^content/targetregions/add/$",
+        "publishers.content_add",
+        {"hotspot": False},
+        name="content_add_targetregions",
+    ),  # REFACTOR: move to rundb/configure
+    url(
+        r"^content/hotspots/add/$",
+        "publishers.content_add",
+        {"hotspot": True},
+        name="content_add_hotspots",
+    ),  # REFACTOR: move to rundb/configure
+    (r"^updateruninfo/$", "views.updateruninfo"),
+    (r"^demo_consumer/?(?P<name>\w+)", "events.demo_consumer"),
+)
 
-    (r'^islive/(\d+)$', 'ajax.analysis_liveness'),
-    (r'^star/(\d+)/(\d)$', 'ajax.starRun'),
-    (r'^progress_bar/(\d+)$', 'ajax.progress_bar'),
-    (r'^api$', 'ajax.apibase'),
-    (r'^changelibrary/(\d+)$', 'ajax.change_library'),
-    (r'^reports/progressbox/(\d+)$', 'ajax.progressbox'),
-
-    (r'^report/(\d+)$', 'views.displayReport'),
-    (r'^graphiframe/(\d+)/$', 'report.classic.graph_iframe'),
-
-    (r'^publish/api/(?P<pub_name>\w+)$', 'publishers.publisher_api_upload'),  #REFACTOR: move to rundb/configure
-    (r'^publish/plupload/(?P<pub_name>\w+)/$', 'publishers.write_plupload'),  #REFACTOR: move to rundb/configure
-    (r'^publish/(\w+)$', 'publishers.publisher_upload'),  #REFACTOR: move to rundb/configure
-    (r'^published/$', 'publishers.list_content'),  #REFACTOR: move to rundb/configure
-    (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure
-    (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure
-    (r'^uploadstatus/download/(\d+)/$', 'publishers.upload_download'),  #REFACTOR: move to rundb/configure
-    (r'^content/download/(\d+)/$', 'publishers.content_download'),  #REFACTOR: move to rundb/configure
-    (r'^content/targetregions/add/$', 'publishers.content_add', {'hotspot': False}),  #REFACTOR: move to rundb/configure
-    (r'^content/hotspots/add/$', 'publishers.content_add', {'hotspot': True}),  #REFACTOR: move to rundb/configure
-
-    (r'^updateruninfo/$', 'views.updateruninfo'),
-
-    (r'^demo_consumer/?(?P<name>\w+)', 'events.demo_consumer'),
-
+urlpatterns.extend(
+    patterns(
+        "", (r"^api/", include(v1_api.urls)), (r"^api/mesh/", include(v1_mesh_api.urls))
     )
-
-urlpatterns.extend(patterns(
-            '',
-            (r'^api/', include(v1_api.urls)),
-            (r'^api/mesh/', include(v1_mesh_api.urls)),
-))
+)

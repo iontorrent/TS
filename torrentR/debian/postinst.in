@@ -4,6 +4,55 @@
 set -e
 case "$1" in
     configure)
+    # force removal of packages in /usr/local/lib/R/site-library since it would interfere with
+    # debian package installed version (/usr/lib/R/site-library)
+    BASEDIR='/usr/local/lib/R/site-library/'
+    OBSOLETEPKG=(\
+        AnnotationDbi
+        Biobase
+        BiocGenerics
+        Biostrings
+        DBI
+        Formula
+        GenomicRanges
+        IRanges
+        RColorBrewer
+        RCurl
+        ROCR
+        RSQLite
+        Rsamtools
+        ShortRead
+        bitops
+        colorspace
+        dichromat
+        digest
+        gdata
+        getopt
+        ggplot2
+        gtable
+        gtools
+        hdf5
+        hwriter
+        labeling
+        latticeExtra
+        memoise
+        munsell
+        plyr
+        proto
+        reshape2
+        rjson
+        scales
+        stringr
+        caTools
+        proto
+        bitops
+        fields
+        ROCR
+    )
+    for PKG in ${OBSOLETEPKG[@]}; do
+        rm -rf "$BASEDIR/${PKG}"
+    done
+
     #N.B. These are in dependency order: do not sort alphabetically.
     LIBLIST=(\
         caTools_1.14.tar.gz \
@@ -23,12 +72,13 @@ case "$1" in
         optparse_1.0.1.tar.gz \
     )
 
-    # force removal of packages
-    rm -rf /usr/local/lib/R/site-library/caTools/
-    rm -rf /usr/local/lib/R/site-library/proto/
-    rm -rf /usr/local/lib/R/site-library/bitops/
-    rm -rf /usr/local/lib/R/site-library/fields/
-    rm -rf /usr/local/lib/R/site-library/ROCR/
+    # bionic only; rest of packages have been moved to debian dependency
+    if [ "$(lsb_release -sc)" = "bionic" ]; then
+        LIBLIST=(\
+            rbamtools_2.6.0.tar.gz \
+            zlibbioc_1.6.0.tar.gz \
+        )
+    fi
 
     for LIB in ${LIBLIST[@]}; do
         LIBNAME=${LIB%_*}

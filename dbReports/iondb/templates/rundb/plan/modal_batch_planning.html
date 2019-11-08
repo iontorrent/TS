@@ -1,27 +1,27 @@
+{% load i18n %}
 <div id="modal_batch_planning" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="modal_batch_plan_title">Plan Runs from Template: {{selectedPlanTemplate.planDisplayedName}}</h3>
+        <h3 id="modal_batch_plan_title">{% trans "batch_plans_from_template.title" %} : {{selectedPlanTemplate.planDisplayedName}}</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <form class="form-horizontal" id="modalBatchPlanning" method="GET">
             <fieldset>
                 <div class="control-group">
-                    <label for="name" class="control-label">Number of plans to create<i>(required)</i></label>
+                    <label for="name" class="control-label">{% trans "batch_plans_from_template.fields.planCount.label" %}<i>{% trans "global.field.label.required" %}</i></label>
                     <div class="controls">
-                        <input name="planCount" id="planCount" placeholder='enter a whole number between 1 and 100' maxlength="500" type="text" class="input-xlarge uint required"/>
+                        <input name="planCount" id="planCount" placeholder='{% trans "batch_plans_from_template.fields.planCount.placeholder" %}' maxlength="3" type="text" class="input-xlarge uint required"/>
                         <p class="help-block">
-                            Number of plans to create offline
+                            {% trans "batch_plans_from_template.fields.planCount.helptext" %}
                         </p>
-                        <p class="planCountError" id="planCountError">
-                        </p>
+                        <p class="planCountError" id="planCountError"></p>
                         <input value="{{selectedPlanTemplate.pk}}"  id="selectedTemplateId" name="selectedTemplateId" type="hidden"/>
                         {% if not is_barcoded %}
-                            <label><i>Note: Single CSV file with sample and plan will be downloaded.</i></label>
+                            <label><i>{% trans "batch_plans_from_template.fields.planCount.helptext.nonbarcoded" %}</i></label>
                             <input type="hidden" id="uploadtype_single" name="uploadtype_select" value="single">
                         {% else %}
-                            <i>Note: ZIP archive of multiple samples and plan CSV files will be downloaded </i>
+                            <i>{% trans "batch_plans_from_template.fields.planCount.helptext.barcoded" %}</i>
                             <input type="hidden" id="uploadtype_multi" name="uploadtype_select" value="multi">
                         {% endif %}
                      </div>
@@ -35,8 +35,8 @@
         </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a href="#" id="submitDownload" class="btn btn-primary submitDownload" >Download CSV for batch planning</a></div>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a href="#" id="submitDownload" class="btn btn-primary submitDownload" >{% if not is_barcoded %}{% trans "batch_plans_from_template.action.submit.nonbarcoded" %}{% else %}{% trans "batch_plans_from_template.action.submit.barcoded" %}{% endif %}</a></div>
     </div>
 
 

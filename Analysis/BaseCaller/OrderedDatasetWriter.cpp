@@ -167,15 +167,14 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
           read_group.KeySequence          += read_group_json["barcode"].get("barcode_sequence","").asString();
           read_group.KeySequence          += read_group_json["barcode"].get("barcode_adapter","").asString();
         }
-        if (read_group_json.isMember("end_barcode")) {
-              string full_end_barcode;
-              full_end_barcode  = read_group_json["end_barcode"].get("barcode_adapter","").asString();
-              full_end_barcode += read_group_json["end_barcode"].get("barcode_sequence","").asString();
-              AddCustomReadGroupTag(read_group, "sk", full_end_barcode);
-        }
-        if (read_structure.isMember("handle")){
-          AddCustomReadGroupTag(read_group, "fh", read_structure["handle"].get("FH","").asString());
-          AddCustomReadGroupTag(read_group, "rh", read_structure["handle"].get("RH","").asString());
+        // Only write header sk tags if we process the samples as dual barcoded.
+        // If we de-mulitplex and emulate single sided barcodes, we don't output the sk tag.
+        // In this case end-barcodes are part of the YK tag.
+        if (read_group_json.isMember("end_barcode") and read_group_end_barcode_counts_.size()==0) {
+          string full_end_barcode;
+          full_end_barcode  = read_group_json["end_barcode"].get("barcode_adapter","").asString();
+          full_end_barcode += read_group_json["end_barcode"].get("barcode_sequence","").asString();
+          AddCustomReadGroupTag(read_group, "sk", full_end_barcode);
         }
       }
 
@@ -216,6 +215,16 @@ void  OrderedDatasetWriter::AddCustomReadGroupTag (SamReadGroup & read_group, co
   my_custom_tag.TagValue = tag_body;
 
   read_group.CustomTags.push_back(my_custom_tag);
+}
+
+void  OrderedDatasetWriter::AddOriginalReadGroupTag(BamAlignment & bam, string tag_body)
+{
+  if (bam.HasTag("ZO")){
+    bam.EditTag("ZO", "Z", tag_body);
+  }
+  else{
+    bam.AddTag("ZO", "Z", tag_body);
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -270,7 +279,6 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets,
           read_group_json["barcode"]["barcode_errors_hist"][ierr] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][ierr];
 
         // Add handle information to json
-        // TODO Do we want all this accounting information in the production code?
         if (have_handles_){
           read_group_json["handle"]["bc_handle_filtered"] = (Json::UInt64)read_group_handle_rejected_[rg_index];
           for (unsigned int ibin=0; ibin < read_group_num_handle_errors_[rg_index].size(); ++ibin)
@@ -329,7 +337,8 @@ void OrderedDatasetWriter::WriteReadCountCSV(BarcodeDatasets& datasets,
   for (unsigned int ebc=0; ebc<end_barcode_names.size(); ++ebc){
     read_count_file << ',' << end_barcode_names[ebc];
   }
-  read_count_file << ",NoMatch,NoAdapter" << endl;
+  //read_count_file << ",NoMatch,NoAdapter" << endl;
+  read_count_file << endl;
 
   //Write body lines per read group
   string bc_name;
@@ -342,8 +351,9 @@ void OrderedDatasetWriter::WriteReadCountCSV(BarcodeDatasets& datasets,
     for (unsigned int ebc=0; ebc < read_group_end_barcode_counts_.at(rg).size(); ++ebc){
       read_count_file << ',' << read_group_end_barcode_counts_.at(rg).at(ebc);
     }
-    read_count_file << ',' << (read_group_end_adapter_rejected_.at(rg)+read_group_end_barcode_rejected_.at(rg))
-                    << ',' << read_group_no_bead_adapter_.at(rg) << endl;
+    //read_count_file << ',' << (read_group_end_adapter_rejected_.at(rg)+read_group_end_barcode_rejected_.at(rg))
+    //                << ',' << read_group_no_bead_adapter_.at(rg) << endl;
+    read_count_file << endl;
   }
   read_count_file.close();
 }
@@ -423,31 +433,51 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
     // Barcode signal distance histogram [binned to 0.2 intervals]
     int n_hist = min((int)(5.0*entry->barcode_distance), 4);
     read_group_barcode_distance_hist_.at(entry->read_group_index).at(n_hist)++;
+
+    // Barcode No-match accounting
     // 0-error filtered barcodes
-    if (entry->barcode_filt_zero_error >= 0)
+    if (entry->barcode_filt_zero_error >= 0){
       read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
+      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_filt_zero_error)+".SB");
+    }
     // Account for filtered reads due to barcode adapter rejection
-    if (entry->barcode_adapter_filtered >= 0)
+    if (entry->barcode_adapter_filtered >= 0){
       read_group_barcode_adapter_rejected_.at(entry->barcode_adapter_filtered)++;
+      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_adapter_filtered)+".SA");
+    }
 
     // *** End barcode
 
+    // No-match accounting
     if (entry->end_barcode_filtered >= 0){
-      if (entry->filter.adapter_type < 0)
+      string org_rg = read_group_name_.at(entry->end_barcode_filtered);
+
+      if (entry->filter.adapter_type < 0){
         read_group_no_bead_adapter_.at(entry->end_barcode_filtered)++;
-      else if (entry->end_adapter_filtered)
+        AddOriginalReadGroupTag(entry->bam, org_rg);
+      }
+      else if (entry->end_adapter_filtered) {
         read_group_end_adapter_rejected_.at(entry->end_barcode_filtered)++;
+        AddOriginalReadGroupTag(entry->bam, org_rg+".EA");
+      }
       else if (entry->end_handle_filtered){
         read_group_end_handle_rejected_.at(entry->end_barcode_filtered)++;
+        AddOriginalReadGroupTag(entry->bam, org_rg+".EH");
       }
-      else
+      else{
         read_group_end_barcode_rejected_.at(entry->end_barcode_filtered)++;
+        AddOriginalReadGroupTag(entry->bam, org_rg+".EB");
+      }
+      if (read_group_end_barcode_counts_.size() >0 and entry->end_barcode_index >=0){
+        ++read_group_end_barcode_counts_.at(entry->end_barcode_filtered).at(entry->end_barcode_index);
+      }
+
     }
     else if (entry->end_barcode_index>=0) {
       n_errors = max(0,min(3,entry->end_bc_n_errors));
       read_group_end_barcode_errors_[entry->read_group_index].at(n_errors)++;
-      if (read_group_end_barcode_counts_.size() >0 ){
-        ++read_group_end_barcode_counts_[entry->read_group_index][entry->end_barcode_index];
+      if (read_group_end_barcode_counts_.size() >0 and entry->end_barcode_index >=0){
+        ++read_group_end_barcode_counts_.at(entry->read_group_index).at(entry->end_barcode_index);
       }
     }
 
@@ -459,6 +489,7 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       }
       else if (entry->barcode_handle_filtered >=0){
         read_group_handle_rejected_.at(entry->barcode_handle_filtered)++;
+        AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_handle_filtered)+".SH");
       }
 
       if (entry->end_handle_index >= 0){

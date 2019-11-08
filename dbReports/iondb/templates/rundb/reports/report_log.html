@@ -2,6 +2,7 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block content %}
 <script>
 $(function() {
@@ -28,7 +29,7 @@ $(function() {
         <p>Cannot display TorrentSuite 3.0-style report for a pre-3.0 analysis run.</p>
         <ul>
             <li><a href="/report/analyze/{{report.experiment.pk}}/0/">Re-analyze the run to generate a new report</a></li>
-            {% for name, link, exists in file_links %}
+            {% for name, i18nname, link, exists in file_links %}
                 {% ifequal name "Classic Report" %}
                 <li>
                     {% if exists %}<a href="{{link}}">View the pre-3.0 report</a>
@@ -46,39 +47,39 @@ $(function() {
             <li><a href="{% url "report" report.pk %}log" id="log-btn">View this report Log</a></li>
         </ul>
     {% elif error == "user_aborted" %}
-        <h1>User Aborted Run</h1>
-        <p>This run was aborted by the user on the instrument, and has no data.</p>
+        <h1>{% trans "experiment.fields.ftpStatus.User_Aborted.label" %}</h1>
+        <p>{% trans "experiment.fields.ftpStatus.User_Aborted.details" %}</p>
         <ul>
-            <li><a href="{{archive_files.csa}}">Customer Support Archive</a></li>
+            <li><a href="{{archive_files.csa}}">{% trans "report.action.getcsa.label" %}</a></li>
         </ul>
     {% elif error == "report_archived" or error == "report_deleted"%}
-        <h1>Status: {{report.status}}</h1>
+        <h1>{% trans "report.fields.status.label" %}: {{report.i18nstatus.i18n}}</h1>
         {% if report.status == "Importing" %}
-            <h2>Report is importing and cannot be viewed</h2>
+            <h2>{% trans "report.fields.status.choice.Importing.details" %}</h2>
         {% elif error == "report_archived" %}
-            <h2>Report was archived and cannot be viewed</h2>
+            <h2>{% trans "report.fields.filestat.OUT.isarchived.details" %}</h2>
         {% elif error == "report_deleted" %}
-            <h2>Report was deleted and cannot be viewed</h2>
+            <h2>{% trans "report.fields.filestat.OUT.isdeleted.details" %}</h2>
         {% endif %}
         <ul>
             {% if archive_files.csa %}
-                <li><a href="{{ archive_files.csa }}">Customer Support Archive</a></li>
+                <li><a href="{{ archive_files.csa }}">{% trans "report.action.getcsa.label" %}</a></li>
             {% endif %}
             {% if not no_live_beads %}{# TS-9782 #}
                 {% if archive_files.report_pdf %}
-                    <li><a href="{{ archive_files.report_pdf }}">View Backup Report PDF</a></li>
+                    <li><a href="{{ archive_files.report_pdf }}">{% trans "report.action.viewbackuppdf" %}</a></li>
                 {% endif %}
             {% endif %}
         </ul>
         {% if archive_restore %}
         <ul>
-            <li><a id="archive_restore" href="{% url "import_data" %}" data-postdata="{{archive_restore}}">Restore Report files from archived location</a></li>
+            <li><a id="archive_restore" href="{% url "import_data" %}" data-postdata="{{archive_restore}}">{% trans "report.action.import_data.label" %}</a></li>
             <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
             <script type='text/javascript'>
                 $('#archive_restore').click(function(){
                     var url = $(this).attr('href');
                     var postData = $(this).data('postdata');
-                    bootbox.confirm('Copy Report files back to local directory?', function(result){
+                    bootbox.confirm('{% trans "report.action.import_data.messages.confirmimport" %}', function(result){
                         if(result){
                             $.post(url, JSON.stringify(postData)).done(function(data){
                                 console.log('success:', url, postData);
@@ -91,31 +92,31 @@ $(function() {
         </ul>
         {% endif %}
     {% else %}
-        <h1>Status: {{report.status}}</h1>
+        <h1>{% trans "report.fields.status.label" %}: {{report.i18nstatus.i18n}}</h1>
         <ul>
-            <li><a href="{% url "report_csa" report.pk %}">Customer Support Archive</a></li>
-            <li><a href="{% url "report" report.pk %}">Report</a></li>
+            <li><a href="{% url "report_csa" report.pk %}">{% trans "report.action.getcsa.label" %}</a></li>
+            <li><a href="{% url "report" report.pk %}">{% trans "report.action.view.label" %}</a></li>
         </ul>
         <ul>
-            {% for name, link, exists in file_links %}
+            {% for name, i18nname, link, exists in file_links %}
             <li>
-                {% if exists %}<a href="{{link}}">{{name}}</a>
-                {% else %} {{name}} (Does not exist)
+                {% if exists %}<a href="{{link}}">{{i18nname}}</a>
+                {% else %} {{name}} ({% trans "report.messages.filedoesnotexist" %})
                 {% endif %}
             </li>
             {% endfor %}
         </ul>
         {% if log_files %}
-            <h1>Report Log <small>Refresh the page to see updates</small></h1>
+            <h1>{% trans "report.section.logs.title" %} <small>{% trans "report.section.logs.subtitle" %}</small></h1>
             {% for name, link in log_files %}
                 <div class="clearfix">
                     <h2 class="pull-left">{{name}}</h2>&nbsp;
-                    <a href="{{link}}" class="btn btn-small"><i class="icon-download"></i> Download</a>
+                    <a href="{{link}}" class="btn btn-small"><i class="icon-download"></i> {% trans "report.section.logs.action.download" %}</a>
                 </div>
                 <pre data-logfile="{{link}}" class="log">Loading <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img> </pre>
             {% endfor %}
         {% else %}
-            <h2>There is no log to view.</h2>
+            <h2>{% trans "report.section.logs.messages.nologs" %}</h2>
         {% endif %}
     {% endif %}
 </div>

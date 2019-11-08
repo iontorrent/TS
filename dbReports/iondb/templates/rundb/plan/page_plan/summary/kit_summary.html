@@ -1,46 +1,47 @@
-{%include "rundb/plan/page_plan/summary/application_summary.html"%}
+{% include "rundb/plan/page_plan/summary/application_summary.html" %}
+{% load i18n %}
 <tr>
-    <td><b>Instrument:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.instrumentType.label" %}:</b></td>
     <td id="selectedInstrumentName"></td>
 </tr>
 <tr>
-    <td><b>Chip Type:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.chipType.label" %}:</b></td>
     <td id="selectedChipType"></td>
 </tr>
 <tr>
-    <td><b>Sample Preparation Kit:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.samplePreparationKit.label" %}:</b></td>
     <td id="selectedSamplePreparationKit">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.samplePreparationKit|default_if_none:""}}</td>
 </tr>
 <tr>
-    <td><b>Control Sequence:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.controlsequence.label" %}:</b></td>
     <td id="selectedControlSequence">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.controlsequence|default_if_none:""}}</td>
 </tr>
 <tr>
-    <td><b>Library Kit Type:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.librarykitname.label" %}:</b></td>
     <td id="selectedLibraryKitType"></td>
 </tr>
 <tr>
-    <td><b>Barcode Set:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.barcodeId.label" %}:</b></td>
     <td id="selectedBarcode">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.barcodeId|default_if_none:""}}</td>
 </tr>
 <tr>
-    <td><b>Template Kit:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.templatekitname.label" %}:</b></td>
     <td id="selectedTemplatingKitName"></td>
 </tr>
 <tr>
-    <td><b>Sequencing Kit:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.sequenceKit.label" %}:</b></td>
     <td id="selectedSequenceKit"></td>
 </tr>
 <tr>
-    <td><b>Library Read Length:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.libraryReadLength.label" %}:</b></td>
     <td id="selectedLibraryReadLength">{% if helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength|stringformat:"s" != "0" and helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength > 0 %}{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength}}{%else%}--{%endif%}</td>
 </tr>
 <tr>
-    <td><b>Flows:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.flows.label" %}:</b></td>
     <td id="selectedFlows">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.flows}}</td>
 </tr>
 <tr>
-    <td><b>Mark as Duplicate Reads:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.duplicateReads.label" %}:</b></td>
     <td id="selectedMarkAsPcrDuplicates">
     {% if helper.getStepDict.Kits.getCurrentSavedFieldDict.isDuplicateReads %}
         True
@@ -50,7 +51,7 @@
     </td>
 </tr>
 <tr>
-    <td><b>Enable Realignment:</b></td>
+    <td><b>{% trans "workflow.step.kits.fields.realign.label" %}:</b></td>
     <td id="selectedEnableRealignment">
         {% if helper.getStepDict.Kits.getCurrentSavedFieldDict.realign %}
             True

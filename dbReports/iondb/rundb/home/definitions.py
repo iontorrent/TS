@@ -14,12 +14,12 @@ DONE = "Complete"
 ERROR = "Error"
 
 # instrument states
-CONNECTED = 'Connected'
-ALARM = 'Alarm'
-OFFLINE = 'Offline'
+CONNECTED = "Connected"
+ALARM = "Alarm"
+OFFLINE = "Offline"
 
 # instrument types for icon
-INSTRUMENT_TYPES = ['PGM', 'Proton', 'S5']
+INSTRUMENT_TYPES = ["PGM", "Proton", "S5"]
 
 # Constants to drive the logic in the templates
 DASHBOARD_STAGES = {
@@ -33,11 +33,7 @@ DASHBOARD_STAGES = {
         "display_name": "Template Prep",
         "name_label": "Planned Run name",
     },
-    SEQUENCING: {
-        "index": 2,
-        "display_name": "Sequencing",
-        "name_label": "Run name",
-    },
+    SEQUENCING: {"index": 2, "display_name": "Sequencing", "name_label": "Run name"},
     ANALYSIS: {
         "index": 3,
         "display_name": "Analysis",
@@ -51,4 +47,3 @@ DASHBOARD_STAGES = {
         "show_report_url": True,
     },
 }
-

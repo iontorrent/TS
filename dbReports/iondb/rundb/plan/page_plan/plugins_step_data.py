@@ -11,38 +11,39 @@ from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 logger = logging.getLogger(__name__)
 
 
-class PluginFieldNames():
+class PluginFieldNames:
 
-    PL_ID = 'id'
-    NAME = 'name'
-    VERSION = 'version'
-    FEATURES = 'features'
-    EXPORT = 'export'
-    PLUGIN = 'plugin'
-    PLUGINS = 'plugins'
-    PLUGIN_IDS = 'pluginIds'
-    PLUGIN_CONFIG = 'plugin_config_%s'
-    PLUGIN_ID_LIST = 'pluginIdList'
-    SELECTED = 'selected'
-    CONFIG = 'config'
-    USER_INPUT = 'userInput'
-    ACCOUNT_ID = 'accountId'
-    ACCOUNT_NAME = 'accountName'
-    IRU_QC_OPTIONS = 'iru_qc_option'
+    PL_ID = "id"
+    NAME = "name"
+    VERSION = "version"
+    FEATURES = "features"
+    EXPORT = "export"
+    PLUGIN = "plugin"
+    PLUGINS = "plugins"
+    PLUGIN_IDS = "pluginIds"
+    PLUGIN_CONFIG = "plugin_config_%s"
+    PLUGIN_ID_LIST = "pluginIdList"
+    SELECTED = "selected"
+    CONFIG = "config"
+    USER_INPUT = "userInput"
+    ACCOUNT_ID = "accountId"
+    ACCOUNT_NAME = "accountName"
+    IRU_QC_OPTIONS = "iru_qc_option"
 
 
 class PluginsStepData(AbstractStepData):
-
     def __init__(self, sh_type):
         super(PluginsStepData, self).__init__(sh_type)
-        self.resourcePath = 'rundb/plan/page_plan/page_plan_plugins.html'
+        self.resourcePath = "rundb/plan/page_plan/page_plan_plugins.html"
         self.prev_step_url = reverse("page_plan_kits")
         self.next_step_url = reverse("page_plan_output")
         if sh_type in StepHelperType.PLAN_BY_SAMPLE_TYPES:
             # Plan by Sample
             self.next_step_url = reverse("page_plan_by_sample_barcode")
 
-        self.all_enabled_plugins = Plugin.objects.filter(selected=True, active=True).order_by('name', '-version')
+        self.all_enabled_plugins = Plugin.objects.filter(
+            selected=True, active=True
+        ).order_by("name", "-version")
         self.non_ir_plugins = []
         for p in self.all_enabled_plugins:
             info = p.info()
@@ -79,23 +80,34 @@ class PluginsStepData(AbstractStepData):
         self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = []
 
         if self.savedFields[PluginFieldNames.PLUGIN_IDS]:
-            self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = self.savedFields[PluginFieldNames.PLUGIN_IDS].split(', ')
+            self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = self.savedFields[
+                PluginFieldNames.PLUGIN_IDS
+            ].split(", ")
 
         for plugin in self.prepopulatedFields[PluginFieldNames.PLUGINS]:
             selected = False
-            if self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] and (str(plugin.id) in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] or
-                                                                       plugin.id in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]):
+            if self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] and (
+                str(plugin.id) in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]
+                or plugin.id in self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]
+            ):
                 selected = True
 
             config = None
-            if plugin.isPlanConfig and self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]:
-                config = json.dumps(json.loads(self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]))
+            if (
+                plugin.isPlanConfig
+                and self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]
+            ):
+                config = json.dumps(
+                    json.loads(
+                        self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]
+                    )
+                )
 
             self.savedObjects[PluginFieldNames.PLUGINS][plugin.id] = {
                 PluginFieldNames.PLUGIN: plugin,
                 PluginFieldNames.SELECTED: selected,
-                PluginFieldNames.CONFIG: config
-                }
+                PluginFieldNames.CONFIG: config,
+            }
 
     def updateFromStep(self, updated_step):
         pass
@@ -106,29 +118,46 @@ class PluginsStepData(AbstractStepData):
         if not self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST]:
             return retval
 
-        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
+        for plugin_id, values in list(
+            self.savedObjects[PluginFieldNames.PLUGINS].items()
+        ):
             if values[PluginFieldNames.SELECTED]:
                 retval[values[PluginFieldNames.PLUGIN].name] = {
                     PluginFieldNames.PL_ID: plugin_id,
                     PluginFieldNames.NAME: values[PluginFieldNames.PLUGIN].name,
                     PluginFieldNames.VERSION: values[PluginFieldNames.PLUGIN].version,
-                    PluginFieldNames.FEATURES: []}
+                    PluginFieldNames.FEATURES: [],
+                }
 
                 if values[PluginFieldNames.CONFIG]:
-                    retval[values[PluginFieldNames.PLUGIN].name][PluginFieldNames.USER_INPUT] = json.loads(values[PluginFieldNames.CONFIG])
+                    retval[values[PluginFieldNames.PLUGIN].name][
+                        PluginFieldNames.USER_INPUT
+                    ] = json.loads(values[PluginFieldNames.CONFIG])
                 else:
-                    retval[values[PluginFieldNames.PLUGIN].name][PluginFieldNames.USER_INPUT] = ''
+                    retval[values[PluginFieldNames.PLUGIN].name][
+                        PluginFieldNames.USER_INPUT
+                    ] = ""
         return retval
 
     def isVariantCallerSelected(self):
-        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
-            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.SELECTED]:
+        for plugin_id, values in list(
+            self.savedObjects[PluginFieldNames.PLUGINS].items()
+        ):
+            if (
+                values[PluginFieldNames.PLUGIN].name == "variantCaller"
+                and values[PluginFieldNames.SELECTED]
+            ):
                 return True
         return False
 
     def isVariantCallerConfigured(self):
-        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
-            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.CONFIG]:
+        for plugin_id, values in list(
+            self.savedObjects[PluginFieldNames.PLUGINS].items()
+        ):
+            if (
+                values[PluginFieldNames.PLUGIN].name == "variantCaller"
+                and values[PluginFieldNames.CONFIG]
+            ):
                 return True
         return False
 
@@ -143,11 +172,24 @@ class PluginsStepData(AbstractStepData):
         # reset the validation errors
         self.validationErrors.clear()
 
-        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
+        for plugin_id, values in list(
+            self.savedObjects[PluginFieldNames.PLUGINS].items()
+        ):
             plugin_model = Plugin.objects.get(id=plugin_id)
-            if values[PluginFieldNames.SELECTED] and plugin_model.requires_configuration:
-                configuration = dict() if values[PluginFieldNames.CONFIG] is None else json.loads(values[PluginFieldNames.CONFIG])
-                plugin_validation_errors = Plugin.validate(plugin_id, configuration, 'Automatic')
+            if (
+                values[PluginFieldNames.SELECTED]
+                and plugin_model.requires_configuration
+            ):
+                configuration = (
+                    dict()
+                    if values[PluginFieldNames.CONFIG] is None
+                    else json.loads(values[PluginFieldNames.CONFIG])
+                )
+                plugin_validation_errors = Plugin.validate(
+                    plugin_id, configuration, "Automatic"
+                )
 
                 if plugin_validation_errors:
-                    self.validationErrors[values[PluginFieldNames.PLUGIN].name] = plugin_validation_errors
+                    self.validationErrors[
+                        values[PluginFieldNames.PLUGIN].name
+                    ] = plugin_validation_errors

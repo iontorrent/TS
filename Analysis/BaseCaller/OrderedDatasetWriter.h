@@ -222,6 +222,8 @@ public:
   //! @param  tag_body        String value of custom tag
   void AddCustomReadGroupTag (SamReadGroup & read_group, const string& tag_name, const string& tag_body);
 
+  void AddOriginalReadGroupTag(BamAlignment & bam, string tag_body);
+
   //! Update SFF header and close.
   void Close(BarcodeDatasets& datasets,
              const vector<string>& end_barcode_names,

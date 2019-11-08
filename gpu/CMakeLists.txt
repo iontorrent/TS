@@ -6,17 +6,15 @@ enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
-#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
-
-#set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
 
 # Use the closest ION_UPDATE_SERVER we can find.
 message(STATUS "Searching for an ION_UPDATE_SERVER...")
 foreach ( SERVER updates updates.itw updates.iontorrent.com )
     # See if we can look up the server in question.
-    execute_process( COMMAND host -W 2 ${SERVER}
+    execute_process( COMMAND host -W 2 -t A ${SERVER}
        RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
 
     # If we can find it, great! We're done!
@@ -42,10 +40,9 @@ IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS
 ENDIF ()
 include(ExternalProject)
 
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/opt/ion/gpu" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_GPU_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_GPU_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_GPU_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 
@@ -66,8 +63,13 @@ configure_file (
     "${PROJECT_BINARY_DIR}/debian/postrm" @ONLY
 )
 
-set(gpu_devdriver_version "375.26")
-set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-375.26.run")
+if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+  set(gpu_devdriver_version "410.78")
+  set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-410.78.run")
+else()
+  set(gpu_devdriver_version "375.26")
+  set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-375.26.run")
+endif()
 
 set(gpu_devdriver "gpu_devdriver")
 set(gpu_devdriver_version "${gpu_devdriver}-${gpu_devdriver_version}")
@@ -97,9 +99,13 @@ set (CMAKE_C_FLAGS_RELEASE "")
 set (CMAKE_CXX_FLAGS_RELEASE "")
 include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
 
+set(COMMON_LIBS pthread dl rt ${CUDA_LIBRARIES})
 CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
+target_link_libraries(bandwidthTest ${COMMON_LIBS})
 CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
+target_link_libraries(deviceQuery ${COMMON_LIBS})
 CUDA_ADD_EXECUTABLE(matrixMul matrixMul.cu)
+target_link_libraries(matrixMul ${COMMON_LIBS})
 
 add_dependencies(bandwidthTest cuda_toolkit)
 add_dependencies(deviceQuery cuda_toolkit)

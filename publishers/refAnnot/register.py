@@ -9,11 +9,11 @@ from iondb.rundb import publisher_types
 
 api_url = "http://localhost/rundb/api/v1/content/register/%s/"
 headers = {"Content-type": "application/json"}
-supported_filetypes = ['gff', 'gff3', 'gtf', 'gtf2', 'gtf3', 'fasta']
+supported_filetypes = ["gff", "gff3", "gtf", "gtf2", "gtf3", "fasta"]
 
 
 def register(files, meta):
-    print '....register files: %s' % files
+    print("....register files: %s" % files)
     session = requests.Session()
     session.headers.update(headers)
 
@@ -24,7 +24,7 @@ def register(files, meta):
         from annotation, which is the default type for this publisher.
         """
         type_field = publisher_types.ANNOTATION
-        if meta.get('annot_type', '') == publisher_types.AUXILIARYREFERENCE:
+        if meta.get("annot_type", "") == publisher_types.AUXILIARYREFERENCE:
             type_field = publisher_types.AUXILIARYREFERENCE
 
         """
@@ -32,44 +32,44 @@ def register(files, meta):
         format with different file ext. then file_type should be part
         of the meta. file_type should be stored in upper cases.
         """
-        if not meta.get('file_type', None):
-            file_type = meta.get('url', '').split('.').pop()
+        if not meta.get("file_type", None):
+            file_type = meta.get("url", "").split(".").pop()
             if not file_type or file_type.lower() not in supported_filetypes:
-                file_type = ''
-            meta['file_type'] = file_type.upper()
+                file_type = ""
+            meta["file_type"] = file_type.upper()
 
         payload = {
-            'file': my_file,
-            'path': '/' + meta['reference'] + '/' + os.path.basename(my_file),
-            'meta': meta,
-            'type': type_field,
-            'extra': meta['reference'],
-            'application_tags': meta['application_tags'],
-            'description': meta['description']
+            "file": my_file,
+            "path": "/" + meta["reference"] + "/" + os.path.basename(my_file),
+            "meta": meta,
+            "type": type_field,
+            "extra": meta["reference"],
+            "application_tags": meta["application_tags"],
+            "description": meta["description"],
         }
         r = session.post(url, data=json.dumps(payload), headers=headers)
         r.raise_for_status()
-        print '....registered %s' % payload['path']
+        print("....registered %s" % payload["path"])
 
 
 def main():
     try:
         with open(meta_file) as f:
             meta = json.load(f)
-            print '....meta: %s' % json.dumps(meta, indent=1)
+            print("....meta: %s" % json.dumps(meta, indent=1))
 
-        files = meta.get('validate_files') or [upload_file]
+        files = meta.get("validate_files") or [upload_file]
         if len(files) < 1:
-            raise Exception('No files to process, exiting.')
+            raise Exception("No files to process, exiting.")
         else:
             register(files, meta)
 
     except Exception as e:
-        print 'Error: %s' % e
+        print("Error: %s" % e)
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     args = sys.argv
 
@@ -83,6 +83,6 @@ if __name__ == '__main__':
         parse.print_help()
         sys.exit(1)
 
-    print 'Started register'
+    print("Started register")
 
     main()

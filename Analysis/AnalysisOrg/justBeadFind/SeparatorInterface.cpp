@@ -76,6 +76,7 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.tauEEstimateStepX = inception_state.bfd_control.meshStepX;
   opts.tauEEstimateStepY = inception_state.bfd_control.meshStepY;
   opts.useMeshNeighbors = 0;
+  opts.exclusionMaskSet = inception_state.loc_context.exclusionMaskSet;
   opts.regionXSize = inception_state.loc_context.regionXSize;
   opts.regionYSize = inception_state.loc_context.regionYSize;
   opts.beadfindAcqThreshold = inception_state.bfd_control.beadfindAcqThreshold;

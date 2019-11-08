@@ -100,7 +100,7 @@ void build_index(const string &path_in) {
 		  if (iter == chr_order.end()) {order++; chr_order[chr] = order;}
 		  sprintf(buffer, "%d", chr_order[chr]);
 		  chr_key = buffer;
-		  while (chr_key.length() < 3) {chr_key = "0" + chr_key;}
+		  while (chr_key.length() < 6) {chr_key = "0" + chr_key;}
           string position = strs[1];
 		  while (position.length() < 9) {position = "0" + position;}
 		  line_key = "";
@@ -356,25 +356,19 @@ int VcfOrderedMerger::variant_cmp(const T* v1, const vcf::Variant* v2) const {
 }
 
 template <typename T>
-int VcfOrderedMerger::variant_cmp_secplus(const T* v1, const vcf::Variant* v2) const {
+int VcfOrderedMerger::variant_cmp_secplus(const T* v1, const vcf::Variant* v2, int p) const {
   int idx_v1 = reference_reader.chr_idx(v1->sequenceName.c_str());
   int idx_v2 = reference_reader.chr_idx(v2->sequenceName.c_str());
-  return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+50+v2->ref.length()));
+  return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+p+v2->ref.length()));
 }
 
-template <typename T>
-int VcfOrderedMerger::variant_cmp_secplus_more(const T* v1, const vcf::Variant* v2) const {
-  int idx_v1 = reference_reader.chr_idx(v1->sequenceName.c_str());
-  int idx_v2 = reference_reader.chr_idx(v2->sequenceName.c_str());
-  return compare(idx_v1, v1->position, idx_v2, (long) (v2->position+250));
-}
 
 
 // -----------------------------------------------------------------------------------
 
 bool VcfOrderedMerger::too_far(vcf::Variant* v1, vcf::Variant* v2) {
     if (v2 == NULL) return true;
-    int com = variant_cmp_secplus(v2, v1);
+    int com = variant_cmp_secplus(v2, v1, 50);
     return (com == -1);
     /*
     int far = 250; 
@@ -390,9 +384,10 @@ bool VcfOrderedMerger::too_far(vcf::Variant* v1, vcf::Variant* v2) {
 
 bool VcfOrderedMerger::too_far_far(vcf::Variant* v1, vcf::Variant* v2) {
     if (v2 == NULL) return true;
-    int com = variant_cmp_secplus_more(v2, v1);
+    int com = variant_cmp_secplus(v2, v1, 150);
     return (com == -1);
 }
+
 
 // -----------------------------------------------------------------------------------
 // position in vcf is 1-based
@@ -426,6 +421,7 @@ void VcfOrderedMerger::perform() {
   // merging ordered files loop
   while (novel_queue.has_value() && assembly_queue.has_value()) {
     vcf::Variant* current;
+    novel_queue.current()->isHotSpot = false; assembly_queue.current()->isHotSpot = true;
     int cmp = variant_cmp(novel_queue.current(), assembly_queue.current());
     current = cmp == -1 ? assembly_queue.current() : novel_queue.current();
     if (cmp < 0) {
@@ -445,10 +441,12 @@ void VcfOrderedMerger::perform() {
 
   // write out remaining entries
   while (novel_queue.has_value()) {
+    novel_queue.current()->isHotSpot = false;
     process_and_write_vcf_entry(novel_queue.current());
     novel_queue.next();
   }
   while (assembly_queue.has_value()) {
+    assembly_queue.current()->isHotSpot = true;
     if (not find_and_merge_assembly()) process_and_write_vcf_entry(assembly_queue.current());
     assembly_queue.next();
   }
@@ -490,39 +488,63 @@ static bool is_nonrefcall(vcf::Variant *v)
     return alt_called;
 }
 
-
-static bool allele_in_gt(vcf::Variant *v, int pos, int rlen, string a, int &idx) 
+static bool allele_in_gt(vcf::Variant *v, int pos, string a, int &idx, string &ref, const ReferenceReader &reference_reader) 
 {
-    if (v->position > pos) return false;
-    if ((int) (v->position+v->ref.length()) < pos+rlen) return false;
-    string left, right;
-    if (pos> v->position) left = v->ref.substr(0, pos-v->position);
+    string vl, vr, left, right;
+    int rlen = ref.length();
+    int chr = reference_reader.chr_idx(v->sequenceName.c_str());
+    if (v->position > pos) {
+	vl = reference_reader.substr(chr, pos-1, v->position-pos);
+    } else if (v->position < pos) {
+	left = reference_reader.substr(chr, v->position-1, pos-v->position);
+    }
+    if (pos+rlen < (int) (v->position+v->ref.length())) {
+	right = reference_reader.substr(chr, pos+rlen-1, v->position+v->ref.length()-pos-rlen);
+    } else if (pos+rlen > (int) (v->position+v->ref.length())) {
+	vr = reference_reader.substr(chr,v->position+v->ref.length()-1, pos+rlen-v->position-v->ref.length());
+    }
+    /*
+    if (v->position >= pos) {
+	if (pos+rlen < (int) v->position) return false;
+	if (v->position > pos) vl = ref.substr(0, v->position-pos); 
+    } else {
+	if ((int) (v->position+v->ref.length()) < pos) return false;
+	left = v->ref.substr(0, pos-v->position);
+    }
     if (pos+rlen < (int) (v->position+v->ref.length())) {
 	int len = v->position+v->ref.length()-(pos+rlen);
 	right = v->ref.substr(v->ref.length()-len);
+    } else if (pos+rlen >(int) (v->position+v->ref.length())) {
+	int len = pos+rlen-(v->position+v->ref.length());
+	vr = ref.substr(rlen-len);
     }
+    */
     unsigned int i;
     for (i = 0; i < v->alt.size(); i++) {
-	if (left+a+right == v->alt[i]) break;
+	//cerr << left+a+right << "  " << vl+v->alt[i]+vr << endl;
+	if (left+a+right == vl+v->alt[i]+vr) break;
     }
     if (i == v->alt.size()) return false;
     idx = i+1;
     return true;
 }    
 
-
-bool VcfOrderedMerger::find_and_merge_assembly()
+bool VcfOrderedMerger::find_and_merge_assembly(vcf::Variant *x, bool use_too_far)
 {
     list<vcf::Variant>::reverse_iterator it;
-    int pos = assembly_queue.current()->position, reflen = assembly_queue.current()->ref.length();
-    string alt = assembly_queue.current()->alt[0];
+    int pos = x->position, reflen = x->ref.length();
+    string alt = x->alt[0];
     //cerr << alt << pos << " "  << reflen << endl;
     for (it = variant_list.rbegin(); it != variant_list.rend(); it++) {
 	//cerr << "Z " << it->position << it->ref << endl;
-	if (too_far(&(*it), assembly_queue.current())) break;
+	if (use_too_far) {
+	    if (too_far(&(*it), x)) break;
+	} else {
+	    if (variant_cmp(&(*it), x) >= 0) break;
+	}
 	//cerr << "Not too far " << endl;
 	int idx = 0;
-	if (allele_in_gt(&(*it), pos, reflen, alt, idx)) {
+	if (allele_in_gt(&(*it), pos, alt, idx, x->ref, reference_reader)) {
 	    bool alt_called = false;
 	    if (in_gt(&(*it), idx, alt_called)) return true;
 	    continue; // just not replacing for now.
@@ -534,6 +556,11 @@ bool VcfOrderedMerger::find_and_merge_assembly()
 	}
     }
     return false;
+}
+
+bool VcfOrderedMerger::find_and_merge_assembly()
+{
+    return find_and_merge_assembly(assembly_queue.current(), true);
 }
 
 // -----------------------------------------------------------------------------------
@@ -687,7 +714,7 @@ bool VcfOrderedMerger::find_match_new(vcf::Variant* merged_entry, vcf::Variant* 
     int length = max(end_m, end_h)-pos;
     if (length > (int) (merged_entry->ref.length()+hotspot->ref.length())) { // not overlaping
     	int chr = reference_reader.chr_idx(hotspot->sequenceName.c_str());
-	mid_ref = reference_reader.substr(chr, min(end_m, end_h), length-merged_entry->ref.length()-hotspot->ref.length());
+	mid_ref = reference_reader.substr(chr, min(end_m, end_h)-1, length-merged_entry->ref.length()-hotspot->ref.length());
     }
     if ( merged_entry->position > hotspot->position) {
 	ll.clear(); left =hotspot->ref.substr(0, merged_entry->position-hotspot->position)+mid_ref;
@@ -894,6 +921,18 @@ void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
 // -----------------------------------------------------------------------------------
 // implementation of subset check  and annotation XXX
 
+void VcfOrderedMerger::genotype_to_set(std::set<int> &gt_set, const string &gt_str, char delim)
+{
+  string gt_field;
+  stringstream mysstream(gt_str);
+  while (getline(mysstream, gt_field, delim)){
+    if (gt_field!="." and gt_field!="0"){
+      int called_allele = std::stoi(gt_field)-1; // Zero based index for vector access
+      gt_set.insert(called_allele);
+    }
+  }
+}
+
 void VcfOrderedMerger::annotate_subset(vcf::Variant* variant) {
 
   if (not allele_subset.check_enabled)
@@ -902,21 +941,18 @@ void VcfOrderedMerger::annotate_subset(vcf::Variant* variant) {
   if (variant->filter != "PASS" or variant->alt.size()<2)
     return;
 
-  // unpack called alleles
-  vector<int> called_alts;
-  string gt_field;
-  stringstream gt(variant->samples[variant->sampleNames[0]]["GT"][0]);
-  while (getline(gt, gt_field, '/')){
-    if (gt_field!="." and gt_field!="0"){
-      int called_allele = std::stoi(gt_field)-1; // Zero based index for vector access
-      // Have we seen this one before?
-      unsigned int idx = 0;
-      while (idx<called_alts.size() and called_alts[idx]!=called_allele)
-        ++idx;
-      if (idx==called_alts.size())
-        called_alts.push_back(called_allele);
-    }
+  // unpack called alleles -- First genotype then PPA
+  set<int> called_alts;
+  string gt_str = variant->samples[variant->sampleNames[0]]["GT"][0];
+  genotype_to_set(called_alts, gt_str, '/');
+
+  map<string, vector<string> >::iterator it;
+  it = variant->info.find("PPA");
+  if (it != variant->info.end()) {
+    gt_str = variant->info["PPA"][0];
+    genotype_to_set(called_alts, gt_str, '/');
   }
+
   if (called_alts.size()==0)
     return;
 
@@ -927,16 +963,30 @@ void VcfOrderedMerger::annotate_subset(vcf::Variant* variant) {
   // For every alt allele we test it is a strict subset of any called alt alleles
   for (unsigned int aidx=0; aidx<variant->alt.size(); ++aidx){
     string si_field;
-    for (vector<int>::iterator calt=called_alts.begin(); calt!=called_alts.end(); ++calt){
+    for (std::set<int>::iterator calt=called_alts.begin(); calt!=called_alts.end(); ++calt){
       if ((int)aidx == *calt)
         continue;
       if (allele_subset.is_allele_subset(variant->ref, variant->alt[aidx], variant->alt[*calt])){
-        have_subsets = true;
-        if (not si_field.empty())
-          si_field += "/";
-        si_field += std::to_string(*calt+1); // In vcf, make it 1-based again
+        // Option to not label symmetric subsets goes here
+        if (allele_subset.ignore_symmetric_subsets and
+            allele_subset.is_allele_subset(variant->ref, variant->alt[*calt], variant->alt[aidx]))
+        {
+          if (allele_subset.debug){
+            cout << "IGNORING Ref: " << variant->ref
+                      << " Subset: " << variant->alt[aidx]
+                    << " Superset: " << variant->alt[*calt] << endl << endl;
+          }
+          continue;
+        }
+        else {
+          have_subsets = true;
+          if (not si_field.empty())
+            si_field += "/";
+          si_field += std::to_string(*calt+1); // In vcf, make it 1-based again
+        }
       }
     }
+
     if (si_field.empty())
       push_value_to_vector(subset_info, aidx, ".");
     else
@@ -989,6 +1039,7 @@ void VcfOrderedMerger::merge_annotation_into_vcf(vcf::Variant* hotspot)
         for (it = variant_list.rbegin(); it != variant_list.rend(); it++ ) {
             if (too_far(&(*it), hotspot)) continue; // not assume well ordered.
             if (find_match_new(&(*it), hotspot, &(*omapalt), gt_v, allele_reads_count, adj_omp, idx)) {
+		if (it->isHotSpot) allele_reads_count = -1;
 		if (not found or (better(s_gt, s_ac, gt_v, allele_reads_count))) {
 		    if (found) {
 			if (sv->infoFlags.find("HS") != sv->infoFlags.end()) {
@@ -1143,6 +1194,10 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
 
     if (too_far_far(current, latest)) {
       if (is_within_target_region(current)) { 
+	if (current->isHotSpot and  find_and_merge_assembly(current, false)) {
+	    variant_list.pop_front();
+	    continue;
+	}
 	unsigned int i;
         bool has_oid = false;
         for (i =0; i < current->info["OID"].size(); i++) {
@@ -1197,7 +1252,7 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
 void VcfOrderedMerger::process_and_write_vcf_entry(vcf::Variant* current) {
   generate_novel_annotations(current);
   process_annotation(current);  // Adds hotspot annotation to entry
-  annotate_subset(current);        // Checks if called alleles supersets of others
+  annotate_subset(current);     // Checks if called alleles supersets of others
   flush_vcf(current);           // Filters entries and writes vcf files to file
   return;
 }
@@ -1317,22 +1372,12 @@ void VcfOrderedMerger::next_cov_entry() {
 void VcfOrderedMerger::process_annotation(vcf::Variant* current) {
 
   int cmp;
-  if (hotspot_queue.has_value())
-    do {
-      cmp = variant_cmp_secplus(current, hotspot_queue.current());
-      if (cmp == 1) { /*hotspots_.push_back(*hotspot_queue.current());*/ return;}
-      /*
-      if (cmp == 0) {
-        merge_annotation_into_vcf(current, hotspot_queue.current());
-        hotspot_queue.next();
-        return;
-      }
-      */
+  while (hotspot_queue.has_value()) {
+      if (not too_far(hotspot_queue.current(), current)) return;
       merge_annotation_into_vcf(hotspot_queue.current()) ;
       //blacklist_check(hotspot_queue.current()); // does not need, it is checked in above
       hotspot_queue.next();
-    }
-    while (cmp == -1 && hotspot_queue.has_value());
+  }
 }
   
 // -----------------------------------------------------------------------------------
@@ -1515,9 +1560,10 @@ int UnifyVcf(int argc, const char *argv[]) {
   bool  hotspot_variants_only    = opts.GetFirstBoolean ('-', "hotspot-variants-only",  false);
 
   // Subset annotation options
-  bool subset_debug              = opts.GetFirstBoolean ('-', "subset-debug",       false);
-  bool check_for_subsets         = opts.GetFirstBoolean ('-', "subset-check",       true);
-  bool subset_simple_mnp         = opts.GetFirstBoolean ('-', "subset-simple-mnp",  true);
+  bool subset_debug              = opts.GetFirstBoolean  ('-', "subset-debug",       false);
+  bool check_for_subsets         = opts.GetFirstBoolean  ('-', "subset-check",       true);
+  bool subset_simple_mnp         = opts.GetFirstBoolean  ('-', "subset-simple-mnp",  true);
+  bool ignore_symmetric_subsets  = opts.GetFirstBoolean  ('-', "subset-ignore-symmetric",  true);
   vector<int> subset_scores      = opts.GetFirstIntVector('-', "subset-scores", "1,-3,-5,-2");
 
   // check and fill optional arguments
@@ -1566,9 +1612,10 @@ int UnifyVcf(int argc, const char *argv[]) {
     // Set filtering options
     merger.SetVCFrecordFilters(filter_by_target, hotspot_positions_only, hotspot_variants_only);
     // Set subset annotation options
-    merger.allele_subset.debug                = subset_debug;
-    merger.allele_subset.check_enabled        = check_for_subsets;
-    merger.allele_subset.simple_mnp_alignment = subset_simple_mnp;
+    merger.allele_subset.debug                    = subset_debug;
+    merger.allele_subset.check_enabled            = check_for_subsets;
+    merger.allele_subset.simple_mnp_alignment     = subset_simple_mnp;
+    merger.allele_subset.ignore_symmetric_subsets = ignore_symmetric_subsets;
     merger.allele_subset.SetAlignerScores(subset_scores);
 
     // Perform merging procedure
@@ -1589,7 +1636,7 @@ int UnifyVcf(int argc, const char *argv[]) {
 // TODO: explore vcflib Smith-Waterman instead of Realigner
 
 AlleleSubsetCheck::AlleleSubsetCheck() :
-    aligner_(50,10),check_enabled(true), simple_mnp_alignment(true)
+    aligner_(50,10),check_enabled(true), simple_mnp_alignment(true), ignore_symmetric_subsets(false)
 {
   // Default to tmap default scores for alignment
   vector<int> def_scores(4, 1);

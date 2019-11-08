@@ -2,7 +2,7 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
-
+{% load i18n %}
 {% block extra_head %}
 <style type="text/css">
     .run {
@@ -30,8 +30,8 @@
 {% endblock extra_head %}
 
 {% block sub-nav %}
-<li class=""><a href="{% url "monitor" %}">Runs in Progress</a></li>
-<li class="active"><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
+<li class=""><a href="{% url "monitor" %}">{% trans "global.nav.menu.monitor.menu.monitor.label" %}</a></li>
+<li class="active"><a href="{% url "monitor_chef" %}">{% trans "global.nav.menu.monitor.menu.monitor_chef.label" %}</a></li>
 {% endblock sub-nav %}
 
 {% block content %}
@@ -39,22 +39,22 @@
     <div class="pull-right">
         <a id="live_update" class="btn"></a>
     </div>
-    <h1 style="margin-bottom:5px;">Ion Chef</h1>
+    <h1 style="margin-bottom:5px;">{% trans "monitor_chef.title" %}</h1>
     {% if plans %}
     <div id="runs">
         <div class="row-fluid">
             <table class="table table-striped">
                 <tr>
-                    <th>Last Updated</th>
-                    <th>Sample Set</th>
-                    <th>Plan</th>
-                    <th>Chef Instrument</th>
-                    <th>Library Prep Progress</th>
-                    <th>Library Prep Status</th>
-                    <th>Template Prep Progress</th>
-                    <th>Template Prep Status</th>
-                    <th>Estimated Time Remaining</th>
-                    <th>Estimated Time Until User Intervention</th>
+                    <th>{% trans "monitor_chef.fields.last_updated.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.sampleSetName.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.planName.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.instrumentName.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.lib_prep_progress.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.lib_prep_status.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.template_prep_progress.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.template_prep_status.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.estimated_remaining_time.label" %}</th>
+                    <th>{% trans "monitor_chef.fields.estimated_end_time.label" %}</th>
                 </tr>
                 {% for prepData in plans %}
                     <tr>
@@ -89,7 +89,7 @@
     <div id="pagination" class="row-fluid">
         <div class="offset4 span1">
             {% if plans.has_previous %}
-                <a href="?page={{ plans.previous_page_number }}">Previous</a>
+                <a href="?page={{ plans.previous_page_number }}">{% trans "monitor_chef.pageable.previous.label" %}</a>
             {% endif %}
         </div>
         <div class="span2">
@@ -97,13 +97,13 @@
         </div>
         <div class="span1">
             {% if plans.has_next %}
-                <a href="?page={{ plans.next_page_number }}">Next</a>
+                <a href="?page={{ plans.next_page_number }}">{% trans "monitor_chef.pageable.next.label" %}</a>
             {% endif %}
         </div>
     </div>
     {% else %}
         <div class="well" style="text-align: center;">
-            There are no current or recent TS plans running on the Ion Chef at this time.
+            {% trans "monitor_chef.pageable.messages.empty" %}
         </div>
     {% endif %}
 

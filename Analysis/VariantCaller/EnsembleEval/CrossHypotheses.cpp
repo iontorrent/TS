@@ -3,40 +3,34 @@
 #include "CrossHypotheses.h"
 #include "RandSchrange.h"
 
+PrecomputeTDistOddN::PrecomputeTDistOddN(){
+    SetV(3);
+}
+
 // model as a t-distribution to slightly resist outliers
-
 void PrecomputeTDistOddN::SetV(int _half_n){
-  half_n = _half_n;
-  v = (float) (2*half_n-1);
-  pi_factor = 1.0f/(3.14159f*sqrt(v));
-  v_factor = 1.0f;
-  for (int i_prod=1; i_prod<half_n; i_prod++) {
-    v_factor *= (v+1.0f-2.0f*i_prod)/(v-2.0f*i_prod);
-  }
-
-  log_v = log(v);
-  log_factor = log(v_factor) - (0.5f * log_v + 1.1447299f); //log_factor = log(pi_factor * pi_factor), 1.1447299 = log(pi)
+	half_n_ = _half_n;
+	v_ = (float) (2 * half_n_ - 1);
+	pi_factor_ = 1.0f / (M_PI * sqrt(v_));
+	v_factor_ = 1.0f;
+    for (int i_prod = 1; i_prod < half_n_; ++i_prod){
+      v_factor_ *= (v_ + 1.0f - 2.0f * i_prod) / (v_ - 2.0f * i_prod);
+    }
+    log_v_ = log(v_);
+    log_factor_ = log(v_factor_) - (0.5f * log_v_ + log(M_PI)); //log_factor = log(pi_factor * pi_factor), 1.1447299 = log(pi)
 };
 
-float PrecomputeTDistOddN::TDistOddN(float res, float sigma, float skew){
+float PrecomputeTDistOddN::TDistOddN(float res, float sigma, float skew) const{
   // skew t-dist one direction or the other
-  float l_sigma;
-  if (res>0.0f) {
-    l_sigma = sigma*skew;
-  } else {
-    l_sigma = sigma/skew;
-  }
+  float l_sigma = skew == 1.0f? sigma : (res > 0.0f? (sigma * skew) : (sigma / skew));
+  float x = res / l_sigma;
+  float my_likelihood = pi_factor_;
+  float my_factor = v_/(v_+x*x);
 
-  float x = res/l_sigma;
-  float xx = x*x;
-
-  float my_likelihood = pi_factor;
-  float my_factor = v/(v+xx);
-
-  for (int i_prod=0; i_prod<half_n; i_prod++) {
+  for (int i_prod=0; i_prod<half_n_; i_prod++) {
     my_likelihood *= my_factor;
   }
-  my_likelihood *= v_factor;
+  my_likelihood *= v_factor_;
   //  for (int i_prod=1; i_prod<half_n; i_prod++) {
   //    my_likelihood *= (v+1.0f-2.0f*i_prod)/(v-2.0f*i_prod);
   //  }
@@ -51,16 +45,16 @@ float PrecomputeTDistOddN::TDistOddN(float res, float sigma, float skew){
 }
 
 // Operate in the log domain to slightly speed up the calculation
-float PrecomputeTDistOddN::LogTDistOddN(float res, float sigma, float skew){
+float PrecomputeTDistOddN::LogTDistOddN(float res, float sigma, float skew) const{
   // skew t-dist one direction or the other
   float l_sigma = sigma;
   if (skew != 1.0f){
 	  l_sigma = (res > 0.0f)? sigma * skew : sigma / skew;
   }
   float x = res / l_sigma;
-  float my_log_likelihood = log_factor;
+  float my_log_likelihood = log_factor_;
 
-  my_log_likelihood += half_n * (log_v - log(v + x * x));
+  my_log_likelihood += half_n_ * (log_v_ - log(v_ + x * x));
   my_log_likelihood -= log(l_sigma);
   if (skew == 1.0f){
     return my_log_likelihood;
@@ -90,10 +84,45 @@ void HiddenBasis::Allocate(unsigned int num_hyp, unsigned int num_test_flow){
   int num_alt = num_hyp-2;
   delta.resize(num_alt); // num_alt
   for (unsigned int i_alt=0; i_alt<delta.size(); i_alt++)
-   delta[i_alt].assign(num_test_flow, 0.0f);
+    delta[i_alt].assign(num_test_flow, 0.0f);
 }
 
+CrossHypotheses::CrossHypotheses(){
+    strand_key = -1;
+    max_last_flow = -1;
+    splice_start_flow = -1;
+    splice_end_flow = -1;
+    start_flow = -1;
+    success = false;
+    ll_scale = 0.0f;
+    use_correlated_likelihood = false;
+    read_counter = 1;
+    at_least_one_same_as_null = false;
+    min_last_flow = -1;
+    skew_estimate = 1.0f;
+    ptr_query_name = NULL;
+}
 
+// Static variables
+PrecomputeTDistOddN CrossHypotheses::s_my_t_;
+int CrossHypotheses::s_heavy_tailed_ = 3;  // t_5 degrees of freedom
+bool CrossHypotheses::s_adjust_sigma_ = false;
+float CrossHypotheses::s_sigma_factor_ = 1.0f;
+int CrossHypotheses::s_max_flows_to_test = 10;
+float CrossHypotheses::s_min_delta_for_flow = 0.1f;
+float CrossHypotheses::s_magic_sigma_base = 0.085f;
+float CrossHypotheses::s_magic_sigma_slope = 0.0084f;
+
+void CrossHypotheses::SetHeavyTailed(int heavy_tailed, bool adjust_sigma){
+	s_heavy_tailed_ = heavy_tailed;
+	s_adjust_sigma_ = adjust_sigma;
+	ApplyHeavyTailed();
+}
+
+void CrossHypotheses::ApplyHeavyTailed(){
+	s_my_t_.SetV(s_heavy_tailed_); // 2*heavy_tailed - 1 = DoF of t-dist
+	s_sigma_factor_ = s_adjust_sigma_? sqrt((2.0f * s_heavy_tailed_ - 3.0f) / (2.0f * s_heavy_tailed_ - 1.0f)) : 1.0f;
+}
 
 void CrossHypotheses::CleanAllocate(int num_hyp, int num_flow) {
   // allocate my vectors here
@@ -114,44 +143,32 @@ void CrossHypotheses::CleanAllocate(int num_hyp, int num_flow) {
   sigma_estimate.resize(num_hyp);
   basic_log_likelihoods.resize(num_hyp);
 
-
   for (int i_hyp=0; i_hyp<num_hyp; i_hyp++) {
 	  predictions_all_flows[i_hyp].assign(num_flow, 0.0f);
 	  normalized_all_flows.assign(num_flow, 0.0f);
   }
 }
 
-void  CrossHypotheses::ClearAllFlowsData(){
+void CrossHypotheses::ClearAllFlowsData(){
 	normalized_all_flows.clear();
 	predictions_all_flows.clear();
 	measurement_sd_all_flows.clear();
 }
-
-void CrossHypotheses::SetModPredictions() {
-  // modified predictions reset from predictions
-  for (unsigned int i_hyp=0; i_hyp<predictions.size(); i_hyp++) {
-	mod_predictions[i_hyp].assign(test_flow.size(), 0.0f);
-	for(unsigned int t_flow = 0; t_flow < test_flow.size(); ++t_flow){
-      mod_predictions[i_hyp][t_flow] = predictions[i_hyp][t_flow];
-	}
-  }
-}
-
 
 void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, const Alignment& my_read, const InputStructures &global_context) {
   // allocate everything here
   CleanAllocate(instance_of_read_by_state.size(), global_context.flow_order_vector.at(my_read.flow_order_index).num_flows());
   // We search for test flows in the flow interval [(splice_start_flow-3*max_flows_to_test), (splice_end_flow+4*max_flows_to_test)]
   // We need to simulate further than the end of the search interval to get good predicted values within
-  int flow_upper_bound = splice_end_flow + 4*max_flows_to_test + 20;
+  int flow_upper_bound = splice_end_flow + 4*s_max_flows_to_test + 20;
   CalculateHypPredictions(thread_objects, my_read, global_context, instance_of_read_by_state,
                                           same_as_null_hypothesis, predictions_all_flows, normalized_all_flows, min_last_flow, max_last_flow, flow_upper_bound);
-  SetModPredictions();
+  ResetModPredictions();
   strand_key = my_read.is_reverse_strand? 1 : 0;
+  ptr_query_name = &(my_read.alignment.Name);
 
   // read_counter and measurements_sd for consensus reads
   read_counter = my_read.read_count;
-  read_counter_f = (float) read_counter;
   if (read_counter > 1){
     measurement_sd_all_flows = my_read.measurements_sd;
   }
@@ -162,7 +179,7 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
 
 void CrossHypotheses::InitializeTestFlows() {
   // Compute test flows for all hypotheses: flows changing by more than 0.1, 10 flows allowed
-  ComputeAllComparisonsTestFlow(min_delta_for_flow, max_flows_to_test);
+  ComputeAllComparisonsTestFlow(s_min_delta_for_flow, s_max_flows_to_test);
   InitializeRelevantToTestFlows();
   delta_state.ComputeDelta(predictions); // depends on predicted
   // compute cross-data across the deltas for multialleles
@@ -206,18 +223,13 @@ void CrossHypotheses::InitializeRelevantToTestFlows(){
     }
 }
 
-void CrossHypotheses::InitializeDerivedQualities() {
-
+void CrossHypotheses::InitializeDerivedQualities(const vector<vector<float> >& stranded_bias_adj) {
   InitializeResponsibility(); // depends on hypotheses
   // in theory don't need to compute any but test flows
-  SetModPredictions();  // make sure that mod-predictions=predictions
-  ComputeResiduals(); // predicted and measured
+  ResetModPredictions();  // make sure that mod-predictions=predictions
+  ComputeResiduals(stranded_bias_adj); // predicted and measured
 
   InitializeSigma(); // depends on predicted
-
-  my_t.SetV(heavy_tailed);
-  // 2*heavy_tailed - 1 = Dof of t-dist
-  sigma_factor = adjust_sigma? sqrt((2.0f * heavy_tailed - 3.0f) / (2.0f * heavy_tailed - 1.0f)) : 1.0f;
 
   ComputeBasicLogLikelihoods(); // depends on residuals and sigma
   // compute log-likelihoods
@@ -226,7 +238,7 @@ void CrossHypotheses::InitializeDerivedQualities() {
 
 void CrossHypotheses::InitializeResponsibility() {
   responsibility[0] = 1.0f;  // everyone is an outlier until we trust you
-  weighted_responsibility[0] = read_counter_f;
+  weighted_responsibility[0] = (float) read_counter;
   for (unsigned int i_hyp=1; i_hyp<responsibility.size(); i_hyp++){
     responsibility[i_hyp] = 0.0f;
     weighted_responsibility[i_hyp] = 0.0f;
@@ -254,20 +266,20 @@ void CrossHypotheses::UpdateResponsibility(const vector<float > &hyp_prob, float
     //cout << "alert: fail to splice still called" << endl;
     InitializeResponsibility();
   } else {
-  //  vector<double> tmp_prob(3);
-  tmp_prob_d[0] = outlier_prob * scaled_likelihood[0];   // i'm an outlier
-  for (unsigned int i_hyp=1; i_hyp<scaled_likelihood.size(); i_hyp++)
-    tmp_prob_d[i_hyp] = typical_prob * hyp_prob[i_hyp-1] * scaled_likelihood[i_hyp];
+	//  vector<double> tmp_prob(3);
+	tmp_prob_d[0] = outlier_prob * scaled_likelihood[0];   // i'm an outlier
+	for (unsigned int i_hyp=1; i_hyp<scaled_likelihood.size(); i_hyp++)
+	  tmp_prob_d[i_hyp] = typical_prob * hyp_prob[i_hyp-1] * scaled_likelihood[i_hyp];
 
-  double ll_denom = 0.0;
-  for (unsigned int i_hyp=0; i_hyp<scaled_likelihood.size(); i_hyp++){
-    ll_denom += tmp_prob_d[i_hyp];
-  }
+	double ll_denom = 0.0;
+	for (unsigned int i_hyp=0; i_hyp<scaled_likelihood.size(); i_hyp++){
+	  ll_denom += tmp_prob_d[i_hyp];
+	}
 
-  for (unsigned int i_hyp=0; i_hyp<responsibility.size(); i_hyp++){
-    responsibility[i_hyp] = tmp_prob_d[i_hyp]/ll_denom;
-    weighted_responsibility[i_hyp] = responsibility[i_hyp] * read_counter_f;
-  }
+	for (unsigned int i_hyp=0; i_hyp<responsibility.size(); i_hyp++){
+	  responsibility[i_hyp] = tmp_prob_d[i_hyp]/ll_denom;
+	  weighted_responsibility[i_hyp] = responsibility[i_hyp] * (float) read_counter;
+	}
   }
 }
 
@@ -290,7 +302,14 @@ float CrossHypotheses::ComputePosteriorLikelihood(const vector<float > &hyp_prob
   for (unsigned int i_hyp=0; i_hyp<scaled_likelihood.size(); i_hyp++) {
     ll_denom += tmp_prob_f[i_hyp];
   }
-  return(log(ll_denom)+ll_scale);  // log-likelihood under current distribution, including common value of log-likelihood-scale
+
+  // Notes for consensus reads (read_counter > 1):
+  // scaled_likelihood is obtained from the "basic" log-likelihood weighted by read_counter, which is based on the assumption that all reads in the consensus read support the same truth of nature.
+  // By doing this, error correction has been applied (in basic log-likelihood).
+  // In the following line, the log-likelihood of AF contributed from the cosnsensus read is weighted by read counter,
+  // which implicitly says that the reads in the consensus reads are "independent". This contradicts the assumption of the consensus read because the reads are highly correlated.
+  // In practice, it works fine if the true AF is preserved in both family and read counts, though it is not mathematically strict unless I claim that I intentionally ignore the reason of forming consensus, but I really can't.
+  return (read_counter == 1? (log(ll_denom) + ll_scale) : (log(ll_denom) + ll_scale) * (float) read_counter);  // log-likelihood under current distribution, including common value of log-likelihood-scale
 }
 
 
@@ -418,26 +437,42 @@ void HiddenBasis::ComputeDeltaCorrelation(const vector<vector <float> > &predict
   delta_correlation = sqrt((xy * xy + safety_zero) / (xx * yy + safety_zero));
 }
 
-void CrossHypotheses::ComputeResiduals() {
-  for (unsigned int i_hyp = 0; i_hyp < mod_predictions.size(); i_hyp++) {
-    for (unsigned int t_flow = 0; t_flow < test_flow.size(); t_flow++) {
-      residuals[i_hyp][t_flow] = mod_predictions[i_hyp][t_flow] - normalized[t_flow];
+// Site-specific signal adjustment is applied to the "residuals" if available.
+// Important Notes for site-specific signal adjustment:
+// 1) I do NOT eliminate the co-linear components of delta if there are adjustments on multiple alleles being applied!
+// 2) So please specify FWDB/REVB in just "ONE" Hotspot allele if there are co-linear hotspot alleles.
+// 3) The reason I don't use cross_inv to eliminate the co-linear components is that it requires to specify FWDB/REVB for all co-linear alleles, while I'm not able to do it if there is a de novo.
+void CrossHypotheses::ComputeResiduals(const vector<vector<float> >& bias_adjustment){
+  for (unsigned int t_flow = 0; t_flow < test_flow.size(); t_flow++) {
+    // adjusted_normalized is the normalized measurement (i.e., ZM) with site-specific signal adjustment
+	float adjusted_normalized = normalized[t_flow];
+    // Apply site-specific signal adjustment here!
+	if (not bias_adjustment.empty()){
+      for (unsigned int i_alt = 0; i_alt < bias_adjustment[strand_key].size(); ++i_alt){
+        // I don't adjust a delta of Strong FD.
+    	if (local_flow_disruptiveness_matrix[1][i_alt + 2] > 1){
+        	continue;
+        }
+    	// Important: Note that I do NOT eliminate the co-linear components of delta if there are adjustments on multiple alleles being applied!
+    	adjusted_normalized += delta_state.delta[i_alt][t_flow] * bias_adjustment[strand_key][i_alt];
+      }
+    }
+  	for (unsigned int i_hyp = 0; i_hyp < mod_predictions.size(); i_hyp++) {
+      residuals[i_hyp][t_flow] = mod_predictions[i_hyp][t_flow] - adjusted_normalized;
     }
   }
 }
 
 void CrossHypotheses::ResetModPredictions() {
-  // basic residuals are obviously predicted - normalized under each hypothesis
-  for (unsigned int i_hyp = 0; i_hyp < mod_predictions.size(); i_hyp++) {
-    for (unsigned int t_flow=0; t_flow < test_flow.size(); t_flow++) {
-      mod_predictions[i_hyp][t_flow] = predictions[i_hyp][t_flow];
-    }
+  mod_predictions.resize(predictions.size());
+  for (unsigned int i_hyp = 0; i_hyp < mod_predictions.size(); ++i_hyp) {
+	  copy(predictions[i_hyp].begin(), predictions[i_hyp].end(), mod_predictions[i_hyp].begin());
   }
 }
 
-void CrossHypotheses::ResetRelevantResiduals() {
+void CrossHypotheses::ResetRelevantResiduals(const vector<vector<float> >& stranded_bias_adj) {
   ResetModPredictions();
-  ComputeResiduals();
+  ComputeResiduals(stranded_bias_adj);
 }
 
 void CrossHypotheses::ComputeBasicLogLikelihoods() {
@@ -445,8 +480,8 @@ void CrossHypotheses::ComputeBasicLogLikelihoods() {
 	if (read_counter == 1){
 		for (unsigned int i_hyp=0; i_hyp < basic_log_likelihoods.size(); i_hyp++) {
 			for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++) {
-				float my_sigma = adjust_sigma? sigma_estimate[i_hyp][t_flow] * sigma_factor : sigma_estimate[i_hyp][t_flow];
-				basic_log_likelihoods[i_hyp][t_flow] = my_t.LogTDistOddN(residuals[i_hyp][t_flow], my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
+				float my_sigma = s_adjust_sigma_? sigma_estimate[i_hyp][t_flow] * s_sigma_factor_ : sigma_estimate[i_hyp][t_flow];
+				basic_log_likelihoods[i_hyp][t_flow] = s_my_t_.LogTDistOddN(residuals[i_hyp][t_flow], my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
 			}
 		}
 	}
@@ -459,8 +494,8 @@ void CrossHypotheses::ComputeBasicLogLikelihoods() {
 				if (measurement_var[t_flow] != 0.0f){
 					adj_res = (adj_res > 0.0f) ? sqrt(adj_res * adj_res + measurement_var[t_flow]) : -sqrt(adj_res * adj_res + measurement_var[t_flow]);
 				}
-				float my_sigma = adjust_sigma? sigma_estimate[i_hyp][t_flow] * sigma_factor : sigma_estimate[i_hyp][t_flow];
-				basic_log_likelihoods[i_hyp][t_flow] = my_t.LogTDistOddN(adj_res, my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
+				float my_sigma = s_adjust_sigma_? sigma_estimate[i_hyp][t_flow] * s_sigma_factor_ : sigma_estimate[i_hyp][t_flow];
+				basic_log_likelihoods[i_hyp][t_flow] = s_my_t_.LogTDistOddN(adj_res, my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
 			}
 		}
 	}
@@ -478,7 +513,7 @@ void CrossHypotheses::ComputeLogLikelihoodsSum() {
       log_likelihood[i_hyp] += basic_log_likelihoods[i_hyp][t_flow];  // keep from underflowing from multiplying
     }
     if (read_counter > 1){
-      log_likelihood[i_hyp] *= read_counter_f;
+      log_likelihood[i_hyp] *= (float) read_counter;
     }
   }
 }
@@ -540,12 +575,12 @@ void CrossHypotheses::JointLogLikelihood() {
     //    cout << i_hyp <<  "\t" << res_projection << "\t" << sqrt(sigma_projection) << endl;
     // now that we have r*u and u*sigma*u
     sigma_projection = sqrt(sigma_projection);
-    if (adjust_sigma){
-    	sigma_projection *= sigma_factor;
+    if (s_adjust_sigma_){
+    	sigma_projection *= s_sigma_factor_;
     }
-    float b_likelihood = my_t.LogTDistOddN(res_projection,sigma_projection,skew_estimate);
+    float b_likelihood = s_my_t_.LogTDistOddN(res_projection,sigma_projection,skew_estimate);
 
-    log_likelihood[i_hyp] = (read_counter == 1) ? b_likelihood : read_counter_f * b_likelihood;
+    log_likelihood[i_hyp] = (read_counter == 1) ? b_likelihood : (float) read_counter * b_likelihood;
   }
 }
 
@@ -590,7 +625,7 @@ void CrossHypotheses::InitializeSigma() {
     //    sigma_estimate.at(i_hyp).resize(predictions.at(i_hyp).size());
     for (unsigned int t_flow = 0; t_flow<test_flow.size(); t_flow++) {
       float square_level = mod_predictions[i_hyp][t_flow] * mod_predictions[i_hyp][t_flow] + 1.0f;
-      sigma_estimate[i_hyp][t_flow] = magic_sigma_slope * square_level + magic_sigma_base;
+      sigma_estimate[i_hyp][t_flow] = s_magic_sigma_slope * square_level + s_magic_sigma_base;
     }
   }
 }
@@ -708,7 +743,7 @@ void CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_cho
 	sort(test_flow.begin(), test_flow.end());
 }
 
-float CrossHypotheses::ComputeLLDifference(int a_hyp, int b_hyp) {
+float CrossHypotheses::ComputeLLDifference(int a_hyp, int b_hyp) const{
   // difference in likelihoods between hypotheses
   return(fabs(log_likelihood[a_hyp]-log_likelihood[b_hyp]));
 }
@@ -727,6 +762,7 @@ int CrossHypotheses::MostResponsible() const{
 }
 
 void EvalFamily::InitializeEvalFamily(unsigned int num_hyp){
+	my_family_cross_.success = true;
 	CleanAllocate(num_hyp);
 	InitializeFamilyResponsibility();
 }
@@ -787,10 +823,6 @@ float EvalFamily::ComputeFamilyPosteriorLikelihood(const vector<float> &hyp_prob
 	return log(ll_denom + safety_zero) + my_family_cross_.ll_scale;  // log-likelihood under current distribution, including common value of log-likelihood-scale
 }
 
-int EvalFamily::MostResponsible(){
-	return my_family_cross_.MostResponsible();
-}
-
 int EvalFamily::CountFamSizeFromAll()
 {
 	fam_size_ = 0;
@@ -843,7 +875,7 @@ void EvalFamily::ComputeFamilyOutlierResponsibility(const vector<CrossHypotheses
 	for (vector<unsigned int>::iterator read_idx_it = valid_family_members.begin(); read_idx_it != valid_family_members.end(); ++read_idx_it){
 		min_read_ol_resp = min(min_read_ol_resp, my_hypotheses[*read_idx_it].responsibility[0]);
 		max_read_ol_resp = max(max_read_ol_resp, my_hypotheses[*read_idx_it].responsibility[0]);
-		weighted_avg_read_ol_resp += (my_hypotheses[*read_idx_it].responsibility[0] * my_hypotheses[*read_idx_it].read_counter_f);
+		weighted_avg_read_ol_resp += (my_hypotheses[*read_idx_it].responsibility[0] * (float) my_hypotheses[*read_idx_it].read_counter);
 		// The following criterion basically claims that the read is not an outlier.
 		if (my_hypotheses[*read_idx_it].at_least_one_same_as_null){
 			// This condition basically implies that a hypothesis is the same as null. So it can't be an outlier.

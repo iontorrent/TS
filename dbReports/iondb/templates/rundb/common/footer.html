@@ -1,0 +1,24 @@
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+{% load i18n %}
+<div class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="span12">
+                <img class="pull-left" src="{% static "resources/img/ion-by-thermo-logo-125px.png"%}" border="0">
+                <div class="pull-right">
+                    {% comment %}Translators: Footer first paragraph{% endcomment %}
+                    <p>{% trans "global.footer.p.1" %}</p>
+                    <p>{% comment %}Translators: Footer second paragraph company copyright {% endcomment %}
+                        <span class="copyright">{% trans "global.footer.p.2.span" %}</span>
+                        {% comment %}Translators: Footer second paragraph's first inline link and text (e.g. Technical Support){% endcomment %}
+                        <a href="{% trans "global.footer.p.2.a.1.href" %}">{% trans "global.footer.p.2.a.1.text" %}</a> |
+                        {% comment %}Translators: Footer second paragraph's second inline link and text (e.g. Terms & Conditions) {% endcomment %}
+                        <a href="{% trans "global.footer.p.2.a.2.href" %}">{% trans "global.footer.p.2.a.2.text" %}</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

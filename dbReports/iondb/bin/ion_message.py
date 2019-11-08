@@ -7,10 +7,16 @@ from iondb.rundb.models import Message
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Post a site message to the Torrent browser.")
+    parser = argparse.ArgumentParser(
+        description="Post a site message to the Torrent browser."
+    )
     parser.add_argument("message", type=str, help="The message string to be displayed.")
-    parser.add_argument("-d", "--duplicate", action="store_true",
-                        help="Create a duplicate post if necessary.")
+    parser.add_argument(
+        "-d",
+        "--duplicate",
+        action="store_true",
+        help="Create a duplicate post if necessary.",
+    )
     args = parser.parse_args()
 
     msg = Message.objects.filter(body=args.message).count()

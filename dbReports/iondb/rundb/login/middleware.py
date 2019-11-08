@@ -5,7 +5,9 @@ from django.http import HttpResponse
 from django.contrib.auth import authenticate, login
 
 import logging
+
 log = logging.getLogger(__name__)
+
 
 class BasicAuthMiddleware:
     """
@@ -15,28 +17,35 @@ class BasicAuthMiddleware:
     Use in conjunction with session auth to provide alternatives for users.
 
     """
+
     def process_request(self, request):
-        auth_header = request.META.get('HTTP_AUTHORIZATION', None)
+        auth_header = request.META.get("HTTP_AUTHORIZATION", None)
         if auth_header is None:
             # Do nothing, fall through to other methods
             return None
 
-        auth = request.META['HTTP_AUTHORIZATION'].split()
+        auth = request.META["HTTP_AUTHORIZATION"].split()
         if len(auth) == 2:
             # NOTE: We are only support basic authentication for now.
             if auth[0].lower() == "basic":
                 import base64
-                username, password = base64.b64decode(auth[1]).split(':')
+
+                username, password = base64.b64decode(auth[1]).split(":")
 
                 user = authenticate(username=username, password=password)
                 if user is not None:
                     if user.is_active:
                         login(request, user)
                     else:
-                        log.debug("Failed login attempt for user '%s'. INACTIVE USER", user)
+                        log.debug(
+                            "Failed login attempt for user '%s'. INACTIVE USER", user
+                        )
             else:
                 log.debug("Attempt to auth with '%s' auth: NOT SUPPORTED", auth[0])
         else:
-            log.debug("Unrecognized HTTP_AUTHORIZATION header received: '%s'", request.META['HTTP_AUTHORIZATION'])
+            log.debug(
+                "Unrecognized HTTP_AUTHORIZATION header received: '%s'",
+                request.META["HTTP_AUTHORIZATION"],
+            )
 
         return None

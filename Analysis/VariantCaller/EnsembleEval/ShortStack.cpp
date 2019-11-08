@@ -5,20 +5,16 @@
 
 
 void ShortStack::PropagateTuningParameters(EnsembleEvalTuningParameters &my_params){
-
-	for (unsigned int i_read = 0; i_read < my_hypotheses.size(); i_read++) {
-      // basic likelihoods
-    my_hypotheses[i_read].heavy_tailed = my_params.heavy_tailed;
-    my_hypotheses[i_read].adjust_sigma =  my_params.adjust_sigma;
+	// t-dist related
+	CrossHypotheses::SetHeavyTailed(my_params.heavy_tailed, my_params.adjust_sigma);
     
     // test flow construction
-    my_hypotheses[i_read].max_flows_to_test = my_params.max_flows_to_test;
-    my_hypotheses[i_read].min_delta_for_flow = my_params.min_delta_for_flow;
+	CrossHypotheses::s_max_flows_to_test = my_params.max_flows_to_test;
+	CrossHypotheses::s_min_delta_for_flow = my_params.min_delta_for_flow;
     
     // used to initialize sigma-estimates
-    my_hypotheses[i_read].magic_sigma_base = my_params.magic_sigma_base;
-    my_hypotheses[i_read].magic_sigma_slope = my_params.magic_sigma_slope;
-  }
+	CrossHypotheses::s_magic_sigma_base = my_params.magic_sigma_base;
+	CrossHypotheses::s_magic_sigma_slope = my_params.magic_sigma_slope;
 }
 
 
@@ -38,9 +34,9 @@ void ShortStack::FillInPredictionsAndTestFlows(PersistingThreadObjects &thread_o
 }
 
 void ShortStack::ResetQualities(float outlier_probability) {
-  // ! does not reset test flows or delta (correctly)
-    for (unsigned int i_read = 0; i_read < my_hypotheses.size(); i_read++) {
-        my_hypotheses[i_read].InitializeDerivedQualities();
+    // ! does not reset test flows or delta (correctly)
+	for (unsigned int i_read = 0; i_read < my_hypotheses.size(); i_read++) {
+        my_hypotheses[i_read].InitializeDerivedQualities(stranded_bias_adj);
     }
 
     // reset the derived qualities of my_families
@@ -101,7 +97,7 @@ void ShortStack::UpdateRelevantLikelihoods() {
 void ShortStack::ResetRelevantResiduals() {
   for (unsigned int i_ndx = 0; i_ndx < valid_indexes.size(); i_ndx++) {
     unsigned int i_read = valid_indexes[i_ndx];
-    my_hypotheses[i_read].ResetRelevantResiduals();
+    my_hypotheses[i_read].ResetRelevantResiduals(stranded_bias_adj);
   }
 }
 

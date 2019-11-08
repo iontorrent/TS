@@ -78,7 +78,9 @@ public:
     vcf::Variant* variant; // just for debug message.
 
     vector<float> ll_record;
-    vector<vector <float> > try_hyp_freq;
+    vector<float> ll_record_with_bias_adj;
+    vector<vector<float> > try_hyp_freq;
+    vector<vector<float> > stranded_bias_adjustment; // Site-specific signal adjustment defined in hotspot. stranded_bias_adjustment[0] for fwdb adj, stranded_bias_adjustment[1] for revb adj.
 
     HypothesisStack(){
         DefaultValues();
@@ -88,11 +90,12 @@ public:
     void PropagateTuningParameters(int num_hyp_no_null);
 
     // starting to make inferences
+    void SetSiteSpecificBiasAdjustment(const vector<VariantSpecificParams>& variant_specific_params);
     void RestoreFullInference();
     void SetAlternateFromMain();
     void ExecuteExtremeInferences();
-    void TriangulateRestart();
-    float ExecuteOneRestart(vector<float> &restart_hyp);
+    //void TriangulateRestart();
+    float ExecuteOneRestart(vector<float> &restart_hyp, bool apply_site_specific_signal_adjustment);
     void ExecuteInference();
     void InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, vector<AlleleIdentity> &allele_identity_vector);
 
@@ -114,8 +117,9 @@ public:
     LocalReferenceContext  seq_context;             //!< Reference context of this variant position
     int                    multiallele_window_start;
     int                    multiallele_window_end;
-    vector<string>         info_fields;
+    vector<string>         misc_info_fields;
     bool                   doRealignment;
+    int                    total_read_counts;  // Total read counts (weighted by ZR) on read_stack
     int                    DEBUG;
     // Allele evaluation information
     HypothesisStack allele_eval;
@@ -128,10 +132,11 @@ public:
         diploid_choice.clear();
         variant = &candidate_variant;
         allele_eval.variant = variant;
-        info_fields.clear();
+        misc_info_fields.clear();
         multiallele_window_start = -1;
         multiallele_window_end = -1;
         doRealignment = false;
+        total_read_counts = 0;
         DEBUG = 0;
         read_id_.clear();
         strand_id_.clear();

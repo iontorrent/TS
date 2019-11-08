@@ -745,7 +745,7 @@ void swStripedWord2(int              queryLength,
 
   __m128i vE, vF, vH;
 
-  __m128i vMaxScore, vGapOpen, vGapExtend;
+  __m128i /* vMaxScore, */ vGapOpen, vGapExtend;
 
   __m128i vMin, vTemp;
   __m128i *pvScore;
@@ -765,7 +765,7 @@ void swStripedWord2(int              queryLength,
   /*  full range of the short. */
 
   vMin = _mm_insert_epi16 (vZero, 0x8000, 0);
-  vMaxScore = vInf;    
+  // vMaxScore = vInf;    
 
   /* Zero out the storage vector */
   for (i = 0; i < iter; ++i)
@@ -1143,7 +1143,7 @@ void swStripedWord0(int              queryLength,
 
   __m128i vE, vF, vH;
 
-  __m128i vMaxScore, vGapOpen, vGapExtend;
+  __m128i /* vMaxScore, */ vGapOpen, vGapExtend;
 
   __m128i vMin, vTemp;
   __m128i *pvScore;
@@ -1163,7 +1163,7 @@ void swStripedWord0(int              queryLength,
   /*  full range of the short. */
 
   vMin = _mm_insert_epi16 (vZero, 0x8000, 0);
-  vMaxScore = vInf;    
+  // vMaxScore = vInf;
 
   /* Zero out the storage vector */        
   for (i = 0; i < iter; ++i) {                

@@ -91,3 +91,14 @@ if ! grep -q ^TAP_STATIC_IP "$target"; then
     sed -i "/^ion_apt_server.*$/i $line\n" "$target"
 fi
 # other required fields such tap_static_ip will be added manually when enabled.
+
+#=============================================================================
+# Edits for TSS5.8.0 OEM build
+#=============================================================================
+# is_oem should be set to true on OEM branch
+if ! grep -q ^is_oem "$target"; then
+    line="is_oem: False"
+    # insert this line above line starting with 'ion_apt_server'
+    sed -i "/^ion_apt_server.*$/i $line\n" "$target"
+fi
+

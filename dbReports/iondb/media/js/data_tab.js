@@ -75,6 +75,7 @@ $(function () {
 		},
 
         post_action: function (setstr, message, showModal) {
+            /* TODO: Dead Code */
             var url = '/report/action/' + this.model.id + '/' + setstr;
             var currentPage = window.location.href;
             var refreshPage = function() {
@@ -143,6 +144,7 @@ $(function () {
             $(this.el).html(this.template.render({
                 'count': this.collection.length,
                 'more_reports': this.collection.length > 2,
+                'more_reports_text': this.getShowMoreMessage(),
                 'is_open': this.is_open,
                 "is_local": this.options.is_local, //Mesh
                 "url_prefix": this.options.url_prefix, //Mesh
@@ -181,12 +183,20 @@ $(function () {
 
         hideMore: function () {
             this.elMore.hide();
-            this.$('.reports-show-more').html('Show all ' + this.collection.length + ' reports');
+            this.$('.reports-show-more').html(this.getShowMoreMessage()); //'Show all ' + this.collection.length + ' reports'
+        },
+
+        getShowMoreMessage: function() {
+            return interpolate(gettext('data.listview.messages.reports-show-more'), {number:this.collection.length}, true);
         },
 
         showMore: function () {
             this.elMore.show();
-            this.$('.reports-show-more').html('Hide');
+            this.$('.reports-show-more').html(this.getShowLessMessage());
+        },
+
+        getShowLessMessage: function() {
+            return gettext('data.listview.messages.reports-show-less');
         },
 
         toggleMore: function () {
@@ -216,7 +226,7 @@ $(function () {
 
         events: {
             'click .reanalyze-run': 'reanalyze',
-            'click .edit-run': 'edit',
+            'click .edit-run': 'edit',   // # TODO: SUSPECTED UNUSED DEAD CODE
             'click .completedrun-star': 'toggle_star',
 			'click .storage-exempt': function(e){
 				var checked = $(e.currentTarget).is(':checked');
@@ -283,7 +293,7 @@ $(function () {
             //Reanalyze doesn't do anything at all....
         },
 
-        edit: function (e) {
+        edit: function (e) {  // # TODO: SUSPECTED UNUSED DEAD CODE
             e.preventDefault();
 	    	$('#error-messages').hide().empty();
 			url = $(e.currentTarget).attr('href');
@@ -295,7 +305,7 @@ $(function () {
 			    return false;
 			}).fail(function(data) {
 		    	$('#error-messages').empty().show();
-		    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+		    	$('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
 		    	console.log("Experiment edit error:", data);
 
 		    });
@@ -304,7 +314,7 @@ $(function () {
 
         toggle_star: function () {
             if(this.model.get("_host")){
-                alert("Runs can only be starred on thier originating Torrent Server.");
+                alert(gettext('data.messages.errors.mesh.changefavorite')); //"Runs can only be starred on their originating Torrent Server."
                 return;
             }
             if (this.model.get("star")) {
@@ -316,7 +326,7 @@ $(function () {
 
         change_representative: function(report) {
             if(this.model.get("_host")){
-                alert("Reports can only be marked as representative on thier originating Torrent Server.");
+                alert(gettext('data.messages.errors.mesh.changerepresentative')); //"Reports can only be marked as representative on their originating Torrent Server."
                 return;
             }
             console.log("Toggling experiment");
@@ -373,7 +383,7 @@ $(function () {
 		    return false;
 		}).fail(function(data) {
 	    	$('#error-messages').empty().show();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+	    	$('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
 	    	console.log("Experiment edit error:", data);
 	    });
 	    url = null;
@@ -449,8 +459,8 @@ $(function () {
                 "is_local": is_local, //Mesh
                 "url_prefix": url_prefix, //Mesh
                 "exp_name_prefix": exp_name_prefix, //Mesh
-                "run_date_string": this.model.get('date').toString("MMM d yyyy"),
-                "result_date_string": this.model.get('resultDate').toString("MMM d yyyy"),
+                "run_date_string": kendo.toString(this.model.get("date"),"MMM d yyyy"),
+                "result_date_string": kendo.toString(this.model.get('resultDate'), "MMM d yyyy"),
                 "king_report": king_report,
                 "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
@@ -487,7 +497,7 @@ $(function () {
             })
             .fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
                 console.log("error:", data);
             });
         },
@@ -538,16 +548,7 @@ $(function () {
             $('.chzn-search input').css('width', $(".chzn-select").outerWidth()*.815);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
             today = Date.parse('today');
             now = new Date();
-            $('#rangeA').daterangepicker({
-                dateFormat: 'M d yy',
-                presetRanges: [
-                    {text: 'Today', dateStart: today, dateEnd: today},
-                    {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
-                    {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
-                    {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
-                    {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
-                ],
-            });
+            $('#rangeA').daterangepicker($.DateRangePickerSettings.get());
             this.current_view = null;
             this.collection.bind('add', this.addRun);
             this.collection.bind('reset', this.render);
@@ -672,7 +673,7 @@ $(function () {
 
         fetchStart: function () {
             console.log("Fetchnig started");
-            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
             $('body').prepend(busyDiv);
         },
 
@@ -759,13 +760,13 @@ $(function () {
         toggle_live_update: function() {
         	if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").addClass('btn-success').text('Auto Refresh');
-                this.$("#update_status").text('Page is static until refreshed');
+                this.$("#live_button").addClass('btn-success').text($("#live_button").data('liveOn'));
+                this.$("#update_status").text($("#update_status").data('liveOff')); //'Page is static until refreshed'
 
             } else {
                 this.start_update();
-                this.$("#live_button").removeClass('btn-success').text('Stop Refresh');
-                this.$("#update_status").text('Page is updating automatically');
+                this.$("#live_button").removeClass('btn-success').text($("#live_button").data('liveOff'));
+                this.$("#update_status").text($("#update_status").data('liveOn')); //'Page is updating automatically'
             }
         },
 

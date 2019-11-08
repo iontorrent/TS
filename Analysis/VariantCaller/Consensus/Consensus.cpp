@@ -413,6 +413,7 @@ void * FlowSpaceConsensusWorker(void *input) {
 				vc.targets_manager->FilterReadByRegion(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
 				if (new_read[i]->filtered)
 				  continue;
+				vc.targets_manager->AddToRawReadCoverage(new_read[i]);
 
 		        // 4) Calculate the hash for family identification
 		        vc.mol_tag_manager->PreComputeForFamilyIdentification(new_read[i]);

@@ -20,9 +20,9 @@ def get_version_launchsh(launch):
     # Leading values ignored, usually '#VERSION' or '# VERSION'
     # Must be all-caps VERSION
     # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-    VERSION = re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
+    VERSION = re.compile(r"VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?")
     try:
-        with open(launch, 'r') as f:
+        with open(launch, "r") as f:
             for line in f:
                 m = VERSION.search(line)
                 if m:
@@ -32,9 +32,12 @@ def get_version_launchsh(launch):
                     try:
                         v = LooseVersion(v)
                     except ValueError:
-                        _logger.warning("Version in file does not conform to LooseVersion rules: ", v)
+                        _logger.warning(
+                            "Version in file does not conform to LooseVersion rules: ",
+                            v,
+                        )
                     return str(v)
-    except:
+    except Exception:
         _logger.exception("Failed to parse VERSION from '%s'", pluginscript)
     return "0"
 
@@ -44,7 +47,7 @@ class PluginInfo(object):
     """ Class to encapsulate plugin introspection, to and from json block or plugin class instances """
 
     def __init__(self, infojson=None):
-        self._meta = 'IonPlugin Definition format 1.0'
+        self._meta = "IonPlugin Definition format 1.0"
         self.name = None
         self.version = "0.0"
         self.config = {}  # getUserInput
@@ -59,7 +62,7 @@ class PluginInfo(object):
         if infojson:
             try:
                 self.parse(infojson)
-            except:
+            except Exception:
                 _logger.exception("Unable to inspect plugin for required parameters.")
         return
 
@@ -67,7 +70,7 @@ class PluginInfo(object):
         if isinstance(data, basestring):
             data = json.loads(data)
 
-        extract_keys = vars(self).keys()
+        extract_keys = list(vars(self).keys())
 
         for k in extract_keys:
             if k in data:
@@ -76,7 +79,7 @@ class PluginInfo(object):
     def todict(self):
         d = vars(self)
         # simplify to objects json can handle
-        for k, v in d.iteritems():
+        for k, v in d.items():
             if isinstance(v, property):
                 # d[k] = v.__get__()
                 d[k] = str(v)
@@ -89,14 +92,21 @@ class PluginInfo(object):
     def load_instance(self, plugin):
         try:
             self.config = plugin.getUserInput()
-        except:
+        except Exception:
             _logger.exception("Failed to query plugin for getUserInput")
 
-        for a in ('runtypes', 'features', 'runlevels', 'depends', 'major_block', 'requires_configuration'):
+        for a in (
+            "runtypes",
+            "features",
+            "runlevels",
+            "depends",
+            "major_block",
+            "requires_configuration",
+        ):
             v = getattr(plugin, a, None)
             if v is not None:
                 setattr(self, a, v)
-        self.docs = getattr(plugin, '__doc__', "")
+        self.docs = getattr(plugin, "__doc__", "")
         return self
 
     # Helper method for getting from an instance to a PluginInfo
@@ -113,10 +123,14 @@ class PluginInfo(object):
             # FIXME - inject context - plugin pk/instance is required here
 
             info = cls.from_instance(pi)
-        except:
-            _logger.exception("Failed to build and parse python class for legacy launch.sh - '%s':'%s'", plugin, launch)
+        except Exception:
+            _logger.exception(
+                "Failed to build and parse python class for legacy launch.sh - '%s':'%s'",
+                plugin,
+                launch,
+            )
             info = {
-                'name': os.path.basename(os.path.dirname(launch)),
-                'version': get_version_launchsh(launch),
+                "name": os.path.basename(os.path.dirname(launch)),
+                "version": get_version_launchsh(launch),
             }
         return info

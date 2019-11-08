@@ -20,13 +20,13 @@ serializer = Serializer()
 def build_event_response(sender, when, data):
     """Create a container object with some meta data similar to a tastypie response"""
     event = {
-        'meta': {
-            'event_domain': sender,
-            'event_name': when,
-            'timestamp': datetime.datetime.now(tz=pytz.utc),
-            'attributes': [],
+        "meta": {
+            "event_domain": sender,
+            "event_name": when,
+            "timestamp": datetime.datetime.now(tz=pytz.utc),
+            "attributes": [],
         },
-        'object': data,
+        "object": data,
     }
     return serializer.to_json(event)
 
@@ -34,7 +34,12 @@ def build_event_response(sender, when, data):
 def post_event(body, consumer):
     try:
         h = httplib2.Http()
-        response, content = h.request(consumer, method="POST", body=body, headers={"Content-type": "application/json"})
+        response, content = h.request(
+            consumer,
+            method="POST",
+            body=body,
+            headers={"Content-type": "application/json"},
+        )
         logger.debug("Posting Event %s: %s %s" % (consumer, response, content))
     except Exception as err:
         logger.exception("Post event error: %s" % err)
@@ -54,6 +59,7 @@ def listen_created(domain, name, sender_model, producer, consumer):
         if created:
             logger.warning("running chandler %s" % sender)
             model_event_post(domain, name, sender, instance, producer, consumer)
+
     signals.post_save.connect(handler, sender=sender_model)
     return signals.post_save, handler
 
@@ -64,6 +70,7 @@ def listen_saved(domain, name, sender_model, producer, consumer):
     def handler(sender, instance, created, **kwargs):
         logger.warning("calling shandler %s" % sender)
         model_event_post(domain, name, sender, instance, producer, consumer)
+
     signals.post_save.connect(handler, sender=sender_model)
     return signals.post_save, handler
 
@@ -74,6 +81,7 @@ def listen_deleted(domain, name, sender_model, producer, consumer):
     def handler(sender, instance, **kwargs):
         logger.warning("calling dhandler %s" % sender)
         model_event_post(domain, name, sender, instance, producer, consumer)
+
     signals.pre_delete.connect(handler, sender=sender_model)
     return signals.pre_delete, handler
 
@@ -93,24 +101,20 @@ def api_serializer(model_resource):
         dry = resource.full_dehydrate(bundle)
         logger.debug("Producing %s: %s" % (type(resource), str(dry)))
         return dry
+
     return producer
 
 
-
-event_when = {
-    'save': listen_saved,
-    'create': listen_created,
-    'delete': listen_deleted
-}
+event_when = {"save": listen_saved, "create": listen_created, "delete": listen_deleted}
 
 
 event_senders = {
-    'Experiment': (models.Experiment, api_serializer(api.ExperimentResource)),
-    'Result': (models.Results, api_serializer(api.ResultsResource)),
-    'Plan': (models.PlannedExperiment, api_serializer(api.PlannedExperimentResource)),
-    'Rig': (models.Rig, api_serializer(api.RigResource)),
-    'Plugin': (models.Plugin, api_serializer(api.PluginResource)),
-    'PluginResult': (models.PluginResult, api_serializer(api.PluginResultResource)),
+    "Experiment": (models.Experiment, api_serializer(api.ExperimentResource)),
+    "Result": (models.Results, api_serializer(api.ResultsResource)),
+    "Plan": (models.PlannedExperiment, api_serializer(api.PlannedExperimentResource)),
+    "Rig": (models.Rig, api_serializer(api.RigResource)),
+    "Plugin": (models.Plugin, api_serializer(api.PluginResource)),
+    "PluginResult": (models.PluginResult, api_serializer(api.PluginResultResource)),
 }
 
 
@@ -121,14 +125,14 @@ def register_events(event_consumers):
     "Read the settings' event config and attach to the relevant django signals"
     global event_handlers
     event_handlers = []
-    for (sender, when), consumers in event_consumers.items():
+    for (sender, when), consumers in list(event_consumers.items()):
         try:
             sender_model, producer = event_senders[sender]
             listen = event_when[when]
             for consumer in consumers:
                 signal_info = listen(sender, when, sender_model, producer, consumer)
                 event_handlers.append(signal_info)
-                logger.info("Successfully registered " + sender + ' ' + when)
+                logger.info("Successfully registered " + sender + " " + when)
         except Exception as err:
             logger.exception("Register error %s" % err)
 

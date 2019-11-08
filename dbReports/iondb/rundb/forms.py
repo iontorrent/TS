@@ -9,7 +9,9 @@ from django.forms import widgets as djangoWidget
 from django.forms.extras import widgets
 from django.forms.widgets import PasswordInput
 from django import shortcuts
-from iondb.rundb import models
+from iondb.rundb.login.forms import UserRegistrationForm
+
+from iondb.rundb import models, labels
 import datetime
 from iondb.utils import devices
 from iondb.rundb import tasks
@@ -20,6 +22,7 @@ from itertools import chain
 from django.utils.html import escape, conditional_escape
 import string
 from django.conf import settings
+from django.utils.translation import ugettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -27,38 +30,48 @@ from django.utils.safestring import mark_safe
 
 
 class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
-
     def render(self, name, value, attrs=None):
         csm = super(Plugins_SelectMultiple, self).render(name, value, attrs=None)
-        csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>', u'<label class="checkbox pull-left">')
+        csm = (
+            csm.replace(u"<ul>", u"")
+            .replace(u"</ul>", u"")
+            .replace(u"<label>", u'<label class="checkbox pull-left">')
+        )
         # add 'configure' button for plugins
         btn_html = '<a href="#" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </a>'
-        output = ''
+        output = ""
         columns = 3
-        for line in csm.split('<li>'):
+        for line in csm.split("<li>"):
             if line.find('value="') > 0:
                 columns -= 1
                 if columns == 2:
                     output += '<div class="row-fluid">'
-                output += '<div class="span4">' + line.split('</li>')[0]
+                output += '<div class="span4">' + line.split("</li>")[0]
 
                 pk = line.split('value="')[1].split('"')[0]
                 plugin = models.Plugin.objects.get(pk=pk)
                 if plugin.isPlanConfig:
-                    output += btn_html.replace('XXX', pk)
+                    output += btn_html.replace("XXX", pk)
 
                 if columns == 0:
-                    output += '</div>'
+                    output += "</div>"
                     columns = 3
-                output += '</div>'
+                output += "</div>"
                 # disable IRU if not configured
-                if 'IonReporterUploader' == plugin.name:
-                    if 'checked' in line:
-                        output = output.replace('/> IonReporterUploader', '/><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader</span>')
+                if "IonReporterUploader" == plugin.name:
+                    if "checked" in line:
+                        output = output.replace(
+                            "/> IonReporterUploader",
+                            '/><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader</span>',
+                        )
                     else:
-                        output = output.replace('/> IonReporterUploader', 'disabled /><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader not configured</span>')
+                        output = output.replace(
+                            "/> IonReporterUploader",
+                            'disabled /><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader not configured</span>',
+                        )
 
-        if columns != 3: output += '</div>'
+        if columns != 3:
+            output += "</div>"
 
         return mark_safe(output)
 
@@ -77,16 +90,19 @@ class DataSelect(djangoWidget.Widget):
         self.choices = list(choices)
 
     def render(self, name, value, attrs=None, choices=()):
-        if value is None: value = ''
+        if value is None:
+            value = ""
         final_attrs = self.build_attrs(attrs, name=name)
-        output = [u'<select%s>' % flatatt(final_attrs)]
+        output = [u"<select%s>" % flatatt(final_attrs)]
         options = self.render_options(choices, [value])
         if options:
             output.append(options)
-        output.append(u'</select>')
-        return mark_safe(u'\n'.join(output))
+        output.append(u"</select>")
+        return mark_safe(u"\n".join(output))
 
-    def render_option(self, selected_choices, option_value, option_label, option_pk, option_version):
+    def render_option(
+        self, selected_choices, option_value, option_label, option_pk, option_version
+    ):
         option_value = force_unicode(option_value)
         if option_value in selected_choices:
             selected_html = u' selected="selected"'
@@ -94,27 +110,40 @@ class DataSelect(djangoWidget.Widget):
                 # Only allow for a single selection.
                 selected_choices.remove(option_value)
         else:
-            selected_html = ''
+            selected_html = ""
         return u'<option data-pk="%s" data-version="%s" value="%s"%s>%s</option>' % (
-            option_pk, option_version, escape(option_value), selected_html,
-            conditional_escape(force_unicode(option_label)))
+            option_pk,
+            option_version,
+            escape(option_value),
+            selected_html,
+            conditional_escape(force_unicode(option_label)),
+        )
 
     def render_options(self, choices, selected_choices):
         # Normalize to strings.
         selected_choices = set(force_unicode(v) for v in selected_choices)
         output = []
-        for option_value, option_label, option_pk, option_version in chain(self.choices, choices):
-                output.append(self.render_option(selected_choices, option_value, option_label, option_pk, option_version))
-        return u'\n'.join(output)
+        for option_value, option_label, option_pk, option_version in chain(
+            self.choices, choices
+        ):
+            output.append(
+                self.render_option(
+                    selected_choices,
+                    option_value,
+                    option_label,
+                    option_pk,
+                    option_version,
+                )
+            )
+        return u"\n".join(output)
 
 
 class CmdlineArgsField(forms.CharField):
-
     def __init__(self):
         super(CmdlineArgsField, self).__init__(
             max_length=5000,
             required=False,
-            widget=forms.Textarea(attrs={'class': 'span12 args', 'rows': 4})
+            widget=forms.Textarea(attrs={"class": "span12 args", "rows": 4}),
         )
 
     def clean(self, value):
@@ -126,8 +155,10 @@ class CmdlineArgsField(forms.CharField):
 
 class RunParamsForm(forms.Form):
 
-    report_name = forms.CharField(max_length=128,
-                                widget=forms.TextInput(attrs={'size': '60', 'class': 'textInput input-xlarge'}))
+    report_name = forms.CharField(
+        max_length=128,
+        widget=forms.TextInput(attrs={"size": "60", "class": "textInput input-xlarge"}),
+    )
 
     beadfindArgs = CmdlineArgsField()
     analysisArgs = CmdlineArgsField()
@@ -147,26 +178,50 @@ class RunParamsForm(forms.Form):
 
     custom_args = forms.BooleanField(required=False, widget=forms.HiddenInput)
 
-    blockArgs = forms.CharField(max_length=128, required=False, widget=forms.HiddenInput)
+    blockArgs = forms.CharField(
+        max_length=128, required=False, widget=forms.HiddenInput
+    )
 
-    libraryKey = forms.CharField(max_length=128, required=False, initial="TCAG", widget=forms.TextInput(attrs={'size': '60', 'class': 'input-xlarge'}))
-    tfKey = forms.CharField(max_length=128, required=False, initial="ATCG", widget=forms.TextInput(attrs={'size': '60', 'class': 'input-xlarge'}))
+    libraryKey = forms.CharField(
+        max_length=128,
+        required=False,
+        initial="TCAG",
+        widget=forms.TextInput(attrs={"size": "60", "class": "input-xlarge"}),
+    )
+    tfKey = forms.CharField(
+        max_length=128,
+        required=False,
+        initial="ATCG",
+        widget=forms.TextInput(attrs={"size": "60", "class": "input-xlarge"}),
+    )
 
     # unused?
     align_full = forms.BooleanField(required=False, initial=False)
 
-    do_thumbnail = forms.BooleanField(required=False, initial=False, label="Thumbnail only")
-    do_base_recal = forms.CharField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}), label="Base Recalibration Mode")
+    do_thumbnail = forms.BooleanField(
+        required=False, initial=False, label="Thumbnail only"
+    )
+    do_base_recal = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "input-xlarge"}),
+        label="Base Recalibration Mode",
+    )
 
     realign = forms.BooleanField(required=False)
     mark_duplicates = forms.BooleanField(required=False, initial=False)
 
-    previousReport = forms.CharField(required=False, widget=DataSelect(attrs={'class': 'input-xlarge'}))
-    previousThumbReport = forms.CharField(required=False, widget=DataSelect(attrs={'class': 'input-xlarge'}))
+    previousReport = forms.CharField(
+        required=False, widget=DataSelect(attrs={"class": "input-xlarge"})
+    )
+    previousThumbReport = forms.CharField(
+        required=False, widget=DataSelect(attrs={"class": "input-xlarge"})
+    )
 
-    project_names = forms.CharField(max_length=1024,
-                           required=False,
-                           widget=forms.TextInput(attrs={'size': '60', 'class': 'textInput input-xlarge'}))
+    project_names = forms.CharField(
+        max_length=1024,
+        required=False,
+        widget=forms.TextInput(attrs={"size": "60", "class": "textInput input-xlarge"}),
+    )
 
     def clean_report_name(self):
         """
@@ -178,8 +233,14 @@ class RunParamsForm(forms.Form):
             errors.append(("The Report name can not begin with '-'"))
         if len(reportName) > 60:
             errors.append(("Report Name needs to be less than 60 characters long"))
-        if not set(reportName).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
-            errors.append(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
+        if not set(reportName).issubset(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "
+        ):
+            errors.append(
+                (
+                    "That Report name has invalid characters. The valid values are letters, numbers, underscore and period."
+                )
+            )
 
         if errors:
             raise forms.ValidationError(errors)
@@ -187,16 +248,20 @@ class RunParamsForm(forms.Form):
             return reportName
 
     def clean_libraryKey(self):
-        key = self.cleaned_data.get('libraryKey')
+        key = self.cleaned_data.get("libraryKey")
         if not set(key).issubset("ATCG"):
-            raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
+            raise forms.ValidationError(
+                ("This key has invalid characters. The valid values are TACG.")
+            )
         else:
             return key
 
     def clean_tfKey(self):
-        key = self.cleaned_data.get('tfKey')
+        key = self.cleaned_data.get("tfKey")
         if not set(key).issubset("ATCG"):
-            raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
+            raise forms.ValidationError(
+                ("This key has invalid characters. The valid values are TACG.")
+            )
         else:
             return key
 
@@ -206,15 +271,24 @@ class RunParamsForm(forms.Form):
         """
         projectNames = self.cleaned_data.get("project_names")
         names = []
-        for name in projectNames.split(','):
+        for name in projectNames.split(","):
             if name:
-              names.append(name)
-              if len(name) > 64:
-                  raise forms.ValidationError(("Project Name needs to be less than 64 characters long. Please separate different projects with a comma."))
-              if not set(name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
-                  raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
-        return ','.join(names)
-
+                names.append(name)
+                if len(name) > 64:
+                    raise forms.ValidationError(
+                        (
+                            "Project Name needs to be less than 64 characters long. Please separate different projects with a comma."
+                        )
+                    )
+                if not set(name).issubset(
+                    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "
+                ):
+                    raise forms.ValidationError(
+                        (
+                            "Project name has invalid characters. The valid values are letters, numbers, underscore and period."
+                        )
+                    )
+        return ",".join(names)
 
 
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
@@ -222,77 +296,190 @@ from iondb.rundb.plan.views_helper import dict_bed_hotspot
 
 class AnalysisSettingsForm(forms.ModelForm):
 
-    reference = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    targetRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    hotSpotRegionBedFile = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
-    queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
+    reference = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    targetRegionBedFile = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    hotSpotRegionBedFile = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    plugins = forms.ModelMultipleChoiceField(
+        required=False,
+        widget=Plugins_SelectMultiple(),
+        queryset=models.Plugin.objects.filter(selected=True, active=True).order_by(
+            "name", "-version"
+        ),
+    )
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
-    #barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
-    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    # barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
+    barcodeKitName = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
 
-    threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    threePrimeAdapter = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
     barcodedReferences = forms.CharField(required=False, widget=forms.HiddenInput())
 
     def __init__(self, *args, **kwargs):
         super(AnalysisSettingsForm, self).__init__(*args, **kwargs)
         # initialize choices when form instance created
-        references = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True)
-        self.fields['reference'].choices = [('', 'none')] + [(v[0], "%s (%s)" % (v[0], v[1])) for v in references.values_list('short_name', 'name')]
+        references = models.ReferenceGenome.objects.filter(
+            index_version=settings.TMAP_VERSION, enabled=True
+        )
+        self.fields["reference"].choices = [("", "none")] + [
+            (v[0], "%s (%s)" % (v[0], v[1]))
+            for v in references.values_list("short_name", "name")
+        ]
         bedfiles = dict_bed_hotspot()
-        self.fields['targetRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles', [])]
-        self.fields['hotSpotRegionBedFile'].choices = [('', '')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles', [])]
-        self.fields['barcodeKitName'].choices = [('', '')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name', 'name'))
-        adapters = models.ThreePrimeadapter.objects.filter(direction='Forward', runMode='single').order_by('-isDefault', 'chemistryType', 'name')
-        self.fields['threePrimeAdapter'].choices = [(v[1], "%s (%s)" % (v[0], v[1])) for v in adapters.values_list('name', 'sequence')]
+        self.fields["targetRegionBedFile"].choices = [("", "")] + [
+            (v.file, v.path.split("/")[-1].replace(".bed", ""))
+            for v in bedfiles.get("bedFiles", [])
+        ]
+        self.fields["hotSpotRegionBedFile"].choices = [("", "")] + [
+            (v.file, v.path.split("/")[-1].replace(".bed", ""))
+            for v in bedfiles.get("hotspotFiles", [])
+        ]
+        self.fields["barcodeKitName"].choices = [("", "")] + list(
+            models.dnaBarcode.objects.order_by("name")
+            .distinct("name")
+            .values_list("name", "name")
+        )
+        adapters = models.ThreePrimeadapter.objects.filter(
+            direction="Forward", runMode="single"
+        ).order_by("-isDefault", "chemistryType", "name")
+        self.fields["threePrimeAdapter"].choices = [
+            (v[1], "%s (%s)" % (v[0], v[1]))
+            for v in adapters.values_list("name", "sequence")
+        ]
 
     class Meta:
         model = models.ExperimentAnalysisSettings
-        fields = ('reference', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'barcodeKitName', 'threePrimeAdapter')
+        fields = (
+            "reference",
+            "targetRegionBedFile",
+            "hotSpotRegionBedFile",
+            "barcodeKitName",
+            "threePrimeAdapter",
+        )
 
 
 class ExperimentSettingsForm(forms.ModelForm):
 
-    sample = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
+    sample = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
     barcodedSamples = forms.CharField(required=False, widget=forms.HiddenInput())
-    runtype = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    libraryKitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    sequencekitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    chipBarcode = forms.CharField(required=False, max_length=64, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge validateAlphaNumNoSpace'}))
-    libraryKey = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    notes = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge'}))
+    runtype = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    libraryKitname = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    sequencekitname = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    chipBarcode = forms.CharField(
+        required=False,
+        max_length=64,
+        widget=forms.TextInput(
+            attrs={"class": "textInput input-xlarge validateAlphaNumNoSpace"}
+        ),
+    )
+    libraryKey = forms.ChoiceField(
+        required=False, widget=forms.Select(attrs={"class": "input-xlarge"})
+    )
+    notes = forms.CharField(
+        required=False,
+        max_length=128,
+        widget=forms.TextInput(attrs={"class": "textInput input-xlarge"}),
+    )
     mark_duplicates = forms.BooleanField(required=False, initial=False)
-    sampleTubeLabel = forms.CharField(required=False, max_length=512, widget=forms.TextInput(attrs={'class': 'textInput input-xlarge'}))
+    sampleTubeLabel = forms.CharField(
+        required=False,
+        max_length=512,
+        widget=forms.TextInput(attrs={"class": "textInput input-xlarge"}),
+    )
 
     def __init__(self, *args, **kwargs):
         super(ExperimentSettingsForm, self).__init__(*args, **kwargs)
         # initialize sample and key choices when form instance created
-        self.fields['sample'].choices = [('', '')] + list(models.Sample.objects.filter().values_list('id', 'displayedName'))
-        self.fields['libraryKey'].choices = [(v[0], "%s (%s)" % (v[0], v[1])) for v in models.LibraryKey.objects.filter().values_list('sequence', 'description')]
-        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1], v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType', 'description')]
-        self.fields['libraryKitname'].choices = [('', '')] + list(models.KitInfo.objects.filter(kitType='LibraryKit').values_list('name', 'name'))
-        self.fields['sequencekitname'].choices = [('', '')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name', 'name'))
+        self.fields["sample"].choices = [("", "")] + list(
+            models.Sample.objects.filter().values_list("id", "displayedName")
+        )
+        self.fields["libraryKey"].choices = [
+            (v[0], "%s (%s)" % (v[0], v[1]))
+            for v in models.LibraryKey.objects.filter().values_list(
+                "sequence", "description"
+            )
+        ]
+        self.fields["runtype"].choices = [
+            (v[0], "%s (%s)" % (v[1], v[0]))
+            for v in models.RunType.objects.all()
+            .order_by("id")
+            .values_list("runType", "description")
+        ]
+        self.fields["libraryKitname"].choices = [("", "")] + list(
+            models.KitInfo.objects.filter(kitType="LibraryKit").values_list(
+                "name", "name"
+            )
+        )
+        self.fields["sequencekitname"].choices = [("", "")] + list(
+            models.KitInfo.objects.filter(kitType="SequencingKit").values_list(
+                "name", "name"
+            )
+        )
 
     class Meta:
         model = models.Experiment
-        fields = ('sample', 'sequencekitname', 'chipBarcode', 'notes')
+        fields = ("sample", "sequencekitname", "chipBarcode", "notes")
 
 
 class EmailAddress(forms.ModelForm):
 
     "Made to have full symetry with the EmailAddress model fields"
+
     class Meta:
         model = models.EmailAddress
+        labels = {
+            "email": labels.EmailAddress.email.verbose_name,
+            "selected": labels.EmailAddress.selected.verbose_name,
+        }
 
 
 class EditReferenceGenome(forms.Form):
-    name = forms.CharField(max_length=512, required=True, label="Short Name")
-    version = forms.CharField(max_length=100, required=False, label="Version")
-    NCBI_name = forms.CharField(max_length=512, required=True, label="Description")
-    notes = forms.CharField(max_length=1048, required=False, widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
-    enabled = forms.BooleanField(required=False)
+    name = forms.CharField(
+        max_length=512,
+        required=True,
+        label=_("entity.ReferenceGenome.fields.short_name.verbose_name"),
+    )
+    version = forms.CharField(
+        max_length=100,
+        required=False,
+        label=_("entity.ReferenceGenome.fields.version.verbose_name"),
+    )
+    NCBI_name = forms.CharField(
+        max_length=512,
+        required=True,
+        label=_("entity.ReferenceGenome.fields.name.verbose_name"),
+    )
+    notes = forms.CharField(
+        max_length=1048,
+        required=False,
+        widget=forms.Textarea(attrs={"cols": 50, "rows": 4}),
+        label=_("entity.ReferenceGenome.fields.notes.verbose_name"),
+    )
+    enabled = forms.BooleanField(
+        required=False, label=_("entity.ReferenceGenome.fields.enabled.verbose_name")
+    )
     genome_key = forms.IntegerField(widget=forms.HiddenInput(), required=True)
-    index_version = forms.CharField(widget=forms.HiddenInput(), required=True)
+    index_version = forms.CharField(
+        widget=forms.HiddenInput(),
+        required=True,
+        label=_("entity.ReferenceGenome.fields.index_version.verbose_name"),
+    )
 
     def clean_name(self):
         """don't allow duplicate names
@@ -301,38 +488,70 @@ class EditReferenceGenome(forms.Form):
 
         index_version = self.data.getlist("index_version")[0]
         genome_key = self.data.getlist("genome_key")[0]
-        get_name = self.cleaned_data.get('name')
-        genomes = models.ReferenceGenome.objects.filter(short_name=get_name).exclude(pk=genome_key)
+        get_name = self.cleaned_data.get("name")
+        genomes = models.ReferenceGenome.objects.filter(short_name=get_name).exclude(
+            pk=genome_key
+        )
 
-        if not set(get_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"):
-            raise forms.ValidationError(("The short name has invalid characters. The valid values are letters, numbers, and underscores."))
+        if not set(get_name).issubset(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+        ):
+            raise forms.ValidationError(
+                (
+                    "The short name has invalid characters. The valid values are letters, numbers, and underscores."
+                )
+            )
 
         for g in genomes:
             if get_name == g.name and g.index_version == index_version:
-                error_str = "A reference with the name" + get_name + " and index version" + index_version + " already exists"
+                error_str = (
+                    "A reference with the name"
+                    + get_name
+                    + " and index version"
+                    + index_version
+                    + " already exists"
+                )
                 raise forms.ValidationError(error_str)
         return get_name
+
+    def clean_NCBI_name(self):
+        description = self.cleaned_data["NCBI_name"]
+        return description.encode("utf-8")
 
 
 class UserProfileForm(forms.ModelForm):
     # validate name length against the longest possible name
     #  Source: http://www.independent.co.uk/news/uk/this-britain/captain-fantastic-claims-worlds-longest-name-993957.html
     # Captain Fantastic Faster Than Superman Spiderman Batman Wolverine Hulk And The Flash Combined
-    name = forms.CharField(max_length=93)
-    email = forms.EmailField()
-    password = forms.CharField(widget=forms.PasswordInput(), required=False)
-    password_confirm = forms.CharField(widget=forms.PasswordInput(), label="Password Confirm", required=False)
+    name = forms.CharField(max_length=93, label=labels.UserProfile.name.verbose_name)
+    email = forms.EmailField(label=labels.User.email.verbose_name)
+    password = forms.CharField(
+        label=labels.User.password1.verbose_name,
+        widget=forms.PasswordInput(),
+        required=False,
+    )
+    password_confirm = forms.CharField(
+        widget=forms.PasswordInput(),
+        label=labels.User.password2.verbose_name,
+        required=False,
+    )
 
     def __init__(self, *args, **kw):
         super(UserProfileForm, self).__init__(*args, **kw)
-        self.fields['email'].initial = self.instance.user.email
+        self.fields["email"].initial = self.instance.user.email
 
-        self.fields.keyOrder = ['name', 'email', 'phone_number', 'password', 'password_confirm']
+        self.fields.keyOrder = [
+            "name",
+            "email",
+            "phone_number",
+            "password",
+            "password_confirm",
+        ]
 
     def save(self, *args, **kw):
         super(UserProfileForm, self).save(*args, **kw)
-        self.instance.user.email = self.cleaned_data.get('email')
-        password = self.cleaned_data.get('password', '')
+        self.instance.user.email = self.cleaned_data.get("email")
+        password = self.cleaned_data.get("password", "")
         if password:
             self.instance.user.set_password(password)
 
@@ -340,8 +559,8 @@ class UserProfileForm(forms.ModelForm):
 
     def clean_password_confirm(self):
         """Validation that the passwords match"""
-        password1 = str(self.cleaned_data.get('password'))
-        password2 = str(self.cleaned_data.get('password_confirm'))
+        password1 = str(self.cleaned_data.get("password"))
+        password2 = str(self.cleaned_data.get("password_confirm"))
 
         if password1:
             if not password2:
@@ -352,10 +571,11 @@ class UserProfileForm(forms.ModelForm):
 
     class Meta:
         model = models.UserProfile
+        labels = {"phone_number": labels.UserProfile.phone_number.verbose_name}
 
 
 class NetworkConfigForm(forms.Form):
-    modes = (("dhcp", "DHCP",), ("static", "Static"))
+    modes = (("dhcp", "DHCP"), ("static", "Static"))
     mode = forms.ChoiceField(widget=forms.widgets.RadioSelect, choices=modes)
     address = forms.IPAddressField(label="IP Address", required=False)
     subnet = forms.IPAddressField(required=False, label="Subnet")
@@ -368,7 +588,7 @@ class NetworkConfigForm(forms.Form):
     proxy_password = forms.CharField(required=False)
     no_proxy = forms.CharField(required=False, max_length=256, label="Set no_proxy")
     default_no_proxy = settings.DEFAULT_NO_PROXY
-    
+
     def get_network_settings(self):
         """Usage: /usr/sbin/TSquery [option]...
         --eth-dev                 Specify eth device to query
@@ -391,22 +611,21 @@ class NetworkConfigForm(forms.Form):
             network_dnssearch:ite,itw,cbd
         """
         settings = {
-                "mode": "",
-                "address": "",
-                "subnet": "",
-                "gateway": "",
-                "nameservers": "",
-                "dnssearch": "",
-                "proxy_address": "",
-                "proxy_port": "",
-                "proxy_username": "",
-                "proxy_password": "",
-                "no_proxy": "",
-                }
+            "mode": "",
+            "address": "",
+            "subnet": "",
+            "gateway": "",
+            "nameservers": "",
+            "dnssearch": "",
+            "proxy_address": "",
+            "proxy_port": "",
+            "proxy_username": "",
+            "proxy_password": "",
+            "no_proxy": "",
+        }
         cmd = ["/usr/sbin/TSquery"]
         try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = proc.communicate()
             out_lines = stdout.split("\n")
             formatted_output = "\n".join("    %s" % l for l in out_lines)
@@ -415,7 +634,7 @@ class NetworkConfigForm(forms.Form):
                 if line:
                     key, value = line.split(":", 1)
                     if key.startswith("network_"):
-                        key = key.replace("network_", '', 1)
+                        key = key.replace("network_", "", 1)
                     settings[key] = value
         except Exception as error:
             logger.error("When attempting to run TSquery:\n%s" % error)
@@ -426,24 +645,23 @@ class NetworkConfigForm(forms.Form):
 
     def set_to_current_values(self):
         settings = self.get_network_settings()
-        self.fields['mode'].initial = settings["mode"]
-        self.fields['address'].initial = settings["address"]
-        self.fields['subnet'].initial = settings["subnet"]
-        self.fields['gateway'].initial = settings["gateway"]
-        self.fields['nameservers'].initial = settings["nameservers"]
-        self.fields['dnssearch'].initial = settings["dnssearch"]
-        self.fields['proxy_address'].initial = settings["proxy_address"]
-        self.fields['proxy_port'].initial = settings["proxy_port"]
-        self.fields['proxy_username'].initial = settings["proxy_username"]
-        self.fields['proxy_password'].initial = settings["proxy_password"]
-        self.fields['no_proxy'].initial = settings["no_proxy"]
+        self.fields["mode"].initial = settings["mode"]
+        self.fields["address"].initial = settings["address"]
+        self.fields["subnet"].initial = settings["subnet"]
+        self.fields["gateway"].initial = settings["gateway"]
+        self.fields["nameservers"].initial = settings["nameservers"]
+        self.fields["dnssearch"].initial = settings["dnssearch"]
+        self.fields["proxy_address"].initial = settings["proxy_address"]
+        self.fields["proxy_port"].initial = settings["proxy_port"]
+        self.fields["proxy_username"].initial = settings["proxy_username"]
+        self.fields["proxy_password"].initial = settings["proxy_password"]
+        self.fields["no_proxy"].initial = settings["no_proxy"]
 
     def __init__(self, *args, **kw):
         super(NetworkConfigForm, self).__init__(*args, **kw)
         self.set_to_current_values()
 
     def save(self, *args, **kw):
-
         def ax_proxy():
             """
             Helper method for TSsetproxy script which will automatically set the "--remove" argument
@@ -462,7 +680,18 @@ class NetworkConfigForm(forms.Form):
             :param username: --username    Username for authentication
             :param password: --password    Password for authentication
             """
-            cmd = ["sudo", "/usr/sbin/TSsetproxy", "--address", address, "--port", port, "--username", username, "--password", password]
+            cmd = [
+                "sudo",
+                "/usr/sbin/TSsetproxy",
+                "--address",
+                address,
+                "--port",
+                port,
+                "--username",
+                username,
+                "--password",
+                password,
+            ]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = proc.communicate()
             if stderr:
@@ -503,7 +732,16 @@ class NetworkConfigForm(forms.Form):
             :param nameserver: --nameserver Specify one or more nameserver IP addresses
             :param search:     --search     Specify one or more search domains
             """
-            cmd = ["sudo", "/usr/sbin/TSstaticip", "--ip", address, "--nm", subnet,"--gw", gateway]
+            cmd = [
+                "sudo",
+                "/usr/sbin/TSstaticip",
+                "--ip",
+                address,
+                "--nm",
+                subnet,
+                "--gw",
+                gateway,
+            ]
             if nameserver:
                 cmd += ["--nameserver", nameserver]
             if search:
@@ -516,41 +754,50 @@ class NetworkConfigForm(forms.Form):
         network_settings = self.get_network_settings()
         host_config = ["mode", "address", "subnet", "gateway"]
         if self.new_config(self.cleaned_data, network_settings, host_config):
-            if self.cleaned_data['mode'] == "dhcp":
+            if self.cleaned_data["mode"] == "dhcp":
                 dhcp()
-            elif self.cleaned_data['mode'] == "static":
-                address = self.cleaned_data['address']
-                subnet = self.cleaned_data['subnet']
-                gateway = self.cleaned_data['gateway']
+            elif self.cleaned_data["mode"] == "static":
+                address = self.cleaned_data["address"]
+                subnet = self.cleaned_data["subnet"]
+                gateway = self.cleaned_data["gateway"]
                 nameservers = None
                 dnssearch = None
 
-                if self.new_config(self.cleaned_data, network_settings, ["nameservers", "dnssearch"]):
+                if self.new_config(
+                    self.cleaned_data, network_settings, ["nameservers", "dnssearch"]
+                ):
                     logger.info("User changed the DNS and host network settings.")
-                    if self.cleaned_data['nameservers']:
-                        nameservers = self.cleaned_data['nameservers']
+                    if self.cleaned_data["nameservers"]:
+                        nameservers = self.cleaned_data["nameservers"]
 
-                    if self.cleaned_data['dnssearch']:
-                        dnssearch = self.cleaned_data['dnssearch']
+                    if self.cleaned_data["dnssearch"]:
+                        dnssearch = self.cleaned_data["dnssearch"]
 
                 logger.info("User changed the host network settings.")
-                static_ip(address, subnet, gateway, nameserver=nameservers, search=dnssearch)
+                static_ip(
+                    address, subnet, gateway, nameserver=nameservers, search=dnssearch
+                )
 
-        proxy_config = ["proxy_address", "proxy_port", "proxy_username", "proxy_password"]
+        proxy_config = [
+            "proxy_address",
+            "proxy_port",
+            "proxy_username",
+            "proxy_password",
+        ]
         if self.new_config(self.cleaned_data, network_settings, proxy_config):
             logger.info("User changed the proxy settings.")
-            if self.cleaned_data['proxy_address'] and self.cleaned_data['proxy_port']:
-                address = self.cleaned_data['proxy_address']
-                port = self.cleaned_data['proxy_port']
-                user = self.cleaned_data['proxy_username']
-                password = self.cleaned_data['proxy_password']
+            if self.cleaned_data["proxy_address"] and self.cleaned_data["proxy_port"]:
+                address = self.cleaned_data["proxy_address"]
+                port = self.cleaned_data["proxy_port"]
+                user = self.cleaned_data["proxy_username"]
+                password = self.cleaned_data["proxy_password"]
                 proxyconf(address, port, user, password)
             else:
                 ax_proxy()
 
         # set no proxy
-        if self.new_config(self.cleaned_data, network_settings, ['no_proxy']):
-            no_proxy = self.cleaned_data['no_proxy']
+        if self.new_config(self.cleaned_data, network_settings, ["no_proxy"]):
+            no_proxy = self.cleaned_data["no_proxy"]
             noproxyconf(no_proxy)
 
         self.set_to_current_values()

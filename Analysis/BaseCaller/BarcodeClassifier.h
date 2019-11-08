@@ -173,6 +173,7 @@ protected:
   bool                      barcode_ignore_flows_;       // Switch telling the classifier to exclude certain flows from classification
   bool                      trim_barcodes_;              // Switch to trim or leave barcodes alone
   bool                      have_ambiguity_codes_;       // Do we have non-ACGT characters in key, barcode?
+  bool                      barcode_clip_measurements_;   // Restrict measurements to the expected interval?
   vector<int>               classifier_ignore_flows_;    // Specifying an interval of flows to exclude from classification
 
   int                       hamming_dmin_;
@@ -218,9 +219,10 @@ class EndBarcodeClassifier {
   };
 
   bool                      enable_barcodes_;
-  //bool                      nothing_to_do_;
   bool                      have_end_barcodes_;
   bool                      trim_barcodes_;
+  bool                      keep_nomatch_reads_;
+
   int                       nomatch_read_group_;
   vector<EndBarcode>        read_group_;
   vector<EndBarcode>        end_barcodes_;
@@ -255,9 +257,15 @@ public:
 
   static void PrintHelp();
 
-  void AddBarcode(EndBarcode& barcode, const string& bc_sequence, const string& bc_adapter);
+  void AddBarcode(EndBarcode& barcode,
+                  const string& bc_sequence,
+                  const string& bc_adapter);
+
+  bool LoadBarcodesFromDatasets(BarcodeDatasets& datasets);
 
   bool LoadBarcodesFromCSV(string filename);
+
+  bool CreateBarcodeListFromDatasets(BarcodeDatasets& datasets);
 
   void LoadHandlesFromArgs(OptArgs& opts, const Json::Value& structure);
 
@@ -274,7 +282,7 @@ public:
            int trim_n_bases,
            const string& YK_tag);
 
-  void FilterRead(
+  void PushReadToNomatch(
            int read_index,
            ProcessedRead &processed_read);
 
@@ -324,6 +332,7 @@ public:
            int&  best_read_bases);
 
   int NumEndBarcodes() { return (demux_barcode_list_ ? num_end_barcodes_ : 0); };
+  int NoMatchReadGroup() { return nomatch_read_group_; }
 
   const vector<string>& EndBarcodeNames() { return end_barcode_names_; }
 

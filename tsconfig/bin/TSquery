@@ -142,27 +142,39 @@ fi
 # T620/T630/T430 will have em1 network device
 # (Possibly, T620 will have p*p1 network device)
 # TODO: this is fragile and hardcoded interface names.
-srcfile=$(find /run/resolvconf/interface -name "em1.*" -o -name "eth0.*" -o -name "p*p1.*")
-if [[ ${#srcfile} -eq 0 ]]; then
+if [ -d "/run/resolvconf/interface" ]; then
+    srcfile=$(find /run/resolvconf/interface -name "em1.*" -o -name "eth0.*" -o -name "p*p1.*" -o -name "eno1.*")
+    if [[ ${#srcfile} -gt 0 ]]; then
+        nameservers=""
+        for entry in $(grep nameserver "$srcfile"|awk '{print $2}'); do
+            if [[ ${#nameservers} -ne 0 ]]; then
+                nameservers="$nameservers,$entry"
+            else
+                nameservers="$entry"
+            fi
+        done
+        nameservers=${nameservers// /,}
+        echo "network_nameservers:$nameservers"
+
+        entry="$(egrep '(^search|^domain)' "$srcfile"|sed 's/search //'|sed 's/domain //')"
+        entry=${entry// /,}
+        echo "network_dnssearch:$entry"
+    fi
+elif [ -d "/run/systemd/resolved.conf.d" ]; then
+    # Ubuntu 18.04 servers use systemd-resolve
+    # e.g. /run/systemd/resolved.conf.d/isc-dhcp-v4-eno1.conf
+    # alternatively could run "systemd-resolve --status"
+    srcfile=$(find /run/systemd/resolved.conf.d -name "*-em1.*" -o -name "*-eth0.*" -o -name "p*p1.*" -o -name "*-eno1.*")
+    if [[ ${#srcfile} -gt 0 ]]; then
+        nameservers=$(grep DNS "$srcfile"|cut -d= -f2|sed 's/^\s//;s/ /,/g')
+        echo "network_nameservers:$nameservers"
+        domains=$(grep Domains "$srcfile"|cut -d= -f2|sed 's/^\s//;s/ /,/g')
+        echo "network_dnssearch:$domains"
+    fi
+else
     # no source file found, nothing to report
     echo "network_nameservers:"
     echo "network_dnssearch:"
-else
-    nameservers=""
-    for entry in $(grep nameserver "$srcfile"|awk '{print $2}'); do
-        if [[ ${#nameservers} -ne 0 ]]; then
-            nameservers="$nameservers,$entry"
-        else
-            nameservers="$entry"
-        fi
-    done
-    nameservers=${nameservers// /,}
-    echo "network_nameservers:$nameservers"
-    
-    entry="$(egrep '(^search|^domain)' "$srcfile"|sed 's/search //'|sed 's/domain //')"
-    entry=${entry// /,}
-    echo "network_dnssearch:$entry"
-
 fi
 
 exit 0

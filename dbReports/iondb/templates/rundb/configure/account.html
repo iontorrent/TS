@@ -1,8 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block current_tab %}about{% endblock %}
 {% block tab-configure-accounts %}
-    <li class="active"><a href="{% url "configure_account" %}">Accounts</a></li>
+    <li class="active"><a href="{% url "configure_account" %}">{% trans "global.nav.menu.configure.menu.account.label" %}</a></li>
 {% endblock tab-configure-accounts %}
 {% block extra_head_js %}
 {% load staticfiles %}
@@ -13,7 +14,9 @@ $(document).ready(function() {
         var btn = $(this);
         var userId = btn.data('id');
         $('#modal_confirm_approve').modal('show');
-        $('#modal_confirm_approve .modal-body p b').text(btn.data('username'));
+        var confirmmsg = '{% trans "signup.pending.approve.confirmmsg"|safe %}'
+        confirmmsg = interpolate(confirmmsg, {username: btn.data('username')}, true);
+        $('#modal_confirm_approve .modal-body p').html(confirmmsg);
         $('#modal_confirm_approve .modal-body #modal-error-messages').hide().empty();
         $('#modal_confirm_approve .btn-success').click(function(e){
             e.preventDefault();
@@ -30,7 +33,7 @@ $(document).ready(function() {
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_approve').modal('hide');
             }).fail(function (data) {
-               $('#modal_confirm_approve .modal-body #modal-error-messages').empty().append('<p>Error:</p><p>' + data.responseText + '</p>').show();
+               $('#modal_confirm_approve .modal-body #modal-error-messages').empty().append('<p>{% trans "global.messages.error.label" %}:</p><p>' + data.responseText + '</p>').show();
             });
         });
         e.preventDefault();
@@ -40,7 +43,9 @@ $(document).ready(function() {
         var btn = $(this);
         var userId = btn.data('id');
         $('#modal_confirm_reject').modal('show');
-        $('#modal_confirm_reject .modal-body p b').text(btn.data('username'));
+        var confirmmsg = '{% trans "signup.pending.reject.confirmmsg"|safe %}'
+        confirmmsg = interpolate(confirmmsg, {username: btn.data('username')}, true);
+        $('#modal_confirm_reject .modal-body p').html(confirmmsg);
         $('#modal_confirm_reject .modal-body #modal-error-messages').hide().empty();
         $('#modal_confirm_reject .btn-danger').click(function(e){
             e.preventDefault();
@@ -56,7 +61,7 @@ $(document).ready(function() {
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_reject').modal('hide');
             }).fail(function (data) {
-               $('#modal_confirm_reject .modal-body #modal-error-messages').empty().append('<p>Error:</p><p>' + data.responseText + '</p>').show();
+               $('#modal_confirm_reject .modal-body #modal-error-messages').empty().append('<p>{% trans "global.messages.error.label" %}:</p><p>' + data.responseText + '</p>').show();
             });
         });
     });
@@ -91,7 +96,7 @@ $(document).ready(function() {
 {% block content %}
 
 <div class="content">
-    <h1>User Profile / Account Information  <small>Allows to view and update your existing user profile and account information</small></h1>
+    <h1>{% trans "configure_account.title" %}    <small>{% trans "configure_account.subtitle" %}</small></h1>
     <form method="post" action="" class="form-horizontal">
         {% csrf_token %}
         {% if form.errors %}
@@ -110,7 +115,7 @@ $(document).ready(function() {
         {% endif %}
         <fieldset>
             <div class="control-group">
-                <label for="input01" class="control-label">Username</label>
+                <label for="input01" class="control-label">{{ User.username.verbose_name }}</label>
                 <div class="controls" id="username">
                     {{ user.username }}
                     <p class="help-block">
@@ -118,7 +123,7 @@ $(document).ready(function() {
                 </div>
             </div>
             <div class="control-group">
-                <label for="fileInput" class="control-label">Full Name</label>
+                <label for="fileInput" class="control-label">{{ User.get_full_name.verbose_name }}</label>
                 <div class="controls" id="fullname">
                     {{ user.get_full_name|default:"[Not Set]" }}
                     <p class="help-block">
@@ -126,7 +131,7 @@ $(document).ready(function() {
                 </div>
             </div>
             <div class="control-group">
-                <label for="fileInput" class="control-label">REST API Key</label>
+                <label for="fileInput" class="control-label">{{ User.api_key.verbose_name }}</label>
                 <div class="controls" id="apikey">
                     <pre>{{ user.api_key.key }}</pre>
                     <p class="help-block">
@@ -134,9 +139,9 @@ $(document).ready(function() {
                 </div>
             </div>
             <div class="control-group">
-                <label for="fileInput" class="control-label">Account Level</label>
+                <label for="fileInput" class="control-label">{{ User.accountlevel.verbose_name }}</label>
                 <div class="controls" id="is_superuser">
-                    {% if user.is_superuser %}Admin{% else %}{% if user.is_staff %}Staff{% else %}User{% endif %}{% endif %}
+                    {% if user.is_superuser %}{{ SuperUser.verbose_name }}{% else %}{% if user.is_staff %}{{ StaffUser.verbose_name }}{% else %}{{ User.verbose_name }}{% endif %}{% endif %}
                     <p class="help-block">
                     </p>
                 </div>
@@ -179,14 +184,15 @@ $(document).ready(function() {
             </div>
             <div>
                 <div class="form-actions">
-                    <input type="reset" class="btn" id="reset_button" value="Reset" />
-                    <input type="submit" class="btn btn-primary" id="submit_button" value="Submit" />
+                    <input type="reset" class="btn" id="reset_button" value="{% trans "global.action.reset" %}" />
+                    <input type="submit" class="btn btn-primary" id="submit_button" value="{% trans "global.action.save" %}" />
                 </div>
             </div>
         </fieldset>
     </form>
 </div>
-     <div class="content clearfix">
+    {% if featureflags.AMPLISEQ %}
+    <div id="linkAmpliseq" class="content clearfix">
         <h1>Connection to AmpliSeq</h1>
         {%  if tfc_account %}
             <a href="{% url "tfc_delete" pk=tfc_account.id %}" class="btn btn-danger" id="tfc_delete" >Unlink {{ tfc_account.username }}</a>
@@ -194,19 +200,20 @@ $(document).ready(function() {
             <a href="{% url "tfc_configure" %}" class="btn" id="associate" >Link to AmpliSeq</a>
         {%  endif %}
     </div>
+    {% endif %}
 
 {% if user.is_superuser %}
 <div class="content clearfix">
-    <h1>User Registrations <small>New user registrations awaiting approval</small></h1>
+    <h1>{% trans "signup.pending.title" %}&nbsp;<small>{% trans "signup.pending.subtitle" %}</small></h1>
     {% if approve %}
     
     <table class="table">
         <thead>
             <tr>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Full Name</th>
-                <th>Date Joined</th>
+                <th>{{ User.username.verbose_name }}</th>
+                <th>{{ User.email.verbose_name }}</th>
+                <th>{{ User.get_full_name.verbose_name }}</th>
+                <th>{{ User.date_joined.verbose_name }}</th>
                 <th></th>
             </tr>
         </thead>
@@ -219,46 +226,46 @@ $(document).ready(function() {
                 <td>{{ user.date_joined }}</td>
                 <td><a href="{% url "api_dispatch_activate" resource_name="user" api_name="v1" pk=user.id %}"
                        class="btn btn-success approve-user" id="approve-user-{{user.id}}"
-                        data-id="{{ user.id }}" data-username="{{ user.username }}">Approve</a>
+                        data-id="{{ user.id }}" data-username="{{ user.username }}">{% trans "signup.pending.action.approve.label" %}</a>
                     <a href="{% url "api_dispatch_reject" resource_name="user" api_name="v1" pk=user.id %}"
                        class="btn btn-danger reject-user" id="reject-user-{{user.id}}"
-                        data-id="{{ user.id }}" data-username="{{ user.username }}">Reject</a>
+                        data-id="{{ user.id }}" data-username="{{ user.username }}">{% trans "signup.pending.action.reject.label" %}</a>
                 </td>
             </tr>
         {% endfor user %}
         </tbody>
     </table>
     {% else %}
-    <p>No user accounts pending approval.</p>
+    <p>{% trans "signup.pending.messages.none" %}</p>
     {% endif %}
 </div>
 {% endif %}
 <div id="modal_confirm_reject" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Confirm Reject Registration</h3>
+        <h3>{% trans "signup.pending.reject.title" %}</h3>
     </div>
     <div class="modal-body">
-        <p>Are you sure you want to reject the registration for <b></b>?</p>
+        <p></p>
         <div id="modal-error-messages" class="alert alert-error hide"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" class="btn btn-danger">Yes, Reject!</a>
+        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a href="#" class="btn btn-danger">{% trans "signup.pending.reject.action.submit" %}</a>
     </div>
 </div>
 <div id="modal_confirm_approve" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Confirm Approve Registration</h3>
+        <h3>{% trans "signup.pending.approve.title" %}</h3>
     </div>
     <div class="modal-body">
-        <p>Are you sure you want to approve the registration for <b></b>?</p>
+        <p></p>
         <div id="modal-error-messages" class="alert alert-error hide"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" class="btn btn-success">Yes, Approve!</a>
+        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a href="#" class="btn btn-success">{% trans "signup.pending.approve.action.submit" %}</a>
     </div>
 </div>
 {% endblock content %}

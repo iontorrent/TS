@@ -13,14 +13,6 @@ div.header ul.nav.nav-tabs.pull-left{
 {
 	display: inline;
 	align: center;
-}	
-
-
-#plugins-sub-nav {
-    width: 100%;
-    max-height: 340px;
-    overflow-y: auto;
-    overflow-x: hidden;
 }
 
 #progress {
@@ -166,9 +158,34 @@ hr{
     padding: 0;
 }
 
+/* --- Side nav scroll bar--- */
+    
+.report-side-nav::-webkit-scrollbar {
+    -webkit-appearance: none;
+}
+
+.report-side-nav::-webkit-scrollbar:vertical {
+    width: 8px;
+}
+
+.report-side-nav::-webkit-scrollbar:horizontal {
+    height: 8px;
+}
+
+.report-side-nav::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.5);
+    -webkit-border-radius: 100px;
+}
+
+.report-side-nav::-webkit-scrollbar-track {
+    background-color: #fff;
+    border-radius: 8px;
+}
+
 /* --- Side nav --- */
 
 .report-side-nav {
+    overflow-y: auto;
     margin-top: 11px;
 }
 
@@ -203,11 +220,6 @@ hr{
     content: "";
     height: 50px;
     margin: -50px 0 0;
-}
-
-#summary-section:before {
-    height: 210px;
-    margin: -210px 0 0;
 }
 
 /* --- Top nav --- */

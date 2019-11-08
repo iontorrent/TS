@@ -1,13 +1,14 @@
 {% load pagetools %}
+{% load i18n %}
 
 {% if helper.getApplProduct.isReferenceSelectionSupported %}
-    <tr>
-        <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library:</b></td>
-        <td id="selectedReferenceLibrary"></td>
-    </tr>
+<tr>
+    <td><b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_reference.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_reference.label" %}{% endif %}:</b></td>
+    <td id="selectedReferenceLibrary"></td>
+</tr>
 
     <tr>
-        <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Target Regions:</b></td>
+        <td><b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_targetBedFile.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_targetBedFile.label" %}{% endif %}:</b></td>
         <td id="selectedTargetRegions" class="word-break-all">
         {{ helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile|default_if_none:""|basename }}
         </td>
@@ -15,20 +16,20 @@
 
     {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.showHotSpotBed %}
         <tr>
-            <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Hotspot Regions:</b></td>
+            <td><b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_hotSpotBedFile.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_hotSpotBedFile.label" %}{% endif %}:</b></td>
             <td id="selectedHotspotRegions" class="word-break-all">
-            {{ helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""|basename }}
+{{ helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""|basename }}
             </td>
         </tr>
     {% endif %}
 
     {% if helper.isDualNucleotideTypeBySample %}
         <tr>
-            <td><b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Reference Library:</b></td>
+            <td><b>{%if helper.isOCPApplicationGroup %}{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.label.isOCPApplicationGroup" %}{%else%}{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.label" %}{% endif %}:</b></td>
             <td id="selectedMixedTypeRNAReferenceLibrary">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference|default_if_none:""}}</td>
         </tr>
         <tr>
-            <td><b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Target Regions:</b></td>
+            <td><b>{%if helper.isOCPApplicationGroup %}{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.label.isOCPApplicationGroup" %}{% else %}{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.label" %}{% endif %}:</b></td>
             <td id="selectedMixedTypeRNATargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile|default_if_none:""}}</td>
         </tr>
     {% endif %}

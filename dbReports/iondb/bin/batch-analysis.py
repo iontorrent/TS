@@ -29,25 +29,34 @@ def get_name_from_json(exp, key):
     data = exp.log
     name = data.get(key, False)
     if not name:
-        return 'Auto_%s_%s' % (exp.pretty_print(), exp.pk,)
+        return "Auto_%s_%s" % (exp.pretty_print(), exp.pk)
     else:
-        return '%s_%s' % (str(name), exp.pk)
+        return "%s_%s" % (str(name), exp.pk)
 
 
 def generate_http_post(exp, server):
-    params = urllib.urlencode({'report_name': get_name_from_json(exp, 'autoanalysisname') + "_V7",
-                               'tf_config': '',
-                               'path': exp.expDir,
-                               'qname': settings.SGEQUEUENAME,
-                               'submit': ['Start Analysis']
-                               })
-    print params
-    headers = {"Content-type": "text/html",
-               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
+    params = urllib.urlencode(
+        {
+            "report_name": get_name_from_json(exp, "autoanalysisname") + "_V7",
+            "tf_config": "",
+            "path": exp.expDir,
+            "qname": settings.SGEQUEUENAME,
+            "submit": ["Start Analysis"],
+        }
+    )
+    print(params)
+    headers = {
+        "Content-type": "text/html",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
     try:
-        f = urllib.urlopen('http://%s/rundb/newanalysis/%s/0' % (server, exp.pk), params)
-    except:
-        f = urllib.urlopen('https://%s/rundb/newanalysis/%s/0' % (server, exp.pk), params)
+        f = urllib.urlopen(
+            "http://%s/rundb/newanalysis/%s/0" % (server, exp.pk), params
+        )
+    except Exception:
+        f = urllib.urlopen(
+            "https://%s/rundb/newanalysis/%s/0" % (server, exp.pk), params
+        )
     return
 
 
@@ -65,20 +74,23 @@ def parse_input(input_file):
 
     return parsed
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     try:
-        print sys.argv[1]
+        print(sys.argv[1])
         input_file = open(sys.argv[1])
         reports = parse_input(input_file)
     except IndexError:
-        print "Please provide the path to a text file where each line is the name of a report as the first arg"
+        print(
+            "Please provide the path to a text file where each line is the name of a report as the first arg"
+        )
         sys.exit(1)
     except IOError:
-        print "Could not open text file!"
+        print("Could not open text file!")
         sys.exit(1)
     except:
-        print "Fatal Error"
+        print("Fatal Error")
         sys.exit(1)
 
     # make a set of exps
@@ -91,5 +103,5 @@ if __name__ == '__main__':
 
     # now start the analysis, we are using a set of that each exp only has to be reran once.
     for exp in exp_list:
-        print "Starting analysis for : ", exp
+        print("Starting analysis for : ", exp)
         generate_http_post(exp, "localhost")

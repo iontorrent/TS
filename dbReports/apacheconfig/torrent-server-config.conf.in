@@ -45,7 +45,7 @@ WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi.py
 # Provide different auth / permissions on API
 <Location "/rundb/api/v1">
     AuthType Basic
-    AuthName "Torrent Browser"
+    AuthName "Torrent Suite (TM)"
     AuthBasicProvider wsgi
 
     # Accept but do not require AuthBasic
@@ -130,7 +130,7 @@ AliasMatch ^/private/plugins([^/]*)/(.*) /var/www/plugins$1/$2
 # Same as /output, except auth by apache, not via django.
 <Location /auth/>
     AuthType Basic
-    AuthName "Torrent Browser"
+    AuthName "Torrent Suite (TM)"
     AuthBasicAuthoritative Off
     AuthBasicProvider wsgi
     WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi.py application-group=iontorrent

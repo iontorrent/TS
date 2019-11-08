@@ -1,42 +1,44 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
-{% block main-title %}Select instrument, chip and kits and then hit next.{% endblock main-title %}
+{% load i18n %}
+{% load pagetools %}
+{% block main-title %}{% trans "workflow.step.kits.subtitle" %}{% endblock main-title %}
 
 {% block page-plan-content %}
 <div class="row-fluid">
     <div class="span6">                                     
-        <label class="form-label">Instrument</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.instrumentType.label" %}</label>
         <select id="instrumentType">
             {% if helper.isEditRun %}
                 {% if step.getPrePopulatedFieldDict.chipTypes %}
                     {% with step.getPrePopulatedFieldDict.chipTypes.0 as chipType %}
                     <option SELECTED value="{{chipType.instrumentType}}">
-                         {% if chipType.name|first in "5" %}{{chipType.get_instrumentType_display}}&trade; System{%else%}
-                         Ion {{chipType.get_instrumentType_display}}&trade; System{%endif%}
+                        {% for value, display in step.getPrePopulatedFieldDict.instrumentTypes %}
+                            {% ifequal chipType.instrumentType value %}
+                                {{ display }}
+                            {% endifequal %}
+                        {% endfor %}
                     </option>
                     {% endwith %}
                 {% endif %}
             {% else %}
                 <option value=""></option>
                 {% for value, display in step.getPrePopulatedFieldDict.instrumentTypes %}
-                	<option value="{{value}}">
-                    {% if value|first in "S" %}{{display}} System{%else%}
-                         Ion {{display}}&trade; System{%endif%}
-                   </option>
+                	<option value="{{value}}">{{display}}</option>
                 {% endfor %}
             {% endif %}
         </select>
     </div>
 
     <div class="span6">                                     
-        <label class="form-label">Chip Type{%if not step.prepopulatedFields.is_chipType_required%} (optional){%endif%}</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.chipType.label" %}{%if not step.prepopulatedFields.is_chipType_required%}{% trans "global.field.label.optional" %}{%endif%}</label>
         <select id="chipType" name="chipType">
             {% if helper.isEditRun %}
-                <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
+                <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">
                 {% if step.getPrePopulatedFieldDict.chipTypes %}
                     {% with step.getPrePopulatedFieldDict.chipTypes.0 as chipType %}
-                        {{chipType.getChipDisplayedNamePrimaryPrefix}}&trade;{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}
+                        {{ chipType.getI18NDisplayedName|safe }}
                     {% endwith %}
                 {% else %}
                     {{step.getCurrentSavedFieldDict.chipType }}&trade; Chip
@@ -44,15 +46,16 @@
                 </option>
             {% else %}
                 <option value=""></option>
+                {# TODO: i18n for custom option value's #}
                 {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
                     {% if chipType.name == step.getCurrentSavedFieldDict.chipType %}
                         <option SELECTED 
                     {% elif not step.getCurrentSavedFieldDict.chipType and not helper.isTemplate and chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType and "Chip Type is required" not in step.validationErrors.values %}
                         <option SELECTED 
                     {% else %}                    
-                        <option 
+                        <option
                     {% endif %}
-                    value="{{chipType.name}}">Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}&trade;{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}</option>
+                    value="{{chipType.name}}">{{ chipType.getI18NDisplayedName|safe }}</option>
                 {% endfor %}
             {% endif %}
         </select>
@@ -64,7 +67,7 @@
     <div class="span6">
         <input type="hidden" id="isBarcodeKitRequired" name="isBarcodeKitRequired" value="" />
 
-        <label class="form-label">Sample Preparation Kit (optional)</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.samplePreparationKit.label" %}{% trans "global.field.label.optional" %}</label>
         <select id="samplePreparationKit" name="samplePreparationKit" style="width: 350px;" {% if not helper.getApplProduct.isSamplePrepKitSupported %} disabled="disabled" {% endif %}>
             <option value=""></option>
             {% for spk in step.getPrePopulatedFieldDict.samplePrepKits %}
@@ -77,7 +80,7 @@
         </select>
     </div>
     <div class="span6">
-        <label class="form-label">Control Sequence (optional)</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.controlsequence.label" %}{% trans "global.field.label.optional" %}</label>
         <select id="controlsequence" name="controlsequence" {% if step.getPrePopulatedFieldDict.controlSeqKits|length == 0 %} disabled {% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.controlSeqKits %}
@@ -92,7 +95,7 @@
 </div>
 <div class="row-fluid">
     <div class="span6">
-        <label class="form-label">Library Kit Type</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.librarykitname.label" %}</label>
         <select id="libraryKitType" name="librarykitname" style="width: 350px;">
             <option value=""></option>
             {% for libKit in step.getPrePopulatedFieldDict.libKits %}
@@ -105,14 +108,14 @@
         </select>
     </div>
     <div class="span6">                                     
-        <label class="form-label" id="barcodeKitLabel">Barcode Set {% if helper.getApplProduct.isBarcodeKitSelectionRequired %}(required){% else %}(optional){% endif %}</label>
+        <label class="form-label" id="barcodeKitLabel">{% trans "workflow.step.kits.fields.barcodeId.label" %}{% if helper.getApplProduct.isBarcodeKitSelectionRequired %}{% trans "global.field.label.required" %}{% else %}{% trans "global.field.label.optional" %}{% endif %}</label>
         <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample and step.getCurrentSavedFieldDict.barcodeId %}disabled="disabled"{% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.barcodes %}
                 {% ifequal kit.name step.getCurrentSavedFieldDict.barcodeId %}
-                    <option SELECTED 
+                    <option SELECTED
                 {% else %}
-                    <option 
+                    <option
                 {% endifequal %}
                 value="{{kit.name}}">{{kit.name}}</option>
             {% endfor %}
@@ -121,17 +124,18 @@
 </div>
 <div class="row-fluid">
     <div class="span6">
-        <p class="form-label">Template Kit
+        <p class="form-label">{% trans "workflow.step.kits.fields.templatekitname.label" %}
         <span class="option-group">
         <small style="font-weight: normal; font-size: 75%;">
             {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
+                {# TODO: i18n for IA kit name? #}
                 {% ifequal kitTypeName "Avalanche" %}
                 {% else %}
-                <input type="radio" class="template-kit-radio" {% ifequal kitTypeName "IA" %} rel="tooltip" title="Isothermal Amplification" {% endifequal %} id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
+                <input type="radio" class="template-kit-radio" {% ifequal kitTypeName "IA" %} rel="tooltip" title="{% trans "entity.SamplePrepInstrument.IA.tooltip" %}" {% endifequal %} id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
                     {% if kitTypeName == step.getCurrentSavedFieldDict.templatekitType and step.getCurrentSavedFieldDict.templatekitname %}
                                     checked="checked" data-templatekitname="{{step.getCurrentSavedFieldDict.templatekitname}}"
                     {% endif %}
-                >{{kitTypeName}}
+                >{{step.ModelsSamplePrepInstrumentToLabelsSamplePrepInstrumentAsDict|bracket:kitTypeName}}
                 {% endifequal %}
             {% endfor %}
         </small>
@@ -140,7 +144,8 @@
         
         <div id="templateKitHolder">
             {% if not step.getCurrentSavedFieldDict.templatekitType %}
-                <input id="templateKit_comment" name="templateKit_comment" type="text" placeholder="Choose instrument to view Template Kit menu" style="width: 335px" disabled>
+                <p id="templateKit_comment">{% trans "workflow.step.kits.fields.templatekitname.helptext" %}</p>
+{#                <input id="templateKit_comment" name="templateKit_comment" type="text" placeholder="Choose instrument to view Template Kit menu" style="width: 335px" disabled>#}
             {% endif %}
             
             <select id="templateKit" name="templatekitname" style="width: 350px;" {% if not step.getCurrentSavedFieldDict.templatekitType %} class="hide" {% endif %}>
@@ -161,7 +166,7 @@
         </div>
     </div>
     <div class="span6">
-        <label class="form-label">Flows</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.flows.label" %}</label>
         <input value="{{step.getCurrentSavedFieldDict.flows}}" class="pull-left" style="width:50px; font-weight: normal; font-size: 14px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
     </div>
 </div>
@@ -169,7 +174,7 @@
 
 <div class="library_read_length_info row-fluid hide" style="display: block;">
     <div class="span6">
-        <p style="font-weight: bold; font-size: 14px; margin-bottom: 12px;">Library Read Length:
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 12px;">{% trans "workflow.step.kits.fields.libraryReadLength.label" %}:
         <input value="{{step.getCurrentSavedFieldDict.libraryReadLength}}" style="width:50px; font-weight: normal; font-size: 14px;" name="libraryReadLength" id="libraryReadLength" {% if helper.isEditRun %} readonly {% endif %}>
         </p>
     </div>
@@ -178,7 +183,7 @@
 </div>
 <div class="read_length_info row-fluid hide" style="display: block;">
     <div class="span6">
-        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Read Length:
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">{% trans "workflow.step.kits.fields.readLength.label" %}:
         <span class="option-group">
             <small style="font-weight: normal; font-size: 100%;">
                 {% for readLength in step.getPrePopulatedFieldDict.readLengthChoices %}
@@ -197,7 +202,7 @@
 
 <div class="row-fluid">
     <div class="span6">
-        <label class="form-label">Sequencing Kit</label>
+        <label class="form-label">{% trans "workflow.step.kits.fields.sequenceKit.label" %}</label>
         <select id="sequenceKit" name="sequencekitname" style="width: 350px;">
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.seqKits %}
@@ -212,8 +217,8 @@
     <div class="span6">
         <label class="form-label" style="display: inline;">
             <i class="icon-info-sign" rel="tooltip" data-placement="right"
-                title="PCR duplicates will be flagged in the BAM file"></i>
-            Mark as Duplicates Reads
+                title="{% trans "workflow.step.kits.fields.duplicateReads.tooltip" %}"></i>
+            {% trans "workflow.step.kits.fields.duplicateReads.label" %}
             <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"
                    {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %}
                    style="vertical-align:top;">
@@ -222,8 +227,8 @@
     <div class="span6">
         <label class="form-label" style="display: inline;">
             <i class="icon-info-sign" rel="tooltip"
-                title="Optional analysis step to adjust the alignment, primarily in the CIGAR string"></i>
-            Enable Realignment
+                title="{% trans "workflow.step.kits.fields.realign.tooltip" %}"></i>
+            {% trans "workflow.step.kits.fields.realign.label" %}
             <input type="checkbox" id="realign" name="realign"
                    {% if step.getCurrentSavedFieldDict.realign %}checked="checked"{% endif %}
                    style="vertical-align:top;">
@@ -236,23 +241,22 @@
         <div class="span12 collapsible-section">
             <h3>
                 <a class="pull-right" href="#"><i class="showhide icon-plus"></i></a>
-                Advanced Settings
-                <small><span id="show_updated" class="text-success hide">&nbsp Updated Advanced Settings!</span></small>
+                {% trans "workflow.step.kits.advancedsettings.title" %}
+                <small><span id="show_updated" class="text-success hide">{% trans "workflow.step.kits.advancedsettings.messages.updated" %}</span></small>
             </h3>
             <label class="radio inline">
                 <input type="radio" name="advancedSettingsChoice" id="defaultSettings" value="default"
-                    {% if step.savedFields.advancedSettingsChoice == 'default' %}checked{% endif %}>Use Recommended Defaults</input>
+                    {% if step.savedFields.advancedSettingsChoice == 'default' %}checked{% endif %}>{% trans "workflow.step.kits.fields.advancedSettingsChoice.defaultSettings" %}</input>
             </label>
             <label class="radio inline">
                 <input type="radio" name="advancedSettingsChoice" id="customSettings" value="custom"
-                    {% if step.savedFields.advancedSettingsChoice == 'custom' %}checked{% endif %}>Customize</input>
+                    {% if step.savedFields.advancedSettingsChoice == 'custom' %}checked{% endif %}>{% trans "workflow.step.kits.fields.advancedSettingsChoice.customSettings" %}</input>
             </label>
             <div class="hideable_advanced_settings_section" style="display: none;">
                 <div class="row-fluid">
                     <div class="span12">
                         <div class="alert" style="margin-top: 10px">
-                            <strong>Warning!</strong> &nbsp;It's <u>not recommended</u> to change these settings,
-                            please consult your local field representative before modifying parameters below.
+                            {% trans "workflow.step.kits.advancedsettings.disclaimer" %}
                         </div>
                     </div>
                 </div>
@@ -260,10 +264,10 @@
                 <div class="row-fluid">
                     <!-- Templating Protocol -->
                     <div class="span6">
-                        <label class="form-label">Templating Protocol</label>
-                        <select id="samplePrepProtocol" name="samplePrepProtocol" class="advanced"
+                        <label class="form-label">{% trans "workflow.step.kits.fields.samplePrepProtocol.label" %}</label>
+                        <select style="width: 95%" id="samplePrepProtocol" name="samplePrepProtocol" class="advanced"
                             {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %} >
-                            <option value="">Use Instrument Default</option>
+                            <option value="">{% trans "workflow.step.kits.fields.samplePrepProtocol.default" %}</option>
                             {% for protocol in step.getPrePopulatedFieldDict.samplePrepProtocols %}
                                 {% ifequal protocol.value step.getCurrentSavedFieldDict.samplePrepProtocol %}
                                     <option SELECTED
@@ -279,14 +283,14 @@
                     <div class="span6">
                         <label class="form-label">
                             <i class="icon-info-sign" rel="tooltip"
-                               title="Base Calibration allows for empirical alignments to influence flow signals to achieve better homopolymer calibration to improve overall accuracy"></i>
-                            Base Calibration Mode</label>
+                               title="{% trans "workflow.step.kits.fields.base_recalibrate.tooltip" %}"></i>
+                            {% trans "workflow.step.kits.fields.base_recalibrate.label" %}</label>
                         <select id="base_recalibrate" name="base_recalibrate" class="advanced" {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %}>
-                            {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
+                            {% for mode, textTitleMap in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
                                 {% ifequal mode step.getCurrentSavedFieldDict.base_recalibrate %}
-                                    <option SELECTED value="{{ mode }}">{{ displayedMode }}</option>
+                                    <option SELECTED value="{{ mode }}" title="{{ textTileMap.title }}">{{ textTitleMap.text }}</option>
                                 {% else %}
-                                    <option value="{{ mode }}">{{ displayedMode }}</option>
+                                    <option value="{{ mode }}" title="{{ textTileMap.title }}">{{ textTitleMap.text }}</option>
                                 {% endifequal %}
                             {% endfor %}
                         </select>
@@ -297,7 +301,7 @@
                 <div class="row-fluid">
                     <!-- Forward Library Key -->
                     <div class="span6">
-                        <label class="form-label">Forward Library Key</label>
+                        <label class="form-label">{% trans "workflow.step.kits.fields.libraryKey.label" %}</label>
                         <select id="libraryKey" name="libraryKey" class="advanced" {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %}>
                             {% for libKey in step.getPrePopulatedFieldDict.forwardLibKeys %}
                                 {% ifequal libKey.sequence step.getCurrentSavedFieldDict.libraryKey %}
@@ -311,7 +315,7 @@
                     </div>
                     <!-- Forward 3' Adapter -->
                     <div class="span6">
-                        <label class="form-label">Forward 3' Adapter</label>
+                        <label class="form-label">{% trans "workflow.step.kits.fields.forward3primeAdapter.label" %}</label>
                         <select id="forward3primeAdapter" name="forward3primeAdapter" class="advanced" {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %}>
                             <option value=""></option>
                             {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
@@ -329,17 +333,17 @@
                 <div class="row-fluid">
                     <!-- Test Fragment Key -->
                     <div class="span6">
-                        <label class="form-label">Test Fragment Key</label>
+                        <label class="form-label">{% trans "workflow.step.kits.fields.tfKey.label" %}</label>
                         <input type="text" id="tfKey" name="tfKey" value={{ step.getCurrentSavedFieldDict.tfKey }} class="advanced"
-                                onkeyup="if('atcgATCG'.indexOf(this.value.slice(-1))<0) alert('Invalid TF key character');"
+                                onkeyup="if('atcgATCG'.indexOf(this.value.slice(-1))<0) alert('{% trans "workflow.step.kits.messages.validate.tfKey.invalidchar" %}');"
                                 {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %}>
                         <p class="alert hide"></p>
                     </div>
                     <!-- Flow Order -->
                     <div class="span6">
-                        <label class="form-label">Flow Order</label>
+                        <label class="form-label">{% trans "workflow.step.kits.fields.flowOrder.label" %}</label>
                         <select id="flowOrder" name="flowOrder" class="advanced" {% if step.savedFields.advancedSettingsChoice == 'default' %}disabled{% endif %}>
-                            <option value="">Use Instrument Default</option>
+                            <option value="">{% trans "workflow.step.kits.fields.flowOrder.default" %}</option>
                             {% for flowOrder in step.getPrePopulatedFieldDict.flowOrders %}
                                 {% ifequal flowOrder.flowOrder step.getCurrentSavedFieldDict.flowOrder %}
                                     <option SELECTED
@@ -362,7 +366,7 @@
 
 <div class="row-fluid">
     {% for key, value in step.validationErrors.items %}
-        <h4 style="color: red">{{value}}</h4>
+        <h4 style="color: red">{{value|safe}}</h4>
     {% endfor %}
 </div>
 <div class="row-fluid">
@@ -450,8 +454,7 @@
         chips["{{chip.name}}"] = {
             "index": {{forloop.counter0}},
             "value": "{{chip.name}}",
-            "display": "Ion " + "{{chip.getChipDisplayedNamePrimaryPrefix}}" + "&trade;" +
-                "{{chip.getChipDisplayedNameSecondaryPrefix}}" + " Chip " + "{{chip.getChipDisplayedVersion}}",
+            "display": "{{ chip.getI18NDisplayedName|safe }}",
             "seq_instrument": "{{chip.instrumentType}}"
         };
     {% endfor %}

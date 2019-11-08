@@ -1,0 +1,37 @@
+html { font-size: 100% }
+a { color: #0088cc }
+p { margin: 0 0 10px }
+h1, h2, h3 { line-height: 40px; }
+h1, h2, h3, h4, h5, h6 { margin: 10px 0; font-family: inherit; text-rendering: optimizelegibility }
+.container-fluid { padding-right: 20px; padding-left: 20px; }
+.pull-left { float: left }
+.pull-right { float: right }
+.container { margin-right: auto; margin-left: auto; width: 940px }
+[class*="span"] { float: left; min-height: 1px; margin-left: 20px }
+.span12 { width: 940px }
+.row { margin-left: -20px }
+
+body {
+  font: .875em/1.4 Arial,"Helvetica Neue",Helvetica,sans-serif;
+  background: #fff;
+}
+
+* {
+  margin: 0;
+}
+
+.footer {
+  color: #fff;
+  background: #070a33;
+  height: 105px;
+}
+
+.footer .container {
+  padding-top: 25px;
+}
+
+a:link, a:visited, .btn-group>a.btn {
+  font-size: 12px;
+  font-weight: bold;
+  text-decoration: none;
+}

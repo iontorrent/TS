@@ -1,13 +1,14 @@
+{% load i18n %}
 <tr>
-    <td><b>Research Application:</b></td>
+    <td><b>{% trans "workflow.step.application.fields.applicationGroup.label" %}:</b></td>
     <td id="selectedApplication"></td>
 </tr>
 <tr>
-    <td><b>Research Category:</b></td>
+    <td><b>{% trans "workflow.step.application.fields.applicationGroupCategory.label" %}:</b></td>
     <td id="selectedApplicationCategory"></td>
 </tr>
 <tr>
-    <td><b>Target Technique:</b></td>
+    <td><b>{% trans "workflow.step.application.fields.runType.label" %}:</b></td>
     <td id="selectedTechnique"></td>
 </tr>
 {%include "rundb/plan/page_plan/summary/ionreporter_summary.html"%}

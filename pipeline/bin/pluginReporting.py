@@ -3,7 +3,7 @@
 # First stage plugin driver script that uses user input to generate document.json with the help of django template
 # This template takes user.json in the form of individual contents - table, images
 
-__version__ = '1.0'
+__version__ = "1.0"
 
 import os, sys, logging
 from optparse import OptionParser
@@ -23,19 +23,32 @@ from ion.plugin.utils.CreateDocument import CreateDocument
 def InitializeLogging():
     pass
 
+
 if __name__ == "__main__":
     # logging.basicConfig()
-    logging.basicConfig(level=logging.INFO,
-                        format=' %(asctime)s %(funcName)s %(lineno)d [%(levelname)s] - %(message)s'
-                        )
+    logging.basicConfig(
+        level=logging.INFO,
+        format=" %(asctime)s %(funcName)s %(lineno)d [%(levelname)s] - %(message)s",
+    )
 
     parser = OptionParser(usage="%prog [options]", version="%%prog %s" % __version__)
-    parser.add_option("-d", dest="results_dir",
-                      help="specify the plugin's results directory containing startplugin.json and output.json. DEFAULT is environment variable ${TSP_FILEPATH_PLUGIN_DIR}")
-    parser.add_option("-s", dest="startplugin_json",
-                      help="specify name for startplugin.json file in the plugin output directory. DEFAULT is startplugin.json ", default="startplugin.json")
-    parser.add_option("-f", dest="user_json",
-                      help="specify path to userjson file in the plugin output directory. DEFAULT is output.json", default="output.json")
+    parser.add_option(
+        "-d",
+        dest="results_dir",
+        help="specify the plugin's results directory containing startplugin.json and output.json. DEFAULT is environment variable ${TSP_FILEPATH_PLUGIN_DIR}",
+    )
+    parser.add_option(
+        "-s",
+        dest="startplugin_json",
+        help="specify name for startplugin.json file in the plugin output directory. DEFAULT is startplugin.json ",
+        default="startplugin.json",
+    )
+    parser.add_option(
+        "-f",
+        dest="user_json",
+        help="specify path to userjson file in the plugin output directory. DEFAULT is output.json",
+        default="output.json",
+    )
     (opt, args) = parser.parse_args()
 
     # TO DO: Better way of defining variables

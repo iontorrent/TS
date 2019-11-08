@@ -7,7 +7,6 @@ import threading
 import time
 import copy
 import socket
-
 from iondb.utils.hostip import gethostfqdn
 
 
@@ -21,7 +20,7 @@ class IonMeshDiscoveryManager(threading.Thread):
     __meshComputers = list()
 
     # registration type
-    __REG_TYPE = '_ionMesh._tcp'
+    __REG_TYPE = "_ionMesh._tcp"
 
     # thread lock
     __threadLock = threading.Lock()
@@ -31,26 +30,48 @@ class IonMeshDiscoveryManager(threading.Thread):
 
     def __new__(cls, *args, **kwargs):
         if not cls.__singleton:
-            cls.__singleton = super(IonMeshDiscoveryManager, cls).__new__(cls, *args, **kwargs)
+            cls.__singleton = super(IonMeshDiscoveryManager, cls).__new__(
+                cls, *args, **kwargs
+            )
             gobject.threads_init()
 
             # setup dbus stuff
             cls.__singleton.__bus = dbus.SystemBus(mainloop=DBusGMainLoop())
-            cls.__singleton.__server = dbus.Interface(cls.__singleton.__bus.get_object(avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER), avahi.DBUS_INTERFACE_SERVER)
+            cls.__singleton.__server = dbus.Interface(
+                cls.__singleton.__bus.get_object(
+                    avahi.DBUS_NAME, avahi.DBUS_PATH_SERVER
+                ),
+                avahi.DBUS_INTERFACE_SERVER,
+            )
 
             # Look for self.regtype services and hook into callbacks
-            cls.__singleton.__browser = dbus.Interface(cls.__singleton.__bus.get_object(avahi.DBUS_NAME, cls.__singleton.__server.ServiceBrowserNew(
-                avahi.IF_UNSPEC, avahi.PROTO_UNSPEC, cls.__singleton.__REG_TYPE, "", dbus.UInt32(0))), avahi.DBUS_INTERFACE_SERVICE_BROWSER)
-            cls.__singleton.__browser.connect_to_signal("ItemNew", cls.__singleton.__serviceFound)
-            cls.__singleton.__browser.connect_to_signal("ItemRemove", cls.__singleton.__serviceRemoved)
+            cls.__singleton.__browser = dbus.Interface(
+                cls.__singleton.__bus.get_object(
+                    avahi.DBUS_NAME,
+                    cls.__singleton.__server.ServiceBrowserNew(
+                        avahi.IF_UNSPEC,
+                        avahi.PROTO_UNSPEC,
+                        cls.__singleton.__REG_TYPE,
+                        "",
+                        dbus.UInt32(0),
+                    ),
+                ),
+                avahi.DBUS_INTERFACE_SERVICE_BROWSER,
+            )
+            cls.__singleton.__browser.connect_to_signal(
+                "ItemNew", cls.__singleton.__serviceFound
+            )
+            cls.__singleton.__browser.connect_to_signal(
+                "ItemRemove", cls.__singleton.__serviceRemoved
+            )
             cls.__singleton.__loop = gobject.MainLoop()
 
             # initialize threading super object
             threading.Thread.__init__(cls.__singleton)
             cls.__singleton.start()
+            time.sleep(1)
 
         return cls.__singleton
-
 
     def stop(self):
         """
@@ -58,13 +79,11 @@ class IonMeshDiscoveryManager(threading.Thread):
         """
         self.__loop.quit()
 
-
     def run(self):
         """
         Method called with the thread object's "start" method is called
         """
         self.__loop.run()
-
 
     def getMeshComputers(self):
         """
@@ -76,18 +95,12 @@ class IonMeshDiscoveryManager(threading.Thread):
             ret = []
             for name in self.__meshComputers:
                 fqdn = socket.getfqdn(name)
-                if fqdn not in ['localhost', 'tsvm']:
+                if fqdn not in ["localhost", "tsvm"]:
                     ret.append(fqdn)
 
             return ret
         finally:
             self.__threadLock.release()
-
-
-    def getLocalComputer(self):
-        """Gets the localhost name"""
-        return self.__localhost
-
 
     def __serviceFound(self, interface, protocol, name, stype, domain, flags):
         """Callback for when a service needs to be added to the mesh list"""
@@ -103,7 +116,6 @@ class IonMeshDiscoveryManager(threading.Thread):
                 self.__meshComputers.append(str(name))
         finally:
             self.__threadLock.release()
-
 
     def __serviceRemoved(self, interface, protocol, name, stype, domain, flags):
         """
@@ -123,14 +135,19 @@ class IonMeshDiscoveryManager(threading.Thread):
             self.__threadLock.release()
 
 
-if __name__ == '__main__':
+def getLocalComputer():
+    """Gets the localhost name"""
+    return gethostfqdn()
+
+
+if __name__ == "__main__":
     mesh1 = IonMeshDiscoveryManager()
 
     try:
         while True:
             time.sleep(1)
-            print "*************************"
-            print mesh1.getMeshComputers()
+            print("*************************")
+            print(mesh1.getMeshComputers())
     except KeyboardInterrupt:
         pass
     finally:

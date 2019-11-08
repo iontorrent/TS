@@ -4,14 +4,19 @@ project (ion-tsconfig)
 set(PROJECT_DESCRIPTION "Ion Torrent Torrent Server Configuration Script")
 enable_testing()
 
+file(STRINGS "../dbReports-oem/oem-partner-name.txt" OEM_NAMES)
+list(GET OEM_NAMES 0 OEM_PROJECT_NAME) # first line is the project name
+list(GET OEM_NAMES 1 OEM_NAME) # second line is the parter name
+
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/usr" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_TSCONFIG_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_TSCONFIG_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_TSCONFIG_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
+
 
 configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/postinst.in"
@@ -29,6 +34,11 @@ configure_file (
 	"${PROJECT_SOURCE_DIR}/bin/TSsetproxy"
 	"${PROJECT_BINARY_DIR}/bin/TSsetproxy" @ONLY
 )
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/iontorrent_master.in"
+    "${PROJECT_SOURCE_DIR}/ansible/group_vars/iontorrent_master" @ONLY
+    )
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
@@ -59,15 +69,10 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/add_compute.sh" DESTINATION share/io
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/del_compute.sh" DESTINATION share/ion-tsconfig/tools )
 install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsconfig )
 
-# perl modules used by plugins for json file parsing
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION share/ion-tsconfig/perl)
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-XS-2.32.tar.gz" DESTINATION share/ion-tsconfig/perl)
-# perl modules used by plugins for ???
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IO-All-0.44.tar.gz" DESTINATION share/ion-tsconfig/perl)
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/List-MoreUtils-0.33.tar.gz" DESTINATION share/ion-tsconfig/perl)
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION share/ion-tsconfig/perl)
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION share/ion-tsconfig/perl)
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/pre_migration.sh" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/post_migration.sh" DESTINATION sbin )
+
+# TS-17140: move these PERL modules to common/task/main.yml
 
 # Deploy the ansible heirarchy for internal testing
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
@@ -91,7 +96,8 @@ execute_process (
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 set(PYTHON_SITE_PACKAGES "${PYTHON_SITE_PACKAGES}" CACHE PATH "Python Install Prefix")
-install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
+configure_file ("${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py.in" "${PROJECT_BINARY_DIR}/ion_tsconfig/__init__.py" @ONLY)
+install(FILES "${PROJECT_BINARY_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 
 include(InstallRequiredSystemLibraries)

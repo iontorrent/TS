@@ -3,11 +3,7 @@
 import re
 import urllib
 
-INTERNAL_ESCAPES = (
-    ('/', '&'),
-    ('\\', '$'),
-    ('.', '#'),
-)
+INTERNAL_ESCAPES = (("/", "&"), ("\\", "$"), (".", "#"))
 
 
 def escape_name(name):
@@ -56,7 +52,7 @@ class BooleanField(NameField):
     ENCODE = True
 
     def test(self, s):
-        return s == 'True'
+        return s == "True"
 
     def get_field(self, s):
         return self.test(s)
@@ -71,8 +67,9 @@ class ConstantField(NameField):
 
     def check_string(self, s):
         if s != self.name:
-            raise ValueError, ("'%s' was not expected in constant field '%s'"
-                               % (s, self.name))
+            raise ValueError(
+                "'%s' was not expected in constant field '%s'" % (s, self.name)
+            )
 
     def get_field(self, s):
         self.check_string
@@ -89,14 +86,14 @@ class ChoiceField(NameField):
     def __init__(self, name=None, choices=None):
         NameField.__init__(self, name)
         if choices is None:
-            raise ValueError, "No choices specified for ChoiceField."
+            raise ValueError("No choices specified for ChoiceField.")
         self.choices = set()
         for c in choices:
             self.choices.add(str(c))
 
     def check_str(self, s):
         if not s in self.choices:
-            raise ValueError, "Unknown choice: '%s'." % s
+            raise ValueError("Unknown choice: '%s'." % s)
 
     def get_field(self, s):
         self.check_str(s)
@@ -108,11 +105,10 @@ class ChoiceField(NameField):
 
 
 class FileExtension(object):
-
     def __init__(self, name, gzipped=False):
         self.name = name
         self.gzipped = gzipped
-        self.match = [''.join(["[%s]" % c for c in self.name])]
+        self.match = ["".join(["[%s]" % c for c in self.name])]
         self.to_sub = [self.name]
         if self.gzipped:
             self.match.append("gz")
@@ -127,7 +123,6 @@ class FileExtension(object):
 
 
 class FieldMaster(object):
-
     def __init__(self):
         self.fields = []
         self.finalized = False
@@ -138,18 +133,18 @@ class FieldMaster(object):
 
     def set_ext(self, ext):
         if self.finalized:
-            raise ValueError, (
-                "Cannot set suffix for finalized %s"
-                % self.__class__.__name__)
+            raise ValueError(
+                "Cannot set suffix for finalized %s" % self.__class__.__name__
+            )
         if self.file_ext is not None:
-            raise ValueError, "Attempted to re-set FieldMaster file extension."
+            raise ValueError("Attempted to re-set FieldMaster file extension.")
         self.file_ext = ext
 
     def add_field(self, field):
         if self.finalized:
-            raise ValueError, (
-                "Cannot add field to finalized %s"
-                % self.__class__.__name__)
+            raise ValueError(
+                "Cannot add field to finalized %s" % self.__class__.__name__
+            )
         field.rank = len(self.fields)
         self.fields.append(field)
 
@@ -165,7 +160,7 @@ class FieldMaster(object):
         if self.file_ext is not None:
             regex.extend(self.file_ext.match)
             to_sub.extend(self.file_ext.to_sub)
-        tomatch = "^%s$" % '.'.join(regex)
+        tomatch = "^%s$" % ".".join(regex)
         to_sub = ".".join(to_sub)
         self.regex = re.compile(tomatch)
         self.to_sub = to_sub
@@ -176,7 +171,7 @@ class FieldMaster(object):
         if match is None:
             return None
         d = match.groupdict()
-        for k, v in d.iteritems():
+        for k, v in d.items():
             f = self.name2field[k]
             if f.ENCODE:
                 v = unescape_name(v)
@@ -200,14 +195,13 @@ class FieldMaster(object):
 
 
 class FileNameBase(type):
-
     def make_prop(self, field):
         pass
 
     def __new__(cls, name, bases, clsdict):
         retdict = {}
         fm = FieldMaster()
-        for k, v in clsdict.iteritems():
+        for k, v in clsdict.items():
             if isinstance(v, NameField):
                 if v.name is None:
                     v.name = k
@@ -217,7 +211,7 @@ class FileNameBase(type):
             else:
                 retdict[k] = v
         fm.finalize()
-        retdict['_meta'] = fm
+        retdict["_meta"] = fm
         return type.__new__(cls, name, bases, retdict)
 
 
@@ -228,18 +222,19 @@ class FileName(object):
         self._meta.init_fnameobj(self)
         if _s:
             d = self._meta.parse_string(_s)
-            for k, v in d.iteritems():
+            for k, v in d.items():
                 self._check_key(k)
                 setattr(self, k, v)
         else:
-            for k, v in kwargs.iteritems():
+            for k, v in kwargs.items():
                 self._check_key(k)
                 setattr(self, k, v)
 
     def _check_key(self, k):
         if not hasattr(self, k):
-            raise AttributeError, ("%s has no attribute '%s'."
-                                   % (self.__class__.__name__, k))
+            raise AttributeError(
+                "%s has no attribute '%s'." % (self.__class__.__name__, k)
+            )
 
     def to_string(self):
         return self._meta.to_string(self)

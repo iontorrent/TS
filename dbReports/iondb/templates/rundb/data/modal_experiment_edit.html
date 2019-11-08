@@ -98,7 +98,7 @@
 	    <a class="btn" href="#" data-dismiss="modal">Cancel</a>
 	    <a id="submitButton" class="btn btn-primary" href="#">Save</a>
 	</div>
-<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>  {# {% static "jquery/js/uni-form-validation.jquery.js"%} is DEPRECATED , use {% include "rundb/common/head_uni-form-validation.jquery.js.html" %} #}
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
 <script type="text/javascript">
 /** TS-4640,TS-5327: IE6,7,8 long text within fixed width <select> is clipped, set width:auto temporarily */

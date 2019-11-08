@@ -9,7 +9,7 @@ set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 message(STATUS "Searching for an ION_UPDATE_SERVER...")
 foreach ( SERVER updates updates.itw updates.iontorrent.com )
     # See if we can look up the server in question.
-    execute_process( COMMAND host -W 2 ${SERVER}
+    execute_process( COMMAND host -W 2 -t A ${SERVER}
        RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
 
     # If we can find it, great! We're done!
@@ -35,7 +35,7 @@ if(LSB_RELEASE_COMMAND)
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
     message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
-endif(LSB_RELEASE_COMMAND) 
+endif(LSB_RELEASE_COMMAND)
 
 # If defined while running cmake look for mkl
 # e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
@@ -43,7 +43,7 @@ if (DEFINED MKL_INSTALL_PATH)
   message("Setting mkl root to ${MKL_INSTALL_PATH}")
   include_directories(${MKL_INSTALL_PATH}/include)
   set(MKL_LINK_LIBS "-Wl,--start-group  ${MKL_INSTALL_PATH}/lib/intel64/libmkl_intel_lp64.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_core.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_sequential.a -Wl,--end-group")
-else() 
+else()
   message("Not setting mkl root ${MKL_INSTALL_PATH}")
 endif()
 
@@ -54,11 +54,7 @@ mark_as_advanced(ION_USE_MKL)
 option(ION_USE_SYSTEM_CUDA "Use CUDA system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_CUDA)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid")
-  option(ION_USE_CUDA "Compile CUDA code" ON)
-else()
-  option(ION_USE_CUDA "Compile CUDA code" ON)
-endif()
+option(ION_USE_CUDA "Compile CUDA code" ON)
 mark_as_advanced(ION_USE_CUDA)
 
 option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
@@ -67,14 +63,14 @@ mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "stretch" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "core" OR # CentOS Linux release 7.2.1511 (Core)
-    ${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "artful" )
+if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR # Debian Unstable
+    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR # Debian 8
+    ${LSB_RELEASE_CODENAME} STREQUAL "stretch" OR # Debian 9
+    ${LSB_RELEASE_CODENAME} STREQUAL "buster" OR # Debian 10
+    ${LSB_RELEASE_CODENAME} STREQUAL "core" OR # CentOS 7
+    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR # Ubuntu 14.04
+    ${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR # Ubuntu 16.04
+    ${LSB_RELEASE_CODENAME} STREQUAL "bionic" ) # Ubuntu 18.04
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" ON)
 else()
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" OFF)
@@ -93,18 +89,20 @@ mark_as_advanced(ION_USE_SYSTEM_BOOST)
 option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
 
-set(cuda_proj_version "8.0.44-21122537")
-set(cuda_toolkit_tar_file "cuda-linux64-16.04-rel-8.0.44-21122537.tar.gz")
-set(CUDA_VERSION "8.0")
+if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+  set(cuda_proj_version "10.0.130-24817639")
+  set(cuda_toolkit_tar_file "cuda-linux64-18.04-rel-${cuda_proj_version}.tar.gz")
+else()
+  set(cuda_proj_version "8.0.44-21122537")
+  set(cuda_toolkit_tar_file "cuda-linux64-16.04-rel-${cuda_proj_version}.tar.gz")
+endif()
 
-
+string(REGEX REPLACE "(.*)-[0-9]*" "\\1" CUDA_VERSION ${cuda_proj_version})
 set(cuda_toolkit "cuda_toolkit")
 set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
 
 
-
 if(ION_USE_CUDA)
-
     message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
     add_definitions(-DION_COMPILE_CUDA)
 
@@ -126,7 +124,7 @@ if(ION_USE_CUDA)
         set(CUDA_TOOLKIT_ROOT_DIR "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}")
         set(CUDA_INCLUDE_DIRS "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/include")
         set(CUDA_NVCC_EXECUTABLE "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc")
-        set(CUDA_CUDART_LIBRARY "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart.so")
+        set(CUDA_CUDART_LIBRARY "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcudart_static.a")
         set(CUDA_TOOLKIT_INCLUDE "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/include")
         set(CUDA_cublas_LIBRARY "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcublas.so")
         set(CUDA_cufft_LIBRARY "${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64/libcufft.so")
@@ -165,16 +163,14 @@ else()
   set(HDF5_USE_STATIC_LIBRARIES OFF)
   find_package(HDF5 REQUIRED)
   if (${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
-      ${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
       ${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR
-      ${LSB_RELEASE_CODENAME} STREQUAL "artful")
+      ${LSB_RELEASE_CODENAME} STREQUAL "bionic")
     set(ION_HDF5_LIBS "hdf5;hdf5_hl;${HDF5_LIBRARIES}")
   else()
     set(ION_HDF5_LIBS "${HDF5_HL_LIBRARIES};${HDF5_LIBRARIES}")
   endif()
-  if (${LSB_RELEASE_CODENAME} STREQUAL "vivid" OR
-      ${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR
-      ${LSB_RELEASE_CODENAME} STREQUAL "artful")
+  if (${LSB_RELEASE_CODENAME} STREQUAL "xenial" OR
+      ${LSB_RELEASE_CODENAME} STREQUAL "bionic")
     link_directories("/usr/lib/x86_64-linux-gnu/hdf5/serial/")
   endif()
   message(STATUS "ION_HDF5_LIBS: ${ION_HDF5_LIBS}")
@@ -216,6 +212,7 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
     CMAKE_ARGS
+      -DBUILD_SHARED_LIBS:BOOL=FALSE
       -DARMA_USE_LAPACK:BOOL=TRUE
       -DARMA_USE_BLAS:BOOL=TRUE
       -DARMA_USE_ATLAS:BOOL=FALSE
@@ -224,7 +221,7 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
       -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
     PATCH_COMMAND patch -p0 -t -N < "${ARMADILLO_PATCH}"
   )
-  set(ION_ARMADILLO_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libarmadillo.so")
+  set(ION_ARMADILLO_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libarmadillo.a")
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
 else()
   set(ION_ARMADILLO_LIBS "armadillo")
@@ -328,9 +325,11 @@ if (NOT ION_USE_SYSTEM_SAMTOOLS)
   )
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
   set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libbam.a")
+  message(STATUS "SAMTOOLS_INCLUDE_DIRS: ${PROJECT_BINARY_DIR}/../${proj_name_version}")
 else()
     set(ION_SAMTOOLS_LIBS libbam.a)
     include_directories("/usr/include/samtools")
+    message(STATUS "SAMTOOLS_INCLUDE_DIRS: /usr/include/samtools")
 endif()
 
 
@@ -340,7 +339,7 @@ if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/picard-tools-1.130.tar.gz"
-    #URL_MD5 
+    #URL_MD5
     # in source build
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR "${PROJECT_BINARY_DIR}/../${proj_name_version}"
@@ -352,18 +351,20 @@ if (NOT ION_USE_SYSTEM_PICARD)
 endif()
 
 
-set(bamtools_patch_file "bamtools-2.4.0.20150702+git15eadb925f.patch")
-
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
-    set(revision_tag 15eadb925f)#set date below accordingly
-    set(proj_version "2.4.0.20150702+git${revision_tag}")
-    set(proj_name_version "${proj_name}-${proj_version}")
-    ExternalProject_add(${proj_name}
+    if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+        set(revision_tag 740562a67a3)#set date below accordingly
+        set(proj_version "2.4.2.20190207+git${revision_tag}")
+    else()
+        set(revision_tag 15eadb925f)#set date below accordingly
+        set(proj_version "2.4.0.20150702+git${revision_tag}")
+    endif()
 
-      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.4.0.20150702+git15eadb925f.tar.gz"
-#      GIT_REPOSITORY "https://github.com/iontorrent/bamtools.git"
-#      GIT_TAG ${revision_tag}
+    set(proj_name_version "${proj_name}-${proj_version}")
+    set(bamtools_patch_file "${proj_name_version}.patch")
+    ExternalProject_add(${proj_name}
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/${proj_name_version}.tar.gz"
       PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
       SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
       BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
@@ -378,7 +379,5 @@ else()
     include_directories("/usr/include/bamtools")
     add_custom_target(bamtools)
 endif()
-
-
 
 

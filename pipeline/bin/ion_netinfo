@@ -6,14 +6,14 @@ default_port=$(/sbin/route|awk '/default/{print $8}')
 #================Look up the MAC address for default network =========================
 echo "=================================================================="
 echo "-----Looking up the MAC address for the server-----"
-macaddress=`/sbin/ifconfig $default_port | grep HWaddr | awk '{print $5}'`
+macaddress=`/sbin/ip addr show $default_port | grep ether | awk '{print $2}'`
 echo "MAC Address = $macaddress"
 
 #================Test that server has an IP Address=========================
 echo
 echo "=================================================================="
 echo "-----Checking that that server has acquired an IP Address-----"
-ipaddress=`/sbin/ifconfig $default_port | grep 'inet addr:'|grep -v '127.0.0.1'|cut -d: -f2|awk '{print $1}'`
+ipaddress=`/sbin/ifconfig $default_port |grep "inet"|awk '{print $2}'|cut -d: -f2`
 if [[ $ipaddress =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
     OIFS=$IFS
     IFS='.'
@@ -41,7 +41,7 @@ fi
 echo
 echo "=================================================================="
 echo "-----Checking network connection-----"
-if (/sbin/ifconfig $default_port | grep UP | grep MTU &> /dev/null)
+if (/sbin/ifconfig $default_port | grep UP | grep -i MTU &> /dev/null)
 then
 	echo "GOOD - the '$default_port' ethernet port is UP"
 else
@@ -131,7 +131,7 @@ echo "-----Checking to see if Sequencers are connected to this server-----"
 interfaces=$(ls -1 /sys/class/net|grep -v 'lo')
 cnt=1
 for i in ${interfaces[@]}; do
-    addr=$(/sbin/ifconfig $i|awk '/inet addr/{print $2}'|cut -f2 -d:|cut -f1-3 -d.)".10"
+    addr=$(/sbin/ifconfig $i|awk '/inet/{print $2}'|cut -f2 -d:|cut -f1-3 -d.)".10"
     if ping -c 2 $addr &> /dev/null
     then
 	echo "Slot${cnt} - connected"

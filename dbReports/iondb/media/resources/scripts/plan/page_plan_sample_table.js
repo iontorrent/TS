@@ -33,7 +33,8 @@ var isEven = function(aNumber){
 
 // These fields will be disabled on the RNA sample row for dual nuc type if SameSample is checked
 var fieldsToUpdateForRNASameSample = [ 'sampleName', 'sampleDescription', 'sampleExternalId', 'controlType',
-        'irWorkflow', 'irRelationRole', 'irGender', 'irSetID', 'ircancerType', 'ircellularityPct'
+        'irWorkflow', 'irRelationRole', 'irGender', 'irSetID', 'ircancerType', 'ircellularityPct', 'irPopulation',
+        'irmouseStrains', 'irSampleCollectionDate', 'irSampleReceiptDate'
     ];
 
 function handleSameSampleForDualNucleotideType(){
@@ -350,12 +351,12 @@ $(document).ready(function () {
         navigatable: true,
         columns: [
             {
-                field: "row", title: "#",
+                field: "row", title: gettext('workflow.step.sample.grid.columns.field.row.title'),
                 width: '35px',
                 template: '#=data.row+1#'
             },
             {
-                field: "barcodeId", title: "Barcode",
+                field: "barcodeId", title: gettext('workflow.step.sample.grid.columns.field.barcodeId.title'),
                 width: '200px',
                 attributes: { "name": "barcodeId" },
                 hidden: $('#chk_not_barcoded').is(':checked'),
@@ -363,7 +364,7 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': $('#barcodeColumnTemplate').html()})
             },
             {
-                field: "endBarcodeId", title: "End Barcode",
+                field: "endBarcodeId", title: gettext('workflow.step.sample.grid.columns.field.endBarcodeId.title'),
                 width: '200px',
                 attributes: { "name": "endBarcodeId" },
                 hidden: $('#chk_not_dualBarcoded').is(':checked'),
@@ -371,7 +372,7 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': $('#endBarcodeColumnTemplate').html()})
             },
             {
-                field: "sampleName", title: "Sample (required)",
+                field: "sampleName", title: gettext('workflow.step.sample.grid.columns.field.sampleName.title') + gettext('workflow.step.sample.grid.columns.field.sampleName.title.required'),
                 width: '200px',
                 attributes: { "name": "sampleName" },
                 editor: planOpt.isPlanBySample ? sampleForSamplesetEditor : "",
@@ -379,12 +380,12 @@ $(document).ready(function () {
             },
             {
                 field: "_control_type", width: "22px",
-                headerTemplate: columnSectionTemplate({'id':'controlTypeSectionTab','text':'Control Type'}),
+                headerTemplate: columnSectionTemplate({'id':'controlTypeSectionTab','text':gettext('workflow.step.sample.grid.columns.field._control_type.title')}),
                 hidden: !$('#chk_barcoded').is(':checked'),
                 editor: " ",
             },
             {
-                field: "controlType", title: "Control Type",
+                field: "controlType", title: gettext('workflow.step.sample.grid.columns.field.controlType.title'),
                 width: '150px',
                 attributes: { "name": "controlType" },
                 hidden: true,
@@ -392,17 +393,17 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': '#=controlType#'})
             },
             {
-                field: "sampleExternalId", title: "Sample ID",
+                field: "sampleExternalId", title: gettext('workflow.step.sample.grid.columns.field.sampleExternalId.title'),
                 width: '150px',
                 attributes: { "name": "sampleExternalId" }
             },
             {
-                field: "sampleDescription", title: "Sample Description",
+                field: "sampleDescription", title: gettext('workflow.step.sample.grid.columns.field.sampleDescription.title'),
                 width: '200px',
                 attributes: { "name": "sampleDescription" }
             },
             {
-                field: "nucleotideType", title: planOpt.isDNAandFusions ? "DNA/Fusions" : "DNA/RNA",
+                field: "nucleotideType", title: planOpt.isDNAandFusions ? gettext('workflow.step.sample.grid.columns.field.nucleotideType.title.isDNAandFusions') : gettext('workflow.step.sample.grid.columns.field.nucleotideType.title'),
                 width: '100px',
                 attributes: { "name": "nucleotideType" },
                 hidden: !planOpt.isDualNucleotideType,
@@ -411,11 +412,11 @@ $(document).ready(function () {
             },
             {
                 field: "_ref_details", width: "22px",
-                headerTemplate: columnSectionTemplate({'id':'referenceSectionTab', 'text':'Reference'}),
+                headerTemplate: columnSectionTemplate({'id':'referenceSectionTab', 'text':gettext('workflow.step.sample.grid.columns.field._ref_details.title')}),
                 editor: " ",
             },
             {
-                field: "reference", title: "Reference",
+                field: "reference", title: gettext('workflow.step.sample.grid.columns.field.reference.title'),
                 width: '210px',
                 attributes: { "name": "reference" },
                 hidden: $('input[id=isSameRefInfoPerSample]').is(":checked"),
@@ -423,7 +424,7 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': $('#referenceColumnTemplate').html()})
             },
             {
-                field: "targetRegionBedFile", title: "Target Regions",
+                field: "targetRegionBedFile", title: gettext('workflow.step.sample.grid.columns.field.targetRegionBedFile.title'),
                 width: '210px',
                 attributes: { "name": "targetRegionBedFile" },
                 hidden: $('input[id=isSameRefInfoPerSample]').is(":checked"),
@@ -431,7 +432,7 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': '#=targetRegionBedFile.split("/").pop()#'})
             },
             {
-                field: "hotSpotRegionBedFile", title: "Hotspot Regions",
+                field: "hotSpotRegionBedFile", title: gettext('workflow.step.sample.grid.columns.field.hotSpotRegionBedFile.title'),
                 width: '210px',
                 attributes: { "name": "hotSpotRegionBedFile" },
                 hidden: $('input[id=isSameRefInfoPerSample]').is(":checked"),
@@ -439,19 +440,19 @@ $(document).ready(function () {
                 template: dropDnTemplate({'html': '#=hotSpotRegionBedFile.split("/").pop()#'})
             },
             {
-                field: "tubeLabel", title: "Sample Tube Label",
+                field: "tubeLabel", title: gettext('workflow.step.sample.grid.columns.field.tubeLabel.title'),
                 width: '150px',
                 attributes: { "name": "tubeLabel" },
                 hidden: $('#chk_barcoded').is(':checked')
             },
             {
-                field: "chipBarcode", title: "Chip Barcode",
+                field: "chipBarcode", title: gettext('workflow.step.sample.grid.columns.field.chipBarcode.title'),
                 width: '150px',
                 attributes: { "name": "chipBarcode" },
                 hidden: $('#chk_barcoded').is(':checked')
             },
             {
-                field: "controlSequenceType", title: "Control Seq Type (optional)",
+                field: "controlSequenceType", title: gettext('workflow.step.sample.grid.columns.field.controlSequenceType.title'),
                 width: '210px',
                 attributes: { "name": "controlSequenceType" },
                 hidden: !planOpt.isControlSeqTypeBySample,
@@ -1081,12 +1082,16 @@ $(document).ready(function () {
      *  Enable a fill down functionality on the sample/barcode grid.
      */
     var fillDownElements = [
+        {name: "irSampleCollectionDate",    action: "Copy"},
+        {name: "irSampleReceiptDate",    action: "Copy"},
         {name: "irWorkflow",      action: "Copy",
             updateRelated: [{'field': 'irRelationRole', 'value': defaultRelation },
                             {'field': 'irSetID', 'value': ''} ]},
         {name: "irRelationRole",  action: "Copy",
             updateRelated: [{'field': 'irGender', 'value': '' } ]},
         {name: "irGender",        action: "Copy"},
+        {name: "irPopulation",    action: "Copy"},
+        {name: "irmouseStrains",  action: "Copy"},
         {name: "irSetID",         action: "Increment"},
         {name: "ircancerType",    action: "Copy"},
         {name: "ircellularityPct",action: "Copy"},
@@ -1197,14 +1202,14 @@ $(document).ready(function () {
 
         var filename = $('#modal_load_samples_table :file').val();
         if (!filename){
-            $('#modal_error').empty().append('Please select a CSV file').show();
+            $('#modal_error').empty().append(gettext('workflow.step.sample.messages.validate.csv_file.required')).show(); //Please select a CSV file
             return false;
         }
 
         var url = $(this).attr("href");
         var form = $('#step_form').attr('action', url);
         form.append(
-            $('<input>', { name: 'irSelected', val: USERINPUT.is_ir_connected ? "1":"0" })
+            $('<input>', { type: 'hidden', name: 'irSelected', val: USERINPUT.is_ir_connected ? "1":"0" })
         );
         form.ajaxSubmit({
             dataType : "json",
@@ -1334,26 +1339,30 @@ function displayErrorInCell(cell, error, type){
 
 function validate_sampleName(value) {
     var error = "";
-    error = validate_chars_and_length(value, 127, 'Sample name');
+    error = validate_chars_and_length(value, 127, gettext('workflow.step.sample.grid.columns.field.sampleName.title'));
     if (!is_valid_leading_chars(value)) {
-        error = 'Sample name cannot begin with (.) or (_) or (-)';
+        error = gettext('workflow.step.sample.messages.validate.sampleName.is_valid_leading_chars');
     }
     return error;
 }
 
 function validate_sampleTubeLabel(value){
-    return validate_chars_and_length(value, 512, 'Sample Tube Label');
+    return validate_chars_and_length(value, 512, gettext('workflow.step.sample.grid.columns.field.tubeLabel.title'));
 }
 
 function validate_chars_and_length(value, max_length, displayedTerm){
     var error = "";
     //call the Regex test function identified in validation.js file
     if (!is_valid_chars(value)){
-        error = 'Error, ' +displayedTerm+' should contain only numbers, letters, spaces, and the following: . - _';
+        //'Error, %(displayedTerm)s should contain only numbers, letters, spaces, and the following: . - _'
+        error = gettext('workflow.step.sample.grid.messages.validate.is_valid_chars');
+        error = interpolate(error, {displayedTerm: displayedTerm}, true);
     }
     //call the check max length function that's in validation.js
     if (!is_valid_length(value, max_length)) {
-        error = 'Error, Cell Number length should be '+max_length+' characters maximum';
+        //'Error, %(displayedTerm)s length should be %(max_length)d characters maximum'
+        error = gettext('workflow.step.sample.grid.messages.validate.is_valid_length');
+        error = interpolate(error, {displayedTerm:displayedTerm,max_length:max_length}, true);
     }
     return error;
 }

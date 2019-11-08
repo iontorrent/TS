@@ -105,7 +105,7 @@ void ModelTab::mTraceCombobox_currentIndexChanged(const QString &txt)
 
 void ModelTab::setfilename(QString filename)
 {
-    printf("%s:\n",__FUNCTION__);
+    //printf("%s:\n",__FUNCTION__);
     mSpatialPlot->setfilename(filename);
 }
 

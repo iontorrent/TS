@@ -1,7 +1,7 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 
 
-class StepHelperType():
+class StepHelperType:
     CREATE_NEW_TEMPLATE = "create_new_template"
     CREATE_NEW_TEMPLATE_BY_SAMPLE = "create_new_template_by_sample"
 
@@ -18,7 +18,23 @@ class StepHelperType():
 
     EDIT_RUN = "edit_run"
 
-    TEMPLATE_TYPES = [CREATE_NEW_TEMPLATE, EDIT_TEMPLATE, COPY_TEMPLATE, CREATE_NEW_TEMPLATE_BY_SAMPLE]
-    PLAN_TYPES = [CREATE_NEW_PLAN, EDIT_PLAN, COPY_PLAN, EDIT_RUN,
-                  CREATE_NEW_PLAN_BY_SAMPLE, EDIT_PLAN_BY_SAMPLE, COPY_PLAN_BY_SAMPLE]
-    PLAN_BY_SAMPLE_TYPES = [CREATE_NEW_PLAN_BY_SAMPLE, EDIT_PLAN_BY_SAMPLE, COPY_PLAN_BY_SAMPLE]
+    TEMPLATE_TYPES = [
+        CREATE_NEW_TEMPLATE,
+        EDIT_TEMPLATE,
+        COPY_TEMPLATE,
+        CREATE_NEW_TEMPLATE_BY_SAMPLE,
+    ]
+    PLAN_TYPES = [
+        CREATE_NEW_PLAN,
+        EDIT_PLAN,
+        COPY_PLAN,
+        EDIT_RUN,
+        CREATE_NEW_PLAN_BY_SAMPLE,
+        EDIT_PLAN_BY_SAMPLE,
+        COPY_PLAN_BY_SAMPLE,
+    ]
+    PLAN_BY_SAMPLE_TYPES = [
+        CREATE_NEW_PLAN_BY_SAMPLE,
+        EDIT_PLAN_BY_SAMPLE,
+        COPY_PLAN_BY_SAMPLE,
+    ]

@@ -53,7 +53,9 @@ def do_upgrade(plan, best_match_analysis_args):
     plan.prebasecallerargs = best_match_analysis_args.prebasecallerargs
     plan.ionstatsargs = best_match_analysis_args.ionstatsargs
 
-    plan.prethumbnailbasecallerargs = best_match_analysis_args.prethumbnailbasecallerargs
+    plan.prethumbnailbasecallerargs = (
+        best_match_analysis_args.prethumbnailbasecallerargs
+    )
     plan.thumbnailalignmentargs = best_match_analysis_args.thumbnailalignmentargs
     plan.thumbnailanalysisargs = best_match_analysis_args.thumbnailanalysisargs
     plan.thumbnailbasecallerargs = best_match_analysis_args.thumbnailbasecallerargs
@@ -85,28 +87,35 @@ def is_upgrade_needed(eas, best_match_analysis_args):
     thumbnailcalibrateargs = eas.thumbnailcalibrateargs
     thumbnailionstatsargs = eas.thumbnailionstatsargs
 
-    if (alignmentargs != best_match_analysis_args.alignmentargs):
+    if alignmentargs != best_match_analysis_args.alignmentargs:
         log.info("DIFF...orig alignmentargs=%s" % (alignmentargs))
-        log.info("DIFF...new alignmentargs=%s" % (best_match_analysis_args.alignmentargs))
+        log.info(
+            "DIFF...new alignmentargs=%s" % (best_match_analysis_args.alignmentargs)
+        )
 
-    if (analysisargs != best_match_analysis_args.analysisargs):
+    if analysisargs != best_match_analysis_args.analysisargs:
         log.info("DIFF...orig alignmentargs=%s" % (analysisargs))
-        log.info("DIFF...new alignmentargs=%s" % (best_match_analysis_args.analysisargs))
+        log.info(
+            "DIFF...new alignmentargs=%s" % (best_match_analysis_args.analysisargs)
+        )
 
-    if (alignmentargs != best_match_analysis_args.alignmentargs or
-        analysisargs != best_match_analysis_args.analysisargs or
-        basecallerargs != best_match_analysis_args.basecallerargs or
-        beadfindargs != best_match_analysis_args.beadfindargs or
-        calibrateargs != best_match_analysis_args.calibrateargs or
-        prebasecallerargs != best_match_analysis_args.prebasecallerargs or
-        ionstatsargs != best_match_analysis_args.ionstatsargs or
-        prethumbnailbasecallerargs != best_match_analysis_args.prethumbnailbasecallerargs or
-        thumbnailalignmentargs != best_match_analysis_args.thumbnailalignmentargs or
-        thumbnailanalysisargs != best_match_analysis_args.thumbnailanalysisargs or
-        thumbnailbasecallerargs != best_match_analysis_args.thumbnailbasecallerargs or
-        thumbnailbeadfindargs != best_match_analysis_args.thumbnailbeadfindargs or
-        thumbnailcalibrateargs != best_match_analysis_args.thumbnailcalibrateargs or
-            thumbnailionstatsargs != best_match_analysis_args.thumbnailionstatsargs):
+    if (
+        alignmentargs != best_match_analysis_args.alignmentargs
+        or analysisargs != best_match_analysis_args.analysisargs
+        or basecallerargs != best_match_analysis_args.basecallerargs
+        or beadfindargs != best_match_analysis_args.beadfindargs
+        or calibrateargs != best_match_analysis_args.calibrateargs
+        or prebasecallerargs != best_match_analysis_args.prebasecallerargs
+        or ionstatsargs != best_match_analysis_args.ionstatsargs
+        or prethumbnailbasecallerargs
+        != best_match_analysis_args.prethumbnailbasecallerargs
+        or thumbnailalignmentargs != best_match_analysis_args.thumbnailalignmentargs
+        or thumbnailanalysisargs != best_match_analysis_args.thumbnailanalysisargs
+        or thumbnailbasecallerargs != best_match_analysis_args.thumbnailbasecallerargs
+        or thumbnailbeadfindargs != best_match_analysis_args.thumbnailbeadfindargs
+        or thumbnailcalibrateargs != best_match_analysis_args.thumbnailcalibrateargs
+        or thumbnailionstatsargs != best_match_analysis_args.thumbnailionstatsargs
+    ):
         has_differences = True
 
     return has_differences
@@ -126,22 +135,51 @@ def check_analysis_args(plan_or_template, latest_analysisArgs_objs, intent):
     samplePrepKitName = plan_or_template.samplePrepKitName
 
     # chip name backwards compatibility
-    chipType = chipType.replace('"', '')
+    chipType = chipType.replace('"', "")
     if models.Chip.objects.filter(name=chipType).count() == 0:
         chipType = chipType[:3]
 
-    latest_analysisArgs_objs_by_chip = latest_analysisArgs_objs.filter(chipType=chipType).order_by('-pk')
+    latest_analysisArgs_objs_by_chip = latest_analysisArgs_objs.filter(
+        chipType=chipType
+    ).order_by("-pk")
 
     runType = plan_or_template.runType
-    applicationGroupName = plan_or_template.applicationGroup.name if plan_or_template.applicationGroup else ""
+    applicationGroupName = (
+        plan_or_template.applicationGroup.name
+        if plan_or_template.applicationGroup
+        else ""
+    )
+    categories = plan_or_template.categories
 
     best_match_analysis_args = models.AnalysisArgs.best_match(
-        chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, latest_analysisArgs_objs_by_chip, runType, applicationGroupName)
+        chipType,
+        sequenceKitName,
+        templatingKitName,
+        libraryKitName,
+        samplePrepKitName,
+        latest_analysisArgs_objs_by_chip,
+        runType,
+        applicationGroupName,
+        categories,
+    )
 
     if best_match_analysis_args:
-        log.info("for chipType=%s; sequenceKitName=%s; =%s; libraryKitName=%s; samplePrepKitName=%s; applicationType=%s; applicationGroupName=%s - best_match_analysis_args.pk=%d" %
-                 (chipType, sequenceKitName, templatingKitName, libraryKitName, samplePrepKitName, runType, applicationGroupName, best_match_analysis_args.pk))
-        is_to_upgrade = is_upgrade_needed(plan_or_template.latestEAS, best_match_analysis_args)
+        log.info(
+            "for chipType=%s; sequenceKitName=%s; =%s; libraryKitName=%s; samplePrepKitName=%s; applicationType=%s; applicationGroupName=%s - best_match_analysis_args.pk=%d"
+            % (
+                chipType,
+                sequenceKitName,
+                templatingKitName,
+                libraryKitName,
+                samplePrepKitName,
+                runType,
+                applicationGroupName,
+                best_match_analysis_args.pk,
+            )
+        )
+        is_to_upgrade = is_upgrade_needed(
+            plan_or_template.latestEAS, best_match_analysis_args
+        )
     else:
         is_to_upgrade = False
         error = "Unsupported chipType:%s" % (chipType)
@@ -157,110 +195,155 @@ def process_data(plans_or_templates, intent):
     If intent is to upgrade, upgrade the analysis arguments only of the plans that need to be upgraded.
     """
 
-    latest_analysisArgs_objs = models.AnalysisArgs.objects.all().exclude(active=False).order_by('-pk')
+    latest_analysisArgs_objs = (
+        models.AnalysisArgs.objects.all().exclude(active=False).order_by("-pk")
+    )
 
     count_upgrade = 0
     count_error = 0
 
     try:
-        if (len(latest_analysisArgs_objs) > 0):
+        if len(latest_analysisArgs_objs) > 0:
             for existing_data in plans_or_templates:
                 is_to_upgrade, best_match_analysis_args, error = check_analysis_args(
-                    existing_data, latest_analysisArgs_objs, intent)
+                    existing_data, latest_analysisArgs_objs, intent
+                )
 
                 if is_to_upgrade:
                     if existing_data.isReusable:
-                        log.info("Template: pk=%d; name=%s" %
-                                 (existing_data.pk, existing_data.planDisplayedName))
+                        log.info(
+                            "Template: pk=%d; name=%s"
+                            % (existing_data.pk, existing_data.planDisplayedName)
+                        )
                     else:
-                        log.info("Plan: pk=%d; name=%s" % (existing_data.pk, existing_data.planDisplayedName))
+                        log.info(
+                            "Plan: pk=%d; name=%s"
+                            % (existing_data.pk, existing_data.planDisplayedName)
+                        )
 
                     count_upgrade += 1
 
-                    if (intent in [Intents.UPGRADE_ALL, Intents.UPGRADE_SYS_TEMPLATES_ONLY, Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY]):
+                    if intent in [
+                        Intents.UPGRADE_ALL,
+                        Intents.UPGRADE_SYS_TEMPLATES_ONLY,
+                        Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY,
+                    ]:
                         do_upgrade(existing_data, best_match_analysis_args)
 
                         existing_data.save()
 
                         # record changes in journal log
                         if existing_data.isReusable:
-                            msg = 'Analysis arguments upgraded for template: %s (%s)' % (
-                                existing_data.planDisplayedName, existing_data.pk)
+                            msg = (
+                                "Analysis arguments upgraded for template: %s (%s)"
+                                % (existing_data.planDisplayedName, existing_data.pk)
+                            )
                         else:
-                            msg = 'Analysis arguments upgraded for plan: %s (%s)' % (
-                                existing_data.planDisplayedName, existing_data.pk)
+                            msg = "Analysis arguments upgraded for plan: %s (%s)" % (
+                                existing_data.planDisplayedName,
+                                existing_data.pk,
+                            )
 
                         models.EventLog.objects.add_entry(existing_data, msg)
 
                 elif error:
                     count_error += 1
                     if existing_data.isReusable:
-                        log.warn("Skipped upgrading template: pk=%d; name=%s due to unsupported chipType=%s" %
-                                 (existing_data.pk, existing_data.planDisplayedName, existing_data.experiment.chipType))
+                        log.warn(
+                            "Skipped upgrading template: pk=%d; name=%s due to unsupported chipType=%s"
+                            % (
+                                existing_data.pk,
+                                existing_data.planDisplayedName,
+                                existing_data.experiment.chipType,
+                            )
+                        )
                     else:
-                        log.warn("Skipped upgrading plan: pk=%d; name=%s due to unsupported chipType=%s" %
-                                 (existing_data.pk, existing_data.planDisplayedName, existing_data.experiment.chipType))
+                        log.warn(
+                            "Skipped upgrading plan: pk=%d; name=%s due to unsupported chipType=%s"
+                            % (
+                                existing_data.pk,
+                                existing_data.planDisplayedName,
+                                existing_data.experiment.chipType,
+                            )
+                        )
 
-            if (intent in [Intents.UPGRADE_ALL, Intents.UPGRADE_SYS_TEMPLATES_ONLY, Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY]):
-                log.info(">> SUMMARY >> analysis arguments of %d plans and templates have been upgraded. " %
-                         (count_upgrade))
+            if intent in [
+                Intents.UPGRADE_ALL,
+                Intents.UPGRADE_SYS_TEMPLATES_ONLY,
+                Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY,
+            ]:
+                log.info(
+                    ">> SUMMARY >> analysis arguments of %d plans and templates have been upgraded. "
+                    % (count_upgrade)
+                )
             else:
-                log.info(">> SUMMARY >> analysis arguments of %d plans and templates are candidates to be upgraded. " %
-                         (count_upgrade))
+                log.info(
+                    ">> SUMMARY >> analysis arguments of %d plans and templates are candidates to be upgraded. "
+                    % (count_upgrade)
+                )
 
             if count_error > 0:
-                log.warn(">> SUMMARY >> Skipped upgrading %d plans and templates due to unsupported chipType" %
-                         (count_error))
+                log.warn(
+                    ">> SUMMARY >> Skipped upgrading %d plans and templates due to unsupported chipType"
+                    % (count_error)
+                )
 
         else:
             log.warning(
-                ">> SUMMARY >> No analysisArgs entries found in DB. Something is not right!  This upgrade script has nothing to do here.")
+                ">> SUMMARY >> No analysisArgs entries found in DB. Something is not right!  This upgrade script has nothing to do here."
+            )
 
     except:
-        print format_exc()
+        print(format_exc())
         transaction.rollback()
-        print "*** Exceptions found. Upgrade(s) rolled back. ***"
+        print("*** Exceptions found. Upgrade(s) rolled back. ***")
     else:
         # if count_upgrade > 0:
         transaction.commit()
         if count_upgrade > 0:
-            print "*** Template/plan upgrades committed. ***"
+            print("*** Template/plan upgrades committed. ***")
         else:
-            print "*** Done ***"
+            print("*** Done ***")
 
 
 def filter_querySet_for_analysisArgs(querySet):
-    querySet2 = querySet.exclude(latestEAS__beadfindargs="",
-                                 latestEAS__thumbnailbeadfindargs="",
-                                 latestEAS__analysisargs="",
-                                 latestEAS__thumbnailanalysisargs="",
-                                 latestEAS__prebasecallerargs="",
-                                 latestEAS__prethumbnailbasecallerargs="",
-                                 latestEAS__calibrateargs="",
-                                 latestEAS__thumbnailcalibrateargs="",
-                                 latestEAS__basecallerargs="",
-                                 latestEAS__thumbnailbasecallerargs="",
-                                 latestEAS__alignmentargs="",
-                                 latestEAS__thumbnailalignmentargs="",
-                                 latestEAS__ionstatsargs="",
-                                 latestEAS__thumbnailionstatsargs="")
+    querySet2 = querySet.exclude(
+        latestEAS__beadfindargs="",
+        latestEAS__thumbnailbeadfindargs="",
+        latestEAS__analysisargs="",
+        latestEAS__thumbnailanalysisargs="",
+        latestEAS__prebasecallerargs="",
+        latestEAS__prethumbnailbasecallerargs="",
+        latestEAS__calibrateargs="",
+        latestEAS__thumbnailcalibrateargs="",
+        latestEAS__basecallerargs="",
+        latestEAS__thumbnailbasecallerargs="",
+        latestEAS__alignmentargs="",
+        latestEAS__thumbnailalignmentargs="",
+        latestEAS__ionstatsargs="",
+        latestEAS__thumbnailionstatsargs="",
+    )
     return querySet2
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     INTENT = Intents.LIST_ALL
 
-#     INTENT = Intents.LIST_ALL
-#     INTENT = Intents.UPGRADE_ALL
-#     INTENT = Intents.LIST_SYS_TEMPLATES_ONLY
-#     INTENT = Intents.UPGRADE_SYS_TEMPLATES_ONLY
-#     INTENT = Intents.LIST_USER_TEMPLATES_PLANS_ONLY
-#     INTENT = Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY
+    #     INTENT = Intents.LIST_ALL
+    #     INTENT = Intents.UPGRADE_ALL
+    #     INTENT = Intents.LIST_SYS_TEMPLATES_ONLY
+    #     INTENT = Intents.UPGRADE_SYS_TEMPLATES_ONLY
+    #     INTENT = Intents.LIST_USER_TEMPLATES_PLANS_ONLY
+    #     INTENT = Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY
 
     if INTENT in [Intents.LIST_ALL, Intents.UPGRADE_ALL]:
-        querySet = models.PlannedExperiment.objects.filter(planExecuted=False).exclude(
-            experiment__chipType="").exclude(latestEAS__isEditable=False).order_by("isReusable")
+        querySet = (
+            models.PlannedExperiment.objects.filter(planExecuted=False)
+            .exclude(experiment__chipType="")
+            .exclude(latestEAS__isEditable=False)
+            .order_by("isReusable")
+        )
 
         querySet2 = filter_querySet_for_analysisArgs(querySet)
 
@@ -269,20 +352,39 @@ if __name__ == '__main__':
 
         process_data(querySet2, INTENT)
 
-    elif INTENT in [Intents.LIST_SYS_TEMPLATES_ONLY, Intents.UPGRADE_SYS_TEMPLATES_ONLY]:
-        querySet = models.PlannedExperiment.objects.filter(isReusable=True, isSystem=True).exclude(
-            experiment__chipType="").exclude(latestEAS__isEditable=False).order_by("isReusable")
+    elif INTENT in [
+        Intents.LIST_SYS_TEMPLATES_ONLY,
+        Intents.UPGRADE_SYS_TEMPLATES_ONLY,
+    ]:
+        querySet = (
+            models.PlannedExperiment.objects.filter(isReusable=True, isSystem=True)
+            .exclude(experiment__chipType="")
+            .exclude(latestEAS__isEditable=False)
+            .order_by("isReusable")
+        )
         querySet2 = filter_querySet_for_analysisArgs(querySet)
         # log.info(">> SYS_TEMPLATES_ONLY - querySet.count=%d" %(len(querySet)))
-        log.info(">> SYS_TEMPLATES_ONLY - Among %d plans and templates " % (len(querySet2)))
+        log.info(
+            ">> SYS_TEMPLATES_ONLY - Among %d plans and templates " % (len(querySet2))
+        )
 
         process_data(querySet2, INTENT)
 
-    elif INTENT in [Intents.LIST_USER_TEMPLATES_PLANS_ONLY, Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY]:
-        querySet = models.PlannedExperiment.objects.filter(planExecuted=False, isSystem=False).exclude(
-            experiment__chipType="").exclude(latestEAS__isEditable=False).order_by("isReusable")
+    elif INTENT in [
+        Intents.LIST_USER_TEMPLATES_PLANS_ONLY,
+        Intents.UPGRADE_USER_TEMPLATES_PLANS_ONLY,
+    ]:
+        querySet = (
+            models.PlannedExperiment.objects.filter(planExecuted=False, isSystem=False)
+            .exclude(experiment__chipType="")
+            .exclude(latestEAS__isEditable=False)
+            .order_by("isReusable")
+        )
         querySet2 = filter_querySet_for_analysisArgs(querySet)
         # log.info(">> USER_TEMPLATES_PLANS_ONLY - querySet.count=%d" %(len(querySet)))
-        log.info(">> USER_TEMPLATES_PLANS_ONLY - Among %d plans and templates " % (len(querySet2)))
+        log.info(
+            ">> USER_TEMPLATES_PLANS_ONLY - Among %d plans and templates "
+            % (len(querySet2))
+        )
 
         process_data(querySet2, INTENT)

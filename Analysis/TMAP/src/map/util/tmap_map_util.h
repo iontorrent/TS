@@ -9,14 +9,14 @@
 #include "../../sw/tmap_vsw.h"
 #include "tmap_map_opt.h"
 #include "tmap_map_stats.h"
-
+#include "tmap_map_locopt.h"
 
 #define __map_util_gen_ap(par, opt) do { \
     int32_t i; \
-    for(i=0;i<25;i++) { \
+    for(i=0;i<ACTGN_MATRIX_SIZE;++i) { \
         (par).matrix[i] = -(opt)->pen_mm; \
     } \
-    for(i=0;i<4;i++) { \
+    for(i=0;i<4;++i) { \
         (par).matrix[i*5+i] = (opt)->score_match; \
     } \
     (par).gap_open = (opt)->pen_gapo; (par).gap_ext = (opt)->pen_gape; \
@@ -101,6 +101,10 @@ typedef struct {
     uint16_t fivep_offset; /*!< number of additional ref bases aligned if 5' not softclipped */
     uint32_t mapper_pos;
     uint32_t mapper_tlen;
+    uint32_t ampl_start; // start of covering ampicon 
+    uint32_t ampl_end; // end of covering amplicon
+    tmap_map_locopt_t* param_ovr; // pointer to override parameters; ptr to default for no override
+    tmap_map_endstat_p_t read_ends; // structure holding data on read end positions statistics for the amplicon this read is mapped to.
     union {
         tmap_map_map1_aux_t *map1_aux; /*!< auxiliary data for map1 */
         tmap_map_map2_aux_t *map2_aux; /*!< auxiliary data for map2 */
@@ -407,15 +411,26 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
   */
 
 tmap_map_sams_t*
-tmap_map_util_sw_gen_score(tmap_refseq_t *refseq,
-                           tmap_seq_t *seq,
-                           tmap_map_sams_t *sams,
-                           tmap_seq_t **seqs,
-                           tmap_rand_t *rand,
-                           tmap_map_opt_t *opt,
-                           int32_t *num_after_grouping);
+tmap_map_util_sw_gen_score
+(
+    tmap_refseq_t *refseq,
+    tmap_seq_t *seq,
+    tmap_map_sams_t *sams,
+    tmap_seq_t **seqs,
+    tmap_rand_t *rand,
+    tmap_map_opt_t *opt,
+    int32_t *num_after_grouping
+);
 
-void tmap_map_util_populate_sw_par (
+
+void tmap_map_util_populate_sw_par_iupac 
+(
+    tmap_sw_param_t* par, 
+    tmap_map_opt_t* opt
+);
+
+void tmap_map_util_populate_stage_sw_par 
+(
     tmap_sw_param_t* par, 
     tmap_map_opt_t* opt
 );
@@ -434,7 +449,8 @@ void tmap_map_util_populate_sw_par (
   */
 
 tmap_map_sams_t*
-tmap_map_util_find_align_starts (
+tmap_map_util_find_align_starts 
+(
     tmap_refseq_t *refseq,      // reference server
     tmap_map_sams_t *sams,      // initial rough mapping 
     tmap_seq_t *seq,            // read
@@ -444,35 +460,55 @@ tmap_map_util_find_align_starts (
     tmap_map_stats_t *stat      // statistics
 );
 
-void tmap_map_util_align (
+void
+tmap_map_find_amplicons 
+(
+    uint32_t stage,             // tmap stage index
+    tmap_map_opt_t* stage_opt,  // tmap stage options
+    tmap_sw_param_t* def_par,   // stage SW parameters - needed for override check
     tmap_refseq_t *refseq,      // reference server
-    tmap_map_sams_t *sams,      // mappings to compute alignments for
-    tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
-    ref_buf_t* target,          // reference data 
-    tmap_sw_path_t** path_buf,  // buffer for traceback path
-    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
-    tmap_sw_param_t* par,        // Smith-Waterman scopring parameters
-    tmap_map_stats_t *stat      // statistics
+    tmap_map_sams_t *sams       // initial rough mapping 
 );
 
-void tmap_map_util_salvage_edge_indels (
+void 
+tmap_map_util_align 
+(
     tmap_refseq_t *refseq,      // reference server
     tmap_map_sams_t *sams,      // mappings to compute alignments for
     tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
-    tmap_map_opt_t *opt,        // tmap parameters
-    tmap_sw_param_t* par,       // Smith-Waterman scopring parameters
     ref_buf_t* target,          // reference data cache
+    int32_t stage_ord,          // tmap processing stage index, needed for fetching stage SW parameter overrides
+    tmap_sw_param_t* swpar,     // Smith-Waterman scoring parameters
     tmap_sw_path_t** path_buf,  // buffer for traceback path
     int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
     tmap_map_stats_t *stat      // statistics
 );
 
-void tmap_map_util_cure_softclips (
+void 
+tmap_map_util_salvage_edge_indels 
+( 
+    tmap_refseq_t* refseq,      // reference server
+    tmap_map_sams_t* sams,      // mappings to compute alignments for
+    tmap_seq_t** seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+    ref_buf_t* target,          // reference data 
+    tmap_map_opt_t* opt,        // TMAP stage parmeters
+    int32_t stage_ord,          // tmap processing stage index, needed for fetching stage SW parameter overrides
+    tmap_sw_param_t* swpar,     // Smith-Waterman scoring parameters
+    tmap_sw_path_t** path_buf,  // buffer for traceback path
+    int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
+    tmap_map_stats_t* stat      // statistics
+);
+
+void 
+tmap_map_util_cure_softclips 
+(
     tmap_map_sams_t *sams,      // mappings to compute alignments for
     tmap_seq_t **seqs          // array of size 4 that contains pre-computed inverse / complement combinations
 );
 
-void tmap_map_util_trim_key (
+void 
+tmap_map_util_trim_key 
+(
     tmap_map_sams_t *sams,      // mappings to compute alignments for
     tmap_seq_t *seq,            // read
     tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
@@ -481,18 +517,22 @@ void tmap_map_util_trim_key (
     tmap_map_stats_t *stat      // statistics
 );
 
-void tmap_map_util_end_repair_bulk (
+void 
+tmap_map_util_end_repair_bulk 
+(
     tmap_refseq_t *refseq,      // reference server
     tmap_map_sams_t *sams,      // mappings to compute alignments for
     tmap_seq_t *seq,            // read
     tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
     tmap_map_opt_t *opt,        // tmap parameters
+    tmap_sw_param_t* swpar,     // Smith-Waterman scoring parameters
     ref_buf_t* target,          // reference data cache
     tmap_sw_path_t** path_buf,  // buffer for traceback path
     int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
     tmap_map_stats_t *stat      // statistics
 );
 
+# if 0
 /*!
   perform local alignment
   @details              generates the cigar after tmap_map_util_sw_gen_score has been called
@@ -513,6 +553,7 @@ tmap_map_util_sw_gen_cigar (
     tmap_map_opt_t *opt,
     tmap_map_stats_t *stat
 );
+#endif
 
 /*!
   re-aligns mappings in flow space
@@ -528,14 +569,30 @@ tmap_map_util_sw_gen_cigar (
   @param  pen_gape       the gap extension penalty
   @param  fscore         the flow penalty
   @param  use_flowgram   1 to use the flowgram if available, 0 otherwise
+  @param  stage_fsw_use  stage-wide flowspace alignemnt flag
+  @param  use_param_ovr  parameters override enabled flag
   @param  stat           tmap statistics
   @return  1 if successful, 0 otherwise
   */
-int32_t
-tmap_map_util_fsw (tmap_seq_t *seq, tmap_map_sams_t *sams, tmap_refseq_t *refseq,
-                  int32_t bw, int32_t softclip_type, int32_t score_thr,
-                  int32_t score_match, int32_t pen_mm, int32_t pen_gapo, 
-                  int32_t pen_gape, int32_t fscore, int32_t use_flowgram, tmap_map_stats_t* stat);
+
+int32_t tmap_map_util_fsw 
+(
+  tmap_seq_t* seq,
+  tmap_map_sams_t* sams,
+  tmap_refseq_t* refseq,
+  int32_t bw,
+  int32_t softclip_type,
+  int32_t score_thr,
+  int32_t score_match,
+  int32_t pen_mm,
+  int32_t pen_gapo,
+  int32_t pen_gape,
+  int32_t fscore,
+  int32_t use_flowgram,
+  int32_t stage_fsw_use,
+  int32_t use_param_ovr,
+  tmap_map_stats_t* stat
+);
 
 
 // updates alignment box (result) from cigar, pos and target_len
@@ -567,7 +624,8 @@ tmap_map_util_remove_5_prime_softclip
     ref_buf_t* target,          // reference data cache
     tmap_sw_path_t** path_buf,  // buffer for traceback path
     int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
-    tmap_sw_param_t* par,       // Smith-Waterman scoring parameters
+    int32_t stage_ord,          // index of TMAP processing stage (needed for fetching SW parameters override for a stage)
+    tmap_sw_param_t* swpar,     // stage-wide Smith-Waterman scoring parameters
     tmap_map_opt_t *opt,        // tmap options (for this stage)
     tmap_map_stats_t *stat      // statistics
 );
@@ -591,9 +649,22 @@ typedef struct
 } 
 AlBatch;
 
-void cigar_log (const uint32_t* cigar, unsigned cigar_sz);
-uint32_t cigar_to_batches (const uint32_t* cigar, uint32_t cigar_sz, uint32_t* x_clip, AlBatch* batches, uint32_t max_batches);
-void log_batches (const char* xseq, unsigned xlen, uint8_t xrev, const char* yseq, unsigned ylen, uint8_t yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff);
+void cigar_log 
+(
+    const uint32_t* cigar, 
+    unsigned cigar_sz
+);
+uint32_t cigar_to_batches 
+(
+    const uint32_t* cigar, 
+    uint32_t cigar_sz, 
+    uint32_t* x_clip, 
+    AlBatch* batches, 
+    uint32_t max_batches
+);
+void log_batches 
+(const char* xseq, unsigned xlen, uint8_t xrev, const char* yseq, unsigned ylen, uint8_t yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff);
+
 void tmap_map_log_text_align (
     const char* preceed, 
     uint32_t* cigar, 
@@ -603,5 +674,20 @@ void tmap_map_log_text_align (
     uint32_t forward, 
     const char* ref, 
     uint32_t ref_off);
+
+int
+tmap_map_get_amplicon
+(
+    tmap_refseq_t *refseq,
+    int32_t seqid,
+    uint32_t start,
+    uint32_t end,
+    uint32_t *ampl_start,
+    uint32_t *ampl_end,
+    tmap_map_locopt_t** overrides,
+    tmap_map_endstat_p_t* ends,
+    uint32_t strand
+);
+
 
 #endif // TMAP_MAP_UTIL_H

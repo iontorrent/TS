@@ -37,7 +37,7 @@ const int s_initialMinJumpLen = 1000000;
 const int s_initialMaxReadLen = 1000;
 
 // Current version number string for bbctools executable
-const uint16_t s_versionNumber = 1301;
+const uint16_t s_versionNumber = 1302;
 
 // Forward declarations of functions used by main()
 int bbctools_create( BbcUtils::OptParser &optParser );

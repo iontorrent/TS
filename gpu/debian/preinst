@@ -30,11 +30,11 @@ case "$1" in
     ;;
     
     abort-install|abort-upgrade)
-    	rm -rf @ION_INSTALL_PREFIX@/devdriver
+    	rm -rf @ION_GPU_PREFIX@/devdriver
         rm -rf /etc/modprobe.d/nvidia-installer-disable-nouveau.conf
-        sed -i "/create_nvidia_files/d" /etc/rc.local
-        rm -f /etc/ld.so.conf.d/cuda.conf
-        ldconfig
+        if [ -e /etc/rc.local ]; then 
+            sed -i "/create_nvidia_files/d" /etc/rc.local
+	    fi
     ;;
 esac
 

@@ -1,70 +1,71 @@
 {% load humanize %}
 {% load pagetools %}
 {% load ion_readable %}
+{% load i18n %}
 
 <div id="beadfind" class="span4 well centered">
     <div class="row-fluid number-chunk">
-        <div rel='tooltip' title="Total base output for the run after filtering" class="span6">
+        <div rel='tooltip' title="{% trans "report.section.unaligned.beadfind.fields.totalbases.tooltip" %}" class="span6">
             <h2>{{report.qualitymetrics.q0_bases|ion_readable}}</h2>
-            <small>Total Bases</small>
+            <small>{% trans "report.section.unaligned.beadfind.fields.totalbases.label" %}</small>
         </div>
         <div class="span6">
             <a id="key-signal" data-toggle="modal" class="usable-sequence-link showImg" href="#keySignalModal" style="display: block;">
               <h2>{{report.libmetrics.aveKeyCounts|floatformat:"0"|default:"N/A"}}</h2>
-              <small>Key Signal</small>
+              <small>{% trans "report.section.unaligned.beadfind.fields.keysignal.label" %}</small>
               <i class="icon-zoom-in"></i>
             </a>
         </div>
     </div>
     <a data-toggle="modal" href="#beadfindModal" class="report-metric-visual bead-loading-link">
         <div id="bead-signal" data-beadloading="{{bead_loading}}"></div>
-        <h2><abbr title="Ion Sphere Particles">ISP</abbr> Density</h2>
+        <h2>{% trans "report.section.unaligned.beadfind.title" %}</h2>
         <img src="{{report.reportLink}}/Bead_density_1000.png" class="show" style="max-height: 350px;"> <i class="icon-zoom-in"></i>
     </a>
     <div class="modal hide" id="beadfindModal">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3><abbr title="Ion Sphere Particles">ISP</abbr> Density</h3>
+            <h3>{% trans "report.section.unaligned.beadfind.details.title" %}</h3>
         </div>
         <div class="modal-body" id="beadfind_body">
             <img src="{{report.reportLink}}/Bead_density_contour.png" style="height: 400px;">
         </div>
         <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
         </div>
     </div>
     <div class="modal hide" id="keySignalModal">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Key Incorporation Traces</h3>
+            <h3>{% trans "report.section.unaligned.beadfind.keysignal.details.title" %}</h3>
         </div>
         <div class="modal-body" id="keysignal_body" style="max-height: 500px;">
             <img src="{{report.reportWebLink}}/iontrace_Library.png">
         </div>
         <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
         </div>
     </div>
 </div>
 <script>
 $(function(){
-    $("#bead-signal").strength('{{bead_loading}}',
+    $('#bead-signal').strength('{{bead_loading}}',
                         '{{bead_loading_threshold}}',
                         '{{bead_loading}}',
-                        'ISP Loading');
-    $("#bead-signal").popover({
-        title: "ISP Loading",
-        content: "Your quality threshold is <strong>{{bead_loading_threshold}}%</strong><br/>The colored bars indicate the quality threshold set in your plan, blue is above and red is under.",
+                        '{% trans "report.section.unaligned.beadfind.fields.bead_loading.label" %}');
+    $('#bead-signal').popover({
+        title: '{% trans "report.section.unaligned.beadfind.fields.bead_loading.label" %}',
+        content: '{{ bead_loading_details|safe }}',
         html: true,
-        trigger: "hover",
-        container: "body"
+        trigger: 'hover',
+        container: 'body'
     });
-    $("#key-signal").popover({
-        title: "Key Signal",
-        content: "Your quality threshold is <strong>{{key_signal_threshold}}</strong><br/>Average 1-mer signal in library key<br/>The colored bars indicate the quality threshold set in your plan, blue is above and red is under.",
+    $('#key-signal').popover({
+        title: '{% trans "report.section.unaligned.beadfind.fields.keysignal.label" %}',
+        content: '{{ key_signal_details|safe }}',
         html: true,
-        trigger: "hover",
-        container: "body"
+        trigger: 'hover',
+        container: 'body'
     });
 });
 </script>

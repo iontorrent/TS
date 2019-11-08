@@ -1,9 +1,10 @@
 {% extends "rundb/data/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block sub-nav %}
-    <li><a href="{% url "data" %}">Completed Runs & Reports</a></li>
-    <li><a href="{% url "projects" %}">Projects</a></li>
-    <li class="active"><a href="{% url "datamanagement" %}">Data Management</a></li>
+    <li><a href="{% url "data" %}">{% trans "global.nav.menu.data.menu.data.label" %}</a></li>
+    <li><a href="{% url "projects" %}">{% trans "global.nav.menu.data.menu.projects.label" %}</a></li>
+    <li class="active"><a href="{% url "datamanagement" %}">{% trans "global.nav.menu.data.menu.datamanagement.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div class="content">
@@ -158,7 +159,7 @@ $(document).ready(function() {
             window.location.href = '{% url "datamanagement" %}';
         })
         .fail(function(data) {
-            $('#error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+            $('#error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
             console.log("error:", data);
         });
 

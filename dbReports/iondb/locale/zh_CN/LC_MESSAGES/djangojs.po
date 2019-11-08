@@ -1,0 +1,866 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-02-12 14:31-0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: media/js/data_models.js:89
+msgid "global.messages.warning.label"
+msgstr "警告"
+
+#: media/js/data_models.js:202
+msgid "data.pageable.messages.goprev"
+msgstr "转至上一页"
+
+#: media/js/data_models.js:203
+msgid "data.pageable.messages.noprev"
+msgstr "无上一页"
+
+#: media/js/data_models.js:205
+msgid "data.pageable.messages.gonext"
+msgstr "转至下一页"
+
+#: media/js/data_models.js:206
+msgid "data.pageable.messages.nonext"
+msgstr "无下一页"
+
+#: media/js/data_models.js:208
+msgid "data.pageable.messages.onfirst"
+msgstr "第一页"
+
+#: media/js/data_models.js:209
+msgid "data.pageable.messages.gofirst"
+msgstr "转至第一页"
+
+#: media/js/data_models.js:211
+msgid "data.pageable.messages.onlast"
+msgstr "最后一页"
+
+#: media/js/data_models.js:212
+msgid "data.pageable.messages.golast"
+msgstr "转至最后一页"
+
+#: media/js/data_models.js:223
+msgid "data.pageable.messages.display"
+msgstr "%(lower_range)s - %(upper_range)s / %(total)s 运行"
+
+#: media/js/data_tab.js:190
+msgid "data.listview.messages.reports-show-more"
+msgstr "显示所有 %(number)s 报告"
+
+#: media/js/data_tab.js:199
+msgid "data.listview.messages.reports-show-less"
+msgstr "隐藏"
+
+#: media/js/data_tab.js:308 media/js/data_tab.js.c:386 media/js/data_tab.js:500
+#: media/js/monitor_tab.js:75
+#: media/resources/scripts/plan/plan_templates.html.js:230
+#: media/resources/scripts/plan/planned.html.js:71
+#: media/resources/scripts/plan/planned.html.js:97
+#: media/resources/scripts/plan/planned.html.js:116
+#: media/resources/scripts/plan/planned.html.js:368
+#: media/resources/scripts/reports/report.js:369
+#: media/resources/scripts/reports/report.js:482
+#: media/resources/scripts/reports/report.js:516
+#: media/resources/scripts/sample/input_samples.js:60
+#: media/resources/scripts/sample/input_samples.js:105
+#: media/resources/scripts/sample/input_samples.js:141
+#: media/resources/scripts/sample/input_samples.js:182
+#: media/resources/scripts/sample/sampleattributes.js:51
+#: media/resources/scripts/sample/sampleattributes.js:91
+#: media/resources/scripts/sample/sampleattributes.js:133
+#: media/resources/scripts/sample/samplesets.js:63
+#: media/resources/scripts/sample/samplesets.js:87
+#: media/resources/scripts/sample/samplesets.js:109
+#: media/resources/scripts/sample/samplesets.js:169
+#: media/resources/scripts/sample/samplesets.js:193
+#: media/resources/scripts/sample/samplesets.js:223
+#: media/resources/scripts/sample/samplesets.js:252
+msgid "global.messages.error.label"
+msgstr "错误"
+
+#: media/js/data_tab.js:317
+msgid "data.messages.errors.mesh.changefavorite"
+msgstr "运行只有在其始发端Torrent Browser上才能标记星标."
+
+#: media/js/data_tab.js:329
+msgid "data.messages.errors.mesh.changerepresentative"
+msgstr "报告只有在其始发端Torrent Browser上才能被标记为代表."
+
+#: media/js/data_tab.js:676 media/js/monitor_tab.js:64
+#: media/resources/scripts/plan/plan_templates.html.js:208
+#: media/resources/scripts/plan/plan_templates.html.js:239
+#: media/resources/scripts/plan/plan_templates.html.js:271
+#: media/resources/scripts/plan/plan_templates.html.js:305
+#: media/resources/scripts/plan/plan_templates.html.js:339
+#: media/resources/scripts/plan/plan_templates.html.js:514
+#: media/resources/scripts/plan/plan_templates.html.js:550
+#: media/resources/scripts/plan/planned.html.js:5
+#: media/resources/scripts/plan/planned.html.js:52
+#: media/resources/scripts/plan/planned.html.js:398
+#: media/resources/scripts/reports/report.js:493
+#: media/resources/scripts/sample/input_samples.js:15
+#: media/resources/scripts/sample/input_samples.js:40
+#: media/resources/scripts/sample/input_samples.js:73
+#: media/resources/scripts/sample/input_samples.js:121
+#: media/resources/scripts/sample/input_samples.js:162
+#: media/resources/scripts/sample/sampleattributes.js:5
+#: media/resources/scripts/sample/sampleattributes.js:30
+#: media/resources/scripts/sample/sampleattributes.js:70
+#: media/resources/scripts/sample/sampleattributes.js:113
+#: media/resources/scripts/sample/samplesets.js:21
+msgid "global.messages.loading"
+msgstr "加载中..."
+
+#: media/js/monitor_tab.js:37
+msgid "monitor.fields.flows.tooltip"
+msgstr "%(progress_flows)s / %(total_flows)s 流动"
+
+#: media/js/monitor_tab.js:38
+msgid "monitor.fields.flows.progress.message"
+msgstr "%(progress_flows)s / %(total_flows)s 流动"
+
+#: media/js/monitor_tab.js:129
+msgid "monitor.fields.flows.progress.message.alternate"
+msgstr "%(progress_flows)s / %(total_flows)s 流动"
+
+#: media/resources/scripts/signal.js:35 media/resources/scripts/signal.min.js:1
+msgid "signal.js.strength.percentage.suffix"
+msgstr " %"
+
+#: media/resources/scripts/configure/configure/contacts.js:3
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_add_prune_group.js:15
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_edit_pruning_config.js:17
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:12
+#: media/resources/scripts/sample/import_samples.js:54
+msgid "uni-form-validation.language.required"
+msgstr "%s是必需的"
+
+#: media/resources/scripts/plan/by_template.js:8
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_chars"
+msgstr "错误,计划名称只能包含数字,字母,空格及以下符号: . - _"
+
+#: media/resources/scripts/plan/by_template.js:13
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_length"
+msgstr "错误,计划名称最长为512个字符"
+
+#: media/resources/scripts/plan/by_template.js:22
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_chars"
+msgstr "错误,注释只能包含数字,字母,空格及以下符号: . - _"
+
+#: media/resources/scripts/plan/by_template.js:27
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_length"
+msgstr "错误,注释最长为1024个字符"
+
+#: media/resources/scripts/plan/modal_batch_planning.js:33
+msgid "batch_plans_from_template.messages.validate.planCount"
+msgstr "数字应该是1到100之间的整数。"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:62
+msgid "upload_plans_for_template.loadingstatus"
+msgstr "正在上传计划CSV文件"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:102
+msgid "row"
+msgstr "行"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:103
+msgid "column"
+msgstr "列"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:124
+msgid "upload_plans_for_template.errors.rowOrColumn"
+msgstr "%(key)s 包含错误:"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:138
+msgid "upload_plans_for_template.errors.summary"
+msgstr "%(inputPlanCount)s个计划中有%(plansFailed)s个发生错误"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:139
+msgid "upload_plans_for_template.errors.totalerrors"
+msgstr "总错误个数：%(total_errors)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:141
+msgid "upload_plans_for_template.errors.instructions"
+msgstr "当前只显示一个计划的错误信息。如需查看详细计划或所有错误，请点击下面按键:"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:158
+msgid "upload_plans_for_template.errors.rowOrColumn.title"
+msgstr "<strong> %(rowOrColumnKey)s (计划 %(plan_number)s) 包含错误:</strong>"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:179
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:187
+msgid "upload_plans_for_template.errors.rowOrColumnError"
+msgstr "<strong>%(columnName)s</strong> 列: %(columnErrors)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:231
+msgid "upload_plans_for_template.warnings.rowOrColumn.title"
+msgstr "<strong> %(rowOrColumnKey)s (计划 %(plan_number)s) 包含警告:</strong>"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:248
+msgid "global.action.modal.close"
+msgstr "关闭"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:265
+msgid "upload_plans_for_template.errors.choose.dropdown"
+msgstr "选择计划以查看错误信息"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:276
+msgid "upload_plans_for_template.errors.choose.dropdown.choice"
+msgstr "计划 %(plan_number)s"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:279
+msgid "upload_plans_for_template.errors.choose.all"
+msgstr "显示所有错误信息"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:300
+msgid "upload_plans_for_template.errors.column.rowNumber.title"
+msgstr "行 #"
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:301
+msgid "upload_plans_for_template.errors.column.errormsg.title"
+msgstr "错误信息"
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:33
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:53
+msgid "workflow.step.analysisparams.action.viewupdate.label.collapse"
+msgstr "详细信息 -"
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:49
+msgid "workflow.step.analysisparams.action.viewupdate.label.expand"
+msgstr "详细信息 +"
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label"
+msgstr "Barcode集"
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+msgid "workflow.step.kits.fields.barcodeId.label.required"
+msgstr " (需要的)"
+
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label.optional"
+msgstr " (可选)"
+
+#: media/resources/scripts/plan/page_plan_kits.js:644
+msgid "workflow.step.kits.fields.flowOrder.default"
+msgstr "使用仪器默认值"
+
+#: media/resources/scripts/plan/page_plan_kits.js:657
+msgid "workflow.step.kits.fields.samplePrepProtocol.default"
+msgstr "使用仪器默认值"
+
+#: media/resources/scripts/plan/page_plan_kits.js:817
+msgid "workflow.step.kits.advancedsettings.messages.recommendation"
+msgstr "建议的%(fieldLabel)s ：%(fieldValue)s"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:354
+msgid "workflow.step.sample.grid.columns.field.row.title"
+msgstr "#"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:359
+msgid "workflow.step.sample.grid.columns.field.barcodeId.title"
+msgstr "Barcode"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:367
+msgid "workflow.step.sample.grid.columns.field.endBarcodeId.title"
+msgstr "结束Barcode"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+#: media/resources/scripts/plan/page_plan_sample_table.js:1342
+msgid "workflow.step.sample.grid.columns.field.sampleName.title"
+msgstr "样本名称"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+msgid "workflow.step.sample.grid.columns.field.sampleName.title.required"
+msgstr " (需要的)"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:383
+msgid "workflow.step.sample.grid.columns.field._control_type.title"
+msgstr "控制类型"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:388
+msgid "workflow.step.sample.grid.columns.field.controlType.title"
+msgstr "控制类型"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:396
+msgid "workflow.step.sample.grid.columns.field.sampleExternalId.title"
+msgstr "样本ID"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:401
+msgid "workflow.step.sample.grid.columns.field.sampleDescription.title"
+msgstr "样本描述"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title.isDNAandFusions"
+msgstr "DNA/融合"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title"
+msgstr "DNA/RNA"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:415
+msgid "workflow.step.sample.grid.columns.field._ref_details.title"
+msgstr "参考"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:419
+msgid "workflow.step.sample.grid.columns.field.reference.title"
+msgstr "参考"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:427
+msgid "workflow.step.sample.grid.columns.field.targetRegionBedFile.title"
+msgstr "目标区域"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:435
+msgid "workflow.step.sample.grid.columns.field.hotSpotRegionBedFile.title"
+msgstr "热点区域"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:443
+#: media/resources/scripts/plan/page_plan_sample_table.js:1350
+msgid "workflow.step.sample.grid.columns.field.tubeLabel.title"
+msgstr "样本管标签"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:449
+msgid "workflow.step.sample.grid.columns.field.chipBarcode.title"
+msgstr "芯片Barcode"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:455
+msgid "workflow.step.sample.grid.columns.field.controlSequenceType.title"
+msgstr "控制序列类型(可选)"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1205
+msgid "workflow.step.sample.messages.validate.csv_file.required"
+msgstr "请选择CSV文件"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1344
+msgid "workflow.step.sample.messages.validate.sampleName.is_valid_leading_chars"
+msgstr "样本名不能用以(.) 或 (_) 或 (-)符号开头"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1358
+msgid "workflow.step.sample.grid.messages.validate.is_valid_chars"
+msgstr "错误, %(displayedTerm)s只能包含数字,字母,空格及以下符号: . - _"
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1364
+msgid "workflow.step.sample.grid.messages.validate.is_valid_length"
+msgstr "错误, %(displayedTerm)s最长为%(max_length)d 字符"
+
+#: media/resources/scripts/plan/plan_templates.html.js:106
+msgid "template.pageable.messages.display"
+msgstr "{0} - {1} / {2} 个模板"
+
+#: media/resources/scripts/plan/plan_templates.html.js:107
+msgid "template.pageable.messages.empty"
+msgstr "没有要显示的模板"
+
+#: media/resources/scripts/plan/plan_templates.html.js:114
+msgid "template.fields.planDisplayedName.label"
+msgstr "模板名称"
+
+#: media/resources/scripts/plan/plan_templates.html.js:119
+msgid "template.fields.sequencingInstrumentType.label"
+msgstr "仪器"
+
+# Sample Preparation Instrument Type
+#: media/resources/scripts/plan/plan_templates.html.js:125
+msgid "template.fields.templatePrepInstrumentType.label"
+msgstr "样本制备"
+
+# Research Application
+#: media/resources/scripts/plan/plan_templates.html.js:131
+msgid "template.fields.runType.label"
+msgstr "研究应用"
+
+#: media/resources/scripts/plan/plan_templates.html.js:137
+msgid "template.fields.barcodeKitName.label"
+msgstr "Barcode"
+
+#: media/resources/scripts/plan/plan_templates.html.js:142
+msgid "template.fields.reference.label"
+msgstr "参考"
+
+#: media/resources/scripts/plan/plan_templates.html.js:147
+msgid "template.fields.projects.label"
+msgstr "项目"
+
+#: media/resources/scripts/plan/plan_templates.html.js:151
+#: media/resources/scripts/plan/planned.html.js:281
+msgid "template.fields.projects.label.plural"
+msgstr "项目"
+
+#: media/resources/scripts/plan/plan_templates.html.js:156
+msgid "template.fields.irAccountName.label"
+msgstr "Ion Reporter账号"
+
+#: media/resources/scripts/plan/plan_templates.html.js:162
+msgid "template.fields.irworkflow.label"
+msgstr "Ion Reporter工作流程"
+
+#: media/resources/scripts/plan/plan_templates.html.js:167
+msgid "template.fields.date.label"
+msgstr "日期"
+
+#: media/resources/scripts/plan/plan_templates.html.js:172
+msgid "template.fields.isSystem.label"
+msgstr "来源"
+
+#: media/resources/scripts/plan/plan_templates.html.js:469
+msgid "templates.messages.references.notinstalled"
+msgstr "未安装参考: "
+
+#: media/resources/scripts/plan/plan_templates.html.js:475
+msgid "templates.messages.bedfiles.notinstalled"
+msgstr "未安装BED文件: "
+
+#: media/resources/scripts/plan/plan_templates.html.js:600
+msgid "import_plan_template.messages.validate.file.required"
+msgstr "请选择CSV文件"
+
+#: media/resources/scripts/plan/planned.html.js:209
+msgid "plannedruns.pageable.messages.display"
+msgstr "{0} - {1} / {2} 个计划运行"
+
+#: media/resources/scripts/plan/planned.html.js:210
+msgid "plannedruns.pageable.messages.empty"
+msgstr "没有显示的计划运行"
+
+#: media/resources/scripts/plan/planned.html.js:218
+msgid "plannedruns.fields.id.label"
+msgstr " "
+
+#: media/resources/scripts/plan/planned.html.js:221
+msgid "plannedruns.selectall.deselectall.tooltip"
+msgstr "全（不）选"
+
+#: media/resources/scripts/plan/planned.html.js:225
+msgid "plannedruns.fields.sampleSetDisplayedName.label"
+msgstr "样本集"
+
+#: media/resources/scripts/plan/planned.html.js:234
+msgid "plannedruns.fields.planShortID.label"
+msgstr "运行代码"
+
+#: media/resources/scripts/plan/planned.html.js:240
+msgid "plannedruns.fields.planDisplayedName.label"
+msgstr "计划运行名称"
+
+#: media/resources/scripts/plan/planned.html.js:245
+msgid "plannedruns.fields.barcodeId.label"
+msgstr "Barcode"
+
+#: media/resources/scripts/plan/planned.html.js:250
+msgid "plannedruns.fields.library.label"
+msgstr "参考"
+
+# Research Application
+#: media/resources/scripts/plan/planned.html.js:255
+msgid "plannedruns.fields.runType.label"
+msgstr "研究应用"
+
+#: media/resources/scripts/plan/planned.html.js:261
+msgid "plannedruns.fields.sampleGroupingName.label"
+msgstr "组"
+
+#: media/resources/scripts/plan/planned.html.js:266
+msgid "plannedruns.fields.libraryPrepType.label"
+msgstr "库制备类型"
+
+#: media/resources/scripts/plan/planned.html.js:273
+msgid "plannedruns.fields.combinedLibraryTubeLabel.label"
+msgstr "混合文库管标签"
+
+#: media/resources/scripts/plan/planned.html.js:277
+msgid "plannedruns.fields.projects.label"
+msgstr "项目"
+
+#: media/resources/scripts/plan/planned.html.js:285
+msgid "plannedruns.fields.sampleDisplayedName.label"
+msgstr "样本"
+
+#: media/resources/scripts/plan/planned.html.js:291
+msgid "plannedruns.fields.sampleTubeLabel.label"
+msgstr "样本管标签"
+
+#: media/resources/scripts/plan/planned.html.js:296
+msgid "plannedruns.fields.chipBarcode.label"
+msgstr "芯片Barcode"
+
+#: media/resources/scripts/plan/planned.html.js:301
+msgid "plannedruns.fields.date.label"
+msgstr "上一次修改"
+
+#: media/resources/scripts/plan/planned.html.js:306
+msgid "plannedruns.fields.planStatus.label"
+msgstr "状态"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.message"
+msgstr "是否确定?"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.cancel"
+msgstr "否"
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.confirm"
+msgstr "是!"
+
+#: media/resources/scripts/reports/report.js:99
+msgid "report.section.plugins.messages.nopluginsrun"
+msgstr "没有已运行插件"
+
+#: media/resources/scripts/reports/report.js:165
+msgid "report.section.plugins.messages.failedtogetpluginstatus"
+msgstr "未能获取插件状态"
+
+#: media/resources/scripts/reports/report.js:188
+msgid "report.messages.status.progresscomplete"
+msgstr "报告已完成.本页将在%(reload_interval_s)s 秒内重新加载"
+
+#: media/resources/scripts/reports/report.js:195
+msgid "report.messages.status.progress.onajaxerror"
+msgstr "检测状态错误"
+
+#: media/resources/scripts/reports/report.js:546
+msgid "report.section.plugins.action.removeplugin.confirm"
+msgstr "是否确定要删除该条插件结果?"
+
+#: media/resources/scripts/reports/report.js:553
+msgid "report.section.plugins.action.removeplugin.failure"
+msgstr "删除插件结果失败."
+
+#: media/resources/scripts/reports/report.js:593
+msgid "report.section.plugins.action.viewlog.failure"
+msgstr "无法读序插件日志:"
+
+#: media/resources/scripts/reports/report.js:606
+msgid "report.section.plugins.action.terminate.inprogress"
+msgstr "停止中"
+
+#: media/resources/scripts/reports/report.js:613
+msgid "report.section.plugins.messages.terminate.inprogress"
+msgstr "正在通过SGE终止插件Job %(jobid)s"
+
+#: media/resources/scripts/reports/report.js:616
+msgid "report.section.plugins.messages.terminate.failed"
+msgstr "终止SGE Job失败%(jobid)s"
+
+#: media/resources/scripts/reports/report.js:635
+msgid "report.section.plugins.execute.title"
+msgstr "选择要运行的插件"
+
+#: media/resources/scripts/reports/report.js:637
+msgid "report.section.plugins.execute.messages.loadingpluginlist"
+msgstr "正在加载插件列表"
+
+#: media/resources/scripts/reports/report.js:650
+msgid "global.nav.menu.configure.menu.plugins.label"
+msgstr "插件"
+
+#: media/resources/scripts/reports/report.js:651
+msgid "report.section.plugins.messages.nopluginsenabled"
+msgstr "未启用任何插件. 转至%(page_link)s以安装并启用插件."
+
+#: media/resources/scripts/reports/report.js:747
+msgid "report.section.plugins.execute.messages.executing"
+msgstr "启动插件%(pluginName)s"
+
+#: media/resources/scripts/reports/report.js:754
+msgid "report.section.plugins.execute.messages.failureexecuting"
+msgstr "错误: 插件启动失败 %(pluginName)s"
+
+#: media/resources/scripts/reports/report.js:892
+msgid "report.section.output.barcodes.fields.barcode_name.label"
+msgstr "Barcode名称"
+
+#: media/resources/scripts/reports/report.js:896
+msgid "report.section.output.barcodes.fields.sample.label"
+msgstr "样本"
+
+#: media/resources/scripts/reports/report.js:900
+msgid "report.section.output.barcodes.fields.total_bases.label"
+msgstr "碱基"
+
+#: media/resources/scripts/reports/report.js:904
+msgid "report.section.output.barcodes.fields.Q20_bases.label"
+msgstr ">=Q20碱基"
+
+#: media/resources/scripts/reports/report.js:908
+msgid "report.section.output.barcodes.fields.read_count.label"
+msgstr "读序（reads）"
+
+#: media/resources/scripts/reports/report.js:912
+msgid "report.section.output.barcodes.fields.mean_read_length.label"
+msgstr "平均读长（read length）"
+
+#: media/resources/scripts/reports/report.js:915
+msgid "report.section.output.barcodes.read_len_histogram.label"
+msgstr "读序长度直方图"
+
+#: media/resources/scripts/reports/report.js:919
+msgid "report.section.output.barcodes.files.label"
+msgstr "文件"
+
+#: media/resources/scripts/sample/input_samples.js:347
+msgid "samplesets.PendingSampleSetItemInfo.fields.displayedName.label"
+msgstr "样本名称"
+
+#: media/resources/scripts/sample/input_samples.js:351
+msgid "samplesets.PendingSampleSetItemInfo.fields.externalId.label"
+msgstr "样本ID"
+
+#: media/resources/scripts/sample/input_samples.js:355
+msgid "samplesets.PendingSampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr "translate: PCR Plate Position"
+
+#: media/resources/scripts/sample/input_samples.js:363
+msgid "samplesets.PendingSampleSetItemInfo.fields.barcode.label"
+msgstr "Barcode"
+
+#: media/resources/scripts/sample/input_samples.js:367
+msgid "samplesets.PendingSampleSetItemInfo.fields.description.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/input_samples.js:371
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr "translate: Sample Collection Date"
+
+#: media/resources/scripts/sample/input_samples.js:375
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr "translate: Sample Receipt Date"
+
+#: media/resources/scripts/sample/input_samples.js:392
+msgid "samplesets.PendingSampleSetItemInfo.fields.gender.label"
+msgstr "性别"
+
+#: media/resources/scripts/sample/input_samples.js:396
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipRole.label"
+msgstr "类型"
+
+#: media/resources/scripts/sample/input_samples.js:400
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipGroup.label"
+msgstr "组"
+
+#: media/resources/scripts/sample/input_samples.js:404
+msgid "samplesets.PendingSampleSetItemInfo.fields.cancerType.label"
+msgstr "癌症类型"
+
+#: media/resources/scripts/sample/input_samples.js:408
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellularityPct.label"
+msgstr "细胞性%"
+
+#: media/resources/scripts/sample/input_samples.js:412
+msgid "samplesets.PendingSampleSetItemInfo.fields.biopsyDays.label"
+msgstr "活检天数"
+
+#: media/resources/scripts/sample/input_samples.js:416
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellNum.label"
+msgstr "细胞数量"
+
+#: media/resources/scripts/sample/input_samples.js:420
+msgid "samplesets.PendingSampleSetItemInfo.fields.coupleId.label"
+msgstr "偶联ID"
+
+#: media/resources/scripts/sample/input_samples.js:424
+msgid "samplesets.PendingSampleSetItemInfo.fields.embryoId.label"
+msgstr "胚胎ID"
+
+#: media/resources/scripts/sample/input_samples.js:428
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.population.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/input_samples.js:432
+#, fuzzy
+msgid "samplesets.PendingSampleSetItemInfo.fields.mouseStrains.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/sampleattributes.js:229
+msgid "samplesets.SampleAttribute.fields.displayedName.label"
+msgstr "属性名称"
+
+#: media/resources/scripts/sample/sampleattributes.js:234
+msgid "samplesets.SampleAttribute.fields.description.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/sampleattributes.js:237
+msgid "samplesets.SampleAttribute.fields.dataType_name.label"
+msgstr "数据类型"
+
+#: media/resources/scripts/sample/sampleattributes.js:241
+msgid "samplesets.SampleAttribute.fields.isMandatory.label"
+msgstr "需要的"
+
+#: media/resources/scripts/sample/sampleattributes.js:246
+msgid "samplesets.SampleAttribute.fields.isActive.label"
+msgstr "显示"
+
+#: media/resources/scripts/sample/sampleattributes.js:251
+msgid "samplesets.SampleAttribute.fields.sampleCount.label"
+msgstr "# 样本"
+
+#: media/resources/scripts/sample/sampleattributes.js:255
+msgid "samplesets.SampleAttribute.fields.lastModifiedDate.label"
+msgstr "日期"
+
+#: media/resources/scripts/sample/samplesets.js:366
+msgid "samplesets.fields.id.label"
+msgstr "选择"
+
+#: media/resources/scripts/sample/samplesets.js:372
+msgid "samplesets.fields.displayedName.label"
+msgstr "设置名称"
+
+#: media/resources/scripts/sample/samplesets.js:376
+msgid "samplesets.fields.lastModifiedDate.label"
+msgstr "日期"
+
+#: media/resources/scripts/sample/samplesets.js:381
+msgid "samplesets.fields.sampleCount.label"
+msgstr "# 样本"
+
+#: media/resources/scripts/sample/samplesets.js:384
+msgid "samplesets.fields.description.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/samplesets.js:387
+msgid "samplesets.fields.sampleGroupTypeName.label"
+msgstr "分组"
+
+#: media/resources/scripts/sample/samplesets.js:390
+msgid "samplesets.fields.libraryPrepType.label"
+msgstr "库制备类型"
+
+#: media/resources/scripts/sample/samplesets.js:394
+msgid "samplesets.fields.libraryPrepKitDisplayedName.label"
+msgstr "库制备试剂盒"
+
+#: media/resources/scripts/sample/samplesets.js:397
+msgid "samplesets.fields.pcrPlateSerialNum.label"
+msgstr "PCR板序列号 #"
+
+#: media/resources/scripts/sample/samplesets.js:400
+msgid "samplesets.fields.combinedLibraryTubeLabel.label"
+msgstr "混合文库管标签"
+
+#: media/resources/scripts/sample/samplesets.js:403
+msgid "samplesets.fields.status.label"
+msgstr "状态"
+
+#: media/resources/scripts/sample/samplesets.js:598
+msgid "samplesets.SampleSetItemInfo.fields.sampleDisplayedName.label"
+msgstr "样本名称"
+
+#: media/resources/scripts/sample/samplesets.js:603
+msgid "samplesets.SampleSetItemInfo.fields.sampleExternalId.label"
+msgstr "样本ID"
+
+#: media/resources/scripts/sample/samplesets.js:608
+msgid "samplesets.SampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr "PCR板位置"
+
+#: media/resources/scripts/sample/samplesets.js:612
+msgid "samplesets.SampleSetItemInfo.fields.controlType.label"
+msgstr "控制类型"
+
+#: media/resources/scripts/sample/samplesets.js:616
+msgid "samplesets.SampleSetItemInfo.fields.dnabarcode.label"
+msgstr "Barcode"
+
+#: media/resources/scripts/sample/samplesets.js:620
+msgid "samplesets.SampleSetItemInfo.fields.description.label"
+msgstr "描述"
+
+#: media/resources/scripts/sample/samplesets.js:625
+msgid "samplesets.SampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr "translate: Sample Collection Date"
+
+#: media/resources/scripts/sample/samplesets.js:630
+msgid "samplesets.SampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr "translate: Sample Receipt Date"
+
+#: media/resources/scripts/sample/samplesets.js:654
+msgid "samplesets.SampleSetItemInfo.fields.gender.label"
+msgstr "性别"
+
+#: media/resources/scripts/sample/samplesets.js:659
+msgid "samplesets.SampleSetItemInfo.fields.relationshipRole.label"
+msgstr "类型"
+
+#: media/resources/scripts/sample/samplesets.js:664
+msgid "samplesets.SampleSetItemInfo.fields.relationshipGroup.label"
+msgstr "组"
+
+#: media/resources/scripts/sample/samplesets.js:670
+msgid "samplesets.SampleSetItemInfo.fields.cancerType.label"
+msgstr "癌症类型"
+
+#: media/resources/scripts/sample/samplesets.js:675
+msgid "samplesets.SampleSetItemInfo.fields.cellularityPct.label"
+msgstr "细胞性%"
+
+#: media/resources/scripts/sample/samplesets.js:680
+msgid "samplesets.SampleSetItemInfo.fields.biopsyDays.label"
+msgstr "活检天数"
+
+#: media/resources/scripts/sample/samplesets.js:684
+msgid "samplesets.SampleSetItemInfo.fields.cellNum.label"
+msgstr "细胞数量"
+
+#: media/resources/scripts/sample/samplesets.js:688
+msgid "samplesets.SampleSetItemInfo.fields.coupleId.label"
+msgstr "偶联ID"
+
+#: media/resources/scripts/sample/samplesets.js:692
+msgid "samplesets.SampleSetItemInfo.fields.embryoId.label"
+msgstr "胚胎ID"
+
+#: media/resources/scripts/sample/samplesets.js:696
+#, fuzzy
+msgid "samplesets.SampleSetItemInfo.fields.population.label"
+msgstr "translate: Population"
+
+#: media/resources/scripts/sample/samplesets.js:700
+#, fuzzy
+msgid "samplesets.SampleSetItemInfo.fields.mouseStrains.label"
+msgstr "translate: Mouse Strains"
+
+#~ msgid "samplesets.PendingSampleSetItemInfo.fields.nucleotideType.label"
+#~ msgstr "DNA/ RNA/ 融合"
+
+#~ msgid "samplesets.SampleSetItemInfo.fields.nucleotideType.label.isFusions"
+#~ msgstr "DNA/融合"
+
+#~ msgid "samplesets.SampleSetItemInfo.fields.nucleotideType.label"
+#~ msgstr "DNA/RNA"
+
+#~ msgid "samplesets.PendingSampleSetItemInfo.fields.barcodeKit.label"
+#~ msgstr "Barcode试剂盒"
+
+#~ msgid "global.mode.live.enable"
+#~ msgstr "自动刷新"
+
+#~ msgid "global.mode.live.enable.details"
+#~ msgstr "页面正在自动更新"
+
+#~ msgid "global.mode.live.disable"
+#~ msgstr "停止刷新"
+
+#~ msgid "global.mode.live.disable.details"
+#~ msgstr "页面在刷新前保持静态"

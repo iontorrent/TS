@@ -1,5 +1,7 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
+{% load i18n %}
+{% load pagetools %}
 {% block extra_head %}
     {{ block.super }}
     {% load static from staticfiles %}
@@ -12,7 +14,7 @@
 {% block page-plan-content %}
 <div class="row-fluid">
     <div class="span7">
-        <label for="templateName">Template Name (required): </label>
+        <label for="templateName">{% trans "workflow.step.savetemplate.fields.templateName.label" %}{% trans "global.field.label.required" %}: </label>
         <input style="width: 420px;" type="text" id="templateName" name="templateName" value="{{step.getCurrentSavedFieldDict.templateName|default_if_none:""}}" />
     </div>
 
@@ -22,7 +24,7 @@
 <div id="error" style="color:red;"></div>
 {% for key, validationErrors in step.validationErrors.items %}
     <div class="row-fluid">
-        <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+        <h4 style="color: red;">{{validationErrors|safe|linebreaks }}</h4>
     </div>
 {% endfor %}
 
@@ -30,7 +32,7 @@
 <div class="row-fluid">
     <div class="span7">
         <p class="form-label">
-            Set as Favorite
+            {% trans "workflow.step.savetemplate.fields.setAsFavorite.label" %}
             {% if step.getCurrentSavedFieldDict.setAsFavorite %}
                 <input type="checkbox" id="setAsFavorite" name="setAsFavorite" checked="checked"/>
             {% else %}
@@ -49,29 +51,29 @@
         
 <div class="row-fluid" style="margin-top: 20px">
     <div class="span8 summary-section">
-        <label for="note" class="form-label">Add a note</label>
-        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <label for="note" class="form-label">{% trans "workflow.step.savetemplate.fields.note.label" %}</label>
+        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="{% trans "workflow.step.savetemplate.fields.note.placeholder" %}">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
         <br>
         
         {% for key, validationErrors in step.validationErrors.items %}
             <div class="row-fluid">
                 {% if key == "note" %}        
-                    <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+                    <h4 style="color: red;">{{validationErrors|safe|linebreaks }}</h4>
                 {% endif %}
             </div>
         {% endfor %}
         
-        <label for="LIMS_meta" class="form-label">Add LIMS Meta Data</label>
-        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
+        <label for="LIMS_meta" class="form-label">{% trans "workflow.step.savetemplate.fields.LIMS_meta.label" %}</label>
+        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="{% trans "workflow.step.savetemplate.fields.LIMS_meta.placeholder" %}">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
         <br>
     </div>
 
     <div class="span4 summary-section" style="margin-top: 25px">
-        <label for="qc" class="form-label">Monitoring Thresholds</label>
+        <label for="qc" class="form-label">{% trans "workflow.step.savetemplate.fields.qcNames.label" %}</label>
         {% for key, value in step.getCurrentSavedFieldDict.items %}
             {% if key in step.qcNames %}
                 <div class="span12">
-                    <h4>{{key}}:</h4>
+                    <h4>{{step.ModelsQcTypeToLabelsQcTypeAsDict|bracket:key}}:</h4>
     
                     <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
                     <input data-input-name="{{key}}" name="{{key}}" style="width:35px;" value="{{value}}">
@@ -89,9 +91,9 @@
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
-    <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
+    <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">{% trans "workflow.action.previousstep" %}</a>
     <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">
-        {% if helper.isCopy %}Copy Template{% else %}Save Template{% endif %}
+        {% if helper.isCopy %}{% trans "template.workflow.name.copy.action.submit" %}{% elif helper.isEdit %}{% trans "template.workflow.name.edit.action.submit" %}{% else %}{% trans "template.workflow.name.createfrom.action.submit" %}{% endif %}
     </a>
 {% endblock prevnext-buttons %}
 
@@ -107,11 +109,11 @@
             $("#irerror").html('');
             //call the Regex test function identified in validation.js file
             if (!is_valid_chars($(this).val())) {
-                $("#irerror").html('Error, Template Name should contain only numbers, letters, spaces, and the following: . - _');
+                $("#irerror").html('{% trans "workflow.step.savetemplate.messages.validate.templateName.is_valid_chars" %}');
             }
             //call the check max length function that's in validation.js
             if(!is_valid_length($(this).val(), 512)) {
-                $("#irerror").html('Error, Template Name length should be 512 characters maximum');   
+                $("#irerror").html('{% trans "workflow.step.savetemplate.messages.validate.templateName.maxlength" %}');
             }
         });
         
@@ -119,11 +121,11 @@
             $("#noteerror").html('');
             //call the Regex test function identified in validation.js file
             if (!is_valid_chars($(this).val())) {
-                $("#noteerror").html('Error, Notes should contain only numbers, letters, spaces, and the following: . - _');
+                $("#noteerror").html('{% trans "workflow.step.savetemplate.messages.validate.note.is_valid_chars" %}');
             }
             //call the check max length function that's in validation.js
             if(!is_valid_length($(this).val(), 1024)) {
-                $("#noteerror").html('Error, Notes length should be 1024 characters maximum');   
+                $("#noteerror").html('{% trans "workflow.step.savetemplate.messages.validate.note.maxlength" %}');
             } 
         });
         

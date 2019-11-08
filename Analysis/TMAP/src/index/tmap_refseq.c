@@ -1,4 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+
+#define _POSIX_C_SOURCE 200112L // to make declaration of strtok_r explicit
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +13,11 @@
 #include <getopt.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/types.h>
+#include <errno.h>
+#include <alloca.h>
+#include <assert.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -20,9 +27,15 @@
 #include "../seq/tmap_seq.h"
 #include "../io/tmap_file.h"
 #include "../io/tmap_seq_io.h"
+#include "../map/util/tmap_map_locopt.h"
 #include "tmap_refseq.h"
+#include "../util/tmap_error.h"
+#include <getopt.h>
 
-const char * 
+static const uint32_t OVR_PAR_MEM_INIT_CHUNK = 64; // allocation chunk for per-amplicon parameters override structures
+static const uint32_t READ_ENDS_MEM_INIT_CHUNK = 64; // allocation chunk for read ends statistics records
+
+const char *
 tmap_refseq_get_version_format(const char *v)
 {
   static const int32_t tmap_index_versions_num = 6;
@@ -49,51 +62,40 @@ tmap_refseq_get_version_format(const char *v)
 static inline int32_t
 tmap_refseq_supported(tmap_refseq_t *refseq)
 {
-  int32_t i, j, sent;
+  int32_t i, j;
   char *refseq_v = refseq->package_version->s;
   char *tmap_v = PACKAGE_VERSION;
 
   // sanity check on version names
-  // DK: we should deprecate the check below or make it more robust. Now it just checks for a number of dots in version string, which is misleading.
-  for (i = 0, j = 0, sent = (int32_t) strlen (refseq_v); i < sent; ++i) 
-  {
-      if ('.' == refseq_v [i]) 
-	  j++;
+  for(i=j=0;i<(int32_t)strlen(refseq_v);i++) {
+      if('.' == refseq_v[i]) j++;
   }
-  if (j < 2) 
-  {
-      fprintf (stderr, "malformed reference file version: %s", refseq_v);
-      tmap_error("reference version should conain at least 3 dot-separated components", Exit, OutOfRange);
+  if(2 != j) {
+      tmap_error("did not find three version numbers", Exit, OutOfRange);
   }
-  for (i=0, j=0, sent = (int32_t)strlen(tmap_v); i < sent; ++i) 
-  {
-      if ('.' == tmap_v[i]) 
-	  j++;
+  for(i=j=0;i<(int32_t)strlen(tmap_v);i++) {
+      if('.' == tmap_v[i]) j++;
   }
-  if(j < 2) 
-  {
-      fprintf (stderr, "malformed TMAP version: %s", tmap_v);
-      tmap_error("Version should contain at least 3 dot-separated components", Exit, OutOfRange);
+  if(2 != j) {
+      tmap_error("did not find three version numbers", Exit, OutOfRange);
   }
 
-  if (tmap_compare_versions (tmap_v, refseq_v) < 0) 
-  {
+  if(tmap_compare_versions(tmap_v, refseq_v) < 0) {
       return 0;
   }
-  
-  // make sure format ids match
-  if(0 == strcmp (tmap_refseq_get_version_format (refseq_v), tmap_refseq_get_version_format (tmap_v))) 
-  {
+
+  // get the format ids
+  if(0 == strcmp(tmap_refseq_get_version_format(refseq_v), tmap_refseq_get_version_format(tmap_v))) {
       return 1;
   }
   return 0;
 }
 
-static inline void 
+static inline void
 tmap_refseq_write_header(tmap_file_t *fp, tmap_refseq_t *refseq)
 {
   // size_t ll = 5;
-  if(1 != tmap_file_fwrite(&refseq->version_id, sizeof(uint64_t), 1, fp) 
+  if(1 != tmap_file_fwrite(&refseq->version_id, sizeof(uint64_t), 1, fp)
      || 1 != tmap_file_fwrite(&refseq->package_version->l, sizeof(size_t), 1, fp)
      || refseq->package_version->l+1 != tmap_file_fwrite(refseq->package_version->s, sizeof(char), refseq->package_version->l+1, fp)
      || 1 != tmap_file_fwrite(&refseq->num_annos, sizeof(uint32_t), 1, fp)
@@ -102,7 +104,7 @@ tmap_refseq_write_header(tmap_file_t *fp, tmap_refseq_t *refseq)
   }
 }
 
-static inline void 
+static inline void
 tmap_refseq_print_header(tmap_file_t *fp, tmap_refseq_t *refseq)
 {
   int32_t i;
@@ -117,11 +119,11 @@ tmap_refseq_print_header(tmap_file_t *fp, tmap_refseq_t *refseq)
 }
 
 static inline void
-tmap_refseq_write_annos(tmap_file_t *fp, tmap_anno_t *anno) 
+tmap_refseq_write_annos(tmap_file_t *fp, tmap_anno_t *anno)
 {
   uint32_t len = anno->name->l+1; // include null terminator
 
-  if(1 != tmap_file_fwrite(&len, sizeof(uint32_t), 1, fp) 
+  if(1 != tmap_file_fwrite(&len, sizeof(uint32_t), 1, fp)
      || len != tmap_file_fwrite(anno->name->s, sizeof(char), len, fp)
      || 1 != tmap_file_fwrite(&anno->len, sizeof(uint64_t), 1, fp)
      || 1 != tmap_file_fwrite(&anno->offset, sizeof(uint64_t), 1, fp)
@@ -150,7 +152,7 @@ tmap_refseq_write_anno(tmap_file_t *fp, tmap_refseq_t *refseq)
 }
 
 static inline void
-tmap_refseq_anno_clone(tmap_anno_t *dest, tmap_anno_t *src, int32_t reverse) 
+tmap_refseq_anno_clone(tmap_anno_t *dest, tmap_anno_t *src, int32_t reverse)
 {
   uint32_t i;
   dest->name = tmap_string_clone(src->name);
@@ -168,7 +170,7 @@ tmap_refseq_anno_clone(tmap_anno_t *dest, tmap_anno_t *src, int32_t reverse)
           dest->amb_bases[i] = src->amb_bases[dest->num_amb-i-1];
       }
   }
-  else { 
+  else {
       for(i=0;i<dest->num_amb;i++) {
           dest->amb_positions_start[i] = src->amb_positions_start[i];
           dest->amb_positions_end[i] = src->amb_positions_end[i];
@@ -200,10 +202,10 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
 
-  refseq->version_id = TMAP_VERSION_ID; 
-  if (old_v == 0) 
+  refseq->version_id = TMAP_VERSION_ID;
+  if (old_v == 0)
      refseq->package_version = tmap_string_clone2(PACKAGE_VERSION);
-  else 
+  else
      refseq->package_version = tmap_string_clone2("0.3.1");
   refseq->seq = buffer; // IMPORTANT: must nullify later
   refseq->annos = NULL;
@@ -230,8 +232,8 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
       refseq->num_annos++;
       refseq->annos = tmap_realloc(refseq->annos, sizeof(tmap_anno_t)*refseq->num_annos, "refseq->annos");
       anno = &refseq->annos[refseq->num_annos-1];
-      
-      anno->name = tmap_string_clone(seq->data.fq->name); 
+
+      anno->name = tmap_string_clone(seq->data.fq->name);
       anno->len = l;
       anno->offset = (1 == refseq->num_annos) ? 0 : refseq->annos[refseq->num_annos-2].offset + refseq->annos[refseq->num_annos-2].len;
       anno->amb_positions_start = NULL;
@@ -243,11 +245,11 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
       // fill the buffer
       for(i=0;i<l;i++) {
           uint8_t c = tmap_nt_char_to_int[(int)seq->data.fq->seq->s[i]];
-          // handle IUPAC codes 
+          // handle IUPAC codes
           if(4 <= c) {
               int32_t k;
               // warn users about IUPAC codes
-              if(0 == num_IUPAC_found) { 
+              if(0 == num_IUPAC_found) {
                   tmap_error("IUPAC codes were found and will be converted to non-matching DNA bases", Warn, OutOfRange);
                   for(j=4;j<15;j++) {
                       c = tmap_iupac_char_to_bit_string[(int)tmap_iupac_int_to_char[j]];
@@ -256,12 +258,12 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
                           if(!(c & (0x1 << k))) {
                               break;
                           }
-                      } 
+                      }
                       tmap_progress_print2("IUPAC code %c will be converted to %c", tmap_iupac_int_to_char[j], "ACGTN"[k & 3]);
                   }
               }
               num_IUPAC_found++;
-              
+
               // change it to a mismatched base than the IUPAC code
               c = tmap_iupac_char_to_bit_string[(int)seq->data.fq->seq->s[i]];
 
@@ -277,7 +279,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
               if(0 < anno->num_amb
                  && anno->amb_positions_end[anno->num_amb-1] == i
                  && anno->amb_bases[anno->num_amb-1] == tmap_iupac_char_to_int[(int)seq->data.fq->seq->s[i]]) {
-                 anno->amb_positions_end[anno->num_amb-1]++; // expand the range 
+                 anno->amb_positions_end[anno->num_amb-1]++; // expand the range
               }
               else {
                   // new ambiguous base and range
@@ -286,14 +288,14 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
                   anno->amb_positions_end[anno->num_amb-1] = i+1; // one-based
                   anno->amb_bases[anno->num_amb-1] = tmap_iupac_char_to_int[(int)seq->data.fq->seq->s[i]];
               }
-              
+
               // get the lexicographically smallest base not compatible with
               // this code
               for(j=0;j<4;j++) {
                   if(!(c & (0x1 << j))) {
                       break;
                   }
-              } 
+              }
               c = j & 3; // Note: Ns will go to As
           }
           if(3 < c) {
@@ -337,7 +339,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
   }
   refseq->seq = NULL; // IMPORTANT: nullify this
   ref_len = refseq->len; // save for return
-      
+
   tmap_progress_print2("total genome length [%u]", refseq->len);
   if(0 < num_IUPAC_found) {
       if(1 == num_IUPAC_found) {
@@ -351,7 +353,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
   // write annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
   fp_anno = tmap_file_fopen(fn_anno, "wb", TMAP_ANNO_COMPRESSION);
-  tmap_refseq_write_anno(fp_anno, refseq); 
+  tmap_refseq_write_anno(fp_anno, refseq);
 
   // close files
   tmap_file_fclose(fp_pac);
@@ -364,25 +366,25 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
       for(j=i+1;j<l;j++) {
           if(0 == strcmp(refseq->annos[i].name->s, refseq->annos[j].name->s)) {
               tmap_file_fprintf(tmap_file_stderr, "Contigs have the same name: #%d [%s] and #%d [%s]\n",
-                                i+1, refseq->annos[i].name->s, 
-                                j+1, refseq->annos[j].name->s); 
+                                i+1, refseq->annos[i].name->s,
+                                j+1, refseq->annos[j].name->s);
               tmap_error("Contig names must be unique", Exit, OutOfRange);
           }
       }
   }
 
-  tmap_refseq_destroy(refseq); 
+  tmap_refseq_destroy(refseq);
   tmap_seq_io_destroy(seqio);
   tmap_seq_destroy(seq);
   free(fn_pac);
   free(fn_anno);
-  
+
   // pack the reverse compliment
   if(0 == fwd_only) {
       int32_t num_annos;
       uint64_t len;
       uint64_t len_fwd, len_rev;
-  
+
       tmap_progress_print2("packing the reverse compliment FASTA for BWT/SA creation");
 
       refseq = tmap_refseq_read(fn_fasta);
@@ -390,7 +392,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
       // original length
       num_annos = refseq->num_annos;
       len = refseq->len;
-          
+
       // more annotations
       refseq->num_annos *= 2;
       refseq->annos = tmap_realloc(refseq->annos, sizeof(tmap_anno_t)*refseq->num_annos, "refseq->annos");
@@ -401,8 +403,8 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
       {
           uint8_t *newSwq = (uint8_t *)tmap_malloc(sizeof(uint8_t) * tmap_refseq_seq_memory(refseq->len), "refseq->seq");
           memcpy(newSwq,refseq->seq,tmap_refseq_seq_memory(len));
-    	  tmap_file_fclose((tmap_file_t *)refseq->refseq_fp);
-    	  refseq->refseq_fp=NULL;
+          tmap_file_fclose((tmap_file_t *)refseq->refseq_fp);
+          refseq->refseq_fp=NULL;
           refseq->seq = newSwq;
       }
       else
@@ -410,13 +412,13 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
           refseq->seq = tmap_realloc(refseq->seq, sizeof(uint8_t) * tmap_refseq_seq_memory(refseq->len), "refseq->seq");
       }
 
-      memset(refseq->seq + tmap_refseq_seq_memory(len), 0, 
+      memset(refseq->seq + tmap_refseq_seq_memory(len), 0,
              (tmap_refseq_seq_memory(refseq->len) - tmap_refseq_seq_memory(len)) * sizeof(uint8_t));
 
       for(i=0,j=num_annos-1,len_fwd=len-1,len_rev=len;i<num_annos;i++,j--) {
           tmap_anno_t *anno_fwd = NULL;
           tmap_anno_t *anno_rev = NULL;
-          
+
           anno_fwd = &refseq->annos[j]; // source
           anno_rev = &refseq->annos[i+num_annos]; // destination
 
@@ -426,7 +428,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
 
           // fill the buffer
           for(k=0;k<anno_fwd->len;k++,len_fwd--,len_rev++) { // reverse
-              uint8_t c = tmap_refseq_seq_i(refseq, len_fwd); 
+              uint8_t c = tmap_refseq_seq_i(refseq, len_fwd);
               if(3 < c) {
                   tmap_bug();
               }
@@ -440,7 +442,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
 
       // write
       tmap_refseq_write(refseq, fn_fasta);
-      
+
       // free memory
       tmap_refseq_destroy(refseq);
   }
@@ -450,7 +452,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
   return ref_len;
 }
 
-void 
+void
 tmap_refseq_write(tmap_refseq_t *refseq, const char *fn_fasta)
 {
   tmap_file_t *fp_pac = NULL, *fp_anno = NULL;
@@ -460,7 +462,7 @@ tmap_refseq_write(tmap_refseq_t *refseq, const char *fn_fasta)
   // write annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
   fp_anno = tmap_file_fopen(fn_anno, "wb", TMAP_ANNO_COMPRESSION);
-  tmap_refseq_write_anno(fp_anno, refseq); 
+  tmap_refseq_write_anno(fp_anno, refseq);
   tmap_file_fclose(fp_anno);
   free(fn_anno);
 
@@ -484,11 +486,11 @@ tmap_refseq_write(tmap_refseq_t *refseq, const char *fn_fasta)
   free(fn_pac);
 }
 
-static inline void 
+static inline void
 tmap_refseq_read_header(tmap_file_t *fp, tmap_refseq_t *refseq, int32_t ignore_version)
 {
   size_t package_version_l = 0;
-  if(1 != tmap_file_fread(&refseq->version_id, sizeof(uint64_t), 1, fp) 
+  if(1 != tmap_file_fread(&refseq->version_id, sizeof(uint64_t), 1, fp)
      || 1 != tmap_file_fread(&package_version_l, sizeof(size_t), 1, fp)) {
       tmap_error(NULL, Exit, ReadFileError);
   }
@@ -506,7 +508,7 @@ tmap_refseq_read_header(tmap_file_t *fp, tmap_refseq_t *refseq, int32_t ignore_v
       fprintf(stderr, "package version: %s\n", PACKAGE_VERSION);
       tmap_error("the reference index is not supported", Exit, ReadFileError);
   }
-     
+
   if(1 != tmap_file_fread(&refseq->num_annos, sizeof(uint32_t), 1, fp)
      || 1 != tmap_file_fread(&refseq->len, sizeof(uint64_t), 1, fp)) {
       tmap_error(NULL, Exit, ReadFileError);
@@ -515,10 +517,10 @@ tmap_refseq_read_header(tmap_file_t *fp, tmap_refseq_t *refseq, int32_t ignore_v
 }
 
 static inline void
-tmap_refseq_read_annos(tmap_file_t *fp, tmap_anno_t *anno) 
+tmap_refseq_read_annos(tmap_file_t *fp, tmap_anno_t *anno)
 {
   uint32_t len = 0; // includes the null-terminator
-  
+
   if(1 != tmap_file_fread(&len, sizeof(uint32_t), 1, fp)) {
       tmap_error(NULL, Exit, ReadFileError);
   }
@@ -569,7 +571,7 @@ tmap_refseq_read(const char *fn_fasta)
   char *fn_pac = NULL, *fn_anno = NULL;
   tmap_refseq_t *refseq = NULL;
 
-  // allocate some memory 
+  // allocate some memory
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
   refseq->bed_exist = 0;
@@ -577,7 +579,7 @@ tmap_refseq_read(const char *fn_fasta)
   // read annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
   fp_anno = tmap_file_fopen(fn_anno, "rb", TMAP_ANNO_COMPRESSION);
-  tmap_refseq_read_anno(fp_anno, refseq, 0); 
+  tmap_refseq_read_anno(fp_anno, refseq, 0);
   tmap_file_fclose(fp_anno);
   free(fn_anno);
 
@@ -586,7 +588,7 @@ tmap_refseq_read(const char *fn_fasta)
   fp_pac = tmap_file_fopen(fn_pac, "rb", TMAP_PAC_COMPRESSION);
 #ifndef TMAP_MMAP
   refseq->seq = tmap_malloc(sizeof(uint8_t)*tmap_refseq_seq_memory(refseq->len), "refseq->seq"); // allocate
-  if(tmap_refseq_seq_memory(refseq->len) 
+  if(tmap_refseq_seq_memory(refseq->len)
      != tmap_file_fread(refseq->seq, sizeof(uint8_t), tmap_refseq_seq_memory(refseq->len), fp_pac)) {
       tmap_error(NULL, Exit, ReadFileError);
   }
@@ -644,7 +646,7 @@ tmap_refseq_shm_num_bytes(tmap_refseq_t *refseq)
   n += sizeof(uint32_t); // annos
   n += sizeof(uint64_t); // len
   n += sizeof(char)*(refseq->package_version->l+1); // package_version->s
-  n += sizeof(uint8_t)*tmap_refseq_seq_memory(refseq->len); // seq 
+  n += sizeof(uint8_t)*tmap_refseq_seq_memory(refseq->len); // seq
   for(i=0;i<refseq->num_annos;i++) {
       n += sizeof(uint64_t); // len
       n += sizeof(uint64_t); // offset
@@ -667,7 +669,7 @@ tmap_refseq_shm_read_num_bytes(const char *fn_fasta)
   char *fn_anno = NULL;
   tmap_refseq_t *refseq = NULL;
 
-  // allocate some memory 
+  // allocate some memory
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
   refseq->bed_exist = 0;
@@ -703,14 +705,14 @@ tmap_refseq_shm_pack(tmap_refseq_t *refseq, uint8_t *buf)
   memcpy(buf, &refseq->len, sizeof(uint64_t)); buf += sizeof(uint64_t);
   // variable length data
   memcpy(buf, refseq->package_version->s, sizeof(char)*(refseq->package_version->l+1));
-  buf += sizeof(char)*(refseq->package_version->l+1); 
-  memcpy(buf, refseq->seq, tmap_refseq_seq_memory(refseq->len)*sizeof(uint8_t)); 
+  buf += sizeof(char)*(refseq->package_version->l+1);
+  memcpy(buf, refseq->seq, tmap_refseq_seq_memory(refseq->len)*sizeof(uint8_t));
   buf += tmap_refseq_seq_memory(refseq->len)*sizeof(uint8_t);
 
   for(i=0;i<refseq->num_annos;i++) {
       // fixed length data
-      memcpy(buf, &refseq->annos[i].len, sizeof(uint64_t)); buf += sizeof(uint64_t); 
-      memcpy(buf, &refseq->annos[i].offset, sizeof(uint64_t)); buf += sizeof(uint64_t); 
+      memcpy(buf, &refseq->annos[i].len, sizeof(uint64_t)); buf += sizeof(uint64_t);
+      memcpy(buf, &refseq->annos[i].offset, sizeof(uint64_t)); buf += sizeof(uint64_t);
       memcpy(buf, &refseq->annos[i].name->l, sizeof(size_t)); buf += sizeof(size_t);
       memcpy(buf, &refseq->annos[i].num_amb, sizeof(uint32_t)); buf += sizeof(uint32_t);
       // variable length data
@@ -734,7 +736,7 @@ tmap_refseq_shm_unpack(uint8_t *buf)
 {
   int32_t i;
   tmap_refseq_t *refseq = NULL;
-  
+
   if(NULL == buf) return NULL;
 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
@@ -744,7 +746,7 @@ tmap_refseq_shm_unpack(uint8_t *buf)
   if(refseq->version_id != TMAP_VERSION_ID) {
       tmap_error("version id did not match", Exit, ReadFileError);
   }
-      
+
   refseq->package_version = tmap_string_init(0);
   memcpy(&refseq->package_version->l, buf, sizeof(size_t)); buf += sizeof(size_t);
   memcpy(&refseq->num_annos, buf, sizeof(uint32_t)) ; buf += sizeof(uint32_t);
@@ -753,7 +755,7 @@ tmap_refseq_shm_unpack(uint8_t *buf)
   // variable length data
   refseq->package_version->s = (char*)buf;
   refseq->package_version->m = refseq->package_version->l+1;
-  buf += sizeof(char)*(refseq->package_version->l+1); 
+  buf += sizeof(char)*(refseq->package_version->l+1);
   if(0 == tmap_refseq_supported(refseq)) {
       tmap_error("the reference index is not supported", Exit, ReadFileError);
   }
@@ -762,8 +764,8 @@ tmap_refseq_shm_unpack(uint8_t *buf)
   refseq->annos = tmap_calloc(refseq->num_annos, sizeof(tmap_anno_t), "refseq->annos");
   for(i=0;i<refseq->num_annos;i++) {
       // fixed length data
-      memcpy(&refseq->annos[i].len, buf, sizeof(uint64_t)); buf += sizeof(uint64_t); 
-      memcpy(&refseq->annos[i].offset, buf, sizeof(uint64_t)); buf += sizeof(uint64_t); 
+      memcpy(&refseq->annos[i].len, buf, sizeof(uint64_t)); buf += sizeof(uint64_t);
+      memcpy(&refseq->annos[i].offset, buf, sizeof(uint64_t)); buf += sizeof(uint64_t);
       refseq->annos[i].name = tmap_string_init(0);
       memcpy(&refseq->annos[i].name->l, buf, sizeof(size_t)); buf += sizeof(size_t);
       refseq->annos[i].name->m = refseq->annos[i].name->l+1;
@@ -792,43 +794,64 @@ tmap_refseq_shm_unpack(uint8_t *buf)
 }
 
 void
-tmap_refseq_destroy(tmap_refseq_t *refseq)
+tmap_refseq_destroy (tmap_refseq_t *refseq)
 {
   int32_t i;
 
-  if(1 == refseq->is_shm) {
-      free(refseq->package_version);
-      for(i=0;i<refseq->num_annos;i++) {
-          free(refseq->annos[i].name);
-      }
-      free(refseq->annos);
+  if (1 == refseq->is_shm) 
+  {
+      free (refseq->package_version);
+      for (i = 0; i < refseq->num_annos; ++i)
+          free (refseq->annos [i].name);
+      free (refseq->annos);
   }
-  else {
-      tmap_string_destroy(refseq->package_version);
-      for(i=0;i<refseq->num_annos;i++) {
-          tmap_string_destroy(refseq->annos[i].name);
-          free(refseq->annos[i].amb_positions_start);
-          free(refseq->annos[i].amb_positions_end);
-          free(refseq->annos[i].amb_bases);
+  else 
+  {
+      tmap_string_destroy (refseq->package_version);
+      for(i = 0; i < refseq->num_annos; ++i) 
+      {
+          tmap_string_destroy (refseq->annos [i].name);
+          free (refseq->annos [i].amb_positions_start);
+          free (refseq->annos [i].amb_positions_end);
+          free (refseq->annos [i].amb_bases);
       }
-      free(refseq->annos);
+      free (refseq->annos);
 
-      if(refseq->refseq_fp)
-    	  tmap_file_fclose((tmap_file_t *)refseq->refseq_fp);
+      if (refseq->refseq_fp)
+          tmap_file_fclose ((tmap_file_t *)refseq->refseq_fp);
       else
-          free(refseq->seq);
+          free (refseq->seq);
   }
-  if (1 == refseq->bed_exist) {
-	int i;
-	for (i = 0; i < refseq->beditem; i++) {
-	    if (refseq->bednum[i]> 0) {
-		free(refseq->bedstart[i]);
-		free(refseq->bedend[i]);
-	    }
-	}
-	free(refseq->bednum);
-	free(refseq->bedstart);
-	free(refseq->bedend);
+  if (1 == refseq->bed_exist) 
+  {
+    int i;
+    for (i = 0; i < refseq->beditem; ++i) 
+    {
+        if (refseq->bednum [i]> 0) 
+        {
+            free (refseq->bedstart [i]);
+            free (refseq->bedend [i]);
+        }
+    }
+    free (refseq->bednum);
+    free (refseq->bedstart);
+    free (refseq->bedend);
+    if (refseq->parovr)
+    {
+        for (i = 0; i < refseq->num_annos; ++i) 
+            free  (refseq->parovr [i]);
+        free (refseq->parovr);
+        for (i = 0; i < refseq->parmem_used; ++i)
+            tmap_map_locopt_destroy (refseq->parmem + i);
+        free (refseq->parmem);
+    }
+    if (refseq->read_ends)
+    {
+        for (i = 0; i < refseq->num_annos; ++i) 
+            free  (refseq->read_ends [i]);
+        free (refseq->read_ends);
+        free (refseq->endposmem);
+    }
   }
   free(refseq);
 }
@@ -883,7 +906,7 @@ tmap_refseq_get_pos(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_t
   return pacpos - refseq->annos[seqid].offset;
 }
 
-inline tmap_bwt_int_t 
+inline tmap_bwt_int_t
 tmap_refseq_pac2real(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_t aln_length, uint32_t *seqid, uint32_t *pos, uint8_t *strand)
 {
   if((refseq->len << 1) < pacpos) {
@@ -949,7 +972,7 @@ tmap_refseq_subseq2(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t start,
       return NULL;
   }
 
-  if(NULL == target) { 
+  if(NULL == target) {
       target = tmap_malloc(sizeof(char) * (end - start + 1), "target");
   }
   if((end - start + 1) != (uint32_t)tmap_refseq_subseq(refseq, refseq->annos[seqid-1].offset + start, end - start + 1, target)) {
@@ -995,7 +1018,7 @@ tmap_refseq_amb_bases(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t star
       }
   }
 
-  low = 0; 
+  low = 0;
   high = anno->num_amb - 1;
   while(low <= high) {
       mid = (low + high) / 2;
@@ -1024,7 +1047,7 @@ tmap_refseq_fasta2pac_main(int argc, char *argv[])
         case 'v': tmap_progress_set_verbosity(1); break;
         case 'f': fwd_only = 1; break;
         case 'h': help = 1; break;
-	case 'p': old_v = 1; break;
+    case 'p': old_v = 1; break;
         default: return 1;
       }
   }
@@ -1063,7 +1086,7 @@ tmap_refseq_refinfo_main(int argc, char *argv[])
   // Note: 'tmap_file_stdout' should not have been previously modified
   tmap_file_stdout = tmap_file_fdopen(fileno(stdout), "wb", TMAP_FILE_NO_COMPRESSION);
 
-  // allocate some memory 
+  // allocate some memory
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
   refseq->bed_exist = 0;
@@ -1161,7 +1184,7 @@ tmap_refseq_get_id(tmap_refseq_t *refseq, char *chr)
 {
     int i;
     for (i = 0; i < refseq->num_annos; i++) {
-	if (strcmp(refseq->annos[i].name->s, chr) == 0) return i;
+    if (strcmp(refseq->annos[i].name->s, chr) == 0) return i;
     }
     return -1;
 }
@@ -1173,102 +1196,1293 @@ static char *strsave(char *s)
     return t;
 }
 
+// DK:Parse tmap override parameters embedded in BED file
+// returns 0 if no overrides found, 1 otherwise
+enum ovr_opt_code
+{
+    // -A,--score-match
+    OO_score_match = 127, //over any ASCII value, so short opts can be checked same way
+    // -M,--pen-mismatch
+    OO_pen_mismatch,
+    // -O,--pen-gap-open
+    OO_pen_gap_open,
+    // -E,--pen-gap-extension
+    OO_pen_gap_extension,
+    // -G,--pen-gap-long
+    OO_pen_gap_long,
+    // -K,--gap-long-length
+    OO_gap_long_length,
+    // -w,--band-width
+    OO_band_width,
+    // -g,--softclip-type
+    OO_softclip_type,
+    // --do-realign
+    OO_do_realign,
+    // --r-mat
+    OO_r_mat,
+    // --r-mis
+    OO_r_mis,
+    // --r-gip
+    OO_r_gip,
+    // --r-gep
+    OO_r_gep,
+    // --r-bw
+    OO_r_bw,
+    // --r-clip
+    OO_r_clip,
+    // --do-repeat-clip
+    OO_do_repeat_clip,
+    // --repclip-cont
+    OO_repclip_cont,
+    // --context
+    OO_context,
+    // --gap-scale
+    OO_gap_scale,
+    // --c-mat
+    OO_c_mat,
+    // --c-mis
+    OO_c_mis,
+    // --c-gip
+    OO_c_gip,
+    // --c-gep
+    OO_c_gep,
+    // --c-bw
+    OO_c_bw,
+
+    // --end-repair
+    OO_end_repair,
+    // --max-one-large-indel-rescue
+    OO_max_one_large_indel_rescue,
+    // --min-anchor-large-indel-rescue
+    OO_min_anchor_large_indel_rescue,
+    // --max-amplicon-overrun-large-indel-rescue
+    OO_max_amplicon_overrun_large_indel_rescue,
+    // --max-adapter-bases-for-soft-clipping
+    OO_max_adapter_bases_for_soft_clipping,
+    // --er-5clip
+    OO_er_5clip,
+
+    // --end-repair-he
+    OO_end_repair_he,
+    // --max-one-large-indel-rescue-he
+    OO_max_one_large_indel_rescue_he,
+    // --min-anchor-large-indel-rescue-he
+    OO_min_anchor_large_indel_rescue_he,
+    // --max-amplicon-overrun-large-indel-rescue-he
+    OO_max_amplicon_overrun_large_indel_rescue_he,
+    // --max-adapter-bases-for-soft-clipping-he
+    OO_max_adapter_bases_for_soft_clipping_he,
+    // --er-5clip-high-ampl-end-he
+    OO_er_5clip_he,
+
+    // --end-repair-low-ampl-end
+    OO_end_repair_le,
+    // --max-one-large-indel-rescue-le
+    OO_max_one_large_indel_rescue_le,
+    // --min-anchor-large-indel-rescue-le
+    OO_min_anchor_large_indel_rescue_le,
+    // --max-amplicon-overrun-large-indel-rescue-le
+    OO_max_amplicon_overrun_large_indel_rescue_le,
+    // --max-adapter-bases-for-soft-clipping-le
+    OO_max_adapter_bases_for_soft_clipping_le,
+    // --er-5clip-le
+    OO_er_5clip_le,
+    // --log
+    OO_log,
+    // --debug-log
+    OO_debug_log,
+    // --pen_flow_error
+    OO_pen_flow_error,
+    // --softclip-key
+    OO_softclip_key,
+    // --ignore-flowgram
+    OO_ignore_flowgram,
+    // --align_flowspace
+    OO_aln_flowspace 
+};
+
+typedef struct option sysopt_t;
+
+static const sysopt_t overridable_opts [] =
+{
+    // -A,--score-match
+    { "score-match",          required_argument,  NULL, OO_score_match },
+    // -M,--pen-mismatch
+    { "pen-mismatch",         required_argument,  NULL, OO_pen_mismatch },
+    // -O,--pen-gap-open
+    { "pen-gap-open",         required_argument,  NULL, OO_pen_gap_open },
+    // -E,--pen-gap-extension
+    { "pen-gap-extension",    required_argument,  NULL, OO_pen_gap_extension },
+    // -G,--pen-gap-long
+    { "pen-gap-long",         required_argument,  NULL, OO_pen_gap_long },
+    // -K,--gap-long-length
+    { "gap-long-length",      required_argument,  NULL, OO_gap_long_length },
+    // -w,--band-width
+    { "pen-band-width",       required_argument,  NULL, OO_band_width },
+    // -g,--softclip-type
+    { "softclip-type",        required_argument,  NULL, OO_softclip_type },
+    // --do-realign
+    { "do-realign",           optional_argument,  NULL, OO_do_realign },
+    // --r-mat
+    { "r-mat",                required_argument,  NULL, OO_r_mat },
+    // --r-mis
+    { "r-mis",                required_argument,  NULL, OO_r_mis },
+    // --r-gip
+    { "r-gip",                required_argument,  NULL, OO_r_gip },
+    // --r-gep
+    { "r-gep",                required_argument,  NULL, OO_r_gep },
+    // --r-bw
+    { "r-bw",                 required_argument,  NULL, OO_r_bw },
+    // --r-clip
+    { "r-clip",               required_argument,  NULL, OO_r_clip },
+    // --do-repeat-clip
+    { "do-repeat-clip",       optional_argument,  NULL, OO_do_repeat_clip },
+    // --repclip-cont
+    { "repclip_cont",         optional_argument,  NULL, OO_repclip_cont },
+    // --context
+    { "context",              optional_argument,  NULL, OO_context },
+    // --gap-scale
+    { "gap-scale",            required_argument,  NULL, OO_gap_scale },
+    // --c-mat
+    { "c-mat",                required_argument,  NULL, OO_c_mat },
+    // --c-mis
+    { "c-mis",                required_argument,  NULL, OO_c_mis },
+    // --c-gip
+    { "c-gip",                required_argument,  NULL, OO_c_gip },
+    // --c-gep
+    { "c-gep",                required_argument,  NULL, OO_c_gep },
+    // --c-bw
+    { "c-bw",                 required_argument,  NULL, OO_c_bw },
+    // Following options are recognised per se as well as with -le and -he suffixes:
+    // --end-repair
+    { "end-repair",           required_argument,  NULL, OO_end_repair },
+    // --max-one-large-indel-rescue
+    { "max-one-large-indel-rescue",                     required_argument,  NULL, OO_max_one_large_indel_rescue },
+    // --min-anchor-large-indel-rescue
+    { "min-anchor-large-indel-rescue",                  required_argument,  NULL, OO_min_anchor_large_indel_rescue },
+    // --max-er-5clip-large-indel-rescue
+    { "max-amplicon-overrun-large_intel_rescue",        required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue },
+    // -J, --max-adapter-bases-for-soft-clipping
+    { "max-adapter-bases-for-soft-clipping",            required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping },
+    // --er-5clip
+    { "er-5clip",                                       optional_argument,  NULL, OO_er_5clip },
+    // lower end of amplicon
+    // --end-repair-le
+    { "end-repair-le",                                  required_argument,   NULL, OO_end_repair_le },
+    // --max-one-large-indel-rescue-le
+    { "max-one-large-indel-rescue-le",                  required_argument,  NULL, OO_max_one_large_indel_rescue_le },
+    // --min-anchor-large-indel-rescue-le
+    { "min-anchor-large-indel-rescue-le",               required_argument,  NULL, OO_min_anchor_large_indel_rescue_le },
+    // --max-er-5clip-large-indel-rescue-le
+    { "max-amplicon-overrun-large-indel-rescue-le",     required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue_le },
+    // --max-adapter-bases-for-soft-clipping-le
+    { "max-adapter-bases-for-soft-clipping-le",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_le },
+    // --er-5clip-le
+    { "er-5clip-le",                                    optional_argument,  NULL, OO_er_5clip_le },
+    // higher end of amplicon
+    // --end-repair-he
+    { "end-repair-he",                                  required_argument,  NULL, OO_end_repair_he },
+    // --max-one-large-indel-rescue-he
+    { "max-one-large-indel-rescue-he",                  required_argument,  NULL, OO_max_one_large_indel_rescue_he },
+    // --min-anchor-large-indel-rescue-he
+    { "min-anchor-large-indel-rescue-he",               required_argument,  NULL, OO_min_anchor_large_indel_rescue_he },
+    // --max-er-5clip-large-indel-rescue-he
+    { "max-amplicon-overrun-large-indel-rescue-he",     required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue_he },
+    // --max-adapter-bases-for-soft-clipping-he
+    { "max-adapter-bases-for-soft-clipping-he",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_he },
+    // --er-5clip-he
+    { "er-5clip-he",                                    optional_argument,  NULL, OO_er_5clip_he },
+    // --log
+    { "log",                                            no_argument,        NULL, OO_log },
+    // --debug-log
+    { "debug_log",                                      no_argument,        NULL, OO_debug_log },
+    // --pen_flow_error
+    { "pen-flow-error",                                 required_argument,  NULL, OO_pen_flow_error },
+    // --softclip-key
+    { "softclip-key",                                   optional_argument,  NULL, OO_softclip_key },
+    // --ignore-flowgram
+    { "ignore-flowgram",                                optional_argument,  NULL, OO_ignore_flowgram },
+    // --align_flowspace
+    { "final-flowspace",                                optional_argument,  NULL, OO_aln_flowspace },
+    { NULL,                                             0,                  NULL, 0 }
+};
+
+static const char* short_opts = "A:M:O:E:G:K:w:g:J:X:YySF";
+
+int string_to_args (char* argstring, char*** argv_p) // this would return 0 or 2 and above: never should return 1 (if works properly)
+{
+    // scan line for space-separated tokens, count and save them
+    static const char *delim = " ";
+    int argc;
+    char** argv = NULL;
+    int argv_alloc = 0, argv_chunk = 8;
+    static char firstarg [] = "BEDOPT"; // :)
+    char *token, *initstr, *context;
+    for (argc = 0, initstr = argstring; (token = strtok_r (initstr, delim, &context)); ++argc, initstr = NULL)
+    {
+        if (argc >= argv_alloc)
+        {
+            argv_alloc += argv_chunk;
+            argv_chunk *= 2;
+            if (!argv)
+                argv = tmap_malloc (sizeof (char*) * argv_alloc, "override_argv_alloc");
+            else
+                argv = tmap_realloc (argv, sizeof (char*) * argv_alloc, "override_argv_realloc");
+        }
+        if (!argc)
+            argv [argc ++] = firstarg;
+        argv [argc] = token;
+    }
+    if (argv_alloc > argc)
+        argv = tmap_realloc (argv, sizeof (char*) * argc, "override_argv_realloc_shrink");
+    *argv_p = argv;
+    return argc;
+}
+
+// neither atoi nor strtol properly check for errors, and sscanf is too expensive.
+// this amends strtol with naive error checking
+static uint8_t str2int (const char* str, int* value)
+{
+    char* endptr;
+    int errono_save = errno;
+    errno = 0;
+    long val = strtol (str, &endptr, 10);
+    if (*endptr) // there was some garbage down a string
+        return 0;
+    if (val == 0)
+    {
+        // check if there is simple evidence that 0 just indicates no valid conversion
+        while (*str)
+        {
+            if (!(isspace (*str) || *str == '+' || *str == '-' || (*str >=  '0' && *str <= '9')))
+                return 0;
+            if (*str >= '1' && *str <= '9')
+                return 0;
+            ++ str;
+        }
+    }
+    if (val > INT_MAX || val < INT_MIN)
+        return 0;
+    *value = (int) val;
+    return 1;
+}
+
+static uint8_t str2double (const char* str, double* value)
+{
+    char* endptr;
+    int errono_save = errno;
+    errno = 0;
+    double val = strtod (str, &endptr);
+    if (*endptr) // there was some garbage down a string
+        return 0;
+    if (val == 0.0)
+    {
+        // check if there is simple evidence that 0 just indicates no valid conversion
+        while (*str)
+        {
+            if (!(isspace (*str) || *str == '+' || *str == '-' || *str == '.' || *str == 'e' || *str == 'E' || (*str >=  '0' && *str <= '9')))
+                return 0;
+            ++ str;
+        }
+        // 'semi-blindly assume best: if no invalid chars here, and 0.0 returned, than exponent was too small...
+    }
+    *value = val;
+    return 1;
+}
+
+// parses string to get override parameters
+// following TMAP options are recognized:
+// -A,--score-match
+// -M,--pen-mismatch
+// -O,--pen-gap-open
+// -E,--pen-gap-extension
+// -G,--pen-gap-long
+// -K,--gap-long-length
+// -w,--band-width
+// -g,--softclip-type
+// --do-realign
+// --r-mat
+// --r-mis
+// --r-gip
+// --r-gep
+// --r-bw
+// --r-clip
+// --do-repeat-clip
+// --repclip-cont
+// --context
+// --gap-scale
+// --c-mat
+// --c-mis
+// --c-gip
+// --c-gep
+// --c-bw
+// --debug-log
+// -X, --pen-flow-error
+// --softclip-key
+// --ignore-flowgram
+// -F, --final-flowspace
+// Following options are recognised per se as well as with -le and -he suffixes:
+// --end-repair
+// --max-one-large-indel-rescue
+// --min-anchor-large-indel-rescue
+// --max-er-5clip-large-indel-rescue
+// -J,--max-adapter-bases-for-soft-clipping
+// --er-5clip
+// the following option has a special meaning:
+// --log : if specified, cancels the post-processing logging for all amplicons but the ones for which it is specified.
+// returns number of parameter overrides succesfully parsed
+
+uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str, int32_t* specific_log, char* bed_fname, int lineno)
+{
+    char** argv = NULL;
+    int argc = string_to_args (param_spec_str, &argv);
+    if (argc < 2)
+        return 0;
+    // now use getopt_long to extract parameters
+    optind = 1; // reset global state for getopt_long
+    uint32_t ovr_count = 0;
+    while (1)
+    {
+        int option_index;
+        int value;
+        double dvalue;
+        int c = getopt_long (argc, argv, short_opts, overridable_opts, &option_index);
+        if (c == -1)
+            break;
+
+        switch (c)
+        {
+            case 'A':
+            case OO_score_match:
+                if (str2int (optarg, &value))
+                    local_params->score_match.value = value,
+                    local_params->score_match.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --score-match (-A)", bed_fname, lineno);
+                break;
+            case 'M':
+            case OO_pen_mismatch:
+                if (str2int (optarg, &value))
+                    local_params->pen_mm.value = value,
+                    local_params->pen_mm.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --pen-mismatch (-M)", bed_fname, lineno);
+                break;
+            case 'O':
+            case OO_pen_gap_open:
+                if (str2int (optarg, &value))
+                    local_params->pen_gapo.value = value,
+                    local_params->pen_gapo.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-open (-O)", bed_fname, lineno);
+                break;
+            case 'E':
+            case OO_pen_gap_extension:
+                if (str2int (optarg, &value))
+                    local_params->pen_gape.value = value,
+                    local_params->pen_gape.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-extension (-E)", bed_fname, lineno);
+                break;
+            case 'G':
+            case OO_pen_gap_long:
+                if (str2int (optarg, &value))
+                    local_params->pen_gapl.value = value,
+                    local_params->pen_gapl.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-long (-G)", bed_fname, lineno);
+                break;
+            case 'K':
+            case OO_gap_long_length:
+                if (str2int (optarg, &value))
+                    local_params->gapl_len.value = value,
+                    local_params->gapl_len.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --gap-long-length (-K)", bed_fname, lineno);
+                break;
+            case 'w':
+            case OO_band_width:
+                if (str2int (optarg, &value))
+                    local_params->bw.value = value,
+                    local_params->bw.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --band_width (-w)", bed_fname, lineno);
+                break;
+            case 'g':
+            case OO_softclip_type:
+                if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 3)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --softclip-type (-g)", bed_fname, lineno, value);
+                    else
+                        local_params->softclip_type.value = value,
+                        local_params->softclip_type.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --softclip-type (-g)", bed_fname, lineno);
+                break;
+            case OO_do_realign:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->do_realign.value = 1,
+                    local_params->do_realign.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --do-realign", bed_fname, lineno, value);
+                    else
+                        local_params->do_realign.value = value,
+                        local_params->do_realign.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --do-realign", bed_fname, lineno);
+                break;
+            case OO_r_mat:
+                if (str2int (optarg, &value))
+                    local_params->realign_mat_score.value = value,
+                    local_params->realign_mat_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-mat", bed_fname, lineno);
+                break;
+            case OO_r_mis:
+                if (str2int (optarg, &value))
+                    local_params->realign_mis_score.value = value,
+                    local_params->realign_mis_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-mis", bed_fname, lineno);
+                break;
+            case OO_r_gip:
+                if (str2int (optarg, &value))
+                    local_params->realign_gip_score.value = value,
+                    local_params->realign_gip_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-gip", bed_fname, lineno);
+                break;
+            case OO_r_gep:
+                if (str2int (optarg, &value))
+                    local_params->realign_gep_score.value = value,
+                    local_params->realign_gep_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-gep", bed_fname, lineno);
+                break;
+            case OO_r_bw:
+                if (str2int (optarg, &value))
+                    local_params->realign_bandwidth.value = value,
+                    local_params->realign_bandwidth.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-bw", bed_fname, lineno);
+                break;
+            case OO_r_clip:
+                if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 4)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --r-clip", bed_fname, lineno, value);
+                    else
+                        local_params->realign_cliptype.value = value,
+                        local_params->realign_cliptype.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --r-clip", bed_fname, lineno);
+                break;
+            case OO_do_repeat_clip:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->do_repeat_clip.value = 1,
+                    local_params->do_repeat_clip.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --do-repeat-clip", bed_fname, lineno, value);
+                    else
+                        local_params->do_repeat_clip.value = value,
+                        local_params->do_repeat_clip.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --do-repeat-clip", bed_fname, lineno);
+                break;
+            case OO_repclip_cont:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->repclip_continuation.value = 1,
+                    local_params->repclip_continuation.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --repclip-cont", bed_fname, lineno, value);
+                    else
+                        local_params->repclip_continuation.value = value,
+                        local_params->repclip_continuation.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --repclip-cont", bed_fname, lineno);
+                break;
+            case OO_context:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->do_hp_weight.value = 1,
+                    local_params->do_hp_weight.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --context", bed_fname, lineno, value);
+                    else
+                        local_params->do_hp_weight.value = value,
+                        local_params->do_hp_weight.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --context", bed_fname, lineno);
+                break;
+            case OO_c_mat:
+                if (str2double (optarg, &dvalue))
+                    local_params->context_mat_score.value = dvalue,
+                    local_params->context_mat_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --c-mat", bed_fname, lineno);
+                break;
+            case OO_c_mis:
+                if (str2double (optarg, &dvalue))
+                    local_params->context_mis_score.value = dvalue,
+                    local_params->context_mis_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --c-mis", bed_fname, lineno);
+                break;
+            case OO_c_gip:
+                if (str2double (optarg, &dvalue))
+                    local_params->context_gip_score.value = dvalue,
+                    local_params->context_gip_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --c-gip", bed_fname, lineno);
+                break;
+            case OO_c_gep:
+                if (str2double (optarg, &dvalue))
+                    local_params->context_gep_score.value = dvalue,
+                    local_params->context_gep_score.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --c-gep", bed_fname, lineno);
+                break;
+            case OO_c_bw:
+                if (str2int (optarg, &value))
+                    local_params->context_extra_bandwidth.value = value,
+                    local_params->context_extra_bandwidth.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --c-bw", bed_fname, lineno);
+                break;
+            case OO_end_repair:
+                if (str2int (optarg, &value))
+                    local_params->end_repair.value = value,
+                    local_params->end_repair.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair", bed_fname, lineno);
+                break;
+            case OO_end_repair_he:
+                if (str2int (optarg, &value))
+                    local_params->end_repair_he.value = value,
+                    local_params->end_repair_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair-he", bed_fname, lineno);
+                break;
+            case OO_end_repair_le:
+                if (str2int (optarg, &value))
+                    local_params->end_repair_le.value = value,
+                    local_params->end_repair_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair-le", bed_fname, lineno);
+                break;
+            case OO_max_one_large_indel_rescue:
+                if (str2int (optarg, &value))
+                    local_params->max_one_large_indel_rescue.value = value,
+                    local_params->max_one_large_indel_rescue.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue", bed_fname, lineno);
+                break;
+            case OO_max_one_large_indel_rescue_he:
+                if (str2int (optarg, &value))
+                    local_params->max_one_large_indel_rescue_he.value = value,
+                    local_params->max_one_large_indel_rescue_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue-he", bed_fname, lineno);
+                break;
+            case OO_max_one_large_indel_rescue_le:
+                if (str2int (optarg, &value))
+                    local_params->max_one_large_indel_rescue_le.value = value,
+                    local_params->max_one_large_indel_rescue_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue-le", bed_fname, lineno);
+                break;
+            case OO_min_anchor_large_indel_rescue:
+                if (str2int (optarg, &value))
+                    local_params->min_anchor_large_indel_rescue.value = value,
+                    local_params->min_anchor_large_indel_rescue.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue", bed_fname, lineno);
+                break;
+            case OO_min_anchor_large_indel_rescue_he:
+                if (str2int (optarg, &value))
+                    local_params->min_anchor_large_indel_rescue_he.value = value,
+                    local_params->min_anchor_large_indel_rescue_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue-he", bed_fname, lineno);
+                break;
+            case OO_min_anchor_large_indel_rescue_le:
+                if (str2int (optarg, &value))
+                    local_params->min_anchor_large_indel_rescue_le.value = value,
+                    local_params->min_anchor_large_indel_rescue_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue-le", bed_fname, lineno);
+                break;
+            case OO_max_amplicon_overrun_large_indel_rescue:
+                if (str2int (optarg, &value))
+                    local_params->max_amplicon_overrun_large_indel_rescue.value = value,
+                    local_params->max_amplicon_overrun_large_indel_rescue.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun", bed_fname, lineno);
+                break;
+            case OO_max_amplicon_overrun_large_indel_rescue_he:
+                if (str2int (optarg, &value))
+                    local_params->max_amplicon_overrun_large_indel_rescue_he.value = value,
+                    local_params->max_amplicon_overrun_large_indel_rescue_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun-he", bed_fname, lineno);
+                break;
+            case OO_max_amplicon_overrun_large_indel_rescue_le:
+                if (str2int (optarg, &value))
+                    local_params->max_amplicon_overrun_large_indel_rescue_le.value = value,
+                    local_params->max_amplicon_overrun_large_indel_rescue_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun-le", bed_fname, lineno);
+                break;
+            case 'J':
+            case OO_max_adapter_bases_for_soft_clipping:
+                if (str2int (optarg, &value))
+                    local_params->max_adapter_bases_for_soft_clipping.value = value,
+                    local_params->max_adapter_bases_for_soft_clipping.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping", bed_fname, lineno);
+                break;
+            case OO_max_adapter_bases_for_soft_clipping_he:
+                if (str2int (optarg, &value))
+                    local_params->max_adapter_bases_for_soft_clipping_he.value = value,
+                    local_params->max_adapter_bases_for_soft_clipping_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping-he", bed_fname, lineno);
+                break;
+            case OO_max_adapter_bases_for_soft_clipping_le:
+                if (str2int (optarg, &value))
+                    local_params->max_adapter_bases_for_soft_clipping_le.value = value,
+                    local_params->max_adapter_bases_for_soft_clipping_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping-le", bed_fname, lineno);
+                break;
+            case OO_er_5clip:
+                if (str2int (optarg, &value))
+                    local_params->end_repair_5_prime_softclip.value = value,
+                    local_params->end_repair_5_prime_softclip.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip", bed_fname, lineno);
+                break;
+            case OO_er_5clip_he:
+                if (str2int (optarg, &value))
+                    local_params->end_repair_5_prime_softclip_he.value = value,
+                    local_params->end_repair_5_prime_softclip_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip-he", bed_fname, lineno);
+                break;
+            case OO_er_5clip_le:
+                if (str2int (optarg, &value))
+                    local_params->end_repair_5_prime_softclip_le.value = value,
+                    local_params->end_repair_5_prime_softclip_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip-le", bed_fname, lineno);
+                break;
+            case OO_log:
+                local_params->specific_log.value = 1,
+                local_params->specific_log.over = 1,
+                ++(*specific_log);
+                ++ovr_count;
+                break;
+            case OO_debug_log:
+                local_params->debug_log.value = 1,
+                local_params->debug_log.over = 1,
+                ++ovr_count;
+                break;
+            case 'X':
+            case OO_pen_flow_error:
+                if (str2int (optarg, &value))
+                    local_params->fscore.value = value,
+                    local_params->fscore.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --pen_flow_error (-X)", bed_fname, lineno);
+                break;
+            case 'Y':
+            case OO_softclip_key:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->softclip_key.value = 1,
+                    local_params->softclip_key.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --softclip-key", bed_fname, lineno, value);
+                    else
+                        local_params->softclip_key.value = value,
+                        local_params->softclip_key.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --softclip-key", bed_fname, lineno);
+                break;
+            case 'S':
+            case OO_ignore_flowgram:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->ignore_flowgram.value = 1,
+                    local_params->ignore_flowgram.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --ignore_flowgram", bed_fname, lineno, value);
+                    else
+                        local_params->ignore_flowgram.value = value,
+                        local_params->ignore_flowgram.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --ignore_flowgram", bed_fname, lineno);
+                break;
+            case 'F':
+            case OO_aln_flowspace:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->aln_flowspace.value = 1,
+                    local_params->aln_flowspace.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --final-flowspace", bed_fname, lineno, value);
+                    else
+                        local_params->aln_flowspace.value = value,
+                        local_params->aln_flowspace.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --final-flowspace", bed_fname, lineno);
+                break;
+        }
+    }
+    free (argv);
+    return ovr_count;
+}
+
+// parse description (last) field from "BED Detail" file to obtain parameters.
+// The parameters should appear same way as on command line. No escape or quotation parsing is performed, as none of the overridable parameters can carry complex string values.
+// format is TMAP_OVERRIDE{ --tmap_option[ value] ....}
+// returns numer of overrides parsed
+
+uint32_t extract_overrides (tmap_map_locopt_t* local_params, const char* description, int32_t* local_logs, char* bed_fname, int lineno)
+{
+    // finds TMAP_OVERRIDE{...} block, cals parse_override on it's content
+    static const char BLOCK_HEAD [] = "TMAP_OVERRIDE";
+    static const char BLOCK_OPEN = '{';
+    static const char BLOCK_CLOSE = '}';
+    char* block_beg, *block_end;
+    block_beg = strstr (description, BLOCK_HEAD);
+    if (!block_beg)
+        return 0;
+    block_beg += sizeof (BLOCK_HEAD) - 1;
+    // scan for opening brace
+    while (isspace (*block_beg))
+        ++block_beg;
+    if (*block_beg != BLOCK_OPEN)
+    {
+        tmap_warning ("%s:%d: Error parsing parameters overrides: No parameters block opening found", bed_fname, lineno);
+        return 0;
+    }
+    ++block_beg; // point to first char inside param block
+    // find block close
+    block_end = block_beg;
+    while (*block_end && *block_end != BLOCK_CLOSE)
+        ++block_end;
+    if (*block_end != BLOCK_CLOSE)
+    {
+        tmap_warning ("%s:%d: Error parsing parameters overrides: Parameters block is not closed", bed_fname, lineno);
+        return 0;
+    }
+    // end string at block end;
+    // *block_end = 0;
+    // pass parmeters block strng to parser
+    // copy block to temp buffer as parse_overrides will modify it while parsing
+    char* block = alloca (block_end - block_beg + 1);
+    memcpy (block, block_beg, block_end - block_beg);
+    block [block_end - block_beg] = 0;
+    return parse_overrides (local_params, block, local_logs, bed_fname, lineno);
+}
+
+// assumes passed in string is semicolon-separated list of tags
+// extracts string value for a given tag; 
+// returns pointer to where the value string starts, put value's length into variable pointed by len
+// if no value for a tag can be found, returns NULL
+char* extract_tag_value (const char* string, const char* tag, int* len)
+{
+    static const char tag_delim [] = ";\n";
+    static const char ignored [] = "= ";
+
+    char* entry = strstr (string, tag);
+    if (!entry)
+    {
+        if (len) *len = 0;
+        return NULL;
+    }
+    entry += strlen (tag);
+    while (*entry && strchr (ignored, *entry))
+        ++entry;
+    if (!*entry)
+    {
+        if (len) *len = 0;
+        return entry;
+    }
+    char* end = strpbrk (entry, tag_delim);
+    if (!end)
+        end = entry + strlen (entry);
+    if (len) *len = end - entry;
+    return entry;
+}
+
+static void endpos_init (tmap_map_endpos_t* endpos)
+{
+    endpos->coord = 0;
+    endpos->count = 0;
+    endpos->fraction = 0.0;
+    endpos->flag = 0;
+};
+
+int32_t extract_and_store_read_ends_tag_values (const char* description, const char* tag, tmap_refseq_t* refseq, char* bed_fname, int lineno)
+{
+    static const char* BLOCK_DELIM = ":";
+    static const char* ELEM_DELIM = "|";
+    int32_t valid_blocks = 0;
+    int value_len;
+    char* value = extract_tag_value (description, tag, &value_len);
+    if (!value)
+        return 0;
+    if (!value_len)
+    {
+        tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Empty value for %s", tag);
+        return 0;
+    }
+    // make copy - no changes to passed in description is made
+    char* vcopy = alloca (value_len + 1);
+    memcpy (vcopy, value, value_len);
+    vcopy  [value_len] = 0;
+    // parse and store
+    char *block, *block_context, *block_initstr;
+    int blockno;
+    for (block_initstr = block = vcopy, blockno = 0; block != NULL; ++blockno, block_initstr = NULL)
+    {
+        if ((block = strtok_r (block_initstr, BLOCK_DELIM, &block_context)))
+        {
+            char *tok, *tok_context, *tok_initstr;
+            int tokno;
+            tmap_map_endpos_t endpos;
+            endpos_init (&endpos);
+            int blocklen = strlen (block);
+            // assert (blocklen <= value_len); // sanity
+            char* bcopy = alloca (blocklen + 1);
+            memcpy (bcopy, block, blocklen +1);
+             printf ("Blocklen=%d, block = %s\n", blocklen, bcopy);
+            for (tok_initstr = tok = bcopy, tokno = 0; 
+                    (tok = strtok_r (tok_initstr, ELEM_DELIM, &tok_context)) != NULL; tok_initstr = NULL, ++tokno)
+            {
+                switch (tokno)
+                {
+                    case 0:
+                        if (!str2int (tok, &endpos.coord))
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse coordinate (from '%s') from block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
+                            tok = NULL;
+                        }
+                        break;
+                    case 1:
+                        if (!str2int (tok, &endpos.count))
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse count (from '%s') from block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
+                            tok = NULL;
+                        }
+                        break;
+                    case 2:
+                        if (!str2double (tok, &endpos.fraction))
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse fraction (from '%s') from %d block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
+                            tok = NULL;
+                        }
+                        break;
+                    case 3:
+                        // we may want some validation here. 
+                        endpos.flag = *tok;
+                        break;
+                    default:
+                        ;
+                }
+            }
+            if (tokno > 4)
+                tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Ignoring %d extra fields in %s block %d (%s).", tokno - 3, tag, blockno, block);
+            if (tokno > 0 && tokno < 3)
+                tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Ignoring incomplete %s block %d (%s): %d fields found, 3 or more needed.", tag, blockno, block, tokno);
+            if (tokno == 3)
+                tmap_user_fileproc_msg (bed_fname, lineno, "Warning: %s block %d (%s) is missing Flag fied. Zero value is used.", tag, blockno, block);
+            if (tokno >= 3)
+            {
+                // manage memory if necessary
+                if (refseq->endposmem_used == refseq->endposmem_size)
+                {
+                    refseq->endposmem_size = refseq->endposmem_size ? (refseq->endposmem_size<<1) : READ_ENDS_MEM_INIT_CHUNK;
+                    refseq->endposmem = tmap_realloc (refseq->endposmem, refseq->endposmem_size * sizeof (tmap_map_endpos_t), "refseq->endposmem"); // no need to disctiminate malloc ad realloc: C realloc handles null pointers safely
+                }
+                // store
+                refseq->endposmem [refseq->endposmem_used ++] = endpos;
+                ++valid_blocks;
+            }
+        }
+    }
+    return valid_blocks;
+}
+
+// extracts read_ends and put into storage (refseq->endposmem), reallocating as needed and updating control memebers endposmem_used and endposmem_size
+// puts the addresses of saved data into tmap_map_endstat_t, passed in by pointer.
+// returns number of ends stored, or -1 on (unrecoverable) error
+
+int32_t extract_read_ends (char* description, tmap_map_endstat_t* read_ends, tmap_refseq_t* refseq, char* bed_fname, int lineno)
+{
+    static const char* READ_STARTS_TAG = "READ_STARTS";
+    static const char* READ_ENDS_TAG = "READ_ENDS";
+    read_ends->index = UINT32_MAX, read_ends->starts_count = 0, read_ends->ends_count = 0;
+
+    int32_t starts_count = extract_and_store_read_ends_tag_values (description, READ_STARTS_TAG, refseq, bed_fname, lineno);
+    if (starts_count == -1)
+        tmap_failure ("%s:%d : Unrecoverable error while parsing READ_STARTS",  bed_fname, lineno);
+    int32_t ends_count = extract_and_store_read_ends_tag_values (description, READ_ENDS_TAG, refseq, bed_fname, lineno);
+    if (ends_count == -1)
+        tmap_failure ("%s:%d : Unrecoverable error while parsing READ_ENDS",  bed_fname, lineno);
+    uint32_t stored = starts_count + ends_count;
+    if (stored)
+    {
+        read_ends->index = refseq->endposmem_used - stored;
+        read_ends->starts_count = starts_count;
+        read_ends->ends_count = ends_count;
+    }
+    return stored;
+}
+
+
 // ZZ:The bed file need to be sorted by start positions.
 static int
-tmap_refseq_read_bed_core(tmap_refseq_t *refseq, char *bedfile, int flag, char **chrs, int max_num_chr)
+tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32_t use_par_ovr, int32_t  use_read_ends, int* local_logs, char **chrs, int max_num_chr)
 {
-    if (bedfile == NULL) {
-	refseq->bed_exist = 0;
-	return 1;
+    if (bedfile == NULL)
+    {
+        refseq->bed_exist = 0;
+        return 1;
     }
-    if (flag == 0 && refseq->num_annos == 0) {
-	refseq->bed_exist = 0;
-	tmap_error("Refseq does not have any contigs, cannot read bed file", Warn, OutOfRange);	
-	return 0;
+    if (flag == 0 && refseq->num_annos == 0)
+    {
+        refseq->bed_exist = 0;
+        tmap_error ("Refseq does not have any contigs, cannot read bed file", Warn, OutOfRange);
+        return 0;
     }
-    refseq->bed_exist = 1;
     FILE *fp = fopen(bedfile, "r");
-    if (fp == NULL) fprintf(stderr, "Warning cannot open bed file %s \n", bedfile);
-    if (fp == NULL) return 0;
+    if (fp == NULL) 
+        tmap_warning ("Cannot open bed file %s\n", bedfile);
+    if (fp == NULL) 
+    {
+        refseq->bed_exist = 0;
+        return 0; //this causes TMAP to terminate.
+    }
+    else
+        refseq->bed_exist = 1;
+
     char line[10000], last_chr[100];
     int32_t seq_id = -1;
-    uint32_t num = 0, *b = NULL, *e = NULL, memsize = 0;
+    uint32_t i, num = 0, *b = NULL, *e = NULL, memsize = 0;
+    uint32_t last_parovr_mem_size = 0;
+    uint32_t last_read_ends_mem_size = 0;
+    uint32_t overrides_count = 0;
+    uint32_t read_ends_count = 0;
     uint32_t n_anno = refseq->num_annos;
     if (flag) n_anno = max_num_chr;
-    refseq->bednum =  tmap_malloc(sizeof(uint32_t) * n_anno, "refseq->bednum"); 
-    refseq->bedstart = tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedstart");
-    refseq->bedend =  tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedend");
-    memset(refseq->bednum, 0, sizeof(uint32_t)*n_anno);
-    memset(refseq->bedstart, 0, sizeof(uint32_t *)*n_anno);
-    memset(refseq->bedend,0, sizeof(uint32_t *)*n_anno);
+    refseq->bednum = tmap_malloc (sizeof(uint32_t) * n_anno, "refseq->bednum");
+    refseq->bedstart = tmap_malloc (sizeof(uint32_t *) * n_anno, "refseq->bedstart");
+    refseq->bedend = tmap_malloc (sizeof(uint32_t *) * n_anno, "refseq->bedend");
+    refseq->parovr = NULL; // lazy alloc if needed
+    refseq->parmem = NULL;
+    refseq->parmem_size = refseq->parmem_used = 0;
+    memset (refseq->bednum, 0, sizeof (uint32_t) * n_anno);
+    memset (refseq->bedstart, 0, sizeof (uint32_t *) * n_anno);
+    memset (refseq->bedend, 0, sizeof (uint32_t *) * n_anno);
     refseq->beditem = n_anno;
     last_chr[0] = 0;
-    while (fgets(line, sizeof line, fp)) {
-	if (line[0] == '#') continue;
-	if (strncmp("track", line, 5)==0) continue;
-	char chr[100];
-	uint32_t beg, end;
-	sscanf(line, "%99s %u %u", chr, &beg, &end);
-	if (strcmp(last_chr, chr) != 0) {
-	    memsize = 1000;
-	    if (num > 0) {
-		refseq->bednum[seq_id] = num;
-		num = 0;
-		refseq->bedstart[seq_id] = b;
-		refseq->bedend[seq_id] = e;
-		if (flag) chrs[seq_id] = strsave(last_chr);
-	    }
-	    int32_t next_id = flag? seq_id+1 : tmap_refseq_get_id(refseq, chr);
-	    if (next_id < 0 || next_id <= seq_id) {
-		fprintf(stderr, "ZZ warning %s %d\t%d\n", chr, seq_id, next_id);
-		tmap_error("Bed file is not sorted by chromosome order", Warn,  OutOfRange);
-        fclose (fp);
-		return 0;
-	    }
-	    seq_id = next_id;
-	    if (flag && seq_id > n_anno) {
-		tmap_error("exceed the max number of chromosomes", Warn, OutOfRange);
-	    }
-	    strcpy(last_chr, chr);
-	    b = tmap_malloc(sizeof(uint32_t) *memsize, "tmpb");
-	    e = tmap_malloc(sizeof(uint32_t) *memsize, "tmpe");
-	} else {
-	    if (num >= memsize) {
-		memsize *= 3;
-		b = tmap_realloc(b, sizeof(uint32_t) *memsize, "realloc_b");
-		e = tmap_realloc(e, sizeof(uint32_t) *memsize, "realloc_e");
-	    }
-	    if (b[num-1] > beg) {
-		tmap_error("Bed file is not sorted by begin", Warn, OutOfRange);
-        fclose (fp);
-		return 0;
-	    } else if (e[num-1] >= end) { 
-		    // ZZ:current ampl is contained in the previous one 
-		    continue;
-	    } else if (b[num-1] == beg) {
-		// ZZ:current one has same beg, but larger end, replace previous one
-		num--;
-	    }
-	} 
-	b[num] = beg;
-	e[num] = end;
-	num++;
+    char *token, *context, *initstr;
+    const char *delim = "\t"; // use tab delimiting; if real BEDs can be space delimited, we should change the processing significantly (it'll be not easy to handle such case, as number of fields in bed detail can be anything from 4+1 to 12+2)
+    uint32_t columns_no = -1; // for chechking consistency of columns count across different lines
+    uint32_t lineno = 0;
+    uint32_t recno = 0;
+    tmap_map_locopt_t local_params;
+    tmap_map_endstat_t read_ends;
+    uint32_t tokno;
+    char chr [100];
+    uint32_t beg, end;
+    uint8_t track_line_seen = 0;
+
+    while (fgets (line, sizeof (line), fp))
+    {
+        ++lineno;
+        if (line [0] == '#')
+                continue;
+        if (strncmp ("track", line, 5) == 0)
+        {
+            if (recno)
+            {
+                tmap_user_warning ("BED file %s contains trac record on line %d, after %d region records: Track record ignored", bedfile, lineno, recno);
+                continue;
+            }
+            if (track_line_seen)
+            {
+                tmap_user_warning ("BED file %s contains multiple trac records: extra at line %s. All but first are ignored", bedfile, lineno);
+                continue;
+            }
+            // DK check if track line contains 'type=bedDetail' clause
+            // do just a silly check here, assume no funny concatenations should be cared about
+            if (use_par_ovr && !strstr (line, "type=bedDetail"))
+            {
+                tmap_user_warning ("Per-amplicon parameter override is requested, but BED file %s is not of the bedDetail format. Amplicon specific parameters can not be used.", bedfile);
+                use_par_ovr = 0; // disable override use
+            }
+            if (use_read_ends && !strstr (line, "type=bedDetail"))
+            {
+                tmap_user_warning ("Use of read ends statistics is requested, but BED file %s is not of the bedDetail format. Read ends statistics can not be used.", bedfile);
+                use_read_ends = 0; // disable override use
+            }
+            track_line_seen = 1;
+            continue;
+        }
+        sscanf(line, "%99s %u %u", chr, &beg, &end);
+        ++recno;
+        overrides_count = 0;
+        read_ends_count = 0;
+        if (use_par_ovr || use_read_ends)
+        {
+            // parse last column, extract parameters overrides if any
+            char* last_tok = NULL;
+            for (tokno = 0, initstr = token = line; token; ++tokno, initstr = NULL)
+            {
+                last_tok = token;
+                token = strtok_r (initstr, delim, &context);
+            }
+            if (columns_no == -1)
+            {
+                if (tokno < 6)
+                    tmap_user_warning ("Bed file format violation: file %s, line %d: bedDetail format is specified in 'track' line, but only %d columns (<6) present. Description field not extracted from this line.", bedfile, lineno, tokno);
+                else
+                    columns_no = tokno;
+            }
+            else
+            {
+                if (tokno < 6)
+                    tmap_user_warning ("Bed file format violation: file %s, line %d: bedDetail format is specified in 'track' line, but only %d columns (<6) present. Description field not extracted from this line.", bedfile, lineno, tokno);
+                if (tokno != columns_no)
+                    tmap_user_warning ("Bed file format violation: file %s, line %d: Inconsistent number of fields: %d seen on this line, %d seen on earlier line(s).", bedfile, lineno, tokno, columns_no);
+            }
+            if (tokno >= 6) // description field present on this line
+            {
+                if (use_par_ovr)
+                {
+                    // find the TMAP_OVERRIDE block if any; get the overrides from the block
+                    tmap_map_locopt_init (&local_params);
+                    overrides_count = extract_overrides (&local_params, last_tok, local_logs, bedfile, lineno);
+                }
+                if (use_read_ends)
+                {
+                    // find the READ_STARTS and READ_ENDS blocks and parse / store them
+                    read_ends_count = extract_read_ends (last_tok, &read_ends, refseq, bedfile, lineno);
+                }
+            }
+        }
+
+        if (strcmp (last_chr, chr) != 0) // next (or first) contig (assuming BED is sorted)
+        {
+            memsize = 1000;
+            last_parovr_mem_size = 0;
+            last_read_ends_mem_size = 0;
+            if (num > 0)
+            {
+                refseq->bednum [seq_id] = num;
+                num = 0;
+                refseq->bedstart [seq_id] = b;
+                refseq->bedend [seq_id] = e;
+                if (flag) 
+                    chrs [seq_id] = strsave(last_chr);
+            }
+            int32_t next_id = flag ? (seq_id + 1) : tmap_refseq_get_id (refseq, chr);
+            if (next_id < 0 || next_id <= seq_id)
+            {
+                // fprintf(stderr, "ZZ warning %s %d\t%d\n", chr, seq_id, next_id);
+                tmap_error("Bed file is not sorted by chromosome order", Warn,  OutOfRange);
+                fclose (fp);
+                return 0;
+            }
+            seq_id = next_id;
+            if (flag && seq_id > n_anno)
+                tmap_error("exceed the max number of chromosomes", Warn, OutOfRange);
+
+            strcpy (last_chr, chr);
+            b = tmap_malloc (sizeof (uint32_t) *memsize, "tmpb");
+            e = tmap_malloc (sizeof (uint32_t) *memsize, "tmpe");
+        }
+        else
+        {
+            if (num >= memsize)
+            {
+                uint32_t prevsize = memsize;
+                memsize *= 3;
+                b = tmap_realloc (b, sizeof (uint32_t) *memsize, "realloc_b");
+                e = tmap_realloc (e, sizeof (uint32_t) *memsize, "realloc_e");
+            }
+            if (b [num-1] > beg) 
+            {
+                tmap_error ("Bed file is not sorted by begin", Warn, OutOfRange);
+                fclose (fp);
+                return 0;
+            }
+            else if (e [num-1] >= end)
+            {
+                // ZZ:current ampl is contained in the previous one
+                continue;
+                // DK: overrides for containing one preceed
+            }
+            else if (b [num-1] == beg)
+            {
+                // ZZ:current one has same beg, but larger end, replace previous one
+                num--;
+                // DK: overrides for longer one preceed
+            }
+        }
+        b [num] = beg;
+        e [num] = end;
+
+        if (overrides_count) // this is possible only if use_par_ovr is not false
+        {
+            if (refseq->parovr == NULL) // encountered actual override. allocate storage for contig's overrides, set each contig's override pointer to NULL
+            {
+                refseq->parovr = tmap_malloc (sizeof (uint32_t *) * n_anno, "refseq->parovr");
+                memset (refseq->parovr, 0, sizeof (uint32_t*) * n_anno); // NULL should always be all-bytes-zeroes, safe enough.
+            }
+            if (memsize > last_parovr_mem_size) // no need to check if the allocation is first: realloc handles NULL ptr reallocation safely.
+            {
+                refseq->parovr [seq_id] = tmap_realloc (refseq->parovr [seq_id], sizeof (uint32_t) * memsize, "refseq->parovr[seq_id]");
+                // memset (refseq->parovr [seq_id] + last_parovr_mem_size, 0xF, (memsize - last_parovr_mem_size) * sizeof (tmap_map_locopt_t*));
+                // the above is not so portable, explicit (below) is safe
+                uint32_t *par_idx, *par_idx_sent;
+                for (par_idx = refseq->parovr [seq_id] + last_parovr_mem_size, 
+                     par_idx_sent = refseq->parovr [seq_id] + memsize; 
+                     par_idx != par_idx_sent;
+                     ++par_idx) 
+                    *par_idx = UINT32_MAX;
+                last_parovr_mem_size = memsize;
+            }
+            // make sure there is free slot for this set of overrides
+            if (refseq->parmem_used == refseq->parmem_size) // no need to check if the allocation is first: realloc handles NULL ptr reallocation safely.
+            {
+                refseq->parmem_size = refseq->parmem_size ? (refseq->parmem_size * 2) : OVR_PAR_MEM_INIT_CHUNK;
+                refseq->parmem = tmap_realloc (refseq->parmem, refseq->parmem_size * sizeof (tmap_map_locopt_t), "parameter overrides storage");
+            }
+            // store (plain copy)
+            refseq->parmem [refseq->parmem_used] = local_params;
+            // the pointer is (refseq->parmem + refseq->parmem_used); store it below
+            refseq->parovr [seq_id][num] = refseq->parmem_used;
+            ++refseq->parmem_used;
+        }
+        if (read_ends_count)
+        {
+            if (refseq->read_ends == NULL)
+            {
+                refseq->read_ends = tmap_malloc (sizeof (tmap_map_endstat_t*) * n_anno, "refseq->read_ends");
+                memset (refseq->read_ends, 0, sizeof (tmap_map_endstat_t*) * n_anno); // NULL should always be all-bytes-zeroes, safe enough.
+            }
+            if (memsize > last_read_ends_mem_size) // no need to check if the allocation is first: realloc handles NULL ptr reallocation safely.
+            {
+                refseq->read_ends [seq_id] = tmap_realloc (refseq->read_ends [seq_id], sizeof (tmap_map_endstat_t) * memsize, "refseq->read_ends[seq_id]");
+                tmap_map_endstat_t *read_ends_ptr, *read_ends_sent;
+                for (read_ends_ptr = refseq->read_ends [seq_id] + last_read_ends_mem_size, 
+                     read_ends_sent = refseq->read_ends [seq_id] + memsize; 
+                     read_ends_ptr != read_ends_sent;
+                     ++read_ends_ptr)
+                    read_ends_ptr->index = UINT32_MAX, read_ends_ptr->starts_count = 0, read_ends_ptr->ends_count = 0;
+                last_read_ends_mem_size = memsize;
+            }
+            refseq->read_ends [seq_id][num] = read_ends;
+        }
+        ++num;
     }
-    if (seq_id >=0)  {
-	refseq->bednum[seq_id] = num;
-        refseq->bedstart[seq_id] = b;
-        refseq->bedend[seq_id] = e;
-	if (flag) chrs[seq_id] = strsave(last_chr);
+
+    // last ones
+    if (seq_id >=0)  
+    {
+        refseq->bednum [seq_id] = num;
+        refseq->bedstart [seq_id] = b;
+        refseq->bedend [seq_id] = e;
+        if (flag) 
+            chrs [seq_id] = strsave (last_chr);
     }
-    if (flag) refseq->beditem = seq_id+1;
+    if (flag) 
+        refseq->beditem = seq_id+1;
     fclose (fp);
     return 1;
 }
 
 int
-tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile) 
+tmap_refseq_read_bed (tmap_refseq_t *refseq, char *bedfile, int32_t use_par_ovr, int32_t use_read_ends, int32_t* local_logs)
 {
-    return tmap_refseq_read_bed_core(refseq, bedfile, 0, NULL, 0);
+    return tmap_refseq_read_bed_core (refseq, bedfile, 0, use_par_ovr, use_read_ends, local_logs, NULL, 0);
 }
 
 static void
@@ -1279,8 +2493,8 @@ find_next_bed(tmap_refseq_t *refseq, int cur_ind, int cur_pos, int *b, int *e, i
     while (i < refseq->bednum[cur_ind] && refseq->bedend[cur_ind][i] <= cur_pos) i++;
     *n = i;
     if (i < refseq->bednum[cur_ind]) {
-	*b = refseq->bedstart[cur_ind][i];
-	*e = refseq->bedend[cur_ind][i];
+    *b = refseq->bedstart[cur_ind][i];
+    *e = refseq->bedend[cur_ind][i];
     }
 }
 
@@ -1289,7 +2503,7 @@ find_chr_ind(char **chrs, int nchr, char *cur_chr)
 {
     int i = 0;
     for (; i < nchr; i++) {
-	if (strcmp(cur_chr, chrs[i]) == 0) return i;
+    if (strcmp(cur_chr, chrs[i]) == 0) return i;
     }
     return -1;
 }
@@ -1314,8 +2528,8 @@ int tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[])
       switch(c) {
         case 'v': tmap_progress_set_verbosity(1); break;
         case 'h': help = 1; break;
-	case 'o': out_nomask = optarg; break;
-	case 'm': max_num_chr = atoi(optarg); break;
+    case 'o': out_nomask = optarg; break;
+    case 'm': max_num_chr = atoi(optarg); break;
         default: return 1;
       }
   }
@@ -1333,40 +2547,39 @@ int tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[])
   refseq->len = 0;
 
 
-  char **chrs = tmap_malloc(sizeof(char *)*max_num_chr, "chrs"); 
-  tmap_refseq_read_bed_core(refseq, argv[optind], 1, chrs, max_num_chr);
+  char **chrs = tmap_malloc (sizeof(char *)*max_num_chr, "chrs");
+  tmap_refseq_read_bed_core (refseq, argv[optind], 1, 0, 0, NULL, chrs, max_num_chr);
 
 
-
-    // read in fasta file and put mask at bases 
+    // read in fasta file and put mask at bases
 
         FILE *fp = fopen(argv[optind+1], "r");
         if (fp == NULL) {
                 tmap_file_fprintf(tmap_file_stderr, "Cannot open %s\n", argv[optind+1]);
                 return 1;
         }
-	FILE *fo = NULL;
-	if (out_nomask) fo = fopen(out_nomask, "w");
+    FILE *fo = NULL;
+    if (out_nomask) fo = fopen(out_nomask, "w");
 
         char line[100000];
         char cur_chr[100];
         int b = -1, e = -1, n;
         int cur_pos = 0;
-	int chr_ind = -1;
+    int chr_ind = -1;
         while (fgets(line, sizeof line, fp)) {
                 if (line[0] == '>') {
                         sscanf(line+1, "%s", cur_chr);
                         cur_pos = n = 0;
-			chr_ind = find_chr_ind(chrs, refseq->beditem, cur_chr);
-			if (chr_ind >= 0) {
-			    find_next_bed(refseq, chr_ind, cur_pos, &b, &e, &n);
-			    if(fo) fprintf(fo, "%s", line);
-			    printf("%s", line);
-			}
+            chr_ind = find_chr_ind(chrs, refseq->beditem, cur_chr);
+            if (chr_ind >= 0) {
+                find_next_bed(refseq, chr_ind, cur_pos, &b, &e, &n);
+                if(fo) fprintf(fo, "%s", line);
+                printf("%s", line);
+            }
                         continue;
                 }
-		if (chr_ind == -1) continue;
-		if(fo) fprintf(fo, "%s", line);
+        if (chr_ind == -1) continue;
+        if(fo) fprintf(fo, "%s", line);
                 if (b == -1) {
                     all_N(line);
                     printf("%s", line);

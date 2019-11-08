@@ -211,8 +211,13 @@ void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null, vector<Allele
         	}
     	}
     }
-
+    // Initialize ll_record for no site-specific signal adjustment
     ll_record.assign(try_hyp_freq.size(), 0.0f);
+    // Initialize ll_record_with_bias_adj if site-specific signal adjustment is available
+	ll_record_with_bias_adj.clear();
+    if (not stranded_bias_adjustment.empty()){
+    	ll_record_with_bias_adj.assign(try_hyp_freq.size(), 0.0f);
+    }
 }
 
 float HypothesisStack::ReturnMaxLL() {
@@ -269,7 +274,7 @@ void HypothesisStack::ExecuteInference() {
     }
     cout << "+ Execute inference for the variant (" <<  PrintVariant(*variant) << ") done. "
     	 <<	"Processing time = " << (double) (clock() - t0) / 1E6 << " sec."<< endl
-		 << "  - Winner of the initial allele_freq = " << PrintIteratorToString(cur_state.start_freq_of_winner.begin(), cur_state.start_freq_of_winner.end()) << endl;
+		 << "  - Winner of the initial allele_freq = " << PrintIteratorToString(cur_state.start_freq_of_winner.begin(), cur_state.start_freq_of_winner.end()) << (cur_state.bias_checker.stranded_bias_adj.empty()? "" : " with site-specific signal adjustment applied") << "." << endl;
     cur_state.bias_generator.PrintDebug(false);
 	cur_state.sigma_generator.PrintDebug(false);
     cout << "  - params_ll = "<< cur_state.cur_posterior.params_ll << endl
@@ -288,16 +293,31 @@ void HypothesisStack::SetAlternateFromMain() {
 
 
 
-float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp){
+float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp, bool apply_site_specific_signal_adjustment){
   LatentSlate tmp_state;
   tmp_state = cur_state;
   tmp_state.detailed_integral = false;
   tmp_state.start_freq_of_winner = restart_hyp;
+
+  // Set stranded_bias_adjustment
+  if (apply_site_specific_signal_adjustment){
+	  tmp_state.bias_checker.SetBiasAdj(stranded_bias_adjustment);
+  }else{
+	  tmp_state.bias_checker.ClearBiasAdj();
+  }
+  // total_theory.stranded_bias_adj is informed by bias_checker.
+  total_theory.stranded_bias_adj = tmp_state.bias_checker.stranded_bias_adj;
+
   total_theory.ResetQualities(my_params.outlier_prob);  // clean slate to begin again
   tmp_state.ResetToOrigin(); // everyone back to starting places
 
   if (DEBUG > 0){
-	  cout<< "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << endl;
+	  cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << endl;
+	  if (apply_site_specific_signal_adjustment){
+	      cout << "  + Site-specific signal adjustment applied:" << endl;
+	      cout << "    - FWDB: " << PrintIteratorToString(stranded_bias_adjustment[0].begin(), stranded_bias_adjustment[0].end()) <<endl;
+	      cout << "    - REVB: " << PrintIteratorToString(stranded_bias_adjustment[1].begin(), stranded_bias_adjustment[1].end()) <<endl;
+	  }
   }
 
   tmp_state.LocalExecuteInference(total_theory, true, true, restart_hyp); // start at reference
@@ -315,7 +335,7 @@ float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp){
 	  if(tmp_state.cur_posterior.ref_vs_all.scan_ref_done){
         tmp_state.cur_posterior.clustering.UpdateFrequencyAgainstOne(max_allele_freq, tmp_state.cur_posterior.ref_vs_all.eval_at_frequency[tmp_state.cur_posterior.ref_vs_all.max_index], 0);
 	  }
-	  cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << " done. "<< endl
+	  cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << (apply_site_specific_signal_adjustment? " and site-specific signal adjustment " : " ") << "done"<< endl
 	       << "  - params_ll = "<< tmp_state.cur_posterior.params_ll << endl
 	       << "  - ref_vs_all.max_ll + params_ll = "<< restart_LL << " @ allele_freq = " << PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end()) << (tmp_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl;
   }
@@ -327,6 +347,8 @@ float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp){
   return restart_LL;
 }
 
+/*
+//XXX CZB: Not using. No site-specific bias adjustment.
 void HypothesisStack::TriangulateRestart(){
   // cur_state contains the best remaining guys
   // take the top 3, try by pairs because of diploid theories of the world
@@ -355,21 +377,59 @@ void HypothesisStack::TriangulateRestart(){
   }
   }
 }
+*/
 
 // try altenatives to the main function to see if we have a better fit somewhere else
 void HypothesisStack::ExecuteExtremeInferences() {
   if (DEBUG > 0){
-	  cout<< "  - The EM algorithm will be restarted by trying "<< try_hyp_freq.size() << " different initial allele_freq."<< endl;
+	  cout << "  - The EM algorithm will be restarted by trying "<< try_hyp_freq.size() << " different initial allele_freq" << (stranded_bias_adjustment.empty()? "." : " and turn on/off site-specific signal adjustment.")  << endl;
   }
   for (unsigned int i_start=0; i_start<try_hyp_freq.size(); i_start++){
-    ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start]);
+    // With the initial hyp_freq, first try no site-specific signal adjustment
+	ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start], false);
+	// Then try site-specific signal adjustment if available
+	// Apply the adjustment >after< the regular restart is highly desirable, since the no-adjustment restart will be used when restart_LL is tie.
+    if (not stranded_bias_adjustment.empty()){
+    	ll_record_with_bias_adj[i_start] = ExecuteOneRestart(try_hyp_freq[i_start], true);
+    }
   }
   //TriangulateRestart();
   RestoreFullInference(); // put total_theory to be consistent with whoever won
 }
 
+// Initialize site-specific signal adjustment
+void HypothesisStack::SetSiteSpecificBiasAdjustment(const vector<VariantSpecificParams>& variant_specific_params) {
+	bool has_fwdb_adj = false;
+	bool has_revb_adj = false;
+
+	stranded_bias_adjustment.assign(2, vector<float>(variant_specific_params.size(), 0.0f));
+	for (unsigned int i_alt = 0; i_alt < variant_specific_params.size(); ++i_alt){
+		if (variant_specific_params[i_alt].fwdb != 0.0f){
+			stranded_bias_adjustment[0][i_alt] = variant_specific_params[i_alt].fwdb;
+			has_fwdb_adj = true;
+		}
+		if (variant_specific_params[i_alt].revb != 0.0f){
+			stranded_bias_adjustment[1][i_alt] = variant_specific_params[i_alt].revb;
+			has_revb_adj = true;
+		}
+	}
+
+	if (has_fwdb_adj or has_revb_adj){
+		if (not has_fwdb_adj){
+			stranded_bias_adjustment[0].clear();
+		}
+		if (not has_revb_adj){
+			stranded_bias_adjustment[1].clear();
+		}
+	}else{
+		stranded_bias_adjustment.clear();
+	}
+}
+
 void HypothesisStack::RestoreFullInference() {
 //  cur_state = backup_state;
+  // Remember to restore total_theory.tranded_bias_adj from the best latent_bias!
+  total_theory.stranded_bias_adj = cur_state.bias_checker.stranded_bias_adj;
   cur_state.bias_generator.ResetActiveBias(total_theory);
   // in theory, need to update sigma & skew, but since not fitting for particular variants, don't worry about it at the moment.
   cur_state.sigma_generator.UpdateSigmaEstimates(total_theory);
@@ -636,33 +696,33 @@ void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
 // read_id_[i] = 1 means the i-th read is classified as the variant allele 1, and so on.
 void EnsembleEval::ApproximateHardClassifierForReads()
 {
-    read_id_.assign(read_stack.size(), -1);
-	strand_id_.assign(read_stack.size(), -1);
-	dist_to_left_.assign(read_stack.size(), -1);
-	dist_to_right_.assign(read_stack.size(), -1);
+    read_id_.assign(total_read_counts, -1);
+	strand_id_.assign(total_read_counts, -1);
+	dist_to_left_.assign(total_read_counts, -1);
+	dist_to_right_.assign(total_read_counts, -1);
 
 	int position0 = variant->position -1; // variant->position 1-base: vcflib/Variant.h
+	int book_idx = 0;
 	for (unsigned int i_read = 0; i_read < read_stack.size(); ++i_read) {
-		// compute read_id_
-		if(allele_eval.total_theory.my_hypotheses[i_read].success){
-			int most_responsibile_hyp = allele_eval.total_theory.my_hypotheses[i_read].MostResponsible();
-	        read_id_[i_read] = most_responsibile_hyp - 1; // -1 = null, 0 = ref , ...
-		}
-		else{
-	        read_id_[i_read] = -1; // failure = outlier
-	    }
+		int my_read_id = allele_eval.total_theory.my_hypotheses[i_read].success? allele_eval.total_theory.my_hypotheses[i_read].MostResponsible() - 1 : -1;  // -1 = null, 0 = ref , ...
+		int my_dist_to_left = -1;
+		int my_dist_to_right = -1;
+		int my_strand_id = read_stack[i_read]->is_reverse_strand? 1 : 0;
 
 		// not an outlier
-		if(read_id_[i_read] > -1){
+		if (my_read_id > -1){
 		    //fprintf(stdout, "position0 =%d, read_stack[i_read]->align_start = %d, read_stack[i_read]->align_end = %d, read_stack[i_read]->left_sc = %d, read_stack[i_read]->right_sc = %d\n", (int)position0, (int)read_stack[i_read]->align_start, (int)read_stack[i_read]->align_end, (int)read_stack[i_read]->left_sc, (int)read_stack[i_read]->right_sc);
 		    //fprintf(stdout, "dist_to_left[%d] = =%d, dist_to_right[%d] = %d\n", (int)i_read, (int)(position0 - read_stack[i_read]->align_start), (int)i_read, (int)(read_stack[i_read]->align_end - position0));
-	        dist_to_left_[i_read] = position0 - read_stack[i_read]->align_start;
-		    assert ( dist_to_left_[i_read] >=0 );
-		    dist_to_right_[i_read] = read_stack[i_read]->align_end - position0;
-		    assert ( dist_to_right_[i_read] >=0 );
-	    }
-	    //compute strand_id_
-	    strand_id_[i_read] = read_stack[i_read]->is_reverse_strand? 1 : 0;
+			my_dist_to_left = position0 - read_stack[i_read]->align_start;
+			my_dist_to_right = read_stack[i_read]->align_end - position0;
+		}
+		for (int consensus_read_counter = 0; consensus_read_counter < read_stack[i_read]->read_count; ++consensus_read_counter){
+			read_id_[book_idx] = my_read_id;
+			strand_id_[book_idx] = my_strand_id;
+			dist_to_left_[book_idx] = my_dist_to_left;
+			dist_to_right_[book_idx] = my_dist_to_right;
+			++book_idx;
+		}
 	}
 }
 
@@ -865,11 +925,13 @@ int EnsembleEval::DetectBestMultiAllelePair(vector<float>& allele_freq_estimatio
     	    ApproximateHardClassifierForReads();
 	    }
 	    // take responsibility
-	    for(unsigned int i_read = 0; i_read < read_id_.size(); ++i_read){
-	        int my_alt = read_id_[i_read];
+	    int i_read_id = 0;
+	    for(unsigned int i_read = 0; i_read < allele_eval.total_theory.my_hypotheses.size(); ++i_read){
+	        int my_alt = read_id_[i_read_id];
 		    if (my_alt > -1){
 		        best_allele_test[my_alt].second += allele_eval.total_theory.my_hypotheses[i_read].weighted_responsibility[my_alt + 1];
 		    } // otherwise count for nothing
+	        i_read_id += allele_eval.total_theory.my_hypotheses[i_read].read_counter;
 	    }
     }
 
@@ -1018,6 +1080,8 @@ void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool 
     SetEffectiveMinFamilySize(*parameters, variant_specific_params);
     // only rich_json_diagnostic needs full data
     allele_eval.total_theory.preserve_full_data = parameters->program_flow.rich_json_diagnostic;
+    // Site-specific signal adjustment
+    allele_eval.SetSiteSpecificBiasAdjustment(variant_specific_params);
 }
 
 void EnsembleEval::FlowDisruptivenessInReadLevel(const InputStructures &global_context)
@@ -2253,9 +2317,14 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
 	else {
       my_info << "REALIGNEDx" << frac_realigned;
 	}
-    info_fields.push_back(my_info.str());
+    misc_info_fields.push_back(my_info.str());
   }
 }
+
+bool CompareReadCounts(const Alignment* const rai_0, const Alignment* const rai_1){
+	return rai_0->read_count > rai_1->read_count;
+}
+
 
 // Read and process records appropriate for this variant; positions are zero based
 void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const PositionInProgress& bam_position, int sample_index)
@@ -2264,9 +2333,15 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
   // Initialize random number generator for each stack -> ensure reproducibility
   RandSchrange RandGen(parameters.my_controls.RandSeed);
 
-  read_stack.clear();  // reset the stack
-  read_stack.reserve(parameters.my_controls.downSampleCoverage);
   int read_counter = 0;
+  total_read_counts = 0;
+  bool is_suppress_mol_tags = parameters.tag_trimmer_parameters.suppress_mol_tags;
+  read_stack.clear();  // reset the stack
+  if (is_suppress_mol_tags){
+	  read_stack.reserve(8192);
+  }else{
+	  read_stack.reserve(parameters.my_controls.downSampleCoverage);
+  }
 
   for (Alignment* rai = bam_position.begin; rai != bam_position.end; rai = rai->next) {
 
@@ -2279,7 +2354,8 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
       continue;
 
     // TS-17069: The primer-trimmed read must fully cover the variant
-    if (rai->alignment.Position > seq_context.position0 or rai->alignment.GetEndPosition() < (int) seq_context.position0 + (int) seq_context.reference_allele.size())
+    if (rai->alignment.Position > seq_context.position0
+    		or rai->alignment.GetEndPosition() < (int) seq_context.position0 + (int) seq_context.reference_allele.size())
       continue;
 
     if (rai->filtered)
@@ -2287,19 +2363,46 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
 
     // TS-17069: The original read must fully cover the splicing window. (rai->original_positinon has been checked)
     if (rai->original_end_position < multiallele_window_end)
-    	continue;
+      continue;
+
+    // The read passes all conditions and is eligible to be downsampled.
+    read_counter++;
+
+    if (is_suppress_mol_tags){
+      read_stack.push_back(rai);
+      total_read_counts += rai->read_count;
+      continue;
+    }
 
     // Reservoir Sampling
     if (read_stack.size() < (unsigned int)parameters.my_controls.downSampleCoverage) {
-      read_counter++;
       read_stack.push_back(rai);
+      total_read_counts += rai->read_count;
     } else {
-      read_counter++;
       // produces a uniformly distributed test_position between [0, read_counter-1]
       unsigned int test_position = ((double)RandGen.Rand() / ((double)RandGen.RandMax + 1.0)) * (double)read_counter;
-      if (test_position < (unsigned int)parameters.my_controls.downSampleCoverage)
-        read_stack[test_position] = rai;
+      if (test_position < (unsigned int)parameters.my_controls.downSampleCoverage){
+        total_read_counts -= read_stack[test_position]->read_count;
+    	read_stack[test_position] = rai;
+    	total_read_counts += rai->read_count;
+      }
     }
+  }
+
+  // No need to do strategic downsampling.
+  if (read_counter <= parameters.my_controls.downSampleCoverage or (not is_suppress_mol_tags)){
+	return;
+  }
+
+  // Do strategic downsampling if I suppress mol tags.
+  // (a): Pick up the reads with higher read counts.
+  // (b): If I can't pick up all reads of the same read counts, then randomly pick the reads until the read stack is full.
+  random_shuffle(read_stack.begin(), read_stack.end());
+  sort(read_stack.begin(), read_stack.end(), CompareReadCounts);
+  read_stack.resize(parameters.my_controls.downSampleCoverage);
+  total_read_counts = 0;
+  for (vector<const Alignment*>::const_iterator read_stack_it = read_stack.begin(); read_stack_it != read_stack.end(); ++read_stack_it){
+	total_read_counts += (*read_stack_it)->read_count;
   }
 }
 
@@ -2513,6 +2616,7 @@ void EnsembleEval::DoDownSamplingBiDirMolTag(const ExtendParameters &parameters,
 	assert(strand_key == 0);
 	MyRandSchrange my_rand_schrange(parameters.my_controls.RandSeed); 	// The random number generator that we use to guarantee reproducibility.
     unsigned int read_counter = 0;  // Number of reads on read stack
+    total_read_counts = 0;
     unsigned int downSampleCoverage = (unsigned int) parameters.my_controls.downSampleCoverage;
 
 	read_stack.clear();  // reset the stack
@@ -2531,6 +2635,7 @@ void EnsembleEval::DoDownSamplingBiDirMolTag(const ExtendParameters &parameters,
 					read_stack.push_back(*read_it);
 					allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
 					++read_counter;
+					total_read_counts += (*read_it)->read_count;
 				}
 			}
 		}
@@ -2621,6 +2726,7 @@ void EnsembleEval::DoDownSamplingBiDirMolTag(const ExtendParameters &parameters,
 			for (unsigned int idx = 0; idx < num_reads_in; ++idx){
 				read_stack.push_back(func_fam_it->ptr_fam->valid_family_members.at(read_indicies->at(idx)));
 				allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
+				total_read_counts += func_fam_it->ptr_fam->valid_family_members.at(read_indicies->at(idx))->read_count;
 				++read_counter;
 			}
 		}
@@ -2652,6 +2758,7 @@ void EnsembleEval::DoDownSamplingUniDirMolTag(const ExtendParameters &parameters
     unsigned int read_counter = 0;  // Number of reads on read stack
     unsigned int downSampleCoverage = (unsigned int) parameters.my_controls.downSampleCoverage;
 
+    total_read_counts = 0;
 	read_stack.clear();  // reset the stack
 	allele_eval.total_theory.my_eval_families.clear();
 
@@ -2667,6 +2774,7 @@ void EnsembleEval::DoDownSamplingUniDirMolTag(const ExtendParameters &parameters
 				for (vector<Alignment*>::iterator read_it = family_it->valid_family_members.begin(); read_it != family_it->valid_family_members.end(); ++read_it){
 					read_stack.push_back(*read_it);
 					allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
+					total_read_counts += (*read_it)->read_count;
 					++read_counter;
 				}
 			}
@@ -2824,6 +2932,7 @@ void EnsembleEval::DoDownSamplingUniDirMolTag(const ExtendParameters &parameters
 			read_stack.push_back(func_fam_it->ptr_fam->valid_family_members[i_read]);
 			// Add the read in to the family
 			allele_eval.total_theory.my_eval_families.back().AddNewMember(read_counter);
+			total_read_counts += func_fam_it->ptr_fam->valid_family_members[i_read]->read_count;
 			++read_counter;
 		}
 	}
@@ -2942,6 +3051,7 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
 	}else{
 		DoDownSamplingUniDirMolTag(parameters, effective_min_fam_size, my_molecular_families, num_reads_available_by_strand[best_strand_index], num_func_fam_by_strand[best_strand_index], best_strand_index);
 	}
+
 }
 
 // ------------------------------------------------------------

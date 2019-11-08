@@ -240,7 +240,7 @@ $(function () {
                 } else {
                     if ('split_status' in data) {
                     	if (data["split_status"]=='failed'){
-                    		var error_text = '<div class="alert alert-danger" role="alert"> <i class="icon-info-sign"></i> <span class="sr-only"> Error: </span>Job Failed. Please check the ';
+                    		var error_text = '<div class="alert alert-danger" role="alert"> <b>ERROR:</b> </span>Job Failed. Please check the ';
                     		if ('temp_path' in data){
                     			error_text += '<a href="'+ data['temp_path'] + '/TVC_drmaa_stdout.txt">log file</a> for details.</div>';
                     		}
@@ -250,11 +250,11 @@ $(function () {
                     		$("#inspectOutput").html(error_text);
                         	$("#exportInspect").removeAttr("disabled");
                     	}else{
-                            $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + data["split_status"]);
+                            $("#inspectOutput").html("<img style='height:25px;width:25px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + "&nbsp "+ data["split_status"]);
                             poll_status();
                     	}
                     }else{
-                        $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + data["split_status"]);
+                        $("#inspectOutput").html("<img style='height:25px;width:25px;' src='/site_media/resources/bootstrap/img/loading.gif'/>" + "&nbsp "+ data["split_status"]);
                         poll_status();
                     }
                 }
@@ -271,7 +271,7 @@ $(function () {
     	var sp = get_json("startplugin.json");
         var post = {"startplugin": sp, "variants": TVC.inspect, "barcode": get_barcode()};
 
-        $("#inspectOutput").html("<img style='height:30px;width:30px;' src='/site_media/resources/bootstrap/img/loading.gif'/>Starting");
+        $("#inspectOutput").html("<img style='height:25px;width:25px;' src='/site_media/resources/bootstrap/img/loading.gif'/> &nbsp Starting");
 
         var slice = $.ajax({
             dataType: "json",
@@ -341,6 +341,9 @@ $(function () {
     }
     
     function PercentFormatAF(row, cell, value, columnDef, dataContext) {
+    	if (!isFinite(value)){
+    		return '<div style="text-align:right"> . </div>';
+    	}
         return '<div style="text-align:right">' + (value).toFixed(2) + " %</div>";
     }
 
@@ -773,7 +776,7 @@ $(function () {
     	},
     	{
             id: "lod", field: "lod", width: 12, minWidth: 12, sortable: true,
-            name: "LOD", toolTip: "LOD: Limit of Detection at genomic location, estimated based on the number of detected molecules",
+            name: "LOD", toolTip: "The Limit Of Detection (LOD) is the lowest possible allele frequency in the sample such that the variant is callable with probability greater than min_callable_prob, when the molecular depth is given.",
             formatter: PercentFormatAF
     	});
     }else{
@@ -1028,7 +1031,7 @@ copyTextToClipboard(text);
     var table = '<div style="margin-top:35px; padding:5px; width: 99.5%" align="right">';
     table += '<button type="button" class="btn clearfix" id="adjust_debug_settings">';
     table += 'Show Troubleshooting <i class="icon-chevron-down"></i></button></div>';
-    table += '<div class=clearfix collapse" id="toInspect" style="data-toggle=collapse; height:0px; padding: 5px; width: 99%;"><h3 style="margin-bottom:5px"><i class="icon-zoom-in"></i> Variants to inspect (mini bam/bed/vcf files will be generated)</h3>';
+    table += '<div class=clearfix collapse" id="toInspect" style="data-toggle=collapse; height:0px; padding: 5px; width: 99%;"><h3 style="margin-bottom:5px"><i class="icon-zoom-in"></i> Variants to inspect (miniature BAM/BED/VCF files will be generated)</h3>';
     table += '<div id="manualInspectAdd" class="btn">Add Manually</div>';
     table += '<div id="exportInspect" class="btn btn-primary" style="margin-left: 10px;">Export</div>';
     table += '<div id="inspectOutput" style="padding-top: 10px;"></div>';

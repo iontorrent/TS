@@ -5,7 +5,20 @@
 
 def sample_relationship_fields():
     # Webservice Call For Workflow/ApplicationType Data Structure goes here. Replace later
-    webservice_call = [{"Workflow": "TargetSeq Germline", "ApplicationType": "TargetSeq Germline"}, {"Workflow": "myTGWorkflow", "ApplicationType": "TargetSeq Germline"}, {"Workflow": "myDirectorsTGWorkflow", "ApplicationType": "TargetSeq Germline"}, {"Workflow": "DepartmentTGWorkflow", "ApplicationType": "TargetSeq Germline"}, {"Workflow": "Whole Genome", "ApplicationType": "Whole Genome"}, {"Workflow": "Annotate Variants", "ApplicationType": "Annotate Variants"}, {"Workflow": "TargetSeq Somatic", "ApplicationType": "TargetSeq Somatic"}, {"Workflow": "AmpliSeq Germline", "ApplicationType": "AmpliSeq Germline"}, {"Workflow": "AmpliSeq Somatic", "ApplicationType": "AmpliSeq Somatic"}, {"Workflow": "AmpliSeq2Wfl", "ApplicationType": "AmpliSeq Somatic"}, {"Workflow": "TumorNormal", "ApplicationType": "TumorNormal"}, {"Workflow": "myTNWorkflow", "ApplicationType": "TumorNormal"}]
+    webservice_call = [
+        {"Workflow": "TargetSeq Germline", "ApplicationType": "TargetSeq Germline"},
+        {"Workflow": "myTGWorkflow", "ApplicationType": "TargetSeq Germline"},
+        {"Workflow": "myDirectorsTGWorkflow", "ApplicationType": "TargetSeq Germline"},
+        {"Workflow": "DepartmentTGWorkflow", "ApplicationType": "TargetSeq Germline"},
+        {"Workflow": "Whole Genome", "ApplicationType": "Whole Genome"},
+        {"Workflow": "Annotate Variants", "ApplicationType": "Annotate Variants"},
+        {"Workflow": "TargetSeq Somatic", "ApplicationType": "TargetSeq Somatic"},
+        {"Workflow": "AmpliSeq Germline", "ApplicationType": "AmpliSeq Germline"},
+        {"Workflow": "AmpliSeq Somatic", "ApplicationType": "AmpliSeq Somatic"},
+        {"Workflow": "AmpliSeq2Wfl", "ApplicationType": "AmpliSeq Somatic"},
+        {"Workflow": "TumorNormal", "ApplicationType": "TumorNormal"},
+        {"Workflow": "myTNWorkflow", "ApplicationType": "TumorNormal"},
+    ]
     jsonfile = {}  # Represents JSON Object
     workflow_list = []
 
@@ -15,10 +28,28 @@ def sample_relationship_fields():
 
     # "columns" key in JSON
     columns_list = []
-    order1 = {"Name": "Workflow", "Order": "1", "Type": "list", "ValueType": "String", "Values": workflow_list}
-    order2 = {"Name": "RelationshipType", "Order": "2", "Type": "list", "ValueType": "String", "Values": ["Self", "TumorNormal", "Trio"]}
+    order1 = {
+        "Name": "Workflow",
+        "Order": "1",
+        "Type": "list",
+        "ValueType": "String",
+        "Values": workflow_list,
+    }
+    order2 = {
+        "Name": "RelationshipType",
+        "Order": "2",
+        "Type": "list",
+        "ValueType": "String",
+        "Values": ["Self", "TumorNormal", "Trio"],
+    }
     order3 = {"Name": "SetId", "Order": "3", "Type": "input", "ValueType": "Integer"}
-    order4 = {"Name": "Relation", "Order": "4", "Type": "list", "ValueType": "String", "Values": ["Tumor", "Normal", "Father", "Mother", "Child"]}
+    order4 = {
+        "Name": "Relation",
+        "Order": "4",
+        "Type": "list",
+        "ValueType": "String",
+        "Values": ["Tumor", "Normal", "Father", "Mother", "Child"],
+    }
     columns_list.append(order1)
     columns_list.append(order2)
     columns_list.append(order3)
@@ -72,6 +103,7 @@ def sample_relationship_fields():
 
 def main():
     sample_relationship_fields()
+
 
 # For development use
 if __name__ == "__main__":

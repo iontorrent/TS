@@ -1,6 +1,7 @@
 {% extends "rundb/data/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
@@ -9,10 +10,9 @@
         display: inline-block;
         zoom: 1;
 		*display: inline;
-        width: 200px;
         height: 30px;
         float: left;
-        margin: 0 15px 15px 0;
+        {#margin: 0 15px 15px 0;#}
     }
     .search-field #rangeA {
         margin: 0;
@@ -37,60 +37,83 @@
 {% block content %}
 	<div class="content group">
 	{%spaceless%}
-		<div class="clearfix">
-			<h1 class="pull-left">Projects</h1>
-			<a href="{% url "project_add" %}" class="btn btn-primary pull-right add_project">Create a New Project</a>
+        <div class="row-fluid">
+            <div class="clearfix">
+                <h1 class="pull-left">{% trans "projects.title" %}</h1>
+                <a href="{% url "project_add" %}" class="btn btn-primary pull-right add_project">{% trans "projects.action.add.label" %}</a>
+            </div>
 		</div>
-		<div id="search_bar" class="well">
-			<div class="search-field">
-				<label for="rangeA" class="hide">Date</label>
-				<input type="text" value="" id="rangeA" placeholder="Last Modified"/>
-			</div>
-			<div class="input-append search-field">
-				<label for="search_text" class="hide">Search Names</label>
-				<input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-				<button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
-			</div>
-			<div class="input-append search-field">
-				<button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
-					Clear
-				</button>
-			</div>
+        <div class="row-fluid">
+            <div class="form-inline well well-small">
+                <fieldset>
+                    <div id="search_bar" class="">
+                        <div class="search-field">
+                            <label for="rangeA" class="hide">{% trans "projects.search_bar.fields.rangeA.label" %}</label>
+                            <input class="input-medium" type="text" value="" id="rangeA" placeholder="{% trans "projects.search_bar.fields.rangeA.placeholder" %}"/>
+                        </div>
+                        <div class="input-append search-field">
+                            <label for="search_text" class="hide">{% trans "projects.search_bar.fields.search_text.label" %}</label>
+                            <input class="input-medium" id="search_text" type="text" placeholder="{% trans "projects.search_bar.fields.search_text.placeholder" %}" style="width: 150px;" />
+                            <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">{% trans "projects.search_bar.fields.search_text.action.submit" %}</button>
+                        </div>
+                        <div class="search-field">
+                            <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
+                                {% trans "projects.search_bar.action.clear_filters.label" %}
+                            </button>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
 		</div>
-		<div id="grid"></div>
+        <div class="row-fluid">
+		    <div id="grid"></div>
+        </div>
 	{%endspaceless%}
 	</div>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
-<script src="{% static "js/date.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
-<script type="text/javascript">			
+{% include "rundb/common/head_jqueryui_script.html" %}
+<script src="{% static "js/date.min.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
+<script type="text/javascript">
 function initialize_search () {			
-    $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
-    clear_filters()
+    $('#rangeA').daterangepicker($.DateRangePickerSettings.get());
+    clear_filters();
+}
+
+function getDateRangeInFilterFormat($daterange, format /*yyyy-MM-dd HH:mm[:ss[.uuuuuu]][TZ]*/) {
+    var date = "";
+    var _format = format || 'yyyy-MM-dd HH:mm';
+
+    if ($daterange && $daterange.start) {
+        var start = new Date($daterange.start); //clone
+        var end = new Date($daterange.start); //clone
+        if ($daterange.end) {
+            end = new Date($daterange.end);
+        }
+        end.setHours(23);
+        end.setMinutes(59);
+        end.setSeconds(59);
+        date = start.toString(_format) + "," + end.toString(_format);
+    }
+    return date;
 }
 
 function filter(e){
 	e.preventDefault();
-	e.stopPropagation();			    
-  var daterange = $("#rangeA").val();
-  if (daterange) {
-      if (!/ - /.test(daterange)) {
-          daterange = daterange + ' - ' + daterange;
-      }
-      daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
-  }
-	$("#grid").data("kendoGrid").dataSource.filter([
-		{
-			field: "modified",
-			operator: "__range",
-			value: daterange 
-		}
-		, {
-			field: "name",
-			operator: "__icontains",
-			value: $("#search_text").val() 
-		}
-	]);
+	e.stopPropagation();
+
+
+    $("#grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "modified",
+            operator: "__range",
+            value: getDateRangeInFilterFormat($("#rangeA").data("daterange"))
+        }
+        , {
+            field: "name",
+            operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
 }
            
 function clear_filters(){
@@ -105,7 +128,7 @@ $('#clear_filters').click(function (e) { clear_filters(); });
 
 </script>	
 <script type="text/javascript">
-$(document).ready(function(){
+$(function(){
 	var grid = $("#grid").kendoGrid({
         dataSource: {
         	type: "json",
@@ -119,7 +142,7 @@ $(document).ready(function(){
 				parameterMap: function(options) {
 					return buildParameterMap(options)
 				}
-                
+
             },
             schema: {
             	data: "objects",
@@ -136,7 +159,7 @@ $(document).ready(function(){
             },
             serverSorting: true,
             serverFiltering: true,
-            serverPaging: true,                        	
+            serverPaging: true,
         	pageSize: 15,
         	sort: {field: "modified", dir: "desc"}
         },
@@ -147,23 +170,23 @@ $(document).ready(function(){
         pageable: true,
 		columns: [ {
                 field: "id",
-                title: "Action",
+                title: "{% trans "projects.fields.action.label" %}",
                 sortable: false,
                 width: '20%',
-                template: "<a class='edit_project' href='/data/project/${id}/edit/'>edit</a> | <a class='delete_project' href='/data/project/${id}/delete/'>delete</a>| <a class='project_log' href='/data/project/${id}/log/'>log</a>"
+                template: "<a class='edit_project' href='/data/project/${id}/edit/'>{% trans "projects.action.edit.label" %}</a> | <a class='delete_project' href='/data/project/${id}/delete/'>{% trans "projects.action.delete.label" %}</a> | <a class='project_log' href='/data/project/${id}/log/'>{% trans "projects.action.vieweventlog.label" %}</a>"
             } , {
                 field: "name",
-                title: "Name",
+                title: "{% trans "projects.fields.name.label" %}",
                 width: '40%',
                 template: "<a href='/data/project/${id}/results'>${name}</a>"
             } , {
                 field: "resultsCount",
-                title: "Results",
+                title: "{% trans "projects.fields.resultsCount.label" %}",
                 width: '15%',
                 sortable: false
             } , {
                 field: "modified",
-                title: "Last Modified",
+                title: "{% trans "projects.fields.modified.label" %}",
                 width: '15%',
                 template: '#= kendo.toString(new Date(Date.parse(modified.split(".")[0])),"yyyy/MM/dd hh:mm tt") #'
             }
@@ -179,9 +202,9 @@ $(document).ready(function(){
 				    $('body #modal_project_details').on('modal_project_details_done', function () {
     			    	refreshKendoGrid("#grid");
 				    });
-				    
+
 				    return false;
-				}); 
+				});
 			});
 			$('.delete_project').click(function (e) {
 				e.preventDefault();
@@ -194,21 +217,21 @@ $(document).ready(function(){
     			    	refreshKendoGrid("#grid");
 				    });
 				    return false;
-				}); 
+				});
 			});
-			
+
 			$('.project_log').click(function (e) {
 				e.preventDefault();
 				e.stopPropagation();
 				$('body #modal_event_log').remove();
 				$.get($(this).attr('href'), function(data) {
 				  	$('body').append(data);
-				    $( "#modal_event_log" ).modal("show");								    
+				    $( "#modal_event_log" ).modal("show");
 				    return false;
-				}); 
+				});
 			});
-			
-		}                        
+
+		}
     });
     $('.add_project').click(function (e) {
 		e.preventDefault();

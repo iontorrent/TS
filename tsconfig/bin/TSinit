@@ -16,7 +16,7 @@ function print_help()
     echo "If no arguments are given, configuration will continue based on the detected hardware type."
     echo
     echo "Usage: TSinit [options]"
-    echo -e "\t--hdwr <name>                 Specify platform name (T620, T630, T620-PGM, T430)"
+    echo -e "\t--hdwr <name>                 Specify platform name (T620, T630, T620-PGM, T440, T430)"
     echo -e "\t--deviceid device_name        Specify device to partition"
     echo -e "\t--debug, -d                   Enable debug print (set -x)"
     echo -e "\t--nodelete                    Disable deleting existing contents of partitions after copying"
@@ -246,6 +246,9 @@ while [ $# != 0 ]; do
                 'T430')
                 hardware_name="PowerEdge T430"
                 ;;
+                'T440')
+                hardware_name="PowerEdge T440"
+                ;;
                 'T630')
                 hardware_name="PowerEdge T630"
                 ;;
@@ -319,7 +322,7 @@ case $hardware_name in
         deviceid=${deviceid-'/dev/sdb'}    # If passed as an argument, use it.  Else defaults to sdb
         LEGACY=true
     ;;
-    'PowerEdge T630'|'PowerEdge T430')
+    'PowerEdge T630'|'PowerEdge T430'|'PowerEdge T440')
         # TRUSTY Single Partition
         SETUP_RESULTS_PARTITION=true
         deviceid=${deviceid-'/dev/sdc'}    # If passed as an argument, use it.  Else defaults to sdd

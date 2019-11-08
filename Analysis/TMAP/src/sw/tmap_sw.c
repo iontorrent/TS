@@ -230,11 +230,11 @@ int32_t tmap_sw_sm_hs[] = {
 /* START OF align.c */
 /********************/
 
-tmap_sw_param_t tmap_sw_param_short   = { 13,  2,  2, tmap_sw_sm_short, 5, 50 }; /* e=1.21%; T=2.18 */
-tmap_sw_param_t tmap_sw_param_blast   = {  5,  2,  2, tmap_sw_sm_blast, 5, 50 };
-tmap_sw_param_t tmap_sw_param_nt2nt   = {  8,  2,  2, tmap_sw_sm_nt, 16, 75 };
-tmap_sw_param_t tmap_sw_param_rd2rd   = {  1, 19, 19, tmap_sw_sm_read, 16, 75 };
-tmap_sw_param_t tmap_sw_param_aa2aa   = { 10,  2,  2, tmap_sw_sm_blosum62, 22, 50 };
+tmap_sw_param_t tmap_sw_param_short   = { 13,  2,  2, tmap_sw_sm_short,    0, 5,  50 }; /* e=1.21%; T=2.18 */
+tmap_sw_param_t tmap_sw_param_blast   = {  5,  2,  2, tmap_sw_sm_blast,    0, 5,  50 };
+tmap_sw_param_t tmap_sw_param_nt2nt   = {  8,  2,  2, tmap_sw_sm_nt,       0, 16, 75 };
+tmap_sw_param_t tmap_sw_param_rd2rd   = {  1, 19, 19, tmap_sw_sm_read,     0, 16, 75 };
+tmap_sw_param_t tmap_sw_param_aa2aa   = { 10,  2,  2, tmap_sw_sm_blosum62, 0, 22, 50 };
 
 tmap_sw_aln_t *
 tmap_sw_aln_init()
@@ -1297,7 +1297,7 @@ tmap_sw_clipping_core2(uint8_t *seq1, int32_t len1, uint8_t *seq2, int32_t len2,
           ////                   last + j - 1, mat[seq2[j-1]], right_justify);
           tmap_sw_set_match(curr[j].match_score, dpcell[i] + j,
                             last + j - 1, (score_matrix + seq2[j-1] * N_MATRIX_ROW )[seq1[i-1]], right_justify);
-			    
+
           tmap_sw_set_del(curr[j].del_score, dpcell[i] + j, last + j, right_justify);
           tmap_sw_set_ins(curr[j].ins_score, dpcell[i] + j, curr + j - 1, right_justify);
           // deal with starting anywhere in seq2

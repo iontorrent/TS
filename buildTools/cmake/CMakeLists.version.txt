@@ -1,5 +1,7 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
+include(../buildTools/cmake/CMakeLists.installpath.txt)
+
 # get the torrent suite version numbers
 execute_process(COMMAND "grep" "TS_MAJOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MAJOR=//"   OUTPUT_VARIABLE TS_MAJOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND "grep" "TS_MINOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MINOR=//"   OUTPUT_VARIABLE TS_MINOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -92,7 +94,7 @@ configure_file (
 	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.env.in"
 	"${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" DESTINATION /opt/ion/bin
+install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" DESTINATION ${ION_INSTALL_PREFIX}/bin
     RENAME ${CMAKE_PROJECT_NAME}.version.env
 )
 

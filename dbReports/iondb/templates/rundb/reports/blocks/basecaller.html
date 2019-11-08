@@ -1,21 +1,22 @@
 
 {% load humanize %}
+{% load i18n %}
 
 <div id="basecaller" class="span4 well centered">
     <div class="number-chunk">
         {% if basecaller %}
             <h2>{{basecaller.total_reads|intcomma}}</h2>
         {% else %}
-            <h2>Still calculating.</h2>
+            <h2>{% trans "report.section.unaligned.basecaller.messages.inprogress" %}</h2>
         {% endif %}
-        <small>Total Reads</small>
+        <small>{% trans "report.section.unaligned.basecaller.fields.totalreads.label" %}</small>
     </div>    
 
     
     {% if basecaller %}
         <a data-toggle="modal" class="report-metric-visual showImg" href="#baseCallerModal">
             <div id="usable_sequence" data-usablesequence="{{usable_sequence}}"></div>  
-            <h2><abbr title="Ion Sphere Particles">ISP</abbr> Summary</h2>
+            <h2>{% trans "report.section.unaligned.basecaller.title" %}</h2>
            {% if basecaller.isToShowClonality %}
             <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram.png" /> <i class="icon-zoom-in"></i>
 		   {% else %}
@@ -27,7 +28,7 @@
         <div class="modal hide" id="baseCallerModal" style="width: 960px; margin-left: -480px;">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h3><abbr title="Ion Sphere Particles">ISP</abbr> Summary</h3>
+                <h3>{% trans "report.section.unaligned.basecaller.title" %}</h3>
             </div>
             <div class="modal-body" style="max-height: 500px;" id="basecaller_body">
             
@@ -37,44 +38,44 @@
                 <img class="pull-left" style="height: 335px;" src="{{report.reportWebLink}}/basecaller_results/wells_beadogram_basic.png"><br class="hide" />
 		   		{% endif %}		   
 
-                <strong>Chip well details</strong>
+                <strong>{% trans "report.section.unaligned.beadsummary.chipwell.title" %}</strong>
                 <table class="table table-condensed table-striped" style="height: auto; width: 330px; align: center;">
                     <thead>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Wells on the chip which can be physically reached by the library">Addressable Wells</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.total_addressable_wells.tooltip" %}">{% trans "report.section.unaligned.beadsummary.total_addressable_wells.label" %}</td>
                             <td style="text-align: right;">{{ beadsummary.total_addressable_wells|intcomma }}</td>
                             <td></td>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Addressable wells on the chip which have detectable loading. (this / Addressable Wells)">With ISPs</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.bead_wells.tooltip" %}">{% trans "report.section.unaligned.beadsummary.bead_wells.label" %}</td>
                             <td style="text-align: right;">{{ beadsummary.bead_wells|intcomma }}</td>
                             <td style="text-align: right;">{{ beadsummary.p_bead_wells }}</td>
                         </tr>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Loaded wells which have a live signal. (this / With ISPs)">Live</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.live_beads.tooltip" %}">{% trans "report.section.unaligned.beadsummary.live_beads.label" %}</td>
                             <td style="text-align: right;">{{ beadsummary.live_beads|intcomma }}</td>
                             <td style="text-align: right;">{{ beadsummary.p_live_beads }}</td>
                         </tr>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Live wells which have test fragment template sequence. (this / Live)">Test Fragment</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.test_fragment_beads.tooltip" %}">{% trans "report.section.unaligned.beadsummary.test_fragment_beads.label" %}</td>
                             <td style="text-align: right;">{{ beadsummary.test_fragment_beads|intcomma }}</td>
                             <td style="text-align: right;">{{ beadsummary.p_test_fragment_beads }}</td>
                         </tr>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Live wells which have library template sequence. (this / Live)">Library</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.library_beads.tooltip" %}">{% trans "report.section.unaligned.beadsummary.library_beads.label" %}</td>
                             <td style="text-align: right;">{{ beadsummary.library_beads|intcomma }}</td>
                             <td style="text-align: right;">{{ beadsummary.p_library_beads }}</td>
                         </tr>
                     </tbody>
                 </table>
 
-                <strong>Library ISP details</strong>
+                <strong>{% trans "report.section.unaligned.beadsummary.library.title" %}</strong>
                 <table class="table table-condensed table-striped" style="height: auto; width: 330px;">
                     <thead>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="This is the Library value above: live wells with library tempate.">Library ISPs</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.beadsummary.library_beads.tooltip2" %}">{% trans "report.section.unaligned.beadsummary.library_beads.label2" %}</td>
                             <td style="text-align: right;">{{ beadsummary.library_beads|intcomma }}</td>
                             <td></td>
                         </tr>
@@ -83,23 +84,23 @@
                         {% if basecaller %}
                         {% if basecaller.isToShowClonality %}
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="More than one template sequence per ISP. (this / Library ISPs)">Filtered: Polyclonal</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.basecaller.polyclonal.tooltip" %}">{% trans "report.section.unaligned.basecaller.polyclonal.label" %}</td>
                             <td style="text-align: right;">{{ basecaller.polyclonal|intcomma }}</td>
                             <td style="text-align: right;">{{ basecaller.p_polyclonal }}</td>
                         </tr>
                         {% endif %}
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Low quality. (this / Library ISPs)">Filtered: Low Quality</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.basecaller.low_quality.tooltip" %}">{% trans "report.section.unaligned.basecaller.low_quality.label" %}</td>
                             <td style="text-align: right;">{{ basecaller.low_quality|intcomma }}</td>
                             <td style="text-align: right;">{{ basecaller.p_low_quality }}</td>
                         </tr>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Insert size of less than 8 bases. (this / Library ISPs)">Filtered: Adapter Dimer</td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.basecaller.primer_dimer.tooltip" %}">{% trans "report.section.unaligned.basecaller.primer_dimer.label" %}</td>
                             <td style="text-align: right;">{{ basecaller.primer_dimer|intcomma }}</td>
                             <td style="text-align: right;">{{ basecaller.p_primer_dimer }}</td>
                         </tr>
                         <tr>
-                            <td rel="tooltip" data-placement="left" title="Percentage of sequence available for analysis after filtering. (this / Library ISPs)"><strong>Final Library ISPs</strong></td>
+                            <td rel="tooltip" data-placement="left" title="{% trans "report.section.unaligned.basecaller.total_reads.tooltip" %}"><strong>{% trans "report.section.unaligned.basecaller.total_reads.label" %}</strong></td>
                             <td style="text-align: right;"><strong>{{ basecaller.total_reads|intcomma }}</strong></td>
                             <td style="text-align: right;"><strong>{{ basecaller.p_total_reads }}</strong></td>
                         </tr>
@@ -108,11 +109,11 @@
                 </table>
             </div>
             <div class="modal-footer">
-                <a href="#" class="btn" data-dismiss="modal">Close</a>
+                <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
             </div>
         </div>
     {% else %}
-        <p>There aren't any <abbr title="Ion Sphere Particles">ISPs</abbr></p>
+        <p>{% trans "report.section.unaligned.beadsummary.messages.noisps" %}</p>
     {% endif %}
 </div>
 <script>
@@ -120,13 +121,13 @@ $(function(){
     $("#usable_sequence").strength('{{usable_sequence}}',
                         '{{usable_sequence_threshold}}',
                         '{{usable_sequence}}',
-                        'Usable Reads');
+                        '{% trans "report.section.unaligned.basecaller.fields.usable_sequence.label" %}');
     $("#usable_sequence").popover({
-        title: "Usable Sequence",
-        content: "Your quality threshold is <strong>{{usable_sequence_threshold}}%</strong><br/>The colored bars indicate the quality threshold set in your plan, blue is above and red is under.",
+        title: '{% trans "report.section.unaligned.basecaller.fields.usable_sequence.label" %}',
+        content: '{{ usable_sequence_details|safe }}',
         html: true,
-        trigger: "hover",
-        container: "body"
+        trigger: 'hover',
+        container: 'body'
     });
 });
 </script>

@@ -1,5 +1,5 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-__version__ = '3.0'
+__version__ = "3.0"
 
 """ These values are imported directly into plugin implementation classes via
     >>> from ion.plugin import *

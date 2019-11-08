@@ -649,6 +649,14 @@ body .modal-1000 {
   margin-left: -515px;
 }
 
+.form-horizontal.form-horizontal-200 .control-group .controls {
+  margin-left: 220px;
+}
+
+.form-horizontal.form-horizontal-200 .control-group .control-label {
+  width: 200px;
+}
+
 .modal-backdrop,
 .modal-backdrop.fade.in {
   opacity: 0.5;
@@ -1214,7 +1222,6 @@ tr.new_plan td {
 
 .run-actions .btn {
   display: block;
-  width: 70px;
   padding: 4px 10px 4px 10px;
   margin-bottom: 5px;
 }
@@ -2556,7 +2563,9 @@ div.valid {
 }
 
 #sample-popover-container table.sample-popover-table tbody > tr > td {
-  word-wrap: break-word;
+  max-width: 160px;
+  word-break: break-word;
+  white-space: normal;
 }
 
 #sample-popover-container table.sample-popover-table tfoot > tr > td {

@@ -4,15 +4,17 @@ from django.contrib.auth.models import User
 from pyftpdlib.authorizers import AuthenticationFailed
 from . import _unix
 
-PERMMISSIONS = 'elradfmw'
+PERMMISSIONS = "elradfmw"
+
 
 class FTPAccountAuthorizer(object):
     """Authorizer class by django authentication."""
+
     personate_user_class = None
 
     def __init__(self, file_access_user=None):
         if file_access_user:
-            personate_user_class = (self.personate_user_class or _unix.UnixPersonateUser)
+            personate_user_class = self.personate_user_class or _unix.UnixPersonateUser
             self.personate_user = personate_user_class(file_access_user)
         else:
             self.personate_user = None
@@ -34,15 +36,15 @@ class FTPAccountAuthorizer(object):
 
     def get_home_dir(self, username):
         """Get the home directory"""
-        return '/'
+        return "/"
 
     def get_msg_login(self, username):
         """message for welcome."""
-        return 'welcome.'
+        return "welcome."
 
     def get_msg_quit(self, username):
         """The quit message"""
-        return 'good bye.'
+        return "good bye."
 
     def has_perm(self, username, perm, path=None):
         """check user permission"""

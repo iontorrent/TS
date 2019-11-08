@@ -31,17 +31,20 @@
                 owner=sgeadmin group=sgeadmin mode=0664
                 line="{{ groups.headnode[0] }} localhost"
                 regexp=".*localhost.*"
-                
+
+- name: Hard shutdown of sge_qmaster if running
+  shell: bash -lc "kill -9 $(pgrep sge_qmaster)"
+  ignore_errors: yes
+
 - name: Set ignore_fqdn to TRUE in bootstrap file
   lineinfile: state=present dest=/var/lib/gridengine/iontorrent/common/bootstrap
                 line="ignore_fqdn             true"
                 regexp="^ignore_fqdn.*"
                 mode=0644
-  
-- name: Make sure gridengine-master is running by restarting it
-#  service: name=gridengine-master state=running
-  shell: bash -lc '/etc/init.d/gridengine-master restart && sleep 5'
-  
+
+- name: Start gridengine-master
+  service: name=gridengine-master state=restarted
+
 # add submission host
 - name: Add server as submission host
   shell: bash -lc 'qconf -as {{ ansible_hostname }}'
@@ -55,7 +58,7 @@
 
 # add user if user does not exist
 - name: upload user configuration file
-  template: src=user.j2 dest=/tmp/user.{{ item }}.conf
+  template: src=../templates/user.j2 dest=/tmp/user.{{ item }}.conf
   with_items:
     - sge_usernames
   
@@ -82,13 +85,13 @@
   
 # Stage the queue definition template files
 - name: upload queue configuration files
-  template: src=queue.j2 dest=/tmp/{{ item['name'] }}.conf
+  template: src=../templates/queue.j2 dest=/tmp/{{ item['name'] }}.conf
   with_items:
     - '{{ queues }}'
 
 # plugin.q queue gets special settings
 - name: upload plugin.q configuration file
-  template: src=plugin.q.j2 dest=/tmp/plugin.q.conf
+  template: src=../templates/plugin.q.j2 dest=/tmp/plugin.q.conf
   
 # Raptor A hardware has 40GB RAM; needs modified plugin.q memory limits
 - name: S5 TSVM RAM = 40GB limit
@@ -132,7 +135,14 @@
   
 # configure parallel environment
 - name: upload PE configuration file
-  template: src=ion_pe.j2 dest=/tmp/ion_pe.conf
+  template: src=../templates/ion_pe.j2 dest=/tmp/ion_pe.conf
+
+- name: add qsort_args parameter for gridengine >= 8.1.x
+  lineinfile: dest=/tmp/ion_pe.conf
+                state=present
+                regexp='qsort_args'
+                line='qsort_args         NONE'
+  when: ansible_distribution_version == "18.04"
 
 - name: create PE
   shell: bash -lc 'if ! qconf -spl | grep -q ion_pe; then qconf -Ap /tmp/ion_pe.conf; fi ; rm /tmp/ion_pe.conf'
@@ -168,18 +178,25 @@
   with_items:
     - { 'name':'{{ LOCAL_EPILOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ EPILOG_SCRIPT }}' }
     - { 'name':'{{ LOCAL_PROLOG_SCRIPT }}', 'path':'{{ SCRIPT_PATH }}/{{ PROLOG_SCRIPT }}' }
-    
-#    set_sge_open_files
-# The configuration line we want:
-#execd_params              S_DESCRIPTORS=8192,H_DESCRIPTORS=8192
+
+
+# Modify SGE global configuration:
+#   execd_params              S_DESCRIPTORS=8192,H_DESCRIPTORS=8192
+#   min_uid                   0
+#   min_gid                   0
 # filename required to be "global" to update the global configuration
 - name: Generate global setting file
   shell: bash -lc 'qconf -sconf global > /tmp/global'
 
 - name: Edit the global file
-  lineinfile: dest=/tmp/global state=present
-                  regexp='(^execd_params.*)'
-                  line='execd_params S_DESCRIPTORS={{ MAX_FILES_OPEN }},H_DESCRIPTORS={{ MAX_FILES_OPEN }}'
+  lineinfile:
+    dest: /tmp/global
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: '^execd_params', line: 'execd_params S_DESCRIPTORS={{ MAX_FILES_OPEN }},H_DESCRIPTORS={{ MAX_FILES_OPEN }}' }
+    - { regexp: '^min_uid', line: 'min_uid 0' }
+    - { regexp: '^min_gid', line: 'min_gid 0' }
 
 - name: enable the global settings
   shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'

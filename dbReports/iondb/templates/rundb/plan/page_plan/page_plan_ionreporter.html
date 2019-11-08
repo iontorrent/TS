@@ -1,6 +1,7 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 {{ block.super }}
 <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
@@ -10,12 +11,12 @@
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 {%endblock%}
 {% block main-title %}
-<div style="float:left;">Select an Ion Reporter account, workflow and sample grouping, then hit next.</div>
+<div style="float:left;">{% trans "workflow.step.ionreporter.subtitle" %}</div>
 <div style="float:right;">
     <img src="/site_media/img/loading.gif" width="35" height="35" id="loading"/>
-    <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information btn" id="refresh" href="#"><i class="icon-refresh"></i> Refresh</a>
+    <a title="{% trans "workflow.step.ionreporter.action.refresh.tooltip" %}" class="refresh-uploader-information btn" id="refresh" href="#"><i class="icon-refresh"></i>{% trans "workflow.step.ionreporter.action.refresh.label" %}</a>
     {% if helper.getStepDict.Ionreporter.getIRU %}
-    <a title="Configure IonReporterUploader Information" class="btn"  style="margin-right: 5px;" id="iruConfig" href="{% url "configure_plugins_plugin_configure" helper.getStepDict.Ionreporter.getIRU.pk 'config' %}"><i class="icon-wrench"></i> Configure</a>
+    <a title="{% trans "workflow.step.ionreporter.action.configure.tooltip" %}" class="btn"  style="margin-right: 5px;" id="iruConfig" href="{% url "configure_plugins_plugin_configure" helper.getStepDict.Ionreporter.getIRU.pk 'config' %}"><i class="icon-wrench"></i>{% trans "workflow.step.ionreporter.action.configure.label" %}</a>
     {% endif %}
 </div>
 {% endblock main-title %}
@@ -60,7 +61,7 @@
     <div class="span6">
         <div class="span12" style="margin-bottom:25px;margin-left:10px;">
             <div class="controls irOptionsContent" id="ir_accounts">
-            <h4>Ion Reporter Account</h4>
+            <h4>{% trans "workflow.step.ionreporter.fields.irAccountId.label" %}</h4>
             </div>
             
             <input type="hidden" name="irAccountId" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"/>
@@ -76,7 +77,9 @@
             <input type="hidden" name="tag_isFactoryProvidedWorkflow" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.tag_isFactoryProvidedWorkflow}}"/>
 
             <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
-                The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
+{#                The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.#}
+                {% trans "workflow.step.ionreporter.messages.validate.irAccountId.invalid" as irAccountInvalid %}
+                {{ irAccountInvalid }}
             </div>
         </div>
         <div id="error" style="color:red;font-weight:bold"></div>
@@ -100,7 +103,7 @@
     </div>
     <div class="span6">
         <div class="span4" id="sample_grouping">
-                <h4>Sample Grouping</h4>
+                <h4>{% trans "workflow.step.ionreporter.fields.sampleGrouping.label" %}</h4>
                 <div class="control-group offset1">
                     <div class="sampleGroupOptionsContent">
                     </div>
@@ -110,12 +113,12 @@
     <!-- #TS-11365 - Below comment will be reverted in release 5.2 -->
     <div class="span6">
     <div class="span4" id="iruUploadMode">
-    			<label style="width: 410px;"><h4>Ion Reporter Upload Options:</h4></label>
+    			<label style="width: 410px;"><h4>{% trans "workflow.step.ionreporter.fields.iru_UploadMode.label" %}:</h4></label>
                 <div class="control-group offset1">
                     <div class="iruUploadModeContent">
                     </div>
                     <br/>
-                    <label style="width: 410px; font: normal 12px calibri; font-style: italic;">*When you are ready to upload to Ion Reporter after manual review, click on "Upload to IR" --> "Upload as planned" option on the run report Navigation bar</label>
+                    <label style="width: 410px; font: normal 12px calibri; font-style: italic;">{% trans "workflow.step.ionreporter.fields.iru_UploadMode.helptext" %}</label>
                 </div>
     </div>
     </div>
@@ -125,7 +128,7 @@
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
-    <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">Next &rarr;</a>
+    <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">{% trans "workflow.action.nextstep" %}</a>
 {% endblock prevnext-buttons %}
 
 {% block summary-table %}

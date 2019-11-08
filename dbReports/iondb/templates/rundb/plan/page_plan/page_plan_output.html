@@ -1,8 +1,9 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
+{% load i18n %}
 
-{% block main-title %}Select the project(s) that will receive data from runs planned in this template, then hit next.{% endblock main-title %}
 
+{% block main-title %}{% trans "workflow.step.output.subtitle" %}{% endblock main-title %}
 {% block page-plan-content %}
 <div class="row-fluid">  
     <div class="folders" id="projectsGrid">
@@ -21,18 +22,18 @@
     <div class="form-search">
         <div class="input-append">
             <input type="text" class="span10 search-query" id="projectSearchInput">
-            <button class="btn" type="button" id="searchProjects">Search</button>
+            <button class="btn" type="button" id="searchProjects">{% trans "workflow.step.output.action.search" %}</button>
         </div>
-        <div id="addNewProjectsButton" style="margin-left:50px;" class="btn">Add Project…</div>
+        <div id="addNewProjectsButton" style="margin-left:50px;" class="btn">{% trans "workflow.step.output.action.addMultiple" %}</div>
     </div>
     <div id="newProjectsHolder" style="display: none;">
-        <p class="form-label">Enter project name(s) (comma-separated)</p>
+        <p class="form-label">{% trans "workflow.step.output.fields.newProjects.label" %}</p>
         <textarea id="newProjects" name="newProjects" style="width:70%;height:40px;"></textarea>
     </div>
 </div>
 <div class="row-fluid">  
     {% for key, value in step.validationErrors.items %}
-        <h4 style="color: red">{{value|linebreaks}}</h4>
+        <h4 style="color: red">{{value|safe|linebreaks}}</h4>
     {% endfor %}
 </div>
 {% endblock page-plan-content %}
@@ -73,12 +74,12 @@
         
         $("#addNewProjectsButton").click(function(){
             if ($('#newProjectsHolder:visible').length > 0) {
-                $('#addNewProjectsButton').text('Add Project…');
+                $('#addNewProjectsButton').text('{% trans "workflow.step.output.action.addMultiple" %}'); {#Add Project…#}
                 $('#newProjectsHolder').hide();
                 $('#newProjects').val('');
                 updateSelectedProjects();
             } else {
-                $('#addNewProjectsButton').text('Remove New Projects');
+                $('#addNewProjectsButton').text('{% trans "workflow.step.output.action.removeMultiple" %}'); {#Remove New Projects#}
                 $('#newProjectsHolder').show();
             }
         });
@@ -88,7 +89,7 @@
         });
         
         {% if step.getCurrentSavedFieldDict.newProjects %}
-            $('#addNewProjectsButton').text('Remove New Projects');
+            $('#addNewProjectsButton').text('{% trans "workflow.step.output.action.removeMultiple" %}'); {#Remove New Projects#}
             $('#newProjects').val('{{step.getCurrentSavedFieldDict.newProjects}}');
             $('#newProjectsHolder').show();
         {% endif %}

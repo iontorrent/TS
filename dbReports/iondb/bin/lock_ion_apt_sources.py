@@ -14,21 +14,23 @@ sys.tracebacklimit = 0
 
 # check for root level permissions
 if os.geteuid() != 0:
-    sys.exit("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.")
+    sys.exit(
+        "You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting."
+    )
 
 # look for the file name
 if len(sys.argv) < 2:
     sys.exit("Enable flag is required")
 
 # parse the first argument to a bool
-enable = sys.argv[1].lower() == 'true'
+enable = sys.argv[1].lower() == "true"
 
 # get distribution string
-os_codename = 'trusty'
-with open('/etc/lsb-release', 'r') as fp:
+os_codename = "trusty"
+with open("/etc/lsb-release", "r") as fp:
     for line in fp.readlines():
-        if line.startswith('DISTRIB_CODENAME'):
-            os_codename = line.split('=')[1].strip()
+        if line.startswith("DISTRIB_CODENAME"):
+            os_codename = line.split("=")[1].strip()
 
 if enable:
     find_string = "updates\/software.*%s\/" % os_codename
@@ -42,18 +44,22 @@ sed_string = "s/%s/%s/g" % (find_string, replace_string)
 #     /etc/apt/sources.list
 #     /etc/apt/sources.list.d/*.list
 #
-filepaths = [os.path.join("/etc/apt/sources.list.d", x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list' and x != 'iontorrent-offcycle.list']
+filepaths = [
+    os.path.join("/etc/apt/sources.list.d", x)
+    for x in os.listdir("/etc/apt/sources.list.d")
+    if os.path.splitext(x)[1] == ".list" and x != "iontorrent-offcycle.list"
+]
 filepaths.append("/etc/apt/sources.list")
 for filepath in filepaths:
     print("Looking in %s" % filepath)
     cmd = ["sed", "-i", sed_string, filepath]
 
-    stdout = ''
-    stderr = ''
+    stdout = ""
+    stderr = ""
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         if proc.returncode:
             sys.stderr.write(stderr)
-    except:
+    except Exception:
         sys.stderr.write(stderr)

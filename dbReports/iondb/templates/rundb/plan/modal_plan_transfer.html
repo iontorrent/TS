@@ -1,28 +1,39 @@
 {% load static from staticfiles %}
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
+{% block extra_head %}
+<style type="text/css">
+.planTransfer-popover {
+    word-break: break-word;
+    white-space:normal;
+}
+</style>
+{% endblock extra_head %}
 <div id="modal_plan_transfer" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Confirm Transfer Planned Run</h3>
+        <h3>{{ i18n.title }}</h3>
         <h3>{{planName}}</h3>
     </div>
     <div class="modal-body">
         <div id="start">
-            <p>Are you sure you want to move this Planned Run to Torrent Server <b>{{destination}}</b> ?</p>
-            <p>Transferred planned run will no longer be available on this Torrent Server.</p>
+            <p>{{ i18n.confirmmsg|safe }}</p>
+            <p>{{ i18n.infomsg|safe }}</p>
         </div>
         <div id="processing" style="display: none;">
-            <p>Planned run transfer in progress, please wait ...</p>
+            <p>{{ i18n.processingmsg }}</p>
         </div>
         <div id="msg" class="alert alert-success hide"></div>
-        <div id="error-messages" class="alert alert-error hide"></div>
+        <div id="warning-messages" class="alert hide"></div>
+        <div id="error-messages" class="planTransfer-popover alert alert-error hide"></div>
     </div>
     <div class="modal-footer">
         <div id="start_footer">
-            <a href="#" class="btn" data-dismiss="modal">Cancel</a>
-            <a href="{{action}}" class="btn btn-primary" data-destination="{{destination}}">Transfer</a>
+            <a href="#" class="btn" data-dismiss="modal">{{ i18n.cancel }}</a>
+            <a href="{{action}}" class="btn btn-primary" data-destination="{{destination_server_name}}">{{ i18n.submit }}</a>
         </div>
         <div id="done_footer" style="display: none;">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{{ i18n.close }}</a>
         </div>
     </div>
 
@@ -50,18 +61,28 @@
             speed: 1.5,
             padding: '3'
         });
-        $.post(url, params, function(data){
+        $.ajax({
+            type: 'POST',
+            url: url,
+            data: params,  // sending using application/x-www-form-urlencoded since post_transfer
+            headers: {
+                'Accept-Language': '{{ lang.code }}'  // Set language to override the default SDK language when performing a Transfer
+            }
+        }).done(function(data){
             console.log("success:", data);
             if (data.msg) $('#modal_plan_transfer #msg').empty().append(data.msg).show();
             if (data.error) $('#modal_plan_transfer #error-messages').empty().append(data.error).show();
+            if (data.warning) $('#modal_plan_transfer #warning-messages').empty().append(data.warning).show();
         }).fail(function(data) {
             console.log("fail:", data);
-            $('#modal_plan_transfer #error-messages').empty().append('<p>ERROR creating Planned Run</p><p>' + data.responseText + '</p>').show();
+            $('#modal_plan_transfer #error-messages').empty().append('<p>{{ i18n.failmsg }}</p><p>' + data.responseText + '</p>').show();
         }).always(function(data){
             $('#modal_plan_transfer').activity(false);
             $('#modal_plan_transfer #processing').hide();
             $("#modal_plan_transfer #done_footer").show();
         });
     });
+
+    //# sourceURL=templates/rundb/plan/modal_plan_transfer.html
 </script>
 </div>

@@ -1,16 +1,18 @@
 {% extends "rundb/plan/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
-<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
+<script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js" %}"></script>
 <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
 <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 
@@ -48,111 +50,112 @@
     }
 </style>
 <script src="{% static "js/date.min.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 
 
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "samplesets" %}">Samples</a></li>
-<li class="active"><a href="{% url "planned" %}">Planned Runs</a></li>
+<li><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+<li><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+<li class="active"><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
 
 <div class="content clearfix">
-	<h1 style="">Planned Runs</h1>
+	<h1 style="">{% trans "plannedruns.title" %}</h1>
 
     <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
-    	<a id="all" href="#all" class="active setview">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;
-		<a id="byTemplate" href="#byTemplate" class="setview";>by Template</a>&nbsp;&nbsp;|&nbsp;&nbsp;
-		<a id="bySample" href="#bySample" class="setview">by Sample</a>
+    	<a id="all" href="#all" class="active setview">{% trans "plannedruns.actions.setview.all.label" %}</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+		<a id="byTemplate" href="#byTemplate" class="setview";>{% trans "plannedruns.actions.setview.byTemplate.label" %}</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+		<a id="bySample" href="#bySample" class="setview">{% trans "plannedruns.actions.setview.bySample.label" %}</a>
     </div>
     
     <div id="search_bar" class="row-fluid">
         <div class="input-append search-field">
-            <input id="search_text" type="text" placeholder="Search by Plan Name or Code"
+            <input id="search_text" type="text" data-placeholder-prefix="" placeholder="{% trans "plannedruns.search_bar.fields.search_text.choice.name_or_id" %}"
                    data-selected_filter="name_or_id" style="width:160px;" />
 
             <div class="btn-group">
-                <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by Plan name or code" data-toggle="dropdown" style="border-radius:0;">
+                <a id="search_subject_nav" class="btn dropdown-toggle" data-title-prefix="" title="{% trans "plannedruns.search_bar.fields.search_text.choice.name_or_id" %}" data-toggle="dropdown" style="border-radius:0;">
                     <i class="icon-search" border="0"></i><span class="caret"></span>
                 </a>
                 <ul id="plan_search_dropdown_menu" class="dropdown-menu pull-right">
-                    <li><a data-filter="name_or_id"><span class="icon-check"></span>Plan Name or Code</a></li>
-                    <li><a data-filter="experiment__samples__name"><span class="icon-white"></span>Sample Name</a></li>
-                    <li><a data-filter="chipBarcode"><span class="icon-white"></span>Chip Barcode</a></li>
-                    <li><a data-filter="sampleTubeLabel"><span class="icon-white"></span>Sample Tube Label</a></li>
-                    <li><a data-filter="sampleSets__combinedLibraryTubeLabel"><span class="icon-white"></span>Combined Library Tube Label</a></li>
+                    <li><a data-filter="name_or_id"><span class="icon-check"></span>{% trans "plannedruns.search_bar.fields.search_text.choice.name_or_id" %}</a></li>
+                    <li><a data-filter="experiment__samples__name"><span class="icon-white"></span>{% trans "plannedruns.search_bar.fields.search_text.choice.experiment__samples__name" %}</a></li>
+                    <li><a data-filter="chipBarcode"><span class="icon-white"></span>{% trans "plannedruns.search_bar.fields.search_text.choice.chipBarcode" %}</a></li>
+                    <li><a data-filter="sampleTubeLabel"><span class="icon-white"></span>{% trans "plannedruns.search_bar.fields.search_text.choice.sampleTubeLabel" %}</a></li>
+                    <li><a data-filter="sampleSets__combinedLibraryTubeLabel"><span class="icon-white"></span>{% trans "plannedruns.search_bar.fields.search_text.choice.sampleSets__combinedLibraryTubeLabel" %}</a></li>
                 </ul>
                 
-                <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">Go</button>
+                <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px; font-size:11px;">{% trans "plannedruns.search_bar.fields.search_text.label" %}</button>
             </div>
         </div>
         <div class="search-field">
-            <input type="text" id="dateRange" placeholder="Date" style="width:140px;"/>
+            <input type="text" id="dateRange" placeholder="{% trans "plannedruns.search_bar.fields.dateRange.placeholder" %}" style="width:140px;"/>
         </div>
         <div class="search-field">
-            <select id="id_status" name="status" class="selectpicker" data-width="140px" title="Status:" data-persist-title="true">
-                <option value="">All</option>
-                <option value="planned">Planned</option>
-                <option value="pending">Pending</option>
-                <option value="reserved">Reserved</option>
-                <option value="voided">Voided</option>
+            <select id="id_status" name="status" class="selectpicker" data-width="140px" title="{% trans "plannedruns.search_bar.fields.status.title" %}" data-persist-title="true">
+                <option value="">{% trans "plannedruns.search_bar.fields.status.choice.default" %}</option>
+                <option value="planned">{% trans "plannedruns.search_bar.fields.status.choice.planned" %}</option>
+                <option value="pending">{% trans "plannedruns.search_bar.fields.status.choice.pending" %}</option>
+                <option value="reserved">{% trans "plannedruns.search_bar.fields.status.choice.reserved" %}</option>
+                <option value="voided">{% trans "plannedruns.search_bar.fields.status.choice.voided" %}</option>
             </select>
         </div>
         <div class="search-field">
-            <select id="id_runtype" name="runtype" class="selectpicker" data-width="140px" title="Research App:">
-                <option value="">Research App: All</option>
+            <select id="id_runtype" name="runtype" class="selectpicker" data-width="140px" title="{% trans "plannedruns.search_bar.fields.runtype.title" %}Research App:">
+                <option value="">{% trans "plannedruns.search_bar.fields.runtype.choice.default" %}</option>
                 {% for runType in runTypes %}
                 <option value="{{runType.runType}}">{{runType.description}}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="search-field">
-            <label for="id_project" class=" hide">Project</label>
-            <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                    data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                    title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+            <label for="id_project" class=" hide">{% trans "plannedruns.search_bar.fields.project.label" %}</label>
+            <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "plannedruns.search_bar.fields.project.count-selected-text" %}"
+                data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "plannedruns.search_bar.fields.project.remove-button-title" %}" data-live-search="true"
+                data-live-search-placeholder="{% trans "plannedruns.search_bar.fields.project.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                title="{% trans "plannedruns.search_bar.fields.project.title" %}" data-select-all-text="{% trans "plannedruns.search_bar.fields.project.select-all-text" %}" data-deselect-all-text="{% trans "plannedruns.search_bar.fields.project.deselect-all-text" %}" data-none-selected-text="{% trans "plannedruns.search_bar.fields.project.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                 {% for project in projects %}
                     <option value="{{ project }}">{{ project }}</option>
                 {% endfor %}
-            </select>
+            </select>        
         </div>
         <div class="search-field">
-            <label for="id_barcodes" class=" hide">Barcodes</label>
-            <select id="id_barcodes" name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                    data-live-search-placeholder="Find Barcodes..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                    title="Barcodes:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+            <label for="id_barcodes" class=" hide">{% trans "plannedruns.search_bar.fields.barcodes.label" %}</label>
+            <select id="id_barcodes" name="barcodes" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "plannedruns.search_bar.fields.barcodes.count-selected-text" %}"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "plannedruns.search_bar.fields.barcodes.remove-button-title" %}" data-live-search="true"
+                    data-live-search-placeholder="{% trans "plannedruns.search_bar.fields.barcodes.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="{% trans "plannedruns.search_bar.fields.barcodes.title" %}" data-select-all-text="{% trans "plannedruns.search_bar.fields.barcodes.select-all-text" %}" data-deselect-all-text="{% trans "plannedruns.search_bar.fields.barcodes.deselect-all-text" %}" data-none-selected-text="{% trans "plannedruns.search_bar.fields.barcodes.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                 {% for barcode in barcodes %}
                     <option value="{{ barcode }}">{{ barcode }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="search-field">
-            <label for="id_reference" class=" hide">Reference</label>
-            <select id="id_reference" name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected"
-                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true"
-                    data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
-                    title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+            <label for="id_reference" class=" hide">{% trans "plannedruns.search_bar.fields.reference.label" %}</label>
+            <select id="id_reference" name="reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "plannedruns.search_bar.fields.reference.count-selected-text" %}"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "plannedruns.search_bar.fields.reference.remove-button-title" %}" data-live-search="true"
+                    data-live-search-placeholder="{% trans "plannedruns.search_bar.fields.reference.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="{% trans "plannedruns.search_bar.fields.reference.title" %}" data-select-all-text="{% trans "plannedruns.search_bar.fields.reference.select-all-text" %}" data-deselect-all-text="{% trans "plannedruns.search_bar.fields.reference.deselect-all-text" %}" data-none-selected-text="{% trans "plannedruns.search_bar.fields.reference.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                 {% for reference in references %}
                     <option value="{{ reference }}">{{ reference }}</option>
                 {% endfor %}
-            </select>
+            </select>        
         </div>
         <div class="search-field">
-            <button id="clear_filters" class="btn" type="button">Clear All</button>
+            <button id="clear_filters" class="btn" type="button">{% trans "plannedruns.search_bar.action.clear_filters.label" %}</button>
         </div>
     </div>
 
-	<div id='grid'></div>
+	<div id='grid'
+         data-url-read="{% url "api_dispatch_list" resource_name="plannedexperiment" api_name='v1' %}?isReusable=False&planExecuted=False"></div>
 	
 	<div class="btn-group pull-left">						
-		<a class="btn delete_selected" href="{% url "delete_plan_template" 0 %}" style="margin-right: 4px;">Delete Selected</a>
+		<a class="btn delete_selected" href="{% url "delete_plan_template" 0 %}" style="margin-right: 4px;">{% trans "plannedruns.action.selected.delete_plan_template" %}</a>
 	</div>
     <div class="btn-group pull-left">                       
-        <a id="clear" class="btn clear_selection" > Clear Selection </a>
+        <a id="clear" class="btn clear_selection" >{% trans "plannedruns.action.selected.clear" %}  </a>
     </div>
 </div>
 <script id="LibTypeColumnTemplate" type="text/x-kendo-template">
@@ -185,29 +188,29 @@
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
+			<a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">{% trans "plannedruns.action.review_plan" %}</a>
 		</li>
 		<li>
-			<a href="#= '{% url "page_plan_edit_plan" 999999 %}'.replace('999999',_id)#">Edit</a>
+			<a href="#= '{% url "page_plan_edit_plan" 999999 %}'.replace('999999',_id)#">{% trans "plannedruns.action.page_plan_edit_plan" %}</a>
 		</li>
 		<li>
-		<a href="#= '{% url "page_plan_copy_plan" 999999 %}'.replace('999999',_id)#">Copy</a>
+		<a href="#= '{% url "page_plan_copy_plan" 999999 %}'.replace('999999',_id)#">{% trans "plannedruns.action.page_plan_copy_plan" %}</a>
 		</li>
 		<li>
-			<a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
+			<a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">{% trans "plannedruns.action.delete_plan_template" %}</a>
 		</li>
         # if (data.planStatus == 'pending' || data.planStatus == 'reserved') { #
 		<li>
-		    <a href="\\#" class="force-planned" data-id="#=_id#">Completed on Chef</a>
+		    <a href="#= '{% url "api_dispatch_detail" resource_name="plannedexperiment" api_name='v1' pk='999999'%}'.replace('999999',_id)#" class="force-planned" data-id="#=_id#">{% trans "plannedruns.action.set-status-planned" %}</a>
 		</li>
         # } #
 		{% if planshare %}
 		# if (data.planStatus == 'reserved') { #
-		<li><a href="\\#" rel="tooltip" title="planned Run is Reserved and cannot be transferred">Transfer</a></li>
+		<li><a href="\\#" rel="tooltip" title="{% trans "plannedruns.messages.plan_transfer.invalidstate.reserved" %}"><i class="icon-ban-circle"/> {% trans "plannedruns.action.plan_transfer" %}</a></li>
 		# } else { #
                 <div class="btn-group dropup">
                     <li class="dropdown-submenu pull-left">
-                        <a href="\\#">Transfer</a>
+                        <a href="\\#">{% trans "plannedruns.action.plan_transfer" %}</a>
                         <ul class="dropdown-menu dropup" style="left:auto; right:100%; max-height:165px; overflow-y:scroll;">
                             {% for ts in planshare %}
                             <li><a href="#= '{% url "plan_transfer" 999999 ts.name %}'.replace('999999',_id)#" class="transfer_plan">{{ts.name}}</a></li>

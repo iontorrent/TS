@@ -1,54 +1,81 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
+<style type="text/css">
+    select[readonly]{
+    background: #eee;
+    cursor:no-drop;
+}
+
+select[readonly] option{
+    display:none;
+}
+
+</style>
 
 <div id="modal_add_sampleset_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
         <h3 id="modal_addLabel">
-            {% if intent == "edit" %}Edit Sample Set
-            {% else %}Add Sample Set
-            {% endif %}
+            {{ form.title }}
         </h3>
     </div>
     <div class="modal-body" style="max-height: 400px;">
         <div id="error-messages" style="margin-left: 4%;" class="format-errors alert alert-error hide"></div>
-        <form class="form-horizontal" id="save_sampleset" name="save_sampleset" method="POST" action="">
+        <form class="form-horizontal" id="save_sampleset" name="save_sampleset" method="POST" action="" data-action="{{ form.action }}">
             <input type="hidden" id="intent" name="intent" value="{{intent}}">
             <input type="hidden" id="id" name="id" value="{{sampleSet.id}}">
             <div class="control-group">
-                <label class="control-label" for="sampleSetName">Sample Set Name</label>
+                <label class="control-label" for="sampleSetName">{% trans "samplesets.addedit.fields.sampleSetName.label" %}</label>
                 <div class="controls">
                     {% if intent == "edit" %}
-                        <input type="text" maxlength="127"  id="sampleSetName" name="sampleSetName" placeholder="Required" value="{{sampleSet.displayedName}}" />
+                        <input type="text" maxlength="127"  id="sampleSetName" name="sampleSetName" placeholder="{% trans "samplesets.addedit.fields.sampleSetName.placeholder" %}" value="{{sampleSet.displayedName}}" />
                     {% else %}
-                        <input type="text" maxlength="127" id="sampleSetName" name="sampleSetName" placeholder="Required"/>
+                        <input type="text" maxlength="127" id="sampleSetName" name="sampleSetName" placeholder="{% trans "samplesets.addedit.fields.sampleSetName.placeholder" %}"/>
                     {% endif %}
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="groupType">Group Type</label>
+                <label class="control-label" for="groupType">{% trans "samplesets.addedit.fields.groupType.label" %}</label>
                 <div class="controls">
-                    <select id="groupType" name="groupType"style="height:28px;"
-                    {% if not editable %}
-                        disabled="disabled"
-                        title="Group Type cannot be changed since this sample set status is {{sampleSet.status}}"
-                    {% endif %}
-                    >   <option value="0" >.....</option>
+                    <select id="groupType" name="groupType" style="height:28px;"
+                        {% if not editable %}
+                            readonly="true"
+                            data-toggle="tooltip"
+                            title="{{ form.fields.groupType.title }}"
+                        {% endif %}
+
+                        {% if isAmpliseq_or_HD and editable %}
+                            readonly="true"
+                            data-toggle="tooltip"
+                            title="{{ form.fields.groupType.title_amp_hd }}"
+                        {% endif %}
+                    >
+                        <option value="0" >.....</option>
                         {% for groupType in sampleGroupType_list %}
                             <option value="{{groupType.id}}"
                                 {% ifequal groupType.id sampleSet.SampleGroupType_CV_id %} SELECTED {% endifequal %}
                             >{{groupType.displayedName}}</option>
                         {% endfor %}
                     </select>
+                    {% if isAmpliseq_or_HD and editable %}
+                        <i class="icon-info-sign" rel="tooltip" data-placement="right" title="{{ form.fields.groupType.title_amp_hd }}"></i>
+                    {% endif %}
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="libraryPrepType">Library Prep Type</label>
+                <label class="control-label" for="libraryPrepType">{% trans "samplesets.addedit.fields.libraryPrepType.label" %}</label>
                 <div class="controls">
-                    <select id="libraryPrepType" name="libraryPrepType"style="height:28px;"
+                    <select id="libraryPrepType" name="libraryPrepType" style="height:28px;"
                         {% if not editable %}
-                            disabled="disabled"
-                            title="Library Prep Type cannot be changed since this sample set status is {{sampleSet.status}}"
+                            readonly="true"
+                            data-toggle="tooltip"
+                            title="{{ form.fields.libraryPrepType.title }}"
+                        {% endif %}
+                        {% if isAmpliseq_or_HD and editable %}
+                            readonly="true"
+                            data-toggle="tooltip"
+                            title="{{ form.fields.libraryPrepType.title_amp_hd }}"
                         {% endif %}
                     >
                     {% for libPrepType, displayed_libPrepType in libraryPrepType_choices.items %}
@@ -57,15 +84,24 @@
                         >{{displayed_libPrepType}}</option>
                     {% endfor %}
                     </select>
+                    {% if isAmpliseq_or_HD and editable %}
+                        <i class="icon-info-sign" rel="tooltip" data-placement="right" title="{{ form.fields.libraryPrepType.title_amp_hd }}"></i>
+                    {% endif %}
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="libraryPrepKit">Library Prep Kit</label>
+                <label class="control-label" for="libraryPrepKit">{% trans "samplesets.addedit.fields.libraryPrepKit.label" %}</label>
                 <div class="controls">
-                    <select id="libraryPrepKit" name="libraryPrepKit"style="height:28px;"
+                    <select id="libraryPrepKit" name="libraryPrepKit" style="height:28px;"
                     {% if not editable %}
-                        disabled="disabled"
-                        title="Library Prep Kit cannot be changed since this sample set status is {{sampleSet.status}}"
+                        readonly="true"
+                        data-toggle="tooltip"
+                        title="{{ form.fields.libraryPrepKit.title }}"
+                    {% endif %}
+                    {% if isAmpliseq_or_HD %}
+                            readonly="true"
+                            data-toggle="tooltip"
+                            title="{{ form.fields.libraryPrepKit.title_amp_hd }}"
                     {% endif %}
                     >   <option value="" >.....</option>
                         {% for libraryPrepKit in libraryPrepKits %}
@@ -74,38 +110,64 @@
                             >{{libraryPrepKit.description}}</option>
                         {% endfor %}
                     </select>
+                    {% if isAmpliseq_or_HD and editable %}
+                        <i class="icon-info-sign" rel="tooltip" data-placement="right"
+                           title="{{ form.fields.libraryPrepKit.title_amp_hd }}"></i>
+                    {% endif %}
+                </div>
+            </div>
+        <div class="control-group">
+            <label class="control-label" for="cyclingProtocols">Cycling Protocol</label>
+            <div class="controls">
+                        <select id="cyclingProtocols" name="cyclingProtocols" style="height:28px;">
+                            {% for cyclingProtocol in cyclingProtocols_choices %}
+                                <option value="{{cyclingProtocol.value}}" {% if cyclingProtocol.value == sampleSet.cyclingProtocols  %} selected {% elif cyclingProtocol.value == "SOP" %} selected {% endif %}>{{cyclingProtocol.value}}</option>
+                            {% endfor %}
+                        </select>
+            </div>
+        </div>
+                <div class="control-group">
+            <label class="control-label" for="additionalCycles">Additional Cycle</label>
+            <div class="controls">
+                        <select id="additionalCycles" name="additionalCycles" style="height:28px;">
+                            {% for additionalCycle in additionalCycles_choices %}
+                                <option value="{{additionalCycle.value}}" {% if additionalCycle.value == sampleSet.additionalCycles  %} selected {% elif additionalCycle.value == "0" %} selected {% endif %}>{{additionalCycle.value}}</option>
+                            {% endfor %}
+                        </select>
+            </div>
+
+        </div>
+            <div class="control-group">
+                <label class="control-label" for="pcrPlateSerialNum">{% trans "samplesets.addedit.fields.pcrPlateSerialNum.label" %}</label>
+                <div class="controls">
+                    <input type="text" maxlength="64"  id="pcrPlateSerialNum" name="pcrPlateSerialNum" placeholder="{% trans "samplesets.addedit.fields.pcrPlateSerialNum.placeholder" %}" value="{{sampleSet.pcrPlateSerialNum}}" />
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="pcrPlateSerialNum">PCR Plate Serial Number</label>
+                <label class="control-label" for="sampleSetDescription">{% trans "samplesets.addedit.fields.sampleSetDescription.label" %}</label>
                 <div class="controls">
-                    <input type="text" maxlength="64"  id="pcrPlateSerialNum" name="pcrPlateSerialNum" placeholder="Optional" value="{{sampleSet.pcrPlateSerialNum}}" />
-                </div>
-            </div>
-            <div class="control-group">
-                <label class="control-label" for="sampleSetDescription">Description</label>
-                <div class="controls">
-                    <textarea maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" placeholder="Optional" value="{{sampleSet.description}}">{{sampleSet.description}}</textarea>
+                    <textarea maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" placeholder="{% trans "samplesets.addedit.fields.sampleSetDescription.placeholder" %}" value="{{sampleSet.description}}">{{sampleSet.description}}</textarea>
                 </div>
             </div>
         </form>
     </div>
     <div class="modal-footer">
-        <button class="btn" data-dismiss="modal">Cancel</button>
-        <a class="btn btn-primary done_add_sampleSet_btn">Done</a>
+        {% if isAmpliseq_or_HD and editable %}
+        <a href="{% url 'input_samples_advanced_edit' setID=sampleSet.id %}" class="btn btn-primary  pull-left">Advanced Edit</a>
+        {% endif %}
+        <button class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</button>
+        <a class="btn btn-primary done_add_sampleSet_btn">{% trans "samplesets.addedit.action.submit" %}</a>
     </div>
 
     <script type="text/javascript">
     $(document).ready(function(){
+        $('[data-toggle="tooltip"]').tooltip();
+
         $('.done_add_sampleSet_btn').click(function(e){
             e.preventDefault();
             e.stopImmediatePropagation();
     
-            if (intent == "edit"){
-                url = "/sample/sampleset/edited/"
-            }else{
-                url = "/sample/sampleset/added/"
-            }
+            url = $('#save_sampleset').data('action');
             data = $('#save_sampleset').serialize();
             $.post(url, data, function(data) {
                 if (data == "true"){
@@ -127,6 +189,7 @@
             return false;
         });
     });
+    //# sourceURL=templates/rundb/sample/modal_add_sampleset.html
     </script>
 </div>
 

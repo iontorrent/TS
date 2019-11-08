@@ -28,10 +28,14 @@ String.prototype.endsWith = function (str) {
 function resizeiFrames() {
     //Resize the iframe blocks
     $("iframe.pluginBlock:visible").each(function () {
-        var height = $(this).contents().height(),
-            width = $(this).parent().css("width");
-        if ($(this).height() != height) $(this).height(height);
-        if ($(this).width() != width) $(this).width(width);
+        try {
+            var height = $(this).contents().height(),
+                width = $(this).parent().css("width");
+            if ($(this).height() != height) $(this).height(height);
+            if ($(this).width() != width) $(this).width(width);
+        } catch (e) {
+            console.warn("Could not resize plugin iframe: " + e.message)
+        }
     });
 }
 
@@ -90,9 +94,9 @@ function pluginStatusLoad() {
         contentType: "application/json; charset=utf-8",
         dataType: "json",
         success: function (pluginResultsList) {
-            if (pluginResultsList.length == 0) {
+            if (pluginResultsList.length == 0){
                 // No plugins to display
-                pluginStatusTable.append($("<h2/>", {text: "No plugins have been run"}));
+                pluginStatusTable.append($("<h2/>", {text: gettext('report.section.plugins.messages.nopluginsrun') /*"No plugins have been run"*/}));
             } else {
                 var iframeLoadPromises = [];
                 var groupedPluginResults = {};
@@ -158,36 +162,37 @@ function pluginStatusLoad() {
             }
         },
         error: function (msg) {
-            pluginStatusTable.text("Failed to get Plugin Status");
+            pluginStatusTable.text(gettext('report.section.plugins.messages.failedtogetpluginstatus')); //"Failed to get Plugin Status"
         }
     }); //for ajax call
     $('#pluginRefresh').activity(false);
 }
 
 function progress_load() {
+    var sdk_lang = language || 'en-us';  // relies upon the global variable 'language' that is set by templates/rundb/common/head_jqueryui_script.html
     $.ajax({
         type: 'GET',
         url: reportAPI,
         contentType: "application/json; charset=utf-8",
         dataType: "json",
         async: false,
+        headers: {
+            'Accept-Language': sdk_lang  // Set language to override the default SDK language for UI
+        },
         success: function (data) {
-            $("#progress_message").html(data.status);
+            $("#progress_message").html(data.i18nstatus.i18n || data.status);
             if (data.status.indexOf("Completed") === 0
                 || data.status === "No Live Beads") {
                 clearInterval($(document).data('report_progress'));
                 var reload_interval_s = 5; // Seconds until a reload
-                $("#progress_message").html(
-                    "The report has been completed. "
-                    + "The page will reload in "
-                    + reload_interval_s + " seconds");
+                $("#progress_message").html(interpolate(gettext('report.messages.status.progresscomplete'), {'reload_interval_s': reload_interval_s}, true)); //'"The report has been completed. The page will reload in " + reload_interval_s + " seconds"
                 setTimeout(function () {
                     location.reload();
                 }, reload_interval_s * 1000);
             }
         },
         error: function (msg) {
-            $("#progress_message").html("Error checking status");
+            $("#progress_message").html(gettext('report.messages.status.progress.onajaxerror'));
         }
     });
 }
@@ -361,7 +366,7 @@ $(document).ready(function () {
                             }).fail(function (data) {
                                  $('#error-messages').empty().show();
                                  responseText = "Unable to open the plan for review";
-                                 $('#error-messages').append('<p class="alert error">ERROR: ' + responseText + '</p>');
+                                 $('#error-messages').append('<p class="alert error">' + gettext('global.messages.error.label') + ': ' + responseText + '</p>');
                             }).always(function (data) {
                                  /*console.log("complete:", data);*/
                             });
@@ -474,7 +479,7 @@ $(document).ready(function () {
             // $(that).trigger('remove_from_project_done', {values: e.values});
         }).fail(function (data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="alert error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="alert error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
         }).always(function (data) {
             /*console.log("complete:", data);*/
         });
@@ -485,7 +490,7 @@ $(document).ready(function () {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         pk = $(this).data("pk");
@@ -508,7 +513,7 @@ $(document).ready(function () {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function (data) {/*console.log("complete:", data);*/
@@ -538,14 +543,14 @@ $(document).ready(function () {
     $('.pluginRemove').live("click", function (e) {
         e.preventDefault();
         var url = $(this).attr("href");
-        bootbox.confirm("Are you sure you want to delete this plugin result?", function (okay) {
+        bootbox.confirm(gettext('report.section.plugins.action.removeplugin.confirm'), function (okay) {
             if (okay) {
                 $.ajax({
                     type: 'DELETE',
                     url: url,
                     async: true,
                 }).fail(function (msg) {
-                    alert("Failed to remove plugin result.")
+                    alert(gettext('report.section.plugins.action.removeplugin.failure')) //"Failed to remove plugin result."
                 }).done(function () {
                     pluginStatusLoad();
                 });
@@ -585,7 +590,7 @@ $(document).ready(function () {
             $('body').bind('keyup', keyupFunc);
         })
             .fail(function (msg) {
-                $modal_plugin_log.find('.modal-body').html('<div class="log alert alert-error">Unable to read plugin log:' + htmlEscape(msg.statusText) + '</div>');
+                $modal_plugin_log.find('.modal-body').html('<div class="log alert alert-error">' + gettext('report.section.plugins.action.viewlog.failure') + htmlEscape(msg.statusText) + '</div>');
             })
             .always(function () {
                 logParent.activity(false);
@@ -598,17 +603,17 @@ $(document).ready(function () {
 
     /* Click handler for button to terminate running SGE job */
     $('.pluginCancel').live("click", function (e) {
-        this.innerHTML = "Stopping";
+        this.innerHTML = gettext('report.section.plugins.action.terminate.inprogress'); //"Stopping"
         this.disabled = true;
         e.preventDefault();
         var prpk = $(this).data('id');
         var jobid = $(this).data('jobid');
         $.get("/rundb/api/v1/pluginresult/" + prpk + "/stop/"
             , function () {
-                $('pluginStatusLoad').append('<div class="alert alert-info" data-dismiss="alert">Plugin Job ' + jobid + ' is being terminated via SGE</div>')
+                $('pluginStatusLoad').append('<div class="alert alert-info" data-dismiss="alert"> ' + interpolate(gettext('report.section.plugins.messages.terminate.inprogress'), {jobid: jobid}, true) + '</div>')
             }, 'json')
             .fail(function (msg) {
-                $('pluginStatusLoad').append('<div class="alert alert-error" data-dismiss="alert">Failed to terminate SGE Job ' + jobid + '</div>')
+                $('pluginStatusLoad').append('<div class="alert alert-error" data-dismiss="alert">' + interpolate(gettext('report.section.plugins.messages.terminate.failed'), {jobid: jobid}, true) + '</div>')
             })
             .always(function () {
                 // refresh plugin data
@@ -627,9 +632,9 @@ $(document).ready(function () {
 
     $(".pluginDialogButton").click(function () {
         //open the dialog
-        $("#modal-header").html('Select a Plugin to Run');
+        $("#modal-header").html(gettext("report.section.plugins.execute.title")); //'Select a Plugin to Run'
         $("#modal-body").html("<div id='pluginLoad'></div><div id='pluginList'></div>");
-        $("#pluginLoad").html("<span>Loading Plugin List <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+        $("#pluginLoad").html("<span>" + gettext('report.section.plugins.execute.messages.loadingpluginlist') + "<img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
         $('#plugin-modal').modal('show');
 
         //get the list of plugins from the API
@@ -642,7 +647,9 @@ $(document).ready(function () {
                 var items = [];
                 if (data.objects.length === 0) {
                     $("#pluginLoad").html("");
-                    $("#pluginList").html('<p>No plugins enabled. Go to <a href="/configure/plugins/">Configure:Plugins</a> to install and enable plugins.</p>');
+                    var pluginsPageAnchor = '<a href="/configure/plugins/">' + gettext('global.nav.menu.configure.menu.plugins.label') + '</a>';
+                    var pluginListHtml = interpolate(gettext('report.section.plugins.messages.nopluginsenabled'), {page_link: pluginsPageAnchor}, true); //No plugins enabled. Go to <a href="/configure/plugins/">Configure:Plugins</a> to install and enable plugins.
+                    $("#pluginList").html('<p>' + pluginListHtml + '</p>');
                     return false;
                 }
                 $("#pluginList").html(pluginLauncherTemplate({}));
@@ -737,14 +744,14 @@ $(document).ready(function () {
                 processData: false,
                 beforeSend: function () {
                     $("#pluginList").html("");
-                    $("#pluginLoad").html("<span>Launching Plugin " + pluginName + " <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+                    $("#pluginLoad").html("<span>" + interpolate(gettext('report.section.plugins.execute.messages.executing'), {pluginName:pluginName}, true) + " <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>"); //Launching Plugin %(pluginName)s
                 },
                 success: function () {
                     $('#plugin-modal').modal('hide');
                     pluginStatusLoad();
                 },
                 failure: function () {
-                    $("#pluginLoad").html("<span>ERROR: Failed to launch Plugin " + pluginName + "</span>");
+                    $("#pluginLoad").html("<span>" + interpolate(gettext('report.section.plugins.execute.messages.failureexecuting'), {pluginName:pluginName}, true) + "</span>"); //ERROR: Failed to launch Plugin %(pluginName)s
                 }
             });
         });
@@ -882,34 +889,34 @@ $(document).ready(function () {
                 columns: [
                     {
                         field: "barcode_name",
-                        title: "Barcode Name"
+                        title: gettext('report.section.output.barcodes.fields.barcode_name.label')
                     },
                     {
                         field: "sample",
-                        title: "Sample"
+                        title: gettext('report.section.output.barcodes.fields.sample.label')
                     },
                     {
                         field: "total_bases",
-                        title: "Bases"
+                        title: gettext('report.section.output.barcodes.fields.total_bases.label')
                     },
                     {
                         field: "Q20_bases",
-                        title: ">=Q20 Bases"
+                        title: gettext('report.section.output.barcodes.fields.Q20_bases.label')
                     },
                     {
                         field: "read_count",
-                        title: "Reads"
+                        title: gettext('report.section.output.barcodes.fields.read_count.label')
                     },
                     {
                         field: "mean_read_length",
-                        title: "Mean Read Length"
+                        title: gettext('report.section.output.barcodes.fields.mean_read_length.label')
                     },
                     {
-                        title: "Read Length Histogram",
+                        title: gettext('report.section.output.barcodes.read_len_histogram.label'),
                         sortable: false
                     },
                     {
-                        title: "BAM",
+                        title: gettext('report.section.output.barcodes.files.label'),
                         sortable: false
                     }
                 ],

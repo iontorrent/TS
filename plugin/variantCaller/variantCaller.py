@@ -8,7 +8,7 @@ import subprocess
 from ion.plugin import *
 
 class variantCaller(IonPlugin):
-    version = '5.10.1.20'
+    version = '5.12.0.2'
     envDict = dict(os.environ)
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     requires_configuration = True # The user can not run the plugin w/o clicking the configuration button (exception: TS-16890).
@@ -35,7 +35,7 @@ class variantCaller(IonPlugin):
 
     def metric(self):
         pass
-
+    
     def custom_validation(self, configuration, run_mode):
         """
         run_mode takes values from "manual" or "Automatic"

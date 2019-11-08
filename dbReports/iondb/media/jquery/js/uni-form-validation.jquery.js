@@ -1,4 +1,7 @@
 /**
+ * !!!!! DEPRECATED !!!!!!. Please use {% include "rundb/common/head_uni-form-validation.jquery.js.html" %} and update your usage as needed.
+ *
+ *
  * Uni-Form jQuery Plugin
  *
  * Provides form actions for use with the Uni-Form markup style

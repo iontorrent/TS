@@ -180,7 +180,14 @@ void SignalProcessingMasterFitter::PreWellCorrectionFactors(
   {
     // anything that needs doing immediately before writing to wells
     // hypothetically, this all happens at the well level and doesn't involve the signal processing at all.
+//  Timer fit_timer;
+//    double elapsed_time = 0;
+
+//  fit_timer.restart();
     PostModelProtonCorrection( flow_block_size, flow_block_start );
+//  elapsed_time += fit_timer.elapsed();
+//  printf("CPU:WellXtalk:%f\n",elapsed_time);
+
     // this will go away when we add sub-region empty well traces
     // UGLY: if empty-well normalization is turned on...the measured amplitude actually needs
     // to be corrected for the scaling that was done on the raw data...
@@ -990,6 +997,7 @@ void SignalProcessingMasterFitter::RegionalFittingForLaterFlowBlock( int flow_ke
   else {
     GuessCrudeAmplitude (elapsed_time,fit_timer,false, flow_block_size, flow_block_start);
   }
+  //printf("CPU:ProjectionSearch:%f\n", elapsed_time);
 
   FitTimeVaryingRegion ( elapsed_time,fit_timer, flow_key, flow_block_size, table, flow_block_start );
 
@@ -1022,7 +1030,7 @@ void SignalProcessingMasterFitter::CPUxEmbarassinglyParallelRefineFit( int flow_
   double elapsed_time=0;
   // now do a final amplitude estimation on each bead
   RefineAmplitudeEstimates ( elapsed_time,fit_timer, flow_block_size, flow_block_start );
-  //printf("Time in single flow fit: %f\n", elapsed_time);
+  //printf("CPU:Time in single flow fit:%f\n", elapsed_time);
 }
 
 /*--------------------------------Control analysis flow end ----------------------------------------------------*/

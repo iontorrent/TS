@@ -1,14 +1,98 @@
 {% load static from staticfiles %}
 {% if csaAvailable %}
-    <p>
-        Download the Customer Support Archive by clicking here.
-        <a href="{% url "report_csa" report.pk %}" class="btn btn-success"><i class="icon-white icon-arrow-down"></i>
-            Download</a>
-    </p>
-    <p class="well well-small" style="color: #666;">
-        The customer support archive contains instrument information for troubleshooting and may be requested by field
-        support.
-    </p>
+    {% if globalconfig.enable_support_upload %}
+        <div id="support_upload_track" style="display: none;">
+            <div id="ticket_info" style="display: none;">
+                <p><strong>Upload ID <span id="ticket_id"></span></strong> <small id="ticket_status"></small></p>
+                <p id="ticket_message" style="display: none;"></p>
+            </div>
+
+            <p>Support Upload Status - <span class="support_status"></span></p>
+            <p><small>Support Requested <span id="support_created"></span></small></p>
+            <div class="row">
+                <p class="span2">
+                    <strong>Email</strong>
+                </p>
+                <p id="support_contact_email" class="span10"></p>
+            </div>
+            <div class="row">
+                <p class="span2">
+                    <strong>Description</strong>
+                </p>
+                <p id="support_description" class="span10"></p>
+            </div>
+            <div class="well well-small" style="color: #666; margin-top: 20px;">
+                <p>You have started the upload of your Customer Support Archive.  Next, contact your support representative as you normally would and include the Upload ID above.  If you do not see an Upload ID, download the archive and email it to your support contact and note this error.</p>
+                <small>
+                    You may still download the Customer Support Archive by clicking here.
+                    <a href="{% url "report_csa" report.pk %}">Download</a>
+                </small>
+            </div>
+        </div>
+        <div id="support_upload_start" style="margin-bottom: 10px;">
+            <p>If you intend to contact support regarding issues with this sequencing run, please upload the Customer Support Archive file by completing the form below.</p>
+            <p id="support_errors"></p>
+            <form id="support_form" class="form-horizontal" method="POST" action="{% url "report_support_upload" %}">
+                {% csrf_token %}
+                <input type="hidden" name="result" value="{{report.pk}}">
+                <div id="contact_email" class="control-group">
+                    <label class="control-label" for="contact_email">Email</label>
+                    <div class="controls">
+                        <div class="errors"></div>
+                        <input type="email" name="contact_email" placeholder="Email" value="" required>
+                    </div>
+                </div>
+                <div id="description" class="control-group">
+                    <label class="control-label" for="inputPassword">Description</label>
+                    <div class="controls">
+                        <div class="errors"></div>
+                        <textarea name="description" placeholder="Describe your problem" required></textarea>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <div class="controls">
+                        <button id="support_form_submit" type="submit" class="btn btn-primary"><i class="icon-white icon-arrow-up"></i> <span>Upload</span></button>
+                    </div>
+                </div>
+            </form>
+            <div class="well well-small" style="color: #666; margin-top: 20px;">
+                  The CSA file contains instrument information for troubleshooting and may be
+                  requested by your support representative. Uploading a CSA file here will not
+                  automatically generate a support request.
+                <br>
+                  In order to get support you must:
+                <ul>
+                    <li>Complete this form and click Upload.</li>
+                    <li>Note the Upload ID number that appears when the upload is received.</li>
+                    <li>Provide the Upload ID when contacting your support representative and include any additional data you have available (ex. Qubit excel calculator, Bioanalyzer traces, etc.)</li>
+                </ul>
+                <small>
+                    You may still download the Customer Support Archive by clicking here.
+                    <a href="{% url "report_csa" report.pk %}">Download</a>
+                </small>
+            </div>
+        </div>
+
+        <script type="text/javascript" src="{% static "js/support.js" %}"></script>
+        <script>
+            $(function(){
+                check_for_upload({{report.pk}});
+            });
+        </script>
+        {% else %}
+            <p>
+                Download the Customer Support Archive by clicking here.
+                <a href="{% url "report_csa" report.pk %}" class="btn btn-success"><i class="icon-white icon-arrow-down"></i> Download</a>
+            </p>
+            <p class="well well-small" style="color: #666;">
+                The customer support archive contains instrument information for troubleshooting and may be requested by field support.
+                <br>
+                Your Torrent Server is not able to access the support server automatically.
+                If you would like to be able to upload these support files directly rather than
+                manually attaching them to an email in order to receive support, contact your
+                support representative and ask how to enable Customer Support Archive upload for your Torrent Server.
+            </p>
+    {% endif %}
 {% else %}
     <div class="well well-small" style="color: #666; margin-top: 20px;">
           The CSA file may only be generated for PGM or thumbnail analysis due to size constraint.  Please switch to a thumbnail report to enable this feature.

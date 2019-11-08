@@ -19,6 +19,7 @@ HotspotReader::HotspotReader()
   next_pos_ = 0;
   hint_header_ = 0;
   hint_cur_ = 0;
+  checkpt_ = 0;
 }
 
 
@@ -138,6 +139,9 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 		case 'r':
 		  hint = REV_BAD_HINT;
 		  break;
+		case 's':
+		  hint = SPEC_BAD_HINT;
+		  break;
 	      }
 		hint_item hint_entry;
           	hint_entry.chr_ind = chrom_idx;
@@ -148,8 +152,11 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 		if (bstr[i].size()>2) {
 		    float x, y;
 		    sscanf(bstr[i].c_str()+2, "%f:%f", &x, &y);
-		    fprintf(stderr, "checking %f %f\n", x, y);
-		    hint_entry.afmean = x; hint_entry.afsd = y;		    
+		    if (hint == SPEC_BAD_HINT) {
+			hint_entry.AFf = x; hint_entry.AFr = y;
+		    } else {
+		        hint_entry.afmean = x; hint_entry.afsd = y;		    
+	  	    }
 		}
 		hint_vec.push_back(hint_entry);
 	    }
@@ -206,6 +213,8 @@ void HotspotReader::FetchNextVariant()
     vector<string>& min_tag_fam_size = current_hotspot.info["min_tag_fam_size"];
     vector<string>& min_fam_per_strand_cov = current_hotspot.info["min_fam_per_strand_cov"];
     vector<string>& sse_prob_threshold = current_hotspot.info["sse_prob_threshold"];
+    vector<string>& fwdb = current_hotspot.info["FWDB"];
+    vector<string>& revb = current_hotspot.info["REVB"];
 
     // collect bad-strand info
     vector<string>& black_list_strand = current_hotspot.info["BSTRAND"];
@@ -312,6 +321,14 @@ void HotspotReader::FetchNextVariant()
       if (alt_idx < sse_prob_threshold.size() and sse_prob_threshold[alt_idx] != ".") {
         hotspot.params.sse_prob_threshold_override = true;
         hotspot.params.sse_prob_threshold = atof(sse_prob_threshold[alt_idx].c_str());
+      }
+
+      if (alt_idx < fwdb.size() and fwdb[alt_idx] != ".") {
+        hotspot.params.fwdb = atof(fwdb[alt_idx].c_str());
+      }
+
+      if (alt_idx < revb.size() and revb[alt_idx] != ".") {
+        hotspot.params.revb = atof(revb[alt_idx].c_str());
       }
 
       // record bad-strand info

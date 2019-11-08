@@ -15,7 +15,7 @@ function download_prerequisites()
     
     for pkgname in ${required[@]}; do
 
-        URL=$(apt-get install --reinstall --assume-yes --force-yes --print-uris $pkgname|tail -1|awk -F\' '{print $2}')
+        URL=$(apt-get install --reinstall --assume-yes --allow-unauthenticated --print-uris $pkgname|tail -1|awk -F\' '{print $2}')
         wget --directory-prefix=./${destdir} $URL
     done
 }

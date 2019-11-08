@@ -17,10 +17,15 @@ class RawTab : public ModelTab
 
 public:
     explicit RawTab(QString _mName, Dialog *_mParent, QWidget *parent = 0);
+    QPushButton *m_button;
+
+signals:
+	void fileNameChanged(QString fname);
 
 public slots:
+	void fileNameChangedRx(QString fname);
+	//void handleButton();
 
-private:
 };
 
 #endif // RAWTAB_H

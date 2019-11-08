@@ -1,4 +1,5 @@
 {% extends "rundb/configure/base.html" %}
+{% load i18n %}
 
 {% block content %}
 
@@ -6,7 +7,7 @@
 {% for upload in processed_uploads %}
 <div class="content">
   <div class="modal-header">
-    <h1>{{upload.content_type}} Details - {{upload.content_name}}</h1>
+    <h1>{{ upload.title }}</h1>
   </div>
 
   <div >
@@ -14,7 +15,7 @@
 
       <fieldset>
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">Processed File</label>
+          <label class="control-label">{{ upload.file_name_label }}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               <a href='/rundb/content/download/{{upload.content_id}}'>{{upload.file_name}}</a> {{upload.file_size_string}}
@@ -24,7 +25,7 @@
             
       {% for bonus in upload.bonus_fields %}
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">{{bonus.title}}</label>
+          <label class="control-label">{{bonus.label}}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               {{bonus.value}}
@@ -34,21 +35,21 @@
       {% endfor %}
         
         <div class="control-group">
-          <label for="description" class="control-label">Description</label>
+          <label for="description" class="control-label">{{ upload.description_label }}</label>
           <div class="controls">
-            <textarea name="description" id="description_{{upload.content_id}}" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.description}}</textarea>
+            <textarea name="description" id="description_{{upload.content_id}}" placeholder='{% trans "entity.Content.fields.description.placeholder" %}' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.description}}</textarea>
           </div>
         </div>
         
         <div class="control-group">
-          <label for="notes" class="control-label">Notes</label>
+          <label for="notes" class="control-label">{{ upload.notes_label }}</label>
           <div class="controls">
-            <textarea name="notes" id="notes_{{upload.content_id}}" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.notes}}</textarea>
+            <textarea name="notes" id="notes_{{upload.content_id}}" placeholder='{% trans "entity.Content.fields.notess.placeholder" %}' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.notes}}</textarea>
           </div>
         </div>
         
         <div class="control-group">
-          <label for="enabled" class="control-label">Enabled</label>
+          <label for="enabled" class="control-label">{{ upload.enabled_label }}</label>
           <div class="controls">
             <input type="checkbox" name="enabled" id="enabled_{{upload.content_id}}" {% if upload.enabled %} checked="yes" {% endif %}>
           </div>
@@ -60,8 +61,8 @@
 
   <div class="modal-footer">    
     <div class="row-fluid">
-      <button class="btn btn-primary pull-right save_changes" id="submit_{{upload.content_id}}" href="/configure/references/#{{upload.content_type_hash}}">Save Changes</button>
-      <a class="btn pull-left" href="/configure/references/#{{upload.content_type_hash}}">Back to {{upload.content_type}}</a>
+      <button class="btn btn-primary pull-right save_changes" id="submit_{{upload.content_id}}" href="/configure/references/#{{upload.content_type_hash}}">{% trans "global.action.save" %}</button>
+      <a class="btn pull-left" href="/configure/references/#{{upload.content_type_hash}}">{{ upload.action_back_label }}</a>
     </div>
   </div>
 </div>
@@ -69,14 +70,14 @@
 
 <div class="content">
   <div class="modal-header">
-    <h1>Original Upload - {{upload_name}}</h1>
+    <h1>{{ contentupload_title }}</h1>
   </div>
 
   <div >
     <form class="form-horizontal">
       <fieldset>
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">Original File</label>
+          <label class="control-label">{{ file_path_label }}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               <a href='/rundb/uploadstatus/download/{{contentupload.id}}'>{{contentupload.file_path}}</a> {{file_size_string}}
@@ -85,7 +86,7 @@
         </div>
             
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">Type</label>
+          <label class="control-label">{{upload_type_label}}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               {{upload_type}}
@@ -94,7 +95,7 @@
         </div>
 
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">Date</label>
+          <label class="control-label">{{upload_date_label}}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               {{upload_date}}
@@ -103,7 +104,7 @@
         </div>
 
         <div class="control-group" style="margin-bottom:0;">
-          <label class="control-label">Status</label>
+          <label class="control-label">{{ status_line_label }}</label>
           <div class="controls">
             <div style="padding-top:6px;">
               {{status_line}}
@@ -117,8 +118,8 @@
 
   <div class="modal-footer">    
     <div class="row-fluid">
-      <a id="back_to_history" class="btn pull-left" href="/rundb/published/">Back</a>
-        <button class="btn btn-danger pull-right" id="delete">Delete</button>
+      <a id="back_to_history" class="btn pull-left" href="/rundb/published/">{% trans "global.action.back" %}</a>
+        <button class="btn btn-danger pull-right" id="delete">{% trans "global.action.delete" %}</button>
     </div>
     <div id="ask_delete" style="display: none; margin-top:12px;">
       <div class="row-fluid">
@@ -134,7 +135,7 @@
         </p>
       </div>
       <div class="row-fluid">
-        <button class="btn pull-left" id="cancel_delete">No, Keep It</button> <button class="btn btn-danger pull-left" id="confirm_delete">Yes, Delete It</button>
+        <button class="btn pull-left" id="cancel_delete">{% trans "global.action.cancel_delete" %}</button> <button class="btn btn-danger pull-left" id="confirm_delete">{% trans "global.action.confirm_delete" %}</button>
       </div>
     </div>
     <div class="row-fluid">
@@ -145,7 +146,7 @@
 
 <div class="content">
   <div class="modal-header">
-    <h1>Processing Log</h1>
+    <h1>{{ logs_label }}</h1>
   </div>
 
 <pre class='log'>

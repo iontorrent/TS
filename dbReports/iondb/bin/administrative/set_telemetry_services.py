@@ -5,9 +5,13 @@
 import subprocess
 import argparse
 
-parser = argparse.ArgumentParser(description='This script enables and disables Thermo telemetry services.')
-parser.add_argument('--enable', action="store_true", default=False)
-parser.add_argument('--disable', action="store_true", default=False)
+from iondb.utils.utils import update_telemetry_services, TELEMETRY_FPATH
+
+parser = argparse.ArgumentParser(
+    description="This script enables and disables Thermo telemetry services."
+)
+parser.add_argument("--enable", action="store_true", default=False)
+parser.add_argument("--disable", action="store_true", default=False)
 
 args = parser.parse_args()
 
@@ -22,3 +26,13 @@ for service_name in ["deeplaser", "RSM_Launch"]:
     elif args.disable:
         subprocess.check_output(["sudo", "update-rc.d", service_name, "disable"])
         subprocess.check_output(["sudo", "service", service_name, "stop"])
+
+# update telemetry configuration: TELEMETRY_FPATH
+try:
+    if args.enable:
+        update_telemetry_services(True)
+    elif args.disable:
+        update_telemetry_services(False)
+except OSError as err:
+    print("Problem updating %s" % TELEMETRY_FPATH)
+    raise err

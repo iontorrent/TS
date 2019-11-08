@@ -1,15 +1,17 @@
-<div id="modal_confirm_plugin_version_to_install" title="Install {{ InstallVersion }}" class="modal hide" action="{{action}}" method="{{method}}">
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
+<div id="modal_confirm_plugin_version_to_install" title="" class="modal hide" action="{{action}}" method="{{method}}">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="single_h3">Confirm Install{{type|title}}</h3>
+        <h3 id="single_h3">{{ i18n.title }}</h3>
     </div>
     <div class="modal-body">
-        <p id="single_msg">Are you sure you want to install {{InstallVersion}}?</p>
+        <p id="single_msg">{{ i18n.confirmmsg }}</p>
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" id="cancel_button" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" id="install_button" class="btn btn-danger">Yes, Install!</a>
+        <a href="#" id="cancel_button" class="btn" data-dismiss="modal">{{ i18n.cancel }}</a>
+        <a href="#" id="install_button" class="btn btn-danger">{{ i18n.submit }}</a>
     </div>
 
     <script>
@@ -19,7 +21,7 @@
             var url = $('#modal_confirm_plugin_version_to_install').attr('action')
                 , type = $('#modal_confirm_plugin_version_to_install').attr('method');
 
-            $('#modal_confirm_plugin_version_to_install #single_msg').text("Now installing, please wait.");
+            $('#modal_confirm_plugin_version_to_install #single_msg').text("{{ i18n.submitmsg }}");
             $('#modal_confirm_plugin_version_to_install #cancel_button').attr('disabled','disabled');
             $('#modal_confirm_plugin_version_to_install #install_button').attr('disabled','disabled');
             var jqxhr = $.ajax(url, {
@@ -27,6 +29,9 @@
                                , contentType: 'application/json'
                                , dataType: 'json'
                                , processData: false
+                                , headers: {
+                                                'Accept-Language': '{{ lang.code }}'  // Set language to override the default SDK language for UI
+                                            }
                 }).done(function(data) {
                     if ($('#modal_confirm_plugin_version_to_install').data('customevents')) {
                         jQuery.each($('#modal_confirm_plugin_version_to_install').data('customevents'), function(i, elem) {
@@ -39,12 +44,13 @@
                     $('#grid').data('kendoGrid').refresh();
                 })
                 .fail(function(data) {
-                    $('#modal_confirm_plugin_version_to_install #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                    $('#modal_confirm_plugin_version_to_install #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
                     console.log("error:", data);
                 })
         });
         $('#modal_confirm_plugin_version_to_install').on('hidden', function () {
             $('body #modal_confirm_plugin_version_to_install').remove();
         });
+        //# sourceURL=templates/rundb/configure/modal_confirm_plugin_install_to_version.html.js
     </script>
 </div>

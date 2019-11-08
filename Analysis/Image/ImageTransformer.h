@@ -58,6 +58,8 @@ public:
   //---------------gain corrections-------------------------------------------------
   
   static bool ReadDataCollectGainCorrection(const string &gainFile, unsigned int rows, unsigned int cols);
+  static void GainImageErosion(Mask *mask, unsigned int rows,  unsigned int cols, int size);
+  static void GenerateExclusionMaskFromGain(Mask *mask, unsigned int rows,  unsigned int cols, int size);
   static void CalculateGainCorrectionFromBeadfindFlow (char *_datDir, bool gain_debug_output);
   static void CalculateGainCorrectionFromBeadfindFlow (bool gain_debug_output, Image &bfImg, Mask &mask);
   /* uses a beadfind flow to compute the gain of each pixel this can

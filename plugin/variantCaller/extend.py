@@ -524,6 +524,46 @@ def save_adjusted_param_to_configuration(bucket):
 
     return {'Success': 'Adjusted parameters are saved to the configuration "%s".' %save_to_config_name}
 
+def check_variants(variants, ref_fasta_path):
+    contig_dict = {}
+    contig_list = []
+    # At least one variant must be specified.
+    if not variants:
+        raise(ValueError('No variant was specified.'))
+        
+    # Read the fai file.
+    genome_name = os.path.basename(ref_fasta_path)
+    if genome_name.lower().endswith('.fasta'):
+        genome_name = genome_name[:-6]
+    with open(ref_fasta_path + '.fai', 'r') as f_fai:
+        for line in f_fai:
+            split_line = line.split()
+            contig_list.append(split_line[0])
+            contig_dict[split_line[0]] = {'contig': split_line[0], 'length': int(split_line[1])}
+    
+    # Check the variants
+    for variant in variants.itervalues():    
+        chrom = variant["chrom"]
+        if not chrom:
+            raise(ValueError('A variant has no chromosome specified.'))
+        pos = variant['pos']
+        try:
+            pos = int(pos)
+        except ValueError:
+            raise(ValueError('Position must be an integer.'))
+        ref = str(variant['ref'])
+        if not ref:
+            ref = '-'
+        variant_str = '"%s" at %s:%d' %(ref, chrom, pos)
+
+        if chrom not in contig_list:
+            raise(ValueError('The chromosome of the ref allele %s is not in the contig list of %s: [%s].' %(variant_str, genome_name, ', '.join(contig_list))))
+
+        if pos < 1 or pos > contig_dict[chrom]['length']:
+            raise(ValueError('The position of the ref allele %s is invalid: It should be > 0 and <= %d.' %(variant_str, contig_dict[chrom]['length'])))
+        if pos + len(str(variant.get('ref', ''))) - 1 > contig_dict[chrom]['length']:
+            raise(ValueError('The ref allele %s is beyond the range of the contig.' %(variant_str)))
+
 def slicer_main(path, temp_path, barcode):
     '''
     path: path to the barcode directory
@@ -547,6 +587,10 @@ def slicer_main(path, temp_path, barcode):
     results_name = vc_plugin.STARTPLUGIN_JSON.get("expmeta", {}).get("results_name", "results")
     variants = json.load(open(os.path.join(full_path, "variants.json")))
 
+    status_update(path, "Check variants")
+    printtime("Check variants")
+    check_variants(variants, my_configutation['options'].serve_option('reference_genome_fasta', my_bam_dict['name']))
+    
     status_update(path, "Stat Generation in progress")
     printtime("Generating BAM stats")
 

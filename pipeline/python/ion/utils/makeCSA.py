@@ -8,63 +8,63 @@ import tempfile
 import zipfile
 
 result_patterns = [
-    'ion_params_00.json',
-    'alignment.log',
-    'report.pdf',
-    'backupPDF.pdf',
-    '*-full.pdf',
-    'DefaultTFs.conf',
-    'drmaa_stderr_block.txt',
-    'drmaa_stdout.txt',
-    'drmaa_stdout_block.txt',
-    'ReportLog.html',
-    'sysinfo.txt',
-    'uploadStatus',
-    'version.txt',
-    #Signal processing files
-    '*bfmask.stats',
-    'avgNukeTrace_*.txt',
-    'dcOffset*',
-    'NucStep*',
-    'processParameters.txt',
-    'separator.bftraces.txt',
-    'separator.trace.txt',
-    'sigproc.log',
-    'separator.avg-traces.txt',
-    'BkgModelFilterData.h5',
-    'pinsPerFlow.txt',
+    "ion_params_00.json",
+    "alignment.log",
+    "report.pdf",
+    "backupPDF.pdf",
+    "*-full.pdf",
+    "DefaultTFs.conf",
+    "drmaa_stderr_block.txt",
+    "drmaa_stdout.txt",
+    "drmaa_stdout_block.txt",
+    "ReportLog.html",
+    "sysinfo.txt",
+    "uploadStatus",
+    "version.txt",
+    # Signal processing files
+    "*bfmask.stats",
+    "avgNukeTrace_*.txt",
+    "dcOffset*",
+    "NucStep*",
+    "processParameters.txt",
+    "separator.bftraces.txt",
+    "separator.trace.txt",
+    "sigproc.log",
+    "BkgModelFilterData.h5",
+    "pinsPerFlow.txt",
     # Basecaller files
-    '*ionstats_alignment.json',
-    '*ionstats_basecaller.json',
-    'alignmentQC_out.txt',
-    'alignmentQC_out_*.txt',
-    'alignStats_err.json',
-    'BaseCaller.json',
-    'basecaller.log',
-    'datasets_basecaller.json',
-    'datasets_pipeline.json',
-    'datasets_tf.json',
-    '*ionstats_tf.json',
-    'TFStats.json',
-    '*.sparkline.png'
+    "*ionstats_alignment.json",
+    "*ionstats_basecaller.json",
+    "alignmentQC_out.txt",
+    "alignmentQC_out_*.txt",
+    "alignStats_err.json",
+    "BaseCaller.json",
+    "basecaller.log",
+    "datasets_basecaller.json",
+    "datasets_pipeline.json",
+    "datasets_tf.json",
+    "*ionstats_tf.json",
+    "iontrace_Test_Fragment.png",
+    "TFStats.json",
+    "*.sparkline.png",
 ]
 rawdata_patterns = [
-    'explog_final.txt',
-    'explog.txt',
-    'InitLog.txt',
-    'InitLog1.txt',
-    'InitLog2.txt',
-    'RawInit.txt',
-    'RawInit.jpg',
-    'InitValsW3.txt',
-    'InitValsW2.txt',
-    'Controller',
-    'debug',
-    'liveview',
-    'Controller_1',
-    'debug_1',
-    'chipCalImage.bmp.bz2',
-    'InitRawTrace0.png',
+    "explog_final.txt",
+    "explog.txt",
+    "InitLog.txt",
+    "InitLog1.txt",
+    "InitLog2.txt",
+    "RawInit.txt",
+    "RawInit.jpg",
+    "InitValsW3.txt",
+    "InitValsW2.txt",
+    "Controller",
+    "debug",
+    "liveview",
+    "Controller_1",
+    "debug_1",
+    "chipCalImage.bmp.bz2",
+    "InitRawTrace0.png",
 ]
 
 
@@ -80,8 +80,8 @@ def get_file_list(directory, patterns, block_list=[]):
     mylist = []
     try:
         walk = list(os.walk(directory, followlinks=True))
-    except:
-        raise Exception('Unable to access files from %s' % directory)
+    except Exception:
+        raise Exception("Unable to access files from %s" % directory)
 
     for pattern in patterns:
         for filename in match_files(walk, pattern):
@@ -96,7 +96,9 @@ def get_file_list(directory, patterns, block_list=[]):
 
 
 def get_list_from_results(directory):
-    return get_file_list(directory, result_patterns, block_list=["plugin_out"])
+    return get_file_list(
+        directory, result_patterns, block_list=["plugin_out", "rawdata"]
+    )
 
 
 def get_list_from_rawdata(directory):
@@ -104,15 +106,17 @@ def get_list_from_rawdata(directory):
 
 
 def writeZip(fullnamepath, filelist, dirtrim="", openmode="w"):
-    '''Add files to zip archive.  dirtrim is a string which will be deleted
-    from each file entry.  Used to strip leading directory from filename.'''
+    """Add files to zip archive.  dirtrim is a string which will be deleted
+    from each file entry.  Used to strip leading directory from filename."""
     # Open a zip archive file
-    csa = zipfile.ZipFile(fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    csa = zipfile.ZipFile(
+        fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True
+    )
 
     # Add each file to the zip archive file
     for item in filelist:
         if os.path.exists(item):
-            arcname = item.replace(dirtrim, '')
+            arcname = item.replace(dirtrim, "")
             csa.write(item, arcname)
 
     # Close zip archive file
@@ -121,12 +125,17 @@ def writeZip(fullnamepath, filelist, dirtrim="", openmode="w"):
 
 def migrateZip(logzipname, fullnamepath, openmode="w"):
     # Open a zip archive file
-    csa = zipfile.ZipFile(fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+    csa = zipfile.ZipFile(
+        fullnamepath, mode=openmode, compression=zipfile.ZIP_DEFLATED, allowZip64=True
+    )
     csa_files = sorted(csa.namelist())
 
     # Include files from pgm_logs.zip found in reportDir
     if not zipfile.is_zipfile(logzipname):
-        csa.writestr("missing_instrument_logs.log", "Could not find raw data directory\npgm_logs.zip also missing.")
+        csa.writestr(
+            "missing_instrument_logs.log",
+            "Could not find raw data directory\npgm_logs.zip also missing.",
+        )
     else:
         # Add contents of pgm_logs.zip
         # This file generated by TLScript.py (src in pipeline/python/ion/reports)
@@ -142,7 +151,7 @@ def migrateZip(logzipname, fullnamepath, openmode="w"):
     return
 
 
-def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=''):
+def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
     """Create the CSA zip file"""
 
     def integrate_chef_log(csa_file_path, chef_log_path):
@@ -152,12 +161,19 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=''):
         chef_log_temp_dir = None
         try:
             chef_log_temp_dir = tempfile.mkdtemp()
-            chef_log_handle = tarfile.open(chef_log_path, 'r')
-            csa_handle = zipfile.ZipFile(csa_file_path, mode='a', compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+            chef_log_handle = tarfile.open(chef_log_path, "r")
+            csa_handle = zipfile.ZipFile(
+                csa_file_path,
+                mode="a",
+                compression=zipfile.ZIP_DEFLATED,
+                allowZip64=True,
+            )
             chef_log_files = chef_log_handle.getnames()
             chef_log_handle.extractall(chef_log_temp_dir)
             for chef_log_file in chef_log_files:
-                csa_handle.write(os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file)
+                csa_handle.write(
+                    os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file
+                )
         finally:
             if os.path.exists(str(chef_log_temp_dir)):
                 shutil.rmtree(chef_log_temp_dir)

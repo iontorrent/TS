@@ -42,7 +42,7 @@
                 
         <div class="row-fluid" id="error" style="color: red;">
         {% for key, validationErrors in step.validationErrors.items %}
-            <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+            <h4 style="color: red;">{{validationErrors|safe|linebreaks}}</h4>
         {% endfor %}
          </div>
     </div>
@@ -77,6 +77,10 @@
             "description":      "{{item.sample.description}}",
             "controlType":      "{{item.controlType}}",
             "irGender":         "{{item.gender}}",
+            "irSampleCollectionDate": "{{item.sampleCollectionDate}}",
+            "irSampleReceiptDate": "{{item.sampleReceiptDate}}",
+            "irPopulation":     "{{item.population}}",
+            "irmouseStrains":     "{{item.mouseStrains}}",
             "ircancerType":     "{{item.cancerType}}",
             "ircellularityPct":   "{{item.cellularityPct}}",
             "irbiopsyDays":     "{{item.biopsyDays}}",

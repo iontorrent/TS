@@ -27,6 +27,11 @@
             // The nav's containing block becomes the window when position:fixed
             // The width now needs to be computed in js to make the width a fraction of the window minus padding
             elements.sideNav.css("width", ($(window).width() - 40) * 0.1452991452991453);
+
+            // Set the max height of the side nav
+            var navTop = elements.sideNav.offset().top;
+            var pageBottom = $(window).scrollTop() + $(window).height();
+            elements.sideNav.css("max-height", pageBottom-navTop);
         }
 
         function storePrevious() {

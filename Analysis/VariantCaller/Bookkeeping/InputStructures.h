@@ -93,7 +93,9 @@ struct VariantSpecificParams {
       sse_prob_threshold_override(false), sse_prob_threshold(0),
 	  min_tag_fam_size_override(false), min_tag_fam_size(0),
 	  min_fam_per_strand_cov_override(false), min_fam_per_strand_cov(0),
-      black_strand('.') {}
+      black_strand('.'),
+	  fwdb(0.0f), revb(0.0f)
+	  {}
 
   bool  min_allele_freq_override;
   float min_allele_freq;
@@ -132,6 +134,9 @@ struct VariantSpecificParams {
   bool min_fam_per_strand_cov_override;
   int  min_fam_per_strand_cov;
   char  black_strand;
+
+  float fwdb;
+  float revb;
 };
 
 // ==============================================================================

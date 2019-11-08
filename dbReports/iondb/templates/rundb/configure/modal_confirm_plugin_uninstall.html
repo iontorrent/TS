@@ -1,15 +1,17 @@
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
 <div id="modal_confirm_plugin_uninstall" title="" class="modal hide" action="{{action}}" method="{{method}}">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="single_h3">Confirm Uninstall {{type|title}}</h3>
+        <h3 id="single_h3">{{ i18n.title|safe }}</h3>
     </div>
     <div class="modal-body">
-        <p id="single_msg">Are you sure you want to uninstall {{plugin.versionedName}} {{type|lower}} ({{id}})?</p>
+        <p id="single_msg">{{ i18n.confirmmsg|safe }}</p>
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
     </div>
     <div class="modal-footer">
-        <a href="#" id="cancel_button" class="btn" data-dismiss="modal">Cancel</a>
-        <a href="#" id="install_button" class="btn btn-danger">Yes, Uninstall!</a>
+        <a href="#" id="cancel_button" class="btn" data-dismiss="modal">{{ i18n.cancel }}</a>
+        <a href="#" id="install_button" class="btn btn-danger">{{ i18n.submit }}</a>
     </div>
 
     <script>
@@ -20,7 +22,7 @@
             var url = $('#modal_confirm_plugin_uninstall').attr('action')
                 , type = $('#modal_confirm_plugin_uninstall').attr('method');
 
-            $('#single_msg').text("Now uninstalling, please wait.");
+            $('#single_msg').text("{{ i18n.submitmsg|safe }}");
             $('#cancel_button').attr('disabled','disabled');
             $('#install_button').attr('disabled','disabled');
             console.log('transmitting :', type, url);
@@ -29,6 +31,9 @@
                                , contentType: 'application/json'
                                , dataType: 'json'
                                , processData: false
+                                , headers: {
+                                                'Accept-Language': '{{ lang.code }}'  // Set language to override the default SDK language for UI
+                                            }
                 }).done(function(data) {
                     console.log("success:",  url);
                     if ($('#modal_confirm_plugin_uninstall').data('customevents')) {
@@ -43,7 +48,7 @@
                     $('#modal_confirm_plugin_uninstall').modal("hide");
                 })
                 .fail(function(data) {
-                    $('#modal_confirm_plugin_uninstall #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                    $('#modal_confirm_plugin_uninstall #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
                     console.log("error:", data);
 
                 })
@@ -51,6 +56,7 @@
         $('#modal_confirm_plugin_uninstall').on('hidden', function () {
             $('body #modal_confirm_plugin_uninstall').remove();
         });
+        //# sourceURL=templates/rundb/configure/modal_confirm_plugin_uninstall.html.js
 </script>
 
 </div>

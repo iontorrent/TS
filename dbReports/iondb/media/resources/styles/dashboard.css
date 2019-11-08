@@ -93,6 +93,12 @@ h1.section-header a.btn {
     text-align: center;
 }
 
+.sample-popover-table tbody tr td {
+    word-break: break-word;
+    max-width: 160px;
+    white-space:normal;
+}
+
 .popover-title {
     display: none;
 }

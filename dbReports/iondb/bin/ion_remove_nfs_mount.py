@@ -18,7 +18,9 @@ sys.tracebacklimit = 0
 
 # check for root level permissions
 if os.geteuid() != 0:
-    sys.exit("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.")
+    sys.exit(
+        "You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting."
+    )
 
 if len(sys.argv) < 2:
     sys.exit("Not enough arguments..")
@@ -36,13 +38,18 @@ with open(tempfile, "w") as out, open(filename, "r") as fh:
 shutil.move(tempfile, filename)
 
 # Which hosts file to use
-hosts_file = '/usr/share/ion-tsconfig/ansible/torrentsuite_hosts'
-if os.path.isfile(hosts_file + '_local'):
-    hosts_file += '_local'
+hosts_file = "/usr/share/ion-tsconfig/ansible/torrentsuite_hosts"
+if os.path.isfile(hosts_file + "_local"):
+    hosts_file += "_local"
 
 # Run ansible-playbook in a subshell since running it from python celery task is broken
-cmd = ["ansible-playbook", "-i",  hosts_file, 'nfs_client.yml', "--sudo"]
-p = subprocess.Popen(cmd, cwd="/usr/share/ion-tsconfig/ansible", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+cmd = ["ansible-playbook", "-i", hosts_file, "nfs_client.yml", "--become"]
+p = subprocess.Popen(
+    cmd,
+    cwd="/usr/share/ion-tsconfig/ansible",
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+)
 stdout, stderr = p.communicate()
 sys.stdout.write(stdout)
 sys.stderr.write(stderr)

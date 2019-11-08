@@ -361,7 +361,7 @@
       "isDefault": false,
       "isActive": true,
       "isVisible": true,
-      "categories": "AMPS_RNA",
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;MIXED",
       "samplePrep_instrumentType": "",
       "sequencing_instrumentType": "",
       "uid": "APPCAT0002"
@@ -378,7 +378,7 @@
       "isDefault": false,
       "isActive": true,
       "isVisible": true,
-      "categories": "WGNM",
+      "categories": "AMPS;WGNM",
       "samplePrep_instrumentType": "",
       "sequencing_instrumentType": "",
       "uid": "APPCAT0003"
@@ -533,7 +533,40 @@
       "uid": "APPCAT0008"
     }
   },
-
+    {
+    "pk": 14,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "carrierSeq",
+      "displayedValue": "Carrier Seq",
+      "description": "Carrier Seq",
+      "isDefault": false,
+      "isActive": false,
+      "isVisible": false,
+      "categories": "AMPS",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0009"
+    }
+  },
+  {
+    "pk": 15,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "ocav4",
+      "displayedValue": "OCA v4",
+      "description": "Oncomine Comprehensive Assay v4",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0010"
+    }
+  },
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -3535,7 +3568,7 @@
       "defaultChipType": "540",
       "isDefault": true,
       "description": "",
-      "isHotspotRegionBEDFileSuppported": true,
+      "isHotspotRegionBEDFileSuppported": false,
       "applType": [
         "AMPS_HD_RNA"
       ],
@@ -3920,7 +3953,7 @@
       "iRAnnotationType": "Gender",
       "isActive": true
     }
-  }, 
+  },
   {
     "pk": 11,
     "model": "rundb.sampleannotation_cv",
@@ -4477,6 +4510,538 @@
       "sampleGroupType_CV": null,
       "value": "Chronic Phase Chronic Myelogenous Leukemia",
       "iRValue": "Chronic Phase Chronic Myelogenous Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 51,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0051",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "African",
+      "iRValue": "African",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 52,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0052",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Ad Mixed American",
+      "iRValue": "Ad Mixed American",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 53,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0053",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "East Asian",
+      "iRValue": "East Asian",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 54,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0054",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "European",
+      "iRValue": "European",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 55,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0055",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "South Asian",
+      "iRValue": "South Asian",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 56,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "population",
+      "uid": "SAMPLEANNOTATE_CV_0056",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Unknown",
+      "iRValue": "Unknown",
+      "iRAnnotationType": "Population",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 57,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "controlType",
+      "uid": "SAMPLEANNOTATE_CV_0057",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "MSI On-Chip Control",
+      "iRValue": "MSI On-Chip Control",
+      "iRAnnotationType": "ControlType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 58,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0058",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "129/Sv",
+      "iRValue": "129/Sv",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 59,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0059",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "C57BL/6",
+      "iRValue": "C57BL/6",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 60,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0060",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "BALB/c",
+      "iRValue": "BALB/c",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 61,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0061",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "MRL/lpr",
+      "iRValue": "MRL/lpr",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 62,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0062",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "NZB",
+      "iRValue": "NZB",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 63,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0063",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "A/J",
+      "iRValue": "A/J",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 64,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0064",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "I/St",
+      "iRValue": "I/St",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 65,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "mouseStrains",
+      "uid": "SAMPLEANNOTATE_CV_0065",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "NFS",
+      "iRValue": "NFS",
+      "iRAnnotationType": "MouseStrains",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 66,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "sampleSource",
+      "uid": "SAMPLEANNOTATE_CV_0066",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Blood",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 67,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "sampleSource",
+      "uid": "SAMPLEANNOTATE_CV_0067",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "FFPE",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 68,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "sampleSource",
+      "uid": "SAMPLEANNOTATE_CV_0068",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Other",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 69,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "panelPoolType",
+      "uid": "SAMPLEANNOTATE_CV_0069",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Single Pool",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 70,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "panelPoolType",
+      "uid": "SAMPLEANNOTATE_CV_0070",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Dual Pool",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 71,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "libraryPrepType",
+      "uid": "SAMPLEANNOTATE_CV_0071",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "AmpliSeq on Chef",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 72,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "libraryPrepType",
+      "uid": "SAMPLEANNOTATE_CV_0072",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "AmpliSeq HD on Chef",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 73,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "libraryPrepType",
+      "uid": "SAMPLEANNOTATE_CV_0073",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Manual",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 74,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cyclingProtocols",
+      "uid": "SAMPLEANNOTATE_CV_0074",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Unspecified",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 75,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cyclingProtocols",
+      "uid": "SAMPLEANNOTATE_CV_0075",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "SOP",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 76,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cyclingProtocols",
+      "uid": "SAMPLEANNOTATE_CV_0076",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Modified",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+{
+    "pk": 77,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0077",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "Unspecified",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 78,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0078",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "0",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 79,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0079",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "1",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 80,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0080",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "2",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 81,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0081",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "3",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 82,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "additionalCycles",
+      "uid": "SAMPLEANNOTATE_CV_0082",
+      "isIRCompatible": false,
+      "sampleGroupType_CV": null,
+      "value": "4",
+      "iRValue": "",
+      "iRAnnotationType": "",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 83,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0083",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Acute Myeloid Leukemia",
+      "iRValue": "Acute Myeloid Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 84,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0084",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Cholangiocarcinoma",
+      "iRValue": "Cholangiocarcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 85,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0085",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Chronic Myeloid Leukemia",
+      "iRValue": "Chronic Myeloid Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 86,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0086",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Colon Cancer",
+      "iRValue": "Colon Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 87,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0087",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Gastroesophageal Junction Adenocarcinoma",
+      "iRValue": "Gastroesophageal Junction Adenocarcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 88,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0088",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Rectal Cancer",
+      "iRValue": "Rectal Cancer",
       "iRAnnotationType": "CancerType",
       "isActive": true
     }

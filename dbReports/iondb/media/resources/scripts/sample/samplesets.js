@@ -18,7 +18,7 @@ $(function() {
 });
 
 function show_busy(show){
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     if (show){
         $('body').css("cursor", "wait");
         $('body').prepend(busyDiv);
@@ -54,14 +54,13 @@ function bindActions(source) {
 
         $.get(url, function(data) {
             $('body').append(data);
-    		//$( "#modal_add_attribute_popup" ).data('source', "#sampleset_grid");
             $("#modal_add_sampleset_popup").modal("show");
             return false;
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -85,7 +84,7 @@ function bindActions(source) {
             console.log("success:", url);
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
@@ -100,21 +99,14 @@ function bindActions(source) {
         var url = $(this).attr('href');
         $('body #modal_confirm_delete').remove();
         $.get(url, function(data) {
-
-        	if (data.indexOf("Error,") >= 0) {
-                apprise(data);
-            }
-            else {
             $('body').append(data);
-    		//$( "#modal_confirm_delete" ).data('source', "#input_samplesetitem_grid");
             $("#modal_confirm_delete").modal("show");
-            }
             return false;
         }).done(function(data) {
             console.log("success:", url);
-        }).fail(function(data) {        	
+        }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
@@ -168,14 +160,13 @@ function detailBindActions(source) {
         $('body #modal_add_samplesetitem_popup').remove();
         $.get(url, function(data) {
             $('body').append(data);
-    		//$( "#modal_add_attribute_popup" ).data('source', "#sampleset_grid");
             $("#modal_add_samplesetitem_popup").modal("show");
             return false;
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
@@ -192,20 +183,14 @@ function detailBindActions(source) {
         
         $('body #modal_confirm_delete').remove();
         $.get(url, function(data) {
-        	if (data.indexOf("Error,") >= 0) {
-                apprise(data);
-            }
-            else {
-	            $('body').append(data);
-	    		//$( "#modal_confirm_delete" ).data('source', "#input_samplesetitem_grid");
-	            $("#modal_confirm_delete").modal("show");
-            }
+            $('body').append(data);
+            $("#modal_confirm_delete").modal("show");
             return false;
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {       	
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
@@ -216,10 +201,7 @@ function detailBindActions(source) {
 
 
 $(document).ready(function() {
-	
-	//20130715-TODO
-    //$('#relationshipGroup').spinner({ min: 0, max: 10000 });
-    
+
     $('.modal_add_sample_attribute').click(function(e) {
 
         $('body').css("cursor", "wait");
@@ -227,20 +209,18 @@ $(document).ready(function() {
         $('#error-messages').hide().empty();
         show_busy(true);
 
-        //url = $(this).attr('href');
-        url = "/sample/sampleattribute/add/"    
+        url = $(this).attr('href');
             
         $('body #modal_add_attribute_popup').remove();
         $.get(url, function(data) {
             $('body').append(data);
-    		//$( "#modal_add_attribute_popup" ).data('source', "#sampleset_grid");
             $("#modal_add_attribute_popup").modal("show");
             return false;
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
@@ -269,25 +249,26 @@ $(document).ready(function() {
             console.log("success:", url);
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
         }).always(function(data) {/*console.log("complete:", data);*/
             show_busy(false);
         });
     });
-
+    var urlRead = $("#sampleset_grid").data('urlRead');
+    var urlUpdate = $("#sampleset_grid").data('urlUpdate');
     var grid = $("#sampleset_grid").kendoGrid({
         dataSource : {
             type : "json",
             transport : {
                 read : {
-                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate&status__in=created,planned,libPrep_pending,libPrep_reserved,libPrep_done,run,,",
+                    url : urlRead,
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
                 },
                 update : {
-                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate",
+                    url : urlUpdate,
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
@@ -330,9 +311,9 @@ $(document).ready(function() {
                         	type : "number",
                         	editable : false
                         },
-//                        SampleGroupType_CV : {
-//                        	type : "string"
-//                        }                        
+                        SampleGroupType_CV : {
+                       	    type : "string"
+                        },
                         sampleGroupTypeName : {
                         	type : "string"
                         },
@@ -382,44 +363,44 @@ $(document).ready(function() {
 		dataBound : onDataBound,        
         columns : [{
             field : "id",
-            title : "Select",
+            title : gettext('samplesets.fields.id.label'), //"Select",
             sortable : false,
             width: '50px',
             template : "<input id='${id}' name='selected_sets' type='checkbox' # if(!readyForPlanning){ # disabled # } # >"
         }, {
             field : "displayedName",
-            title : "Set Name"
+            title : gettext('samplesets.fields.displayedName.label'), //"Set Name"
 //            sortable : true
         }, {
             field : "lastModifiedDate",
-            title : "Date",
+            title : gettext('samplesets.fields.lastModifiedDate.label'), //"Date",
 //            sortable : true,
             template : '#= kendo.toString(new Date(Date.parse(lastModifiedDate)),"yyyy/MM/dd hh:mm tt") #'
         }, {
         	field : "sampleCount",
-        	title: "# Samples"
+        	title: gettext('samplesets.fields.sampleCount.label'), //"# Samples"
         }, {
         	field : "description",
-        	title : "Description"
+        	title : gettext('samplesets.fields.description.label'), //"Description"
         }, {
         	field : "sampleGroupTypeName",
-        	title : "Grouping"
+        	title : gettext('samplesets.fields.sampleGroupTypeName.label'), //"Grouping"
         }, {
             field : "libraryPrepType",
-            title : "Lib Prep Type",
+            title : gettext('samplesets.fields.libraryPrepType.label'), //"Lib Prep Type",
             template : kendo.template($('#LibPrepTypeColumnTemplate').html())
         }, {
             field : "libraryPrepKitDisplayedName",
-            title : "Lib Prep Kit"
+            title : gettext('samplesets.fields.libraryPrepKitDisplayedName.label'), //"Lib Prep Kit"
         }, {
             field : "pcrPlateSerialNum",
-            title : "PCR Plate Serial #"
+            title : gettext('samplesets.fields.pcrPlateSerialNum.label'), //"PCR Plate Serial #"
         }, {
             field : "combinedLibraryTubeLabel",
-            title : "Combined Tube Label"
+            title : gettext('samplesets.fields.combinedLibraryTubeLabel.label'), //"Combined Tube Label"
         }, {       
         	field : "status",
-        	title : "Status"        		
+        	title : gettext('samplesets.fields.status.label'), //"Status"
 //        	title : "Grouping",
 //        	sortable : true,
 //        	template : kendo.template($('#GroupingColumnTemplate').html())
@@ -466,7 +447,7 @@ function detailInit(e) {
 	var sampleSetPk = e.data.id;
 	var isFusions = e.data.sampleGroupTypeName.indexOf('Fusions') > -1
 
-	var detailUrl = "/rundb/api/v1/samplesetiteminfo/?sampleSet="+sampleSetPk+"&order_by=sample__displayedName";
+    var detailUrl = detailRow.find(".samples").data('urlDetail');
 
 	console.log("samplesets.js detailInit() sampleSetPk=", sampleSetPk, "; detailUrl=", detailUrl);
 	
@@ -479,18 +460,6 @@ function detailInit(e) {
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
-                },
-                update : {
-                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate",
-                    contentType : 'application/json; charset=utf-8',
-                    type : 'GET',
-                    dataType : 'json'
-                },
-                destroy : {
-                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate",
-                    contentType : 'application/json; charset=utf-8',
-                    type : 'GET',
-                    dataType : 'json'           
                 },
                 parameterMap : function(options) {
                     return buildParameterMap(options);
@@ -506,54 +475,28 @@ function detailInit(e) {
 						},
 						sampleExternalId : {
 							type : "string",
-//							nullable: true,
-//							editable : true,
-//							validation : {
-//								required : false
-//							}
 						},
 						sampleDisplayedName : {
 							type : "string",
-//							nullable : false,
-//							editable : true,
-//							validation : {
-//								required : true
-//							}
 						},
 						description : {
 							type : "string",
-//							nullable : true,
-//							editable : true,
-//							validation: { 
-//								required: false
-//							}
+						},
+						sampleCollectionDate : {
+							type : "string",
+						},
+						sampleReceiptDate : {
+							type : "string",
 						},
 						relationshipGroup : {
 							type : "number",
-//							nullable: true,
-//							editable : true,
-//							validation: { 
-//								required: false
-//							},
-//							defaultValue: { 
-//								id: 1, 
-//								displayedName: "fake value"
-//							}
+
 						},
 						relationshipRole : {
 							type : "string",
-//							nullable: true,
-//							validation: { 
-//								required: false
-//							}
 						},
 						gender : {
 							type : "string",
-//							nullable: true,
-//							editable : true,
-//							validation: { 
-//								required: false
-//							}
 						},
 						dnabarcode : {
 							type : "string"
@@ -570,7 +513,16 @@ function detailInit(e) {
                         nucleotideType: {
                             type : "string"
                         },
+                        sampleSource: {
+                            type : "string"
+                        },
+                        panelPoolType: {
+                            type : "string"
+                        },
                         pcrPlateRow: {
+                            type : "string"
+                        },
+                        tubePosition: {
                             type : "string"
                         },
                         biopsyDays : {
@@ -584,7 +536,13 @@ function detailInit(e) {
                         },
                         embryoId : {
                         	type : "string",
-                        },                        
+                        },
+                        population : {
+                        	type : "string",
+                        },
+                        mouseStrains : {
+                        	type : "string",
+                        },
 					}
 				}
 			},
@@ -602,39 +560,10 @@ function detailInit(e) {
         	allowUnsort: true
         },
         pageable: false,
-        //columns: TB.sample.sampleset.getColumns(),
         columns : getColumns(isFusions),
-
 		dataBinding : onDetailDataBinding,
 		dataBound : onDetailDataBound,
-		columnResizeHandleWidth : 6		
-//		columns : [
-//		{
-//			field : "sampleExternalId",
-//			title : "Sample ID",
-//		}, {
-//			field : "sampleDisplayedName",
-//			title : "Name",
-//		}, {
-//			field : "gender",
-//			title : "Gender",			
-//		}, {
-//			field : "sampleDescription",
-//			title : "Description",
-//		}, {
-//			field : "relationshipRole",
-//			title : "Type"
-//		}, {
-//			field : "relationshipGroup",
-//			title : "Group",
-//			editor : relationshipGroupDropDownSelector,
-//			template : "#=relationshipGroup.displayedName#"
-//		}, {
-//			command : ["edit", "destroy"], 
-//			title : "&nbsp;",
-//			width : "172px"
-//		}],
-		//20130709 editable : "inline"
+		columnResizeHandleWidth : 6
 	});
 }
 
@@ -642,126 +571,134 @@ function detailInit(e) {
 function getColumns(isFusions) {
     var columnArray = [];
     var custom_sample_list = [];
-    	
-    //var customAttributes = $("#customAttributes").val();
-    //var customAttributes = "{{custom_sample_column_list}}";
-	//console.log("samplesets.js - getColumns - customAttributes=", customAttributes);
-	//console.log("samplesets.js - getColumns - customAttributes_json=", customAttributes_json);
+
+    function _customAttributeTemplate(i) {
+        return "# var _value = data.attribute_dict[customAttributes_json[" + i + "]] # \n" +
+                "# if((typeof _value !== 'undefined') && _value) { #\n" +
+                "#= _value # \n" +
+                "# } else { # \n" +
+                "#= '' # \n" +
+                "# } #\n";
+    }
 
 	for (var i = 0; i < customAttributes_json.length; i++) {
-    //for (attribute in attributes) {
     	console.log("samplesets.js - getColumns - LOOP - customAttributes_json[i]=", customAttributes_json[i]);
-    	//var sampleAttribute = attributes[i];
-
-    	customAttributes_index = i;
-
-    	//document.getElementById("customAttribute").value = customAttributes_json[i]
-    	if ( i < 20) {
-    	custom_sample_list.push({ 
-    	   field: customAttributes_json[i], 
-    	   title: customAttributes_json[i], 
-    	   sortable: false,
-    	   //workaround 
-    	   template: kendo.template($('#CustomSampleAttributeTemplate_'+i).html())
-    	   //template: '#= data.attribute_dict[customAttributes_json[customAttributes_index]] #'
-    	   //20130715-test template: '#= $(this).data.attribute_dict["My_sample_attribute"]  #'
-    	   //template: '#= CustomSampleAttributeTemplate(customAttributes_json[i]) #'
-    	   //template:"#= data.attr_value_{{attribute.displayedName}}#" 
-    	});
-		}
+        custom_sample_list.push({
+           field: customAttributes_json[i],
+           title: customAttributes_json[i],
+           sortable: false,
+           //workaround
+           template: kendo.template(_customAttributeTemplate(i))
+        });
 	}
-
-/*20130714-donotwork
-	var attributeObjs = $("#customAttributeObjs").val().toArray();
-	$.each(attributeObjs, function(key, value) {
-    	console.log("samplesets.js - getColumns - LOOP - key=", key +"; value=", value);
-    	
-    	if (key === "displayedName") {
-        	custom_sample_list.push({ 
-         	   field: value, 
-         	   title: value, 
-         	   sortable: false,
-         	   template: '#= $(this).data.attribute_dict[value]  #'
-         	});    		
-    	}
-	});
-*/
 	
     var default_columnArray = [
      {
          field: "sampleDisplayedName", 
-         title: "Sample Name", 
+         title: gettext('samplesets.SampleSetItemInfo.fields.sampleDisplayedName.label'), //"Sample Name",
          sortable: true,
          //template: kendo.template($('#sample_name_kendo_template').html())
      } , {
          field: "sampleExternalId",
-         title: "Sample ID",         
+         title: gettext('samplesets.SampleSetItemInfo.fields.sampleExternalId.label'), //"Sample ID",
          sortable: true,
          //template: kendo.template($('#sample_id_kendo_template').html())
      } , {
          field: "pcrPlateRow",
-         title: "PCR Plate Position",        
+         title: gettext('samplesets.SampleSetItemInfo.fields.pcrPlateRow.label'), //"PCR Plate Position",
          sortable: true     
-     } , {
+     } ,{
          field: "controlType",
-         title: "Control Type",
+         title: gettext('samplesets.SampleSetItemInfo.fields.controlType.label'), //"Control Type",
          sortable: false
      } , {
          field: "dnabarcode",
-         title: "Barcode",        
+         title: gettext('samplesets.SampleSetItemInfo.fields.dnabarcode.label'), //"Barcode",
          sortable: true         
      } , {
          field: "description",
-         title: "Description",        
+         title: gettext('samplesets.SampleSetItemInfo.fields.description.label'), //"Description",
          sortable: false,
          //template: kendo.template($('#sample_barcoding_id_kendo_template').html())    
-     } , {       
+     } , {
+         field: "sampleCollectionDate",
+         title: gettext('samplesets.SampleSetItemInfo.fields.sampleCollectionDate.label'), //"Sample Collection Date",
+         template : '#= sampleCollectionDate != null ? kendo.toString(kendo.parseDate(sampleCollectionDate), "yyyy-MM-dd") : " " #',
+         sortable: false,
+     } , {
+         field: "sampleReceiptDate",
+         title: gettext('samplesets.SampleSetItemInfo.fields.sampleReceiptDate.label'), //"Sample Receipt Date",
+         template : '#= sampleReceiptDate != null ? kendo.toString(kendo.parseDate(sampleReceiptDate), "yyyy-MM-dd") : " " #',
+         sortable: false,
+     } , {
          field: "nucleotideType",
-         title: isFusions? "DNA/Fusions":"DNA/RNA",
+         //title: isFusions? gettext('samplesets.SampleSetItemInfo.fields.nucleotideType.label.isFusions') /*"DNA/Fusions"*/: gettext('samplesets.SampleSetItemInfo.fields.nucleotideType.label'), //"DNA/RNA",
+         title: "Nucleotide Type",
          sortable: true,
          template: kendo.template($('#sample_nucleotideType_kendo_template').html())  
-     } , {    	 
+     } , {
+         field: "sampleSource",
+         title: "Sample Source",
+         sortable: true
+     } , {
+         field: "panelPoolType",
+         title: "Panel Pool Type",
+         sortable: true
+     } , {
+         field: "tubePosition",
+         title: "Primer Pool Position", //Primer Pool Position
+         sortable: true,
+         width:'5%'
+     } , {
          field: "gender",
-         title: "Gender",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.gender.label'), //"Gender",
          sortable: true,
          //template: kendo.template($('#sample_libperpbarcode_kendo_template').html())
      } , {    	 
          field: "relationshipRole",
-         title: "Type",        
+         title: gettext('samplesets.SampleSetItemInfo.fields.relationshipRole.label'), //"Type",
          sortable: true,
          //template : kendo.template($('#createdByFullname').html())
      } , {
          field: "relationshipGroup",
-         title: "Group",        
+         title: gettext('samplesets.SampleSetItemInfo.fields.relationshipGroup.label'), //"Group",
          sortable: true,
          editor : relationshipGroupDropDownSelector,
          //template: "#=relationshipGroup.displayedName#"
      } , {
          field: "cancerType",
-         title: "Cancer Type",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.cancerType.label'), //"Cancer Type",
          sortable: true,
          //template: kendo.template($('#sample_cancerType_kendo_template').html())
      } , {
          field: "cellularityPct",
-         title: "Cellularity %",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.cellularityPct.label'), //"Cellularity %",
          sortable: true,
          //template: kendo.template($('#sample_cellularityPct_kendo_template').html()) 
      } , {
          field: "biopsyDays",
-         title: "Biopsy Days",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.biopsyDays.label'), //"Biopsy Days",
          sortable: true,
      } , {
          field: "cellNum",
-         title: "Cell Num",
+         title: gettext('samplesets.SampleSetItemInfo.fields.cellNum.label'), //"Cell Num",
          sortable: true,
      } , {
          field: "coupleId",
-         title: "Couple ID",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.coupleId.label'), //"Couple ID",
          sortable: true,
      } , {
          field: "embryoId",
-         title: "Embryo ID",       
+         title: gettext('samplesets.SampleSetItemInfo.fields.embryoId.label'), //"Embryo ID",
          sortable: true,         
+     }, {
+         field: "population",
+         title: gettext('samplesets.SampleSetItemInfo.fields.population.label'), //"Population",
+         sortable: true,
+     }, {
+         field: "mouseStrains",
+         title: gettext('samplesets.SampleSetItemInfo.fields.mouseStrains.label'), //"Mouse Strains"
+         sortable: true,
      }];
 
 //    var default_last_columnArray = [
@@ -819,7 +756,7 @@ function set_search_subject_sampleSetName(e) {
     $("label[for='searchSubject']").text("sampleSetName");  
     $("#search_subject_nav").attr("title", "Search by sample set name"); 
     $("#sampleset_search_dropdown_menu").toggle();                   
-} 
+}
 
 function set_search_subject_combinedTubeLabel(e) {
     e.preventDefault();

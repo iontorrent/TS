@@ -25,10 +25,13 @@ struct MergedTarget {
 };
 
 struct TargetStat{
-	unsigned int read_coverage = 0;   // Number of reads that cover this target (where one read can cover multiple targets, e.g., super amplicon, overlapping amplicons).
+	unsigned int read_coverage_in_families = 0;   // Number of reads in a family that cover this target (where one read can cover multiple targets, e.g., super amplicon, overlapping amplicons).
+    unsigned int read_coverage_in_families_by_best_target = 0;  // Number of reads that cover this target (where one read can cover only one target, determined by the best target assignment).
 	unsigned int family_coverage = 0; // Number of families that cover this target (where one family can cover multiple targets, e.g., super amplicon, overlapping amplicons).
-    int          read_coverage_by_best_target = 0;  // Number of reads that cover this target (where one read can cover only one target, determined by the best target assignment)?
-	// fam_size_hist[x] = y indicates there are y families of size x.
+	unsigned int raw_read_coverage = 0;   // Number of raw reads that cover this target (where one read can cover multiple targets, e.g., super amplicon, overlapping amplicons), including reads in non-functional families.
+	unsigned int raw_read_coverage_by_best_target = 0;   // Number of raw reads that cover this target (where one read can cover only one target, determined by the best target assignment), including reads in non-functional families.
+
+    // fam_size_hist[x] = y indicates there are y families of size x.
 	map<int, unsigned int> fam_size_hist;
 };
 
@@ -59,6 +62,7 @@ public:
   void GetBestTargetIndex(Alignment *rai, int unmerged_target_hint, int& best_target_idx, int& best_fit_penalty, int& best_overlap) const;
   bool FilterReadByRegion(Alignment* rai, int unmerged_target_hint) const;
   void AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets);
+  void AddToRawReadCoverage(const Alignment* const rai);
   void WriteTargetsCoverage(const string& file_path, const ReferenceReader& ref_reader, bool use_best_target, bool use_mol_tags) const;
   int  ReportHotspotsOnly(const MergedTarget &merged, int chr, long pos);
   bool IsCoveredByMerged(int merged_idx, int chr, long pos) const;

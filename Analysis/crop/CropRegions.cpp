@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <iostream>
 
 #ifdef __linux__
 #include <sys/vfs.h>

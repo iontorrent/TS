@@ -1,0 +1,46 @@
+# Should be /etc/systemd/system/celeryd.service
+[Unit]
+Description=This service manages all of the celery queues for the Torrent Suite
+After=rabbitmq-server.service
+
+[Service]
+Type=forking
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ion
+RuntimeDirectory=celery
+KillMode=process
+
+Environment=DJANGO_SETTINGS_MODULE=iondb.settings
+Environment=CELERY_APP=iondb
+Environment=CELERY_BIN=/opt/ion/venv/bin/celery
+Environment=CELERY_LOG_DIR=/var/log/ion
+Environment=CELERY_RUN_DIR=/var/run/celery
+Environment=CELERY_LOG_FILE=celery_%%n.log
+Environment=CELERY_PID_FILE=celery_%%n.pid
+Environment=CELERY_LOG_LEVEL=INFO
+Environment=CELERY_NODES="w1 plugins periodic slowlane transfer diskutil dmprocess dmmanage"
+Environment=CELERY_OPTS="-Ofair --no-color --event --time-limit=21600 --queue:w1=w1 --concurrency:w1=4 --queue:plugins=plugins --concurrency:plugins=2 --queue:periodic=periodic --concurrency:periodic=6 --queue:slowlane=slowlane --concurrency:slowlane=1 --queue:transfer=transfer --concurrency:transfer=1 --queue:diskutil=diskutil --concurrency:diskutil=2 --queue:dmprocess=dmprocess --concurrency:dmprocess=8 --queue:dmmanage=dmmanage --concurrency:dmmanage=8"
+
+ExecStart=/bin/sh -c '${CELERY_BIN} multi start ${CELERY_NODES} \
+                                --pidfile=${CELERY_RUN_DIR}/${CELERY_PID_FILE} \
+                                --logfile=${CELERY_LOG_DIR}/${CELERY_LOG_FILE} \
+                                --loglevel=${CELERY_LOG_LEVEL} \
+                                --app=${CELERY_APP} \
+                                ${CELERY_OPTS}'
+
+ExecStop=/bin/sh -c '${CELERY_BIN} multi --verbose stopwait ${CELERY_NODES} \
+                                --pidfile=${CELERY_RUN_DIR}/${CELERY_PID_FILE} \
+                                --logfile=${CELERY_LOG_DIR}/${CELERY_LOG_FILE} \
+                                --loglevel=${CELERY_LOG_LEVEL} \
+                                --app=${CELERY_APP}'
+
+ExecReload=/bin/sh -c '${CELERY_BIN} multi restart $CELERY_NODES \
+                                --pidfile=${CELERY_RUN_DIR}/${CELERY_PID_FILE} \
+                                --logfile=${CELERY_LOG_DIR}/${CELERY_LOG_FILE} \
+                                --loglevel=${CELERY_LOG_LEVEL} \
+                                --app=${CELERY_APP} \
+                                ${CELERY_OPTS}'
+
+[Install]
+WantedBy=multi-user.target

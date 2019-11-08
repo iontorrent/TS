@@ -2,6 +2,7 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 
 {% block extra_head_styles %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
@@ -34,11 +35,11 @@
    <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
    <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
-   <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+   {% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
 {% endblock extra_head_js %}
 
 {% block tab-configure-updates %}
-    <li class="active"><a href="{% url "offcycle_updates" %}">Updates</a></li>
+    <li class="active"><a href="{% url "offcycle_updates" %}">{% trans "global.nav.menu.configure.menu.updates.label" %}</a></li>
 {% endblock tab-configure-updates %}
 
 {% block content %}
@@ -246,7 +247,7 @@
                                 window.location.reload(true);
                             }, 1000);
                         }).fail(function(data){
-                            $alert_div.html('Error: ' + data.responseText);
+                            $alert_div.html('{% trans "global.messages.error.label" %}: ' + data.responseText);
                             $alert_div.addClass('alert-error').show();
                         }).always(function(){
                             $.unblockUI();
@@ -267,7 +268,7 @@
                     $('#modal_plugin_or_publisher_install').modal('show');
 
                 }).fail(function(data) {
-                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                    $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
                     console.log("error:", data);
                 });
             });

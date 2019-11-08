@@ -4,44 +4,81 @@
 - name:
   include: '../../../globals.yml'
   tags: network-reset
+
 #============================================================================
 # Fix erroneous setup of resolv.conf as a regular file
 #============================================================================
 - name: /etc/resolv.conf needs to be symbolic link
-  file: path=/etc/resolv.conf state=link src=/run/resolvconf/resolv.conf force=True
-  when: docker_image == False
+  file:
+    path: /etc/resolv.conf
+    state: link
+    src: /run/resolvconf/resolv.conf
+    force: True
+  when: ansible_distribution_version == "14.04"
   notify: resolvconf update
   tags: network-reset
 
 #============================================================================
 # iptables configuration
+# TODO: 18.04 configuration
 #============================================================================
 - name: Remove iptables.rules and flush iptables rules
-  file: path=/etc/iptables.rules state=absent
+  file:
+    path: /etc/iptables.rules
+    state: absent
   notify: flush iptables
   when: config_firewall|bool == True
 
 - name: iptables.rules file configuration
-  template: src=iptables.j2 dest=/etc/iptables.rules mode=0644
+  template:
+    src: iptables.j2
+    dest: /etc/iptables.rules
+    mode: 0644
   notify: load iptables
   when: config_firewall|bool == True
 
 - name: iptables.custom initialization
-  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
+  file:
+    name: /etc/iptables.custom
+    owner: root
+    mode: 0644
+    state: touch
   notify: load custom iptables
   when: config_firewall|bool == True
 
 #============================================================================
 # network interfaces configuration
 #============================================================================
+# TS-17088 revert to use ifupdown instead netplan.io
+- name: install ifupdown if not present
+  apt:
+    name: ifupdown
+    state: present
+
+- name: remove netplan.io on 18.04 if installed
+  apt:
+    name: netplan.io
+    state: absent
+    force: yes
+  when: ansible_distribution_version == "18.04"
+
+- name: checking if {{ default_interface }} in /etc/network/interfaces
+  shell: grep -q "{{ default_interface }}" /etc/network/interfaces
+  register: grep_interface
+  tags: network-reset
+  ignore_errors: yes
 
 - name: stop default network interface - {{ default_interface }}
   shell: bash -lc "ifdown {{ default_interface }}"
   tags: network-reset
-  when: edit_interfaces|bool == True
+  when: edit_interfaces|bool == True and grep_interface.rc == 0
 
 - name: Edit /etc/network/interfaces and restart networking
-  template: src=interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
+  template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    mode: 0644
+    backup: yes
   tags: network-reset
   when: edit_interfaces|bool == True
 
@@ -50,21 +87,39 @@
   tags: network-reset
   when: edit_interfaces|bool == True
 
+# at first setup, the new network interfaces will remain down
+- name: start the rest of network interface
+  command: ifup -a
+  tags: network-reset
+  when: edit_interfaces|bool == True
+
 #============================================================================
 # Enable IP forwarding
 #============================================================================
 - name: IP Forwarding
-  sysctl: name="net.ipv4.ip_forward" state=present value=1 reload=yes sysctl_set=yes
+  sysctl:
+    name: "net.ipv4.ip_forward"
+    state: present
+    value: "1"
+    reload: yes
+    sysctl_set: yes
 
 #============================================================================
 # ftp configuration
 #============================================================================
 - name: install vsftpd package
-  apt: name=vsftpd state=present
+  apt:
+    name: vsftpd
+    state: present
 
 # Create ftp user
 - name: initialize ftp system user
-  user: name={{ ftp_username }} password={{ ftp_password }} shell=/bin/sh update_password=on_create state=present
+  user:
+    name: "{{ ftp_username }}"
+    password: "{{ ftp_password }}"
+    shell: /bin/sh
+    update_password: on_create
+    state: present
 
 - name: Test if DenyUsers directive exists
   command: grep -q ^DenyUsers /etc/ssh/sshd_config
@@ -72,12 +127,12 @@
   ignore_errors: yes
 
 - name: Add ftp user to the existing DenyUsers list
-  when: result|success
-  command: sed -i "/^DenyUsers/ {/$deny_user/! s/.*/& $deny_user/}" /etc/ssh/sshd_config
+  command: sed -i "/^DenyUsers/ {/"{{ ftp_username }}"/! s/.*/& "{{ ftp_username }}"/}" /etc/ssh/sshd_config
+  when: result.rc == 0
 
 - name: Add DenyUsers list
-  when: result|failed
-  command: echo "DenyUsers $deny_user" >> /etc/ssh/sshd_config
+  shell: bash -lc 'echo "DenyUsers {{ ftp_username }}" >> /etc/ssh/sshd_config'
+  when: result.rc != 0
 
 #============================================================================
 # If /results exists, link to it.  next, if /rawdata exists, link to it instead
@@ -87,11 +142,19 @@
   register: p
 
 - name: Set correct file permissions on /results directory
-  file: name=/results state=directory mode=0777 owner=root group=root
+  file:
+    name: /results
+    state: directory
+    mode: 0777
+    owner: root
+    group: root
   when: p.stat.exists
 
 - name: ftp download directory symlink to /results
-  file: src=/results dest=/home/{{ ftp_username }}/results state=link
+  file:
+    src: /results
+    dest: "/home/{{ ftp_username }}/results"
+    state: link
   when: p.stat.exists
 
 - name: Test if /rawdata directory exists
@@ -99,18 +162,32 @@
   register: p
 
 - name: Set correct file permissions on /rawdata directory
-  file: name=/rawdata state=directory mode=0777 owner=root group=root
+  file:
+    name: /rawdata
+    state: directory
+    mode: 0777
+    owner: root
+    group: root
   when: p.stat.exists
 
 - name: ftp download directory symlink to /rawdata
-  file: src=/rawdata dest=/home/{{ ftp_username }}/results state=link
+  file:
+    src: /rawdata
+    dest: "/home/{{ ftp_username }}/results"
+    state: link
   when: p.stat.exists
 
 - name: configure allowed_users file
-  template: src=vsftpd.allowed_users.j2 dest=/etc/vsftpd.allowed_users mode=0644
+  template:
+    src: vsftpd.allowed_users.j2
+    dest: /etc/vsftpd.allowed_users
+    mode: 0644
 
 - name: configure vsftpd service
-  template: src=vsftpd.j2 dest=/etc/vsftpd.conf mode=0644
+  template:
+    src: vsftpd.j2
+    dest: /etc/vsftpd.conf
+    mode: 0644
   notify: restart vsftpd
 
 
@@ -118,14 +195,26 @@
 # dhcp server package install
 #============================================================================
 - name: install isc-dhcp-server package
-  apt: name=isc-dhcp-server state=present
-  when: enable_dhcp|bool == True
+  apt:
+    name: isc-dhcp-server
+    state: present
+
+# shutdown the service and disable it on boot
+- name: shutdown DHCP services if not configured or enabled
+  service:
+    name: isc-dhcp-server
+    state: stopped
+    enabled: no
+  when: enable_dhcp|bool == False
 
 #============================================================================
 # dhcp server configuration
 #============================================================================
 - name: dhcp server configuration
-  template: src=dhcpd.j2 dest=/etc/dhcp/dhcpd.conf mode=0644
+  template:
+    src: dhcpd.j2
+    dest: /etc/dhcp/dhcpd.conf
+    mode: 0644
   notify: restart isc-dhcp
   when: enable_dhcp|bool == True
 
@@ -133,7 +222,10 @@
 # dhclient configuration
 #============================================================================
 - name: Configure dhclient.conf
-  template: src=dhclient.j2 dest=/etc/dhcp/dhclient.conf mode=0644
+  template:
+    src: dhclient.j2
+    dest: /etc/dhcp/dhclient.conf
+    mode: 0644
 
 
 #============================================================================
@@ -141,33 +233,51 @@
 # Only DNS service is enabled; dhcp via dnsmasq is disabled
 #============================================================================
 - name: install dnsmasq package
-  apt: name=dnsmasq state=present
+  apt:
+    name: dnsmasq
+    state: present
   when: enable_dhcp|bool == True
 
 - name: dnsmasq configuration
-  template: src=ion-dhcp.j2 dest=/etc/dnsmasq.d/ion-dhcp mode=0644
+  template:
+    src: ion-dhcp.j2
+    dest: /etc/dnsmasq.d/ion-dhcp
+    mode: 0644
   when: enable_dhcp|bool == True
 
 - name: hosts configuration
-  template: src=hosts-dnsmasq.j2 dest=/etc/hosts-dnsmasq mode=0644
+  template:
+    src: hosts-dnsmasq.j2
+    dest: /etc/hosts-dnsmasq
+    mode: 0644
   when: enable_dhcp|bool == True
 
 - name: enable dnsmasq configuration subdirectory
-  lineinfile: dest=/etc/dnsmasq.conf
-                regexp="^.*conf-dir=.*"
-                line="conf-dir=/etc/dnsmasq.d"
+  lineinfile:
+    dest: /etc/dnsmasq.conf
+    regexp: "^.*conf-dir=.*"
+    line: "conf-dir=/etc/dnsmasq.d"
   when: enable_dhcp|bool == True
 
 - name: restart dnsmasq service
-  service: name=dnsmasq state=restarted
+  service:
+    name: dnsmasq
+    state: restarted
   when: enable_dhcp|bool == True
 
 #============================================================================
 # ntp configuration
 # Restrict ntp to the instrument subnets only
 #============================================================================
-- name: install ntp server package
-  apt: name=ntp state=present
+- name: Install ntp server package
+  apt:
+    name: ntp
+    state: present
+
+- name: Start ntp daemon if not started
+  service:
+    name: ntp
+    state: started
 
 - name: Edit ntp.conf to add localhost as fallback server
   lineinfile:
@@ -184,6 +294,17 @@
     insertafter: "server 127.127.1.0"
   notify: restart ntp
 
+- name: Disable systemd-timesyncd which conflicts with ntpd
+  service:
+    name: systemd-timesyncd
+    state: stopped
+    enabled: no
+  register: result
+  failed_when:
+    - "result|failed"
+    - "'service not found' not in result.msg"
+    - "'Could not find the requested service' not in result.msg"
+
 - name: Edit ntp.conf to apply access control for machines in instrument subnets
   lineinfile:
     dest: /etc/ntp.conf
@@ -197,7 +318,9 @@
 # exportfs configuration of /results
 #============================================================================
 - name: Restart nfs daemon
-  service: name=nfs-kernel-server state=restarted
+  service:
+    name: nfs-kernel-server
+    state: restarted
   when: export_results == True
 
 - name: Status of /results
@@ -206,10 +329,11 @@
   when: export_results == True
 
 - name: Exporting /results file system
-  lineinfile: dest=/etc/exports
-                state=present
-                regexp='/results.*{{ ansible_default_ipv4.network }}.*'
-                line='/results {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
+  lineinfile:
+    dest: /etc/exports
+    state: present
+    regexp: '/results.*{{ ansible_default_ipv4.network }}.*'
+    line: '/results {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
   when: export_results == True and p.stat.exists
   notify: restart exportfs
 
@@ -222,9 +346,10 @@
   when: export_results == True
 
 - name: Exporting /rawdata file system
-  lineinfile: dest=/etc/exports
-                state=present
-                regexp='/rawdata.*{{ ansible_default_ipv4.network }}.*'
-                line='/rawdata {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
+  lineinfile:
+    dest: /etc/exports
+    state: present
+    regexp: '/rawdata.*{{ ansible_default_ipv4.network }}.*'
+    line: '/rawdata {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
   when: export_results == True and p.stat.exists
   notify: restart exportfs

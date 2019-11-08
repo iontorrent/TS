@@ -19,6 +19,7 @@ logger = get_task_logger(__name__)
 def get_info_from_script(name, script, context=None, add_to_store=True):
     from ion.plugin.loader import cache
     from ion.plugin.info import PluginInfo
+
     mod = cache.load_module(name, script, add_to_store)
 
     # if the load module command returned a None object, then lets raise an exception based on what happened
@@ -30,9 +31,12 @@ def get_info_from_script(name, script, context=None, add_to_store=True):
 
     cls = cache.get_plugin(name)
     if not cls:
-        raise Exception("The python module loaded but no classes which extend 'IonPlugin' registered themselves with the framework.")
+        raise Exception(
+            "The python module loaded but no classes which extend 'IonPlugin' registered themselves with the framework."
+        )
     plugin = cls()
     return PluginInfo.from_instance(plugin)
+
 
 def find_pluginscript(pluginpath, pluginname=None):
     # Legacy Launch Script
@@ -44,19 +48,23 @@ def find_pluginscript(pluginpath, pluginname=None):
     basedir = pluginpath
     while basedir and not pluginname:
         (basedir, pluginname) = os.path.split(basedir)
-    plugindef = os.path.join(pluginpath, pluginname + '.py')
+    plugindef = os.path.join(pluginpath, pluginname + ".py")
     if os.path.exists(plugindef):
         return plugindef
 
     log.error("Plugin path is missing launch script '%s' or '%s'", launchsh, plugindef)
     return None
 
+
 ## Derived from http://antonym.org/2005/12/dropping-privileges-in-python.html
-def drop_privileges(uid_name='nobody', gid_name='nogroup'):
+def drop_privileges(uid_name="nobody", gid_name="nogroup"):
     import pwd, grp
+
     if os.getuid() != 0:
-        log.info("drop_privileges: already running as non-root user '%s'",
-                 pwd.getpwuid(os.getuid()))
+        log.info(
+            "drop_privileges: already running as non-root user '%s'",
+            pwd.getpwuid(os.getuid()),
+        )
         return
 
     # If we started as root, drop privs and become the specified user/group
@@ -68,22 +76,24 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
     try:
         os.setgroups([])
         os.setgid(running_gid)
-    except OSError, e:
-        log.exception('Could not set effective group id')
+    except OSError as e:
+        log.exception("Could not set effective group id")
 
     try:
         os.setuid(running_uid)
-    except OSError, e:
-        log.exception('Could not set effective user id')
+    except OSError as e:
+        log.exception("Could not set effective user id")
 
     # Ensure a very convervative umask
-    old_umask = os.umask(077)
+    old_umask = os.umask(0o077)
 
     final_uid = os.getuid()
     final_gid = os.getgid()
-    log.info('drop_privileges: running as %s/%s',
-             pwd.getpwuid(final_uid)[0],
-             grp.getgrgid(final_gid)[0])
+    log.info(
+        "drop_privileges: running as %s/%s",
+        pwd.getpwuid(final_uid)[0],
+        grp.getgrgid(final_gid)[0],
+    )
 
 
 @task(queue="plugins", soft_time_limit=30)
@@ -114,6 +124,7 @@ def scan_plugin(name, path, exiting_pk, add_to_store=True):
     if exiting_pk is not None:
         try:
             from iondb.rundb.models import Plugin
+
             p = Plugin.objects.get(pk=exiting_pk)
             p.updateFromInfo(info)
             p.save()
@@ -137,7 +148,9 @@ def scan_all_plugins(plugin_list, add_to_store=True):
     plugin_info = dict()
 
     # fire off sub-tasks for each plugin to be scanned and collect results
-    plugin_scan_tasks = [scan_plugin.s(data[0], data[1], add_to_store, None) for data in plugin_list]
+    plugin_scan_tasks = [
+        scan_plugin.s(data[0], data[1], add_to_store, None) for data in plugin_list
+    ]
     try:
         result = group(plugin_scan_tasks).apply_async().join(timeout=300)
     except Exception as exc:
@@ -156,25 +169,28 @@ def scan_all_plugins(plugin_list, add_to_store=True):
 @task(queue="plugins", ignore_result=True)
 def add_remove_plugins():
     from iondb.plugins.manager import pluginmanager
+
     pluginmanager.rescan()
 
 
 @task(ignore_result=True)
 def backfill_pluginresult_diskusage():
-    '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
+    """Due to new fields (inodes), and errors with counting contents of symlinked files, this function
     updates every Result object's diskusage value.
-    '''
+    """
     from django.db.models import Q
     from iondb.rundb import models
     from datetime import timedelta
     from django.utils import timezone
 
     # Setup log file logging
-    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
-    log = logging.getLogger('backfill_pluginresult_diskusage')
+    filename = "/var/log/ion/%s.log" % "backfill_pluginresult_diskusage"
+    log = logging.getLogger("backfill_pluginresult_diskusage")
     log.propagate = False
     log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5
+    )
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     log.addHandler(handler)
@@ -182,7 +198,7 @@ def backfill_pluginresult_diskusage():
     log.info("PluginResults:")
     obj_list = models.PluginResultJob.objects.filter(
         Q(plugin_result__size=-1) | Q(plugin_result__inodes=-1),
-        state__in=('Complete', 'Error'),
+        state__in=("Complete", "Error"),
         starttime__gte=(timezone.now() - timedelta(days=30)),
     )
     for obj in obj_list:
@@ -194,12 +210,19 @@ def backfill_pluginresult_diskusage():
         except:
             log.exception(traceback.format_exc())
 
-        log.debug("Scanned: %s at %s -- %d (%d)", str(obj), obj.default_path, obj.size, obj.inodes)
+        log.debug(
+            "Scanned: %s at %s -- %d (%d)",
+            str(obj),
+            obj.default_path,
+            obj.size,
+            obj.inodes,
+        )
 
 
 @task
 def calc_size(prid):
     from iondb.rundb.models import PluginResult
+
     try:
         obj = PluginResult.objects.get(pk=prid)
     except (PluginResult.MultipleObjectsReturned, PluginResult.DoesNotExist):
@@ -207,15 +230,29 @@ def calc_size(prid):
     try:
         d = obj.default_path
         if not d:
-            log.info("check_size: No path: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
+            log.info(
+                "check_size: No path: %s at %s -- %d (%d)",
+                str(obj),
+                d,
+                obj.size,
+                obj.inodes,
+            )
             return
         if not os.path.exists(obj.default_path):
-            log.error("check_size: Path doesn't exist: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
+            log.error(
+                "check_size: Path doesn't exist: %s at %s -- %d (%d)",
+                str(obj),
+                d,
+                obj.size,
+                obj.inodes,
+            )
             return
         obj.size, obj.inodes = obj._calc_size
         log.debug("Scanning: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
     except OSError:
-        log.exception("Failed to compute plugin size: %s at '%s'", str(obj), obj.default_path)
+        log.exception(
+            "Failed to compute plugin size: %s at '%s'", str(obj), obj.default_path
+        )
         obj.size, obj.inodes = -1
     except:
         log.exception(traceback.format_exc())
@@ -223,53 +260,73 @@ def calc_size(prid):
         obj.save(update_fields=["size", "inodes"])
     return (obj.size, obj.inodes)
 
+
 @task(ignore_result=True)
 def cleanup_pluginresult_state():
-    ''' Fix jobs stuck in running states '''
+    """ Fix jobs stuck in running states """
     from django.db.models import Q
     from iondb.rundb import models
     from datetime import timedelta
     from django.utils import timezone
 
     # Setup log file logging
-    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
-    log = logging.getLogger('backfill_pluginresult_diskusage')
+    filename = "/var/log/ion/%s.log" % "backfill_pluginresult_diskusage"
+    log = logging.getLogger("backfill_pluginresult_diskusage")
     log.propagate = False
     log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5
+    )
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     log.addHandler(handler)
     log.info("\n===== New Run =====")
 
-    transition_states = ('Pending', 'Started', 'Queued')
+    transition_states = ("Pending", "Started", "Queued")
     # Jobs with no timestamps - Could be large backlog.
-    obj_list = models.PluginResultJob.objects.filter(starttime__isnull=True,)
+    obj_list = models.PluginResultJob.objects.filter(starttime__isnull=True)
     for obj in obj_list:
         obj.starttime = obj.plugin_result.result.timeStamp
         endtime = obj.endtime
         # These are handled in next query, but might as well resolve during this pass
         if obj.state in transition_states:
-            obj.plugin_result.complete(obj.run_level, state='Error')
+            obj.plugin_result.complete(obj.run_level, state="Error")
             if endtime is None:
                 obj.endtime = obj.starttime + timedelta(hours=24)
         else:
             if endtime is None:
                 obj.endtime = obj.starttime
 
-        log.debug("Backfilling timestamps: %s [%s] -- %s, %s -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.plugin_result.size, obj.plugin_result.inodes)
+        log.debug(
+            "Backfilling timestamps: %s [%s] -- %s, %s -- %d (%d)",
+            str(obj),
+            obj.state,
+            obj.starttime,
+            obj.endtime,
+            obj.plugin_result.size,
+            obj.plugin_result.inodes,
+        )
         obj.save()
 
     # Jobs stuck in SGE states
     obj_list = models.PluginResultJob.objects.filter(
-        state__in=transition_states,
-        starttime__lte=timezone.now() - timedelta(hours=25),
+        state__in=transition_states, starttime__lte=timezone.now() - timedelta(hours=25)
     )
     for obj in obj_list:
         endtime = obj.endtime
-        obj.plugin_result.complete(obj.run_level, state='Error') # clears api_key, sets endtime, runs calc_size
+        obj.plugin_result.complete(
+            obj.run_level, state="Error"
+        )  # clears api_key, sets endtime, runs calc_size
         if endtime is None:
             obj.endtime = obj.starttime + timedelta(hours=24)
 
-        log.debug("Cleaning orphan job: %s [%s] -- %s, %s -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.plugin_result.size, obj.plugin_result.inodes)
+        log.debug(
+            "Cleaning orphan job: %s [%s] -- %s, %s -- %d (%d)",
+            str(obj),
+            obj.state,
+            obj.starttime,
+            obj.endtime,
+            obj.plugin_result.size,
+            obj.plugin_result.inodes,
+        )
         obj.save()

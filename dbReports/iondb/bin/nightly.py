@@ -13,7 +13,7 @@ from django.core import mail
 from django.template import loader
 from iondb.rundb import models
 
-settings.EMAIL_HOST = 'localhost'
+settings.EMAIL_HOST = "localhost"
 settings.EMAIL_PORT = 25
 settings.EMAIL_USE_TLS = False
 
@@ -24,6 +24,7 @@ TEMPLATE_NAME = "rundb/ion_nightly.html"
 def get_recips():
     emails = models.EmailAddress.objects.filter(selected=True)
     return [i.email for i in emails]
+
 
 RECIPS = get_recips()
 # RECIPS = ['devtest@mycompany.org']
@@ -40,27 +41,29 @@ def send_html(sender, recips, subject, html, text):
 
 
 def get_result_type(result, pstore):
-    ampl_plugin = 'ampliconGeneralAnalysis'
-    rtype = 'full'
+    ampl_plugin = "ampliconGeneralAnalysis"
+    rtype = "full"
     try:
-        if "paired" in result.metaData.keys() and result.metaData["paired"] == 1:
-            rtype = 'paired'
-        elif result.eas.reference.startswith('ampl_') or (ampl_plugin in pstore.keys() and pstore[ampl_plugin]):
-            rtype = 'ampl'
-        elif "thumb" in result.metaData.keys() and result.metaData["thumb"] == 1:
-            rtype = 'thumb'
+        if "paired" in list(result.metaData.keys()) and result.metaData["paired"] == 1:
+            rtype = "paired"
+        elif result.eas.reference.startswith("ampl_") or (
+            ampl_plugin in list(pstore.keys()) and pstore[ampl_plugin]
+        ):
+            rtype = "ampl"
+        elif "thumb" in list(result.metaData.keys()) and result.metaData["thumb"] == 1:
+            rtype = "thumb"
         else:
-            rtype = 'full'  # default type
-    except:
+            rtype = "full"  # default type
+    except Exception:
         # problems with eas were likely, leets see if it was at least thumb or full
-        if "thumb" in result.metaData.keys() and result.metaData["thumb"] == 1:
-            rtype = 'thumb'
+        if "thumb" in list(result.metaData.keys()) and result.metaData["thumb"] == 1:
+            rtype = "thumb"
 
     return rtype
 
 
 def find_first_result(exp, pstore):
-    rset = exp.results_set.all().order_by('timeStamp')
+    rset = exp.results_set.all().order_by("timeStamp")
     firstPk = []
     firstType = []
     for i in range(0, len(rset), 1):
@@ -73,18 +76,22 @@ def find_first_result(exp, pstore):
 
 
 def paired_end_stats(pe_path):
-# get metrics that PE report doesn't upload
+    # get metrics that PE report doesn't upload
     try:
-        filenames = ['corrected.alignment.summary', 'fwd_alignment.summary', 'Paired_Fwd.alignment.summary']
+        filenames = [
+            "corrected.alignment.summary",
+            "fwd_alignment.summary",
+            "Paired_Fwd.alignment.summary",
+        ]
         nreads = [0] * len(filenames)
         for i, sfile in enumerate(filenames):
             with open(os.path.join(pe_path, sfile)) as f:
                 for line in f.readlines():
                     if "Total number of Reads" in line:
-                        nreads[i] = float(line.split('=')[1])
+                        nreads[i] = float(line.split("=")[1])
                         break
         return 100 * (nreads[0] + nreads[2]) / nreads[1], 100 * nreads[0] / nreads[1]
-    except:
+    except Exception:
         return 0, 0
 
 
@@ -99,7 +106,7 @@ def send_nightly():
     info = []
 
     for result in resultsList:
-        if result.status == 'Completed' and 'INJECTED' not in result.resultsName:
+        if result.status == "Completed" and "INJECTED" not in result.resultsName:
             exp = result.experiment
             pstore = result.getPluginStore()
             [firstPk, firstType] = find_first_result(exp, pstore)
@@ -116,11 +123,11 @@ def send_nightly():
             try:
                 qmetrics = result.qualitymetrics_set.all()[0]
                 extraInfo["q20"] = qmetrics.q20_bases
-            except:
+            except Exception:
                 extraInfo["q20"] = "-"
 
             # if we have a paired end run, lets get that report path
-            if get_result_type(result, pstore) == 'paired':
+            if get_result_type(result, pstore) == "paired":
                 extraInfo["paired"] = paired_end_stats(result.get_report_path())
             else:
                 extraInfo["paired"] = ""
@@ -135,7 +142,7 @@ def send_nightly():
                     extraInfo["fps"] = "30"
                 else:
                     extraInfo["fps"] = "-"
-            except:
+            except Exception:
                 extraInfo["fps"] = "-"
 
             # track the status of the covereage plugin
@@ -143,11 +150,11 @@ def send_nightly():
                 # pluginDict = ast.literal_eval(pstore["coverageAnalysis"])
                 pluginDict = pstore["coverageAnalysis"]
                 if pluginDict is not None:
-                    if "Target base coverage at 20x" in pluginDict.keys():
+                    if "Target base coverage at 20x" in list(pluginDict.keys()):
                         extraInfo["cov"] = pluginDict["Target base coverage at 20x"]
                     else:
                         extraInfo["cov"] = pluginDict["Genome base coverage at 20x"]
-            except:
+            except Exception:
                 extraInfo["cov"] = " "
 
             # track the duplicate rate
@@ -155,26 +162,34 @@ def send_nightly():
             try:
                 if result.best_lib_metrics.duplicate_reads is not None:
                     try:
-                        val = result.best_lib_metrics.duplicate_reads / \
-                            result.best_lib_metrics.total_mapped_reads
-                    except:
+                        val = (
+                            result.best_lib_metrics.duplicate_reads
+                            / result.best_lib_metrics.total_mapped_reads
+                        )
+                    except Exception:
                         val = 0  # assuming total_mapped_reads was 0 here
                     # round to tenths
                     val = int(val * 1000.0)
                     val = float(val) / 10.0
                     extraInfo["dup"] = str(val * 100.0) + "%"
-            except:
-                extraInfo["dup"] = ' '
+            except Exception:
+                extraInfo["dup"] = " "
 
             # track the variant caller SNP & InDel accuracy
             try:
                 # pluginDict = ast.literal_eval(pstore["validateVariantCaller"])
                 pluginDict = pstore["validateVariantCaller"]
                 if pluginDict is not None:
-                    SNPAccuracy = round(float(pluginDict["InDel_ConsensusAccuracy-AllPos"]) * 100.0, 4)
-                    InDelAccuracy = round(float(pluginDict["SNP_ConsensusAccuracy-AllPos"]) * 100.0, 4)
-                    extraInfo["vc"] = str(SNPAccuracy) + "% : " + str(InDelAccuracy) + "%"
-            except:
+                    SNPAccuracy = round(
+                        float(pluginDict["InDel_ConsensusAccuracy-AllPos"]) * 100.0, 4
+                    )
+                    InDelAccuracy = round(
+                        float(pluginDict["SNP_ConsensusAccuracy-AllPos"]) * 100.0, 4
+                    )
+                    extraInfo["vc"] = (
+                        str(SNPAccuracy) + "% : " + str(InDelAccuracy) + "%"
+                    )
+            except Exception:
                 extraInfo["vc"] = " "
 
             # track the systematic error
@@ -189,7 +204,7 @@ def send_nightly():
                         bc = pluginDict["barcodes"]
                         val = 1.0
                         for name in bc:
-                            if '-' not in bc[name]["positions-with-sse"]:
+                            if "-" not in bc[name]["positions-with-sse"]:
                                 bcval = float(bc[name]["positions-with-sse"])
                                 if bcval < val and bcval > 0.0:
                                     val = bcval
@@ -203,7 +218,7 @@ def send_nightly():
                     else:
                         extraInfo["syserr"] = " "
                     # print 'plugin syserr is: %s' % extraInfo["syserr"]
-            except:
+            except Exception:
                 extraInfo["syserr"] = " "
 
             # track coverage uniforimity & 20x coverage
@@ -213,17 +228,20 @@ def send_nightly():
                 if pluginDict is not None:
                     bestCov20 = 0.0
                     bestUnif = 0.0
-                    if pluginDict["barcoded"] == 'true' or pluginDict["barcoded"] == 'True':
+                    if (
+                        pluginDict["barcoded"] == "true"
+                        or pluginDict["barcoded"] == "True"
+                    ):
                         # print 'it is barcoded'
                         bc = pluginDict["barcodes"]
                         for name in bc:
-                            if "Target base coverage at 20x" in bc[name].keys():
+                            if "Target base coverage at 20x" in list(bc[name].keys()):
                                 cov20txt = bc[name]["Target base coverage at 20x"]
                             else:
                                 cov20txt = bc[name]["Genome base coverage at 20x"]
-                            cov20 = float(cov20txt.rstrip('%'))
+                            cov20 = float(cov20txt.rstrip("%"))
                             uniftxt = bc[name]["Uniformity of base coverage"]
-                            unif = float(uniftxt.rstrip('%'))
+                            unif = float(uniftxt.rstrip("%"))
                             if (unif < 100.0) and (unif > 0.0):
                                 if cov20 > bestCov20:
                                     bestCov20 = cov20
@@ -231,13 +249,13 @@ def send_nightly():
 
                     else:
                         # print 'it is not barcoded'
-                        if "Target base coverage at 20x" in pluginDict.keys():
+                        if "Target base coverage at 20x" in list(pluginDict.keys()):
                             cov20txt = pluginDict["Target base coverage at 20x"]
                         else:
                             cov20txt = pluginDict["Genome base coverage at 20x"]
-                        bestCov20 = float(cov20txt.rstrip('%'))
+                        bestCov20 = float(cov20txt.rstrip("%"))
                         uniftxt = pluginDict["Uniformity of base coverage"]
-                        bestUnif = float(uniftxt.rstrip('%'))
+                        bestUnif = float(uniftxt.rstrip("%"))
                     # print 'plugin val: %s' % val
                     if bestCov20 > 0.0:
                         extraInfo["cov20"] = str(bestCov20) + "%"
@@ -246,7 +264,7 @@ def send_nightly():
                         extraInfo["cov20"] = " "
                         extraInfo["unif"] = " "
                     # print 'plugin syserr is: %s' % extraInfo["syserr"]
-            except:
+            except Exception:
                 extraInfo["cov20"] = " "
                 extraInfo["unif"] = " "
 
@@ -256,18 +274,23 @@ def send_nightly():
     if len(resultsAll) > 1:
         try:
             resultsAll, rType, rNew, info = zip(
-                *sorted(zip(resultsAll, rType, rNew, info), key=lambda r: r[0].experiment.chipType))
-        except:
+                *sorted(
+                    zip(resultsAll, rType, rNew, info),
+                    key=lambda r: r[0].experiment.chipType,
+                )
+            )
+        except Exception:
             pass
 
     gc = models.GlobalConfig.get()
     web_root = gc.web_root
     if len(web_root) > 0:
-        if web_root[-1] == '/':
+        if web_root[-1] == "/":
             web_root = web_root[:-1]
     else:
         # Sometimes globalconfig.web_root is empty
         import socket
+
         web_root = socket.getfqdn()
 
     if len(gc.site_name) is 0:
@@ -283,50 +306,81 @@ def send_nightly():
     # find the sum of the q20 bases
     hqBaseSum = 0
     for res, n, tp in zip(resultsAll, rNew, rType):
-        if n and (not tp == 'thumb') and (not tp == 'paired') and res.best_lib_metrics:
+        if n and (not tp == "thumb") and (not tp == "paired") and res.best_lib_metrics:
             if res.best_lib_metrics.align_sample == 0:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.q20_mapped_bases
             if res.best_lib_metrics.align_sample == 1:
-                hqBaseSum = hqBaseSum + res.best_lib_metrics.extrapolated_mapped_bases_in_q20_alignments
+                hqBaseSum = (
+                    hqBaseSum
+                    + res.best_lib_metrics.extrapolated_mapped_bases_in_q20_alignments
+                )
             if res.best_lib_metrics.align_sample == 2:
                 hqBaseSum = hqBaseSum + res.best_lib_metrics.q20_mapped_bases
 
     tmpl = loader.get_template(TEMPLATE_NAME)
-    ctx = template.Context({"reportsOldThumb":
-                          [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                              resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'thumb' and not n],
-                            "reportsOldWhole":
-                                [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                              resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'full' and not n],
-                            "reportsNew":
-                                [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                                      resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'full' and n],
-                            "reportsThumbsNew":
-                                [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                                      resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'thumb' and n],
-                            "reportsAmplNew":
-                                [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                                      resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'ampl' and n],
-                            "reportsPairNew":
-                                [(r, t, lb, l, i)
-                          for r, t, lb, l, i, tp, n in zip(
-                                      resultsAll, tfms, lbms, links, info, rType, rNew) if tp == 'paired' and n],
-                            "webroot": web_root,
-                            "sitename": site_name,
-                            "hq_base_num_new": hqBaseSum,
-                            "use_precontent": True,
-                            "use_content2": True})
+    ctx = template.Context(
+        {
+            "reportsOldThumb": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "thumb" and not n
+            ],
+            "reportsOldWhole": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "full" and not n
+            ],
+            "reportsNew": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "full" and n
+            ],
+            "reportsThumbsNew": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "thumb" and n
+            ],
+            "reportsAmplNew": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "ampl" and n
+            ],
+            "reportsPairNew": [
+                (r, t, lb, l, i)
+                for r, t, lb, l, i, tp, n in zip(
+                    resultsAll, tfms, lbms, links, info, rType, rNew
+                )
+                if tp == "paired" and n
+            ],
+            "webroot": web_root,
+            "sitename": site_name,
+            "hq_base_num_new": hqBaseSum,
+            "use_precontent": True,
+            "use_content2": True,
+        }
+    )
     html = tmpl.render(ctx)
     text = reports_to_text(resultsAll)
-    subTitle = "[Report Summary] for %s %s, %s-%s-%s" % (site_name, "%a", "%m", "%d", "%y")
+    subTitle = "[Report Summary] for %s %s, %s-%s-%s" % (
+        site_name,
+        "%a",
+        "%m",
+        "%d",
+        "%y",
+    )
     # subTitle = "[Report Summary] %a, %m-%d-%y"
     subject = datetime.datetime.now().strftime(subTitle)
-    outfile = open('/tmp/out.html', 'w')
+    outfile = open("/tmp/out.html", "w")
     outfile.write(html)
     outfile.close()
     return send_html(SENDER, RECIPS, subject, html, text)
@@ -336,5 +390,6 @@ def main(args):
     if RECIPS:
         send_nightly()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main(sys.argv)

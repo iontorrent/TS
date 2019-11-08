@@ -42,8 +42,8 @@ case "$1" in
     fi
 
     ## Precompile / recompile python packages
-    #/usr/bin/python -O -m compileall "@ION_INSTALL_PREFIX@/iondb/"
-    (/usr/bin/python -m compileall -q -f "@ION_INSTALL_PREFIX@/iondb/" || /bin/true)
+    PYTHON_BIN=/opt/ion/venv/bin/python
+    (${PYTHON_BIN} -m compileall -q -f "@ION_INSTALL_PREFIX@/iondb/" || /bin/true)
 
     #---											---#
     #---	Genome Directories Permissions, etc.	---#
@@ -267,9 +267,14 @@ ENDOFAPACHEENV
         rm -rf @PYTHON_LOCAL_SITE_PACKAGES@/ion
     fi
 
-    # stop the dependent services
+    # stop the dependent services / tomcat7 (14.04)
     if [ -f "/etc/init.d/tomcat7" ]; then
         invoke-rc.d tomcat7 stop
+    fi
+
+    # stop tomcat8 (18.04)
+    if [ -f "/etc/init.d/tomcat8" ]; then
+        invoke-rc.d tomcat8 stop
     fi
 
     invoke-rc.d apache2 stop
@@ -286,45 +291,45 @@ ENDOFAPACHEENV
         cd @ION_INSTALL_PREFIX@/iondb/
 
         # Create ionadmin if a superuser does not exist
-        /usr/bin/python ./bin/initsprusr.py
+        ${PYTHON_BIN} ./bin/initsprusr.py
 
         # Legacy DB migration - Updates an existing database schema to 2.2
-        /usr/bin/python ./bin/migrate.py
+        ${PYTHON_BIN} ./bin/migrate.py
 
         # Django South DB migration - applies changes in rundb/migrations/
-        /usr/bin/python ${DJANGOADMIN} migrate --all --ignore-ghost-migrations --noinput
+        ${PYTHON_BIN} ${DJANGOADMIN} migrate --all --ignore-ghost-migrations --noinput
 
         # Print current db migration state for diagnostic purposes
-        /usr/bin/python ${DJANGOADMIN} migrate --list --noinput
+        ${PYTHON_BIN} ${DJANGOADMIN} migrate --list --noinput
 
         # Full syncdb to create ContentTypes and Permissions
-        /usr/bin/python ${DJANGOADMIN} syncdb --noinput --all
+        ${PYTHON_BIN} ${DJANGOADMIN} syncdb --noinput --all
 
         # Backfill tastypie API keys
-        /usr/bin/python ${DJANGOADMIN} backfill_api_keys
+        ${PYTHON_BIN} ${DJANGOADMIN} backfill_api_keys
 
         # Loads Test Fragment entries into database
-        #/usr/bin/python ${DJANGOADMIN} loaddata template_init.json
-        /usr/bin/python ./bin/install_testfragments.py rundb/fixtures/template_init.json
+        #${PYTHON_BIN} ${DJANGOADMIN} loaddata template_init.json
+        ${PYTHON_BIN} ./bin/install_testfragments.py rundb/fixtures/template_init.json
 
         # Collect static files (eg. admin pages css/js).
         # TS-9967 Purging content with clear instead of keeping old md5 hashed versions
-        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --link --clear
+        ${PYTHON_BIN} ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --link --clear
 
         # Creates default report templates with site-specific content
-        /usr/bin/python ./bin/base_template.py
+        ${PYTHON_BIN} ./bin/base_template.py
         /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
 
         # Updates existing database entries
         # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
-        /usr/bin/python ./bin/install_script.py
+        ${PYTHON_BIN} ./bin/install_script.py
 
         # Loads system templates to database if needed
         echo "Going to add or update system plan templates if needed..."
-        /usr/bin/python ./bin/add_or_update_systemPlanTemplates.py
+        ${PYTHON_BIN} ./bin/add_or_update_systemPlanTemplates.py
 
         # Loads DMFileSet entries into database
-        /usr/bin/python ./bin/install_dmfilesets.py
+        ${PYTHON_BIN} ./bin/install_dmfilesets.py
 
         cd -
     )
@@ -355,8 +360,13 @@ EOF
         rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
     fi
 
+    # tomcat 7 (14.04)
     if [ -f "/etc/init.d/tomcat7" ]; then
         invoke-rc.d tomcat7 start
+    fi
+    # tomcat 8 (18.04)
+    if [ -f "/etc/init.d/tomcat8" ]; then
+        invoke-rc.d tomcat8 start
     fi
     invoke-rc.d apache2 start
     invoke-rc.d celeryd start
@@ -366,12 +376,10 @@ EOF
     #load the references for a first time
     (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
         echo "Loading references failed."    
-    
-    #load the config page to update plugins and publishers
-    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=60)'
 
     # Rescan size and inode count for PluginResults
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=60)'
+
     # Update status values for plugins
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.cleanup_pluginresult_state.apply_async(countdown=60)'
 
@@ -398,6 +406,18 @@ EOF
     # force a rescan of the plugins
     # wget -q -O /dev/null http://localhost/rundb/api/v1/plugin/rescan/ > /dev/null
 
+    # activate any reverse dependent package post installation step
+    for pkg in `apt-cache rdepends -i ion-dbreports | grep -e '^\s' | sort | uniq`; do
+      # check if pkg is installed
+      if ! dpkg -s $pkg &>/dev/null; then
+        continue
+      fi
+
+      # check if pkg is installed correctly: status -> "ii"
+      if dpkg -l $pkg | grep $pkg | grep '^ii' &>/dev/null; then
+        dpkg-reconfigure $pkg
+      fi
+    done
     ;;
 esac
 

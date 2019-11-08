@@ -339,6 +339,7 @@ char * GetChipId (const char *filepath)
         else if (strncmp ("p1.0.20",chipversion,7) == 0) chip = strdup("p1.0.20");
         else if (strncmp ("p2.2.1", chipversion,6) == 0) chip = strdup("p2.2.1");
         else if (strncmp ("p2.2.2", chipversion,6) == 0) chip = strdup("p2.2.2");
+        else if (strncmp ("560", chipversion,3) == 0)    chip = strdup("560");
         else if (strncmp ("550", chipversion,3) == 0)    chip = strdup("550");
         else if (strncmp ("540", chipversion,3) == 0)    chip = strdup("540");
         else if (strncmp ("530", chipversion,3) == 0)    chip = strdup("530");
@@ -352,6 +353,9 @@ char * GetChipId (const char *filepath)
         else if (strncmp ("p2.1.1", chipversion,6) == 0)   chip = strdup("p2.1.1");
         else if (strncmp ("p2.3.1", chipversion,6) == 0)   chip = strdup("p2.3.1");
         else if (strncmp ("p1.1.541", chipversion,8) == 0) chip = strdup("p1.1.541");
+        else if (strncmp ("541v2", chipversion,5) == 0)    chip = strdup("541v2");
+        else if (strncmp ("gx5v2", chipversion,5) == 0)    chip = strdup("gx5v2");
+        else if (strncmp ("gx7v1", chipversion,5) == 0)    chip = strdup("gx7v1");
         else                                             chip = strdup("p1.1.17");  // default
         //Add new  P chips here and in chipIdDecoder too.
     }
@@ -374,6 +378,7 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
 {
   if (type != NULL)
   {
+    ToLower(const_cast<char*>(type));
     if (strncmp ("314",type,3) == 0)
     {
       dims[0] = 1280;
@@ -384,7 +389,7 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
       dims[0] = 1280;
       dims[1] = 1152;
     }
-    else if ((strncmp ("316DEM",type,6) == 0)||(strncmp ("316v2",type,5) == 0))
+    else if ((strncmp ("316dem",type,6) == 0)||(strncmp ("316v2",type,5) == 0))
     {
       dims[0]=3392; 
       dims[1]=2120;
@@ -403,6 +408,7 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
              (strncmp ("p2",type,2) == 0) ||
              (strncmp ("P1",type,2) == 0) ||
              (strncmp ("P2",type,2) == 0) ||
+             (strncmp ("560",type,3) == 0) ||
              (strncmp ("550",type,3) == 0) ||
              (strncmp ("540",type,3) == 0) ||
              (strncmp ("530",type,3) == 0) ||
@@ -411,7 +417,10 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
              (strncmp ("541",type,3) == 0) ||
              (strncmp ("531",type,3) == 0) ||
              (strncmp ("521",type,3) == 0) || 
-             (strncmp ("522",type,3) == 0)) 
+             (strncmp ("522",type,3) == 0) || 
+             (strncmp ("541v2",type,5) == 0) ||
+             (strncmp ("gx5v2",type,5) == 0) ||
+             (strncmp ("gx7v1",type,5) == 0)) 
     {
 
       // Method using the explog.txt

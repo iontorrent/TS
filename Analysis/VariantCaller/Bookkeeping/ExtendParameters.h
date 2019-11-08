@@ -182,6 +182,7 @@ class ControlCallAndFilters {
 
     // LOD related
     float min_callable_prob;
+    bool suppress_called_allele_lod;
 
     // filter's for mol tags
     int  tag_sim_max_cov;

@@ -1,48 +1,49 @@
 {% load humanize %}
 {% load ion_readable %}
+{% load i18n %}
 
 <div id="alignment" class="span4 well centered">
     <div class="number-chunk">
         {% if ionstats_alignment %}
             <h2>{{ ionstats_alignment.AQ17.num_bases|ion_readable }}</h2>
         {% else %}
-            <h2>Still calculating.</h2>
+            <h2>{% trans "report.section.aligned.alignment.messages.inprogress" %}</h2>
         {% endif %}
-        <small>AQ17 Total Bases</small>
+        <small>{% trans "report.section.aligned.alignment.ionstats_alignment.AQ17.num_bases.label" %}</small>
     </div>    
     
-    <h2>Alignment Quality</h2>
+    <h2>{% trans "report.section.aligned.alignment.title" %}</h2>
 
     <table id="alignment" class="table">
         <thead>
             <tr>
                 <th> </th>
-                <th>AQ17</th>
-                <th>AQ20</th>
-                <th>Perfect</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.AQ17.label" %}</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.AQ20.label" %}</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.AQ47.label" %}</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <th>Total Number of Bases [bp]</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.num_bases.label" %}</th>
                 <td> {{ ionstats_alignment.AQ17.num_bases|ion_readable }} </td>
                 <td> {{ ionstats_alignment.AQ20.num_bases|ion_readable }} </td>
                 <td> {{ ionstats_alignment.AQ47.num_bases|ion_readable }} </td>
             </tr>
             <tr>
-                <th>Mean Length [bp]</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.mean_read_length.label" %}</th>
                 <td> {{ ionstats_alignment.AQ17.mean_read_length }} </td>
                 <td> {{ ionstats_alignment.AQ20.mean_read_length }} </td>
                 <td> {{ ionstats_alignment.AQ47.mean_read_length }} </td>
             </tr>
             <tr>
-                <th>Longest Alignment [bp]</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.max_read_length.label" %}</th>
                 <td> {{ ionstats_alignment.AQ17.max_read_length }} </td>
                 <td> {{ ionstats_alignment.AQ20.max_read_length }} </td>
                 <td> {{ ionstats_alignment.AQ47.max_read_length }} </td>
             </tr>
             <tr>
-                <th>Mean Coverage Depth [x]</th>
+                <th>{% trans "report.section.aligned.alignment.ionstats_alignment.mean_coverage.label" %}</th>
                 <td> {{ ionstats_alignment.AQ17.mean_coverage }} </td>
                 <td> {{ ionstats_alignment.AQ20.mean_coverage }} </td>
                 <td> {{ ionstats_alignment.AQ47.mean_coverage }} </td>

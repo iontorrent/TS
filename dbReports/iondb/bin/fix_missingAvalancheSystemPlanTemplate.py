@@ -22,7 +22,8 @@ from traceback import format_exc
 
 def create_system_template():
     sysDefaultTemplates = models.PlannedExperiment.objects.filter(
-        isSystem=True, isSystemDefault=True, planDisplayedName="System Default Template")
+        isSystem=True, isSystemDefault=True, planDisplayedName="System Default Template"
+    )
 
     newSysTemplate = None
     isCreated = False
@@ -49,17 +50,26 @@ def create_system_template():
         planGUID = str(uuid.uuid4())
         newSysTemplate.planGUID = planGUID
 
-        planShortID = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(5))
+        planShortID = "".join(
+            random.choice(string.ascii_uppercase + string.digits) for x in range(5)
+        )
 
-        while models.PlannedExperiment.objects.filter(planShortID=planShortID, planExecuted=False):
-            planShortID = ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(5))
+        while models.PlannedExperiment.objects.filter(
+            planShortID=planShortID, planExecuted=False
+        ):
+            planShortID = "".join(
+                random.choice(string.ascii_uppercase + string.digits) for x in range(5)
+            )
 
         newSysTemplate.planShortID = planShortID
 
         newSysTemplate.date = currentTime
         newSysTemplate.save()
 
-        print "*** fix.. after saving new Avalanche sysTemplate.id=%d; name=%s " % (newSysTemplate.id, newSysTemplate.planDisplayedName)
+        print(
+            "*** fix.. after saving new Avalanche sysTemplate.id=%d; name=%s "
+            % (newSysTemplate.id, newSysTemplate.planDisplayedName)
+        )
 
         # copy Experiment
         expObj = copy.copy(sysDefaultTemplate.experiment)
@@ -73,7 +83,10 @@ def create_system_template():
         expObj.date = currentTime
         expObj.save()
 
-        print "*** fix.. after saving new Avalanche sysTemplate.experiment.id=%d; name=%s " % (expObj.id, expObj.expName)
+        print(
+            "*** fix.. after saving new Avalanche sysTemplate.experiment.id=%d; name=%s "
+            % (expObj.id, expObj.expName)
+        )
 
         # copy EAS
         for easObj in sysDefaultTemplate.experiment.eas_set.all():
@@ -83,7 +96,10 @@ def create_system_template():
             easObj.date = currentTime
             easObj.save()
 
-            print "*** fix.. after saving new Avalanche sysTemplate.experiment.eas.id=%d " % (easObj.id)
+            print(
+                "*** fix.. after saving new Avalanche sysTemplate.experiment.eas.id=%d "
+                % (easObj.id)
+            )
 
         # clone the qc thresholds as well
         qcValues = sysDefaultTemplate.plannedexperimentqc_set.all()
@@ -95,11 +111,16 @@ def create_system_template():
             qcObj.plannedExperiment = newSysTemplate
             qcObj.save()
 
-            print "*** fix.. after saving new Avalanche sysTemplate.qc.id=%d " % (qcObj.id)
+            print(
+                "*** fix.. after saving new Avalanche sysTemplate.qc.id=%d "
+                % (qcObj.id)
+            )
 
         isCreated = True
     else:
-        print "*** fix.. WARNING - NO System Default Template is found to create an Avalanche template!!"
+        print(
+            "*** fix.. WARNING - NO System Default Template is found to create an Avalanche template!!"
+        )
 
     return newSysTemplate, isCreated
 
@@ -113,23 +134,26 @@ def doFix():
         if isCreated:
             hasNewCreation = True
 
-            print "*** fix.. Congratulations, you are all set now..."
+            print("*** fix.. Congratulations, you are all set now...")
         else:
-            print "*** There is a bigger problem; even the System Default Template is missing..."
+            print(
+                "*** There is a bigger problem; even the System Default Template is missing..."
+            )
     except:
-        print format_exc()
+        print(format_exc())
         transaction.rollback()
-        print "*** Exceptions found. Avalanche System Template rolled back."
+        print("*** Exceptions found. Avalanche System Template rolled back.")
     else:
         if hasNewCreation:
             transaction.commit()
-            print "*** Avalanche System Template committed."
+            print("*** Avalanche System Template committed.")
 
 
 # main
 sysTemplates = models.PlannedExperiment.objects.filter(
-    isSystem=True, isReusable=True, planName="PGM_Avalanche_Template2")
+    isSystem=True, isReusable=True, planName="PGM_Avalanche_Template2"
+)
 if sysTemplates and sysTemplates.count() > 0:
-    print "*** Good! Avalanche system template is found. Nothing to fix."
+    print("*** Good! Avalanche system template is found. Nothing to fix.")
 else:
     doFix()

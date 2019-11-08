@@ -33,8 +33,9 @@ public:
     genotype_component.assign(2,0); // 0/0 = reference call
 
   };
-  string GenotypeAsString();
-  bool IsReference();
+  string GenotypeAsString() const;
+  bool IsHomReference() const ;
+  bool IsAlleleCalled(int i_allele) const;
 };
 
 // all the data needed to make a decision for filtration
@@ -44,7 +45,7 @@ class DecisionTreeData {
 
     vcf::Variant * variant;                         //!< VCF record of this variant position
     vector<AlleleIdentity>* allele_identity_vector;  //!< Detailed information for each candidate allele
-    vector<string>*         info_fields;             //!< Additional information to be printed out in vcf FR tag
+    vector<string>*         misc_info_fields;             //!< Additional information to be printed out in vcf MISC tag
 
     MultiBook all_summary_stats;
     LodManager lod_manager;
@@ -54,7 +55,6 @@ class DecisionTreeData {
     vector<int> filteredAllelesIndex;
     vector<bool> is_possible_polyploidy_allele;
 	map<string, float> variant_quality;
-
 
     bool best_variant_filtered;
 
@@ -72,7 +72,7 @@ class DecisionTreeData {
     DecisionTreeData(vcf::Variant &candidate_variant) /*: multi_allele(candidate_variant)*/ {
       variant = &candidate_variant;
       allele_identity_vector = NULL;
-      info_fields = NULL;
+      misc_info_fields = NULL;
       best_allele_set = false;
       best_allele_index = 0;
       best_variant_filtered=false;
@@ -120,6 +120,7 @@ class DecisionTreeData {
     void AddPositionBiasTags(vcf::Variant &candidate_variant, const string &sample_name);
     void AddLodTags(vcf::Variant &candidate_variant, const string &sample_name, const ControlCallAndFilters &my_control);
     void AddCountInformationTags(vcf::Variant &candidate_variant, const string &sampleName, const ExtendParameters &parameters);
+    void SuppressLod(vcf::Variant &candidate_variant, bool suppress_called_allele_lod);
     string GenotypeStringFromAlleles(std::vector<int> &allowedGenotypes, bool refAlleleFound);
     bool AllowedGenotypesFromSummary(std::vector<int> &allowedGenotypes);
     string GenotypeFromStatus(vcf::Variant &candidate_variant, const ExtendParameters &parameters);

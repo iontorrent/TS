@@ -8,14 +8,13 @@ import json
 from iondb.rundb.views import barcodeData
 
 
-@login_required
 def graph_iframe(request, pk):
     """
     Make a Protovis graph from the requested metric,
     !!! Used by Default_Report.php (TS/pipeline/web/db/writers/combinedReport.php, TS/pipeline/web/db/writers/format_whole.php)
     !!! Similar functionality exists in ResultsResources.get_barcode()
     """
-    metric = request.GET.get('metric', False)
+    metric = request.GET.get("metric", False)
 
     result = shortcuts.get_object_or_404(models.Results, pk=pk)
 
@@ -25,4 +24,6 @@ def graph_iframe(request, pk):
     ctxd = {"data": json.dumps(data)}
     context = template.RequestContext(request, ctxd)
 
-    return shortcuts.render_to_response("rundb/reports/classic/ion_graph_iframe.html", context_instance=context)
+    return shortcuts.render_to_response(
+        "rundb/reports/classic/ion_graph_iframe.html", context_instance=context
+    )

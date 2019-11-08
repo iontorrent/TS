@@ -1,8 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-references %}
-    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
 {% endblock tab-configure-references %}
 {% block extra_head %}
 {% endblock extra_head %}
@@ -12,10 +13,10 @@
 		</div>
 		<div class="content clearfix">
 			<div class="clearfix">
-				<h1 class="pull-left">Barcodes in {{name}}</h1>
-                {% if not system %}
+				<h1 class="pull-left">{{ title }}</h1>
+                {% if not system and featureflags.BARCODESET_ACTIONS %}
 				<div class="pull-right">
-					<a href="{% url "references_barcodeset_delete" barCodeSetId %}" class="btn delete_barcodeset" >Delete Barcode Set</a>
+					<a href="{% url "references_barcodeset_delete" barCodeSetId %}" class="btn delete_barcodeset" >{% trans "references_barcodeset.action.references_barcodeset_delete" %}</a>
 				</div>
                 {% endif %}
 			</div>
@@ -72,20 +73,20 @@
             , columns: [
                 {
                     field: "index",
-                    title: "Index",
+                    title: "{{ Barcode.index.verbose_name }}",
                     width: 70
                 },{
                     field: "id_str"
-                    , title: "ID"
+                    , title: "{{ Barcode.id_str.verbose_name }}"
                     , template: kendo.template($("#barcodeNameCellTemplate").html())
                 }
                 , {
                     field: "sequence"
-                    , title: "Sequence"
+                    , title: "{{ Barcode.sequence.verbose_name }}"
                 }
                 , {
                     field: "adapter"
-                    , title: "Adapter"
+                    , title: "{{ Barcode.adapter.verbose_name }}"
                 }
                 , {
                     field: "end_sequence"
@@ -97,11 +98,11 @@
                 }
                 , {
                     field: "annotation"
-                    , title: "Annotation"
+                    , title: "{{ Barcode.annotation.verbose_name }}"
                 }
                 , {
                     field: "type",
-                    title: "Type",
+                    title: "{{ Barcode.type.verbose_name }}",
                     template: "<span style='text-transform: uppercase;'>${type}</span>"
                 }
             ]

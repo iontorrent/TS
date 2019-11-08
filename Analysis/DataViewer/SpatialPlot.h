@@ -64,7 +64,9 @@
 class SpatialPlot;
 
 #define MAX_NUM_TRACES 12
-#define MAX_TRACE_LEN 500
+#define MAX_TRACE_LEN 2000
+
+#define MAX_ERROR_FLOWS 50
 
 typedef struct{
     int y;
@@ -113,11 +115,11 @@ public:
     void doConvertInt();
     virtual void doConvert(int &loading);
     virtual void copyData();
-    QImage *doRender();
+    virtual QImage *doRender();
     void  copyLastCoord();
     void setRawTrace(int selection);
     void setfilename(QString fileName);
-    void setSlider(int per);
+    virtual void setSlider(int per);
     void setTracePlot(QCustomPlot *TracePlot, int _flow_based=0);
 
     void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
@@ -125,11 +127,14 @@ public:
     virtual void SetOption(QString option, int state);
 
     static void SetBlockCoord(int x, int y){Block_Y=y;Block_X=x;}
+    virtual void CustomTracePlotAdder(double &xmin, double &xmax, double &ymin, double &ymax);
 
 protected:
+    void paintXMarks(QImage *image);
 
     virtual void DoubleClick(int x,int y);
-    virtual void DoubleClick_traces(int x, int y, int ts);
+    virtual void DoubleClick_traces(int x, int y, int ts, float val);
+    virtual void SetTracesToolTip(int y, int x, float ts, float val);
 
     void paintEvent(QPaintEvent *event) Q_DECL_OVERRIDE;
     void resizeEvent(QResizeEvent *event) Q_DECL_OVERRIDE;
@@ -150,27 +155,40 @@ protected:
     static int GblTracesVer;
 
     int LocalTracesVer=0;
-    float traces_Val[MAX_NUM_TRACES][MAX_TRACE_LEN];
+    float traces_Val[MAX_NUM_TRACES+1][MAX_TRACE_LEN];
+    char traces_highlited[MAX_NUM_TRACES+1][MAX_TRACE_LEN];
 
     float traces_ts[MAX_TRACE_LEN]={0};
     int _mTracePlotSet[MAX_TRACE_LEN]={0};
     int traces_len=0;
-    void UpdateTraceData();
+    virtual void UpdateTraceData();
     virtual void UpdateTracePlot();
     QCustomPlot *_mTracePlot=NULL;
     int flow_based=0;
     int ignore_pinned=0;
-
+#define NO_OVERRIDE -10000
+    double X_Upper_Override=NO_OVERRIDE;
+    double X_Lower_Override=NO_OVERRIDE;
+    double Y_Upper_Override=NO_OVERRIDE;
+    double Y_Lower_Override=NO_OVERRIDE;
+    double Spa_Lower_Override=NO_OVERRIDE;
+    double Spa_Upper_Override=NO_OVERRIDE;
+    int histMin=0;
+    int histMax=0;
+#define NUM_HIST_BINS 256
+    int histData[NUM_HIST_BINS]={};
+    int display_histogram=0;
 
 protected slots:
     virtual void updatePixmap(const QImage &image);
     void zoom(double zoomFactor, double XWeight=0.5, double YWeight=0.5);
     void showPointToolTip(QMouseEvent *event);
     void showPointToolTip_traces(QMouseEvent *event);
-
-private:
     void mouseDoubleClickEvent(QMouseEvent *event);
     void mouseDoubleClickEvent_traces(QMouseEvent *event);
+    void axisDoubleClick_traces(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event);
+
+private:
 
     void mousePressEvent(QMouseEvent *);
     void mouseReleaseEvent(QMouseEvent *);
@@ -209,11 +227,12 @@ protected:
     int lastStartY=0;
     int lastEndX=0;
     int lastEndY=0;
+    int lastcurDisplayFlow=-1;
     int initialHints=1;
     int loading=0;
 
-    int maxPixVal=0;
-    int minPixVal=0;
+    float maxPixVal=0;
+    float minPixVal=0;
 
     QString fname="";
 
@@ -231,9 +250,22 @@ protected:
     static const int borderWidth=30;
     static const int scaleBarWidth=35;
 
-    static uint16_t *refMask; //from BfMaskTab
-    static float *gainVals;   //from GainTab
-    static char *mMask; // only display pixels with a 0
+    static uint16_t *refMask;    //from BfMaskTab
+    static float *gainVals;      //from GainTab
+    static char *mMask;          // only display pixels with a 0
+    static float *WellsOut;    // raw calls data
+    static float *WellsNormOut;    // raw calls data
+    static int32_t *sequenceLenOut; // length of alignments
+    static char **SequenceQueryBasesOut;   // called bases
+    static char **SequenceAlignedBasesOut; // aligned bases
+    static uint16_t *SequenceMapQuality;
+    static uint32_t **SequenceMapErrors;
+    static float *NumpyOut;
+    static float *microscopeOut;
+    static int flowOrderLen;
+    static char flowOrder[4096];
+
+    static int curDisplayFlow;
 
 };
 //! [0]

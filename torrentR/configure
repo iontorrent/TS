@@ -112,20 +112,27 @@ then
     if [ $CODENAME == "" ]; then
         HDF5_INC=$TS_BUILD_ROOT/hdf5-1.8.11-install/include
         HDF5_LIB=$TS_BUILD_ROOT/hdf5-1.8.11-install/lib/libhdf5.a
+    elif [ $CODENAME == "xenial"  ]; then
+        HDF5_INC=/usr/include/hdf5/serial
+        HDF5_LIB=/usr/lib/x86_64-linux-gnu/libhdf5_serial.so
+    elif [ $CODENAME == "bionic" ]; then 
+        HDF5_INC=/usr/include/hdf5/serial
+        HDF5_LIB=/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so
     else
-        if [ $CODENAME == "xenial"  ]; then
-            HDF5_INC=/usr/include/hdf5/serial
-            HDF5_LIB=/usr/lib/x86_64-linux-gnu/libhdf5_serial.so
-        else
-            HDF5_INC=/usr/include
-            HDF5_LIB=-lhdf5
-        fi
+        HDF5_INC=/usr/include
+        HDF5_LIB=-lhdf5
+
     fi
 fi
 
 if [$BAMTOOLS_ROOT == ""]
 then
-    BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.4.0.20150702+git15eadb925f-install
+    CODENAME=`lsb_release -cs`
+    if [ $CODENAME == "bionic" ]; then
+        BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.4.2.20190207+git740562a67a3-install
+    else
+        BAMTOOLS_ROOT=$TS_BUILD_ROOT/bamtools-2.4.0.20150702+git15eadb925f-install
+    fi
     BAMTOOLS_INC=$BAMTOOLS_ROOT/include/bamtools
     BAMTOOLS_LIB=$BAMTOOLS_ROOT/lib/bamtools
 fi

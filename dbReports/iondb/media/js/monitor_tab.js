@@ -23,6 +23,7 @@ $(function(){
             var qc = this.model.get("qualitymetrics");
             var exp = this.model.get('experiment');
             var status = exp.ftpStatus;
+            var progress_flows = (status == "Complete" ? exp.flows : status);
             context = {
                 exp: exp,
                 "prettyExpName": exp.displayName,
@@ -32,7 +33,9 @@ $(function(){
                 "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
                 "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
                 "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
-                "progress_flows": (status == "Complete" ? exp.flows : status),
+                "progress_flows": progress_flows,
+                "progress_tooltip": interpolate(gettext("monitor.fields.flows.tooltip"), {progress_flows: progress_flows, total_flows: exp.flows}, true), // "Progress is %(progress_flows)s of %(total_flows)s flows"
+                "progress_message": interpolate(gettext("monitor.fields.flows.progress.message"), {progress_flows: progress_flows, total_flows: exp.flows}, true), //"%(progress_flows)s of %(total_flows)s flows"
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / exp.flows) * 100),
                 "is_proton" : exp.platform.toLowerCase() == "proton",
                 "is_s5" : exp.platform.toLowerCase() == "s5",
@@ -47,18 +50,18 @@ $(function(){
                 usable_sequence_threshold = qc["Usable Sequence (%)"];
 
             $(this.el).html(this.template.render(context));
-            this.$('.bead-loading').strength(context.bead_loading, bead_loading_threshold, context.bead_loading, 'Loading');
-            this.$('.bead-live').strength(context.bead_live, undefined, context.bead_live, 'Live ISPs');
-            this.$('.bead-lib').strength(context.bead_lib, undefined, context.bead_lib, 'Library ISPs');
-            this.$('.key-signal').strength(key_counts, key_threshold, key_counts, 'Key Signal', '');
-            this.$('.usable-sequence').strength(context.usable_seq, usable_sequence_threshold, context.usable_seq, 'Usable Seq');
+            this.$('.bead-loading').strength(context.bead_loading, bead_loading_threshold, context.bead_loading, this.$('.bead-loading').data('signalCaption'));
+            this.$('.bead-live').strength(context.bead_live, undefined, context.bead_live, this.$('.bead-live').data('signalCaption'));
+            this.$('.bead-lib').strength(context.bead_lib, undefined, context.bead_lib, this.$('.bead-lib').data('signalCaption'));
+            this.$('.key-signal').strength(key_counts, key_threshold, key_counts, this.$('.key-signal').data('signalCaption'), '');
+            this.$('.usable-sequence').strength(context.usable_seq, usable_sequence_threshold, context.usable_seq, this.$('.usable-sequence').data('signalCaption'));
         },
 
         review_plan_: function(e) {
             e.preventDefault();
         	$('body').css("cursor", "wait");
             $('#error-messages').hide().empty();
-            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
             $('body').prepend(busyDiv);
 
             var url = this.$el.find('a.review-plan').attr('href');
@@ -69,7 +72,7 @@ $(function(){
                 $('body').append(data);
                 $("#modal_review_plan").modal("show");
             }).fail(function(data) {
-                $('#error-messages').empty().show().append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').empty().show().append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
                 console.log("AJAX Reivew Plan Error:", data);
             }).always(function(data) {
                 $('body').css("cursor", "default");
@@ -112,6 +115,7 @@ $(function(){
             var qc = this.model.get("qualitymetrics");
             var exp = this.model.get('experiment');
             var status = exp.ftpStatus;
+            var progress_flows = (status == "Complete" ? exp.flows : status);
             context = {
                 exp: exp,
                 "prettyExpName": exp.displayName,
@@ -121,7 +125,8 @@ $(function(){
                 "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
                 "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
                 "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
-                "progress_flows": (status == "Complete" ? exp.flows : status),
+                "progress_flows": progress_flows,
+                "progress_message": interpolate(gettext("monitor.fields.flows.progress.message.alternate"), {progress_flows: progress_flows, total_flows: exp.flows}, true),  //"%(progress_flows)s / %(total_flows)s flows"
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / exp.flows) * 100),
                 "is_proton" : exp.chipInstrumentType == "proton",
                 "in_progress": status != "Complete"
@@ -247,15 +252,15 @@ $(function(){
         },
 
         toggle_live_update: function() {
-            if (this.live_update !== null) {
+        	if (this.live_update !== null) {
                 this.clear_update();
-                this.$("#live_button").addClass('btn-success').text('Auto Refresh');
-                this.$("#update_status").text('Page is static until refreshed');
+                this.$("#live_button").addClass('btn-success').text($("#live_button").data('liveOn'));
+                this.$("#update_status").text($("#update_status").data('liveOff')); //'Page is static until refreshed'
 
             } else {
                 this.start_update();
-                this.$("#live_button").removeClass('btn-success').text('Stop Refresh');
-                this.$("#update_status").text('Page is updating automatically');
+                this.$("#live_button").removeClass('btn-success').text($("#live_button").data('liveOff'));
+                this.$("#update_status").text($("#update_status").data('liveOn')); //'Page is updating automatically'
             }
         },
 

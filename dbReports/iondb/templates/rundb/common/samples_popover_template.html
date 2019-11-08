@@ -1,3 +1,4 @@
+{% load i18n %}
 <script>
     // We need a container for the popover in order to style it
     $("<span/>", {id: "sample-popover-container"}).appendTo("body");
@@ -9,14 +10,14 @@
 	#
 	# if (barcodedSamples && !$.isEmptyObject(barcodedSamples)) { #
 		<span rel="popover" data-toggle="popover" data-select="\#sample#=data.id#" data-html="true" data-trigger="hover" data-container="\#sample-popover-container">
-			#= TB.properties(barcodedSamples).length + " Samples " # <i class="icon-info-sign" style="opacity: 0.9"></i>
+			#= TB.properties(barcodedSamples).length + " {% trans "entity.BarcodedSample.verbose_name_plural" %} " # <i class="icon-info-sign" style="opacity: 0.9"></i>
 		</span>
 		<div id="sample#=data.id#" class="hide">
 			<table class="table table-condensed table-striped sample-popover-table" style="margin:0;">
 			<thead>
                 <tr>
-                    <th>Sample</th>
-                    <th>Barcode</th>
+                    <th>{% trans "entity.BarcodedSample.field.displayedName.verbose_name" %}</th>
+                    <th>{% trans "entity.BarcodedSample.field.barcode.verbose_name" %}</th>
                 </tr>
 			</thead>
 			<tbody>
@@ -42,7 +43,7 @@
 			# }); #
 			</tbody>
             # if(sampleInfo.length > 16){ #
-                <tfoot><tr><td colspan="2">+#=sampleInfo.length-16# more barcodes</td></tr></tfoot>
+                <tfoot><tr><td colspan="2">+#=sampleInfo.length-16# {% trans "entity.BarcodedSample.verbose_name_plural" %}</td></tr></tfoot>
             # }; #
 			</table>
 		</div>

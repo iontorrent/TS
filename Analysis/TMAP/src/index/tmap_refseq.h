@@ -6,6 +6,8 @@
 #include "../util/tmap_string.h"
 #include "../util/tmap_definitions.h"
 #include "../io/tmap_file.h"
+#include "../map/util/tmap_map_locopt.h"
+
 
 /*! 
   DNA Reference Sequence Library
@@ -52,7 +54,8 @@
 
 /*! 
   */
-typedef struct {
+typedef struct 
+{
     tmap_string_t *name;  /*!< the name of the contig */
     uint64_t len;  /*!< the length of the current contig  */
     uint64_t offset;  /*!< the offset from the start of the reference (zero-based) */
@@ -60,26 +63,70 @@ typedef struct {
     uint32_t *amb_positions_end;  /*!< end positions of ambiguous bases (one-based) */
     uint8_t *amb_bases;  /*!< the ambiguous bases (IUPAC code) */
     uint32_t num_amb;  /*!< the number of ambiguous bases */
-} tmap_anno_t;
+} 
+tmap_anno_t;
+
+/*!
+ * read end statistics record (check Jingwei's specs if these are truly medians or some other meathures)
+ */
+#pragma pack (push, 1)
+typedef struct
+{
+    int32_t coord; /*!< position on the chromosome */
+    int32_t count; /*!< median of the abslute number of full-length reads observed ending at this position */
+    double  fraction; /*< median of the fraction of full-length reads ending at this position relative to coverage */
+    char    flag; /*< indicates if the entry is within primer region. Values: O - on primer region, S - falls inside primer region, L - falls outside primer region */
+} 
+tmap_map_endpos_t;
+
+/*!
+ * block of read end statistics records for the amplicon. READ_END records follow READ_START records
+ */
+typedef struct 
+{
+    uint32_t index;  /*!< index into of the first tmap_map_endpos_t in the endposmem array in tmap_refseq_t structure. */
+    uint32_t starts_count; /*!< number of records for READ_START's following the index position in the endposmem array in tmap_refseq_t structure. */
+    uint32_t ends_count; /*!< number of records for READ_END's following the index+starts_count position in the endposmem array in tmap_refseq_t structure. */
+}
+tmap_map_endstat_t;
+
+typedef struct 
+{
+    tmap_map_endpos_t* positions;  /*!< pointer to the array of tmap_map_endpos_t */
+    uint32_t starts_count; /*!< number of records for READ_START's in the 'positions' array above. */
+    uint32_t ends_count; /*!< number of records for READ_END's following the first starts_count records in the 'positions' array above. */
+}
+tmap_map_endstat_p_t;
+#pragma pack (pop)
 
 /*! 
   */
-typedef struct {
-    uint64_t version_id;  /*!< the version id of this file */
-    tmap_string_t *package_version;  /*!< the package version */
-    uint8_t *seq;  /*!< the packed nucleotide sequence, with contigs concatenated */
-    tmap_anno_t *annos;  /*!< the annotations about the contigs */
-    int32_t num_annos;  /*!< the number of contigs (and annotations) */
-    uint64_t len;  /*!< the total length of the reference sequence */
-    uint32_t is_shm;  /*!< 1 if loaded from shared memory, 0 otherwise */
-    /* not in the file */
-    void *refseq_fp;
+typedef struct 
+{
+   uint64_t version_id;  /*!< the version id of this file */
+   tmap_string_t *package_version;  /*!< the package version */
+   uint8_t *seq;  /*!< the packed nucleotide sequence, with contigs concatenated */
+   tmap_anno_t *annos;  /*!< the annotations about the contigs */
+   int32_t num_annos;  /*!< the number of contigs (and annotations) */
+   uint64_t len;  /*!< the total length of the reference sequence */
+   uint32_t is_shm;  /*!< 1 if loaded from shared memory, 0 otherwise */
+   /* not in the file */
+   void *refseq_fp;
    uint32_t bed_exist;
-   uint32_t beditem;
-   uint32_t *bednum;
-   uint32_t **bedstart;
-   uint32_t **bedend;
-} tmap_refseq_t;
+   uint32_t beditem;  // number of contigs (== num_annos when mapping, curent contig number when masking fasta)
+   uint32_t *bednum;  // number of bed records encountered per reference contg, [recno_in_ctg0, recno_in_ctg1,...]
+   uint32_t **bedstart; // region starts per contig [[reg0_start,...reg<bednum[0]>start],[reg0ctg0start,...reg<bednum[1]>ctg0start>],..]
+   uint32_t **bedend; // region ends per contig [[reg0_end,...reg<bednum[0]>end],[reg0ctg0start,...reg<bednum[1]>ctg0start>],..]
+   uint32_t **parovr; // override data index: [[reg0ctg0_locopt_idx, reg1ctg0_locopt_idx, ...],[reg0ctg1_locopt_idx,..],..], index is UINT32_MAX for no override
+   tmap_map_locopt_t *parmem; // actual storage for override data, regXctgY_locopt_ptrs from above point here
+   uint32_t parmem_used; // number of members in parmem array that are in use
+   uint32_t parmem_size; // size of allocated parmem array
+   tmap_map_endstat_t **read_ends; // read ends index: an array per chromosome
+   tmap_map_endpos_t *endposmem; // actial storage for read ends data, read_ends[contig_idx][amplicon_idx].end_positions point here
+   uint32_t endposmem_used; // occupied slots in endposmem
+   uint32_t endposmem_size; // allocated size of endposmem
+}
+tmap_refseq_t;
 
 /*!
   returns the index version format given a package version
@@ -246,6 +293,16 @@ tmap_refseq_pac2fasta_main(int argc, char *argv[]);
 int 
 tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[]);
 
+/*! 
+  Checks if the given reference range has ambiguous bases
+  @param  refseq        pointer to the structure storing reference data
+  @param  bedfile       name for the BED file to use
+  @param  use_par_ovr   flag indicating if amplicon-specific options should be used if present in BED
+  @param  use_reads_end flag indicating if amplicon-specific read ends statistics should be used if provided in BED
+  @param  local_logs    pointer to the integer holding count of amplicons with overriden log flag
+  @return               one if BED is parsed, zero if error occured
+  */
 int
-tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile);
+tmap_refseq_read_bed (tmap_refseq_t *refseq, char *bedfile, int32_t  use_par_ovr, int32_t use_read_ends, int32_t* local_logs);
+
 #endif // TMAP_REFSEQ_H

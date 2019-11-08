@@ -3,7 +3,5 @@
 {% load static from staticfiles %}
 {% block content %}
     <h2>Insufficient Permissions</h2>
-    <p>The <strong>{{ request.user }}</strong> user does not have permission to view this page. You may <a
-            href="{% url "logout" %}" style="font-size: 14px">logout</a>
-        and login as a different user.</p>
+    <p>The <strong>{{ request.user }}</strong> user does not have permission to view this page. You may <a href="{% url "logout" %}" style="font-size: 14px">logout</a> and login as a different user.</p>
 {% endblock content %}		

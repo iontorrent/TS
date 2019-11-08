@@ -3,7 +3,7 @@
 # First stage plugin driver script that uses user input to generate document.json with the help of django template
 # This template takes user.json in the form of individual contents - table, images
 
-__version__ = '1.0'
+__version__ = "1.0"
 
 import os, sys, logging
 from optparse import OptionParser
@@ -26,16 +26,22 @@ from ion.plugin.utils.ParseMessages import ParseMessages
 from ion.plugin.utils.Utility import Utility
 
 
-class CreateDocument(Validatetable, Validateimage, Validatehtml, ParseMessages, Utility):
-
+class CreateDocument(
+    Validatetable, Validateimage, Validatehtml, ParseMessages, Utility
+):
     def __init__(self, results_dir, json_file, startplugin_json):
         self.resultsDir = results_dir
         self.log_file = ""
         self.template_file = "ion_plugin_report_template.html"
         self.documentJson = self.parseJsonFile(json_file)
         self.startplugin_json = self.parseJsonFile(startplugin_json)
-        if "name" in self.startplugin_json["runinfo"] or "plugin_name" in self.startplugin_json["runinfo"]:
-            self.documentJson["meta_data"]["plugin_name"] = self.startplugin_json["runinfo"]["plugin_name"]
+        if (
+            "name" in self.startplugin_json["runinfo"]
+            or "plugin_name" in self.startplugin_json["runinfo"]
+        ):
+            self.documentJson["meta_data"]["plugin_name"] = self.startplugin_json[
+                "runinfo"
+            ]["plugin_name"]
         """
         if "version" in self.startplugin_json["runinfo"]["plugin"]:
             self.documentJson["meta_data"]["plugin_version"] = self.startplugin_json["runinfo"]["plugin"]["version"]
@@ -49,11 +55,17 @@ class CreateDocument(Validatetable, Validateimage, Validatehtml, ParseMessages, 
 
     def InitializeTemplates(self):
         if not settings.configured:
-            settings.configure(DEBUG=False, TEMPLATE_DEBUG=False,
-                               TEMPLATE_DIRS=(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates')),
-                                              self.results_dir,
-                                              os.path.join(self.results_dir, "templates"))
-                               )
+            settings.configure(
+                DEBUG=False,
+                TEMPLATE_DEBUG=False,
+                TEMPLATE_DIRS=(
+                    os.path.abspath(
+                        os.path.join(os.path.dirname(__file__), "..", "templates")
+                    ),
+                    self.results_dir,
+                    os.path.join(self.results_dir, "templates"),
+                ),
+            )
 
     def EvaluateMetaData(self):
         """Look for the meta_data section that contains plugin level details"""
@@ -69,9 +81,19 @@ class CreateDocument(Validatetable, Validateimage, Validatehtml, ParseMessages, 
             if os.path.isfile(template_file):
                 self.template_file = template_file
                 if not settings.configured:
-                    settings.configure(TEMPLATE_DIRS=(os.path.join(self.resultsDir, self.template_file), ''), TEMPLATE_DEBUG=False, DEBUG=False)
+                    settings.configure(
+                        TEMPLATE_DIRS=(
+                            os.path.join(self.resultsDir, self.template_file),
+                            "",
+                        ),
+                        TEMPLATE_DEBUG=False,
+                        DEBUG=False,
+                    )
                 else:
-                    settings.TEMPLATE_DIRS += (os.path.join(self.resultsDir, self.template_file), '')
+                    settings.TEMPLATE_DIRS += (
+                        os.path.join(self.resultsDir, self.template_file),
+                        "",
+                    )
                     # settings.TEMPLATE_DEBUG=True
 
         # logging.debug("logfile %s templatefile %s" % self.log_file % self.template_file)
@@ -93,32 +115,66 @@ class CreateDocument(Validatetable, Validateimage, Validatehtml, ParseMessages, 
 
         # Replace the sections block with the newly updated sections
         self.documentJson["sections"] = array
-        if "plugin_about" in self.documentJson["meta_data"] and self.documentJson["meta_data"]:
-            self.documentJson["sections"].append({"type": "html", "title": "About", "content": "<p>" + self.documentJson["meta_data"]["plugin_about"] + "</p>", "id": self.generateID()})
+        if (
+            "plugin_about" in self.documentJson["meta_data"]
+            and self.documentJson["meta_data"]
+        ):
+            self.documentJson["sections"].append(
+                {
+                    "type": "html",
+                    "title": "About",
+                    "content": "<p>"
+                    + self.documentJson["meta_data"]["plugin_about"]
+                    + "</p>",
+                    "id": self.generateID(),
+                }
+            )
         self.parsemessages(self.log_file)
 
     def CreateJson(self):
         """Constructs the json file to be written to disk"""
-        logging.debug("Constructing document.json file.Look for filename ion_report.html")
-        fw = open(os.path.join(self.resultsDir, "document.json"), 'w')
+        logging.debug(
+            "Constructing document.json file.Look for filename ion_report.html"
+        )
+        fw = open(os.path.join(self.resultsDir, "document.json"), "w")
         fw.write(json.dumps(self.documentJson))
-        self.documentJson["plugin_name"] = self.startplugin_json["runinfo"]["plugin_name"]
-        sections = {'data': self.documentJson}
+        self.documentJson["plugin_name"] = self.startplugin_json["runinfo"][
+            "plugin_name"
+        ]
+        sections = {"data": self.documentJson}
         # TO-DO - the template name is harcoded here
         logging.debug("Template file is %s" % self.template_file)
         html_content = self.generateHTML(self.template_file, sections)
         # TO-DO - report name is harcode here
-        with open(os.path.join(self.resultsDir, "ion_%s_report.html" % self.documentJson["plugin_name"]), 'w') as f:
+        with open(
+            os.path.join(
+                self.resultsDir, "ion_%s_report.html" % self.documentJson["plugin_name"]
+            ),
+            "w",
+        ) as f:
             if html_content:
                 f.write(html_content)
             else:
                 logging.error("html content empty")
 
+
 if __name__ == "__main__":
     parser = OptionParser(usage="%prog [options]", version="%%prog %s" % __version__)
-    parser.add_option("-d", dest="results_dir", help="specify the plugin's results directory containing startplugin.json and user.json. REQUIRED")
-    parser.add_option("-s", dest="startplugin_json", help="specify path to startplugin.json file. REQUIRED. ")
-    parser.add_option("-f", dest="user_json", help="specify path to userjson file containing sections. REQUIRED")
+    parser.add_option(
+        "-d",
+        dest="results_dir",
+        help="specify the plugin's results directory containing startplugin.json and user.json. REQUIRED",
+    )
+    parser.add_option(
+        "-s",
+        dest="startplugin_json",
+        help="specify path to startplugin.json file. REQUIRED. ",
+    )
+    parser.add_option(
+        "-f",
+        dest="user_json",
+        help="specify path to userjson file containing sections. REQUIRED",
+    )
     (opt, args) = parser.parse_args()
 
     # TO DO: Better way of defining variables

@@ -1,0 +1,124 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+<!-- Do not include tb_layout.css in block reports - it causes continuous scrolling -->
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+
+{% load humanize %}
+
+<style type="text/css">
+   body {background:white}
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+  td {word-break:break-all}
+</style>
+
+<title>Molecular Coverage Analysis Report</title>
+</head>
+<body>
+
+<div class="container-fluid">
+
+<h4>
+<b>Library type:</b> {{library_type}}<br/>
+{% if target_regions %}
+<b>Target regions:</b> {{target_regions}}<br/>
+{% endif %}
+<b>Parameters:</b> <a href="download.php3?name=local_parameters.json"> {{configure_file}} </a><br/>
+</h4>
+
+<script type="text/javascript">
+  function numberWithCommas(x) {
+    if( x == null || isNaN(x) ) return "NA";
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (x)+"%";
+  }
+</script>
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = {{barcode_results|safe}};
+</script>
+
+<script type="text/javascript">
+$(document).ready(function() {
+  if (typeof barcodes_json !== 'undefined'){
+    $("#barcodes").kendoGrid({
+      height: 'auto',
+      groupable: false,
+      scrollable: false,
+      selectable: false,
+      sortable: { mode: "multiple", allowUnsort: true },
+      pageable : { pageSizes:[5,10,20,50,100,1000] },
+      dataSource: {
+        data: barcodes_json,
+        schema: { model: { fields: {
+          barcode_name: {type:"string"},
+          sample: {type:"string"},
+          funcfam: {type:"number"},
+          uniformity: {type:"float"},
+          famsize: {type:"float"},
+          conversion: {type:"float"}
+        } } },
+        pageSize: 20
+      },
+      columns: [
+        {field:"barcode_name",width:"15%"},
+        {field:"sample",width:"30%"},
+        {field:"funcfam"},
+        {field:"uniformity"},
+        {field:"famsize"},
+        {field:"conversion"}
+      ],
+      rowTemplate: kendo.template($("#barcodesRowTemplate").html())
+    });
+  }
+});
+</script>
+
+<div>
+  <table id="barcodes" style="width:100%">
+    <thead>
+    <tr>
+      <th title="{{help_dict.barcode_name}}">Barcode Name</th>
+      <th title="{{help_dict.sample_name}}">Sample</th>
+      <th title="{{help_dict.funcfam}}">Median Molecular Coverage</th>
+      <th title="{{help_dict.uniformity}}">Molecular Uniformity</th>
+      <th title="{{help_dict.famsize}}">Median Reads per Functional Molecule </th>
+      <th title="{{help_dict.conversion}}">Median Perc Functional Reads</th>
+    </tr>
+    </thead>
+    <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
+      <tr>
+        <td> #= barcode_details #</td>
+        <td> #= (sample) ? sample : "None" #</td>
+        <td> #= numberWithCommas(funcfam) # </td>
+        <td>#= uniformity #</td>
+        <td>#= famsize #</td>
+        <td>#= numberToPercent(conversion) #</td>
+      </tr>
+    </script>
+  </table>
+</div>
+
+</div>
+</body>
+</html>
+

@@ -2,8 +2,8 @@ import os
 
 
 def touch(fname, times=None):
-    '''touch a file (fname)'''
-    with file(fname, 'a'):
+    """touch a file (fname)"""
+    with file(fname, "a"):
         os.utime(fname, times)
 
 

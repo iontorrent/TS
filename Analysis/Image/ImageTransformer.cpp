@@ -981,7 +981,7 @@ bool ImageTransformer::ReadDataCollectGainCorrection(
 
   size_t dataSize = sizeof(float)*rows*cols; 
   if (gain_correction == NULL)
-    gain_correction = (float*)malloc(dataSize);
+    gain_correction = (float *)memalign(VEC8F_SIZE_B,dataSize);
 
   ifstream gainFile;
   gainFile.open(dataPath.c_str(),ios::in | ios::binary);
@@ -1029,4 +1029,51 @@ bool ImageTransformer::ReadDataCollectGainCorrection(
   }
 
   return false;
+}
+
+void ImageTransformer::GenerateExclusionMaskFromGain(Mask *mask, unsigned int rows,  unsigned int cols, int struct_size){
+  if (gain_correction != NULL){
+    GainImageErosion(mask, rows, cols, struct_size);
+  }
+}
+
+void ImageTransformer::GainImageErosion(Mask *mask, unsigned int rows,  unsigned int cols, int struct_size){
+  int* dist = (int *)memalign(VEC8F_SIZE_B,sizeof(int)*rows*cols);
+  // manhattan distance
+  // first pass
+  for (size_t r = 0; r < rows; ++r) {
+      for (size_t c = 0; c < cols; ++c) {
+        if(gain_correction[r*cols + c] >= 0.5){
+          dist[r*cols + c] = 0;
+        }else{
+          dist[r*cols + c] = int(rows + cols);
+          if(r > 0){
+            dist[r*cols + c] = std::min(dist[r*cols + c], dist[(r - 1)*cols + c] + 1);
+          }
+          if(c > 0) {
+            dist[r*cols + c] = std::min(dist[r*cols + c], dist[r*cols + c - 1] + 1);
+          }
+        }
+      }
+    }
+  // second pass
+  for (int r = int(rows - 1); r >= 0; --r) {
+    for (int c = cols - 1; c >= 0; --c) {
+      if(r + 1 < int(rows)){
+        dist[r*cols + c] = std::min(dist[r*cols + c], dist[(r + 1)*cols + c] + 1);
+      }
+      if(c + 1 < int(cols)){
+        dist[r*cols + c] = std::min(dist[r*cols + c], dist[r*cols + c + 1] + 1);
+      }
+    }
+  }
+  // erode based on the manhattan distance
+  for(size_t r = 0; r < rows; r++){
+    for(size_t c = 0; c < cols; c++){
+      if(dist[r*cols + c] >= struct_size){
+        mask->SetOneWell(c, r, MaskExclude);
+      }
+    }
+  }
+  free(dist);
 }

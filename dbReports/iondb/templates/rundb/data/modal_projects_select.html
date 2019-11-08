@@ -1,31 +1,43 @@
+{% load i18n %}
 <div id="modal_projects_select" title="" class="modal modal-1000 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="modal_projects_select_heading">Pick projects to be associated with selected results:</h3>
+        <h3 id="modal_projects_select_heading">{% trans "results_to_projects.title" %}</h3>
     </div>
-    <div class="modal-body" style="max-height: 600px;">
+    <div class="modal-body" style="{% comment %}max-height: 600px;{% endcomment %}">
+        <p class="lead">{% trans "results_to_projects.instructions.text" %}</p>
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-        <form class="form-horizontal" id="modal_projects_select_form" method="{{method}}" action="{{action}}">
-            <fieldset>
-                <div class="control-group">
-                    {%spaceless%}
-                    <div id="search_bar" class="well well-small" style="margin-bottom:-5px;">
+        <div class="row-fluid">
+            <form class="form-inline well well-small" id="modal_projects_select_form" method="{{method}}" action="{{action}}">
+                <fieldset>
+                    <div class="control-group">
+                        {%spaceless%}
+                        <div id="search_bar" class="">
                             <div class="input-append search-field">
-                                <label for="search_text" class="hide">Search Names</label>
-                                <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-                                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+                                <label for="search_text" class="hide">{% trans "results_to_projects.search_bar.fields.search_text.label" %}</label>
+                                <input class="input-medium" id="search_text" type="text" placeholder="{% trans "results_to_projects.search_bar.fields.search_text.placeholder" %}" style="width: 150px;" />
+                                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">{% trans "results_to_projects.search_bar.fields.search_text.action.submit" %}</button>
+                            </div>
+                            <div class="search-field">
+                                <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 1px">
+                                    {% trans "results_to_projects.search_bar.action.clear_filters.label" %}
+                                </button>
                             </div>
                             <div class="pull-right">
-                            <a id="modal_projects_select_btn" class="btn btn-primary hide" href="#">Add projects</a>
+                                <a id="modal_projects_select_btn" class="btn btn-primary hide" href="#">{% trans "results_to_projects.action.submit" %}</a>
+                            </div>
                         </div>
+                        {%endspaceless%}
                     </div>
-                    {%endspaceless%}
-                    <div id="modal_projects_select-grid"></div>
-                </div>
-            </fieldset>
-        </form>
+                </fieldset>
+            </form>
+        </div>
+        <div class="row-fluid">
+            <div id="modal_projects_select-grid" style="margin-top: 5px; margin-bottom: 5px;"></div>
+        </div>
     </div>
     <script type="text/javascript">
+
         $("#modal_projects_select #search_text").change(function (e) {
             e.preventDefault();
             console.log($("#modal_projects_select #search_text").val() );
@@ -75,7 +87,7 @@
                 $('#modal_projects_select').modal("hide");
             })
             .fail(function(data) {
-                $('#modal_projects_select #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                $('#modal_projects_select #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
                 console.log("error:", data);
             
             })
@@ -125,22 +137,22 @@
           pageable: false,
             columns: [ {
                     field: "id",
-                    title: " ",
+                    title: "{% trans "results_to_projects.fields.id.label" %}",
                     sortable:false,
                     width: '7%',
                     template: "<input value='${id}' name='projects' type='checkbox'>"
                 } , {
                     field: "name",
-                    title: "Name",
+                    title: "{% trans "results_to_projects.fields.name.label" %}",
                     width: '40%'
                 } , {
                   field: "resultsCount",
-                  title: "Results",
+                  title: "{% trans "results_to_projects.fields.resultsCount.label" %}",
                   width: '15%',
                   sortable: false
                 } , {
                   field: "modified",
-                  title: "Last Modified",
+                  title: "{% trans "results_to_projects.fields.modified.label" %}",
                   width: '30%',
                   template: '#= kendo.toString(new Date(Date._parse(modified)),"yyyy/MM/dd hh:mm tt") #'
                 }

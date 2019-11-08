@@ -5,12 +5,11 @@ set(PROJECT_DESCRIPTION "Ion Torrent Torrent Server Virtual Machine")
 enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
-#include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/results/tsvm" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# Where to install - override with: -DION_TSVM_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_TSVM_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_TSVM_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 configure_file (
@@ -29,11 +28,11 @@ configure_file(${PROJECT_SOURCE_DIR}/private_key_rsa ${PROJECT_BINARY_DIR}/.priv
 
 install(
 	FILES "${PROJECT_SOURCE_DIR}/Vagrantfile"
-	DESTINATION ${ION_INSTALL_PREFIX}
+	DESTINATION ${ION_TSVM_PREFIX}
 )
 install(
 	FILES "${PROJECT_BINARY_DIR}/.private_key_rsa"
-	DESTINATION ${ION_INSTALL_PREFIX}
+	DESTINATION ${ION_TSVM_PREFIX}
 	PERMISSIONS OWNER_READ OWNER_WRITE
 )
 install(
@@ -46,12 +45,12 @@ install(
 	"${PROJECT_SOURCE_DIR}/tsvm-isvtenabled"
 	"${PROJECT_SOURCE_DIR}/tsvm-prepare"
 	"${PROJECT_SOURCE_DIR}/tsvm-enable-nfs-rule"
-	DESTINATION ${ION_INSTALL_PREFIX}
+	DESTINATION ${ION_TSVM_PREFIX}
 	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
 install(
 	FILES "${PROJECT_SOURCE_DIR}/../dbReports/iondb/bin/serialize_runs_to_json.py"
-	DESTINATION ${ION_INSTALL_PREFIX}
+	DESTINATION ${ION_TSVM_PREFIX}
 	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
 install(
@@ -62,13 +61,30 @@ install(
 
 set(CPACK_GENERATOR "DEB")
 
+find_program(LSB_RELEASE_COMMAND lsb_release)
+if(LSB_RELEASE_COMMAND)
+    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
+                    OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
+    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+endif(LSB_RELEASE_COMMAND)
+
+
 include(../buildTools/cmake/CMakeLists.cpack.txt)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS
-       "vagrant,
-        virtualbox-4.3 (>=4.3),
-        msr-tools,
-        dmidecode"
-    )
+if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+           "vagrant,
+            virtualbox-5.2 (>=5.2),
+            msr-tools,
+            dmidecode")
+else()
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+           "vagrant,
+            virtualbox-4.3 (>=4.3),
+            msr-tools,
+            dmidecode")
+endif()
 set(CPACK_PACKAGE_DESCRIPTION "This package configures the Ion Torrent Suite to download the Early Access Software version.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst

@@ -1,0 +1,29 @@
+# Should be /etc/systemd/system/celerybeat.service
+[Unit]
+Description=This service manages the periodic celery tasks for the Torrent Suite
+After=celeryd.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ion
+RuntimeDirectory=celerybeat
+Environment=DJANGO_SETTINGS_MODULE=iondb.settings
+Environment=CELERY_APP=iondb
+Environment=CELERY_BIN=/opt/ion/venv/bin/celery
+Environment=CELERY_LOG_DIR=/var/log/ion
+Environment=CELERY_RUN_DIR=/var/run/celerybeat
+Environment=CELERY_LOG_FILE=celerybeat.log
+Environment=CELERY_PID_FILE=celerybeat.pid
+Environment=CELERY_LOG_LEVEL=INFO
+
+ExecStart=/bin/sh -c '${CELERY_BIN} beat --pidfile="$CELERY_RUN_DIR/$CELERY_PID_FILE" \
+                                --logfile="$CELERY_LOG_DIR/$CELERY_LOG_FILE" \
+                                --loglevel="$CELERY_LOG_LEVEL" \
+                                --app="$CELERY_APP" \
+                                --schedule=$CELERY_RUN_DIR/celerybeat-schedule \
+                                --no-color'
+
+[Install]
+WantedBy=multi-user.target

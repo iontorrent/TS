@@ -11,6 +11,8 @@
 #include "WellsTab.h"
 #include "NoiseTab.h"
 #include "GainTab.h"
+#include "NumpyTab.h"
+#include "MicroscopeTab.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -33,6 +35,8 @@ class BfMaskTab;
 class NoiseTab;
 class GainTab;
 class WellsTab;
+class NumpyTab;
+class MicroscopeTab;
 
 //! [0]
 class Dialog : public QMainWindow //QDialog
@@ -44,17 +48,7 @@ public:
     int GetRawExpmt_Y(){return RawExpmt_Y;}
     int GetRawExpmt_X(){return RawExpmt_X;}
 
-private slots:
-    void about();
-    void browseDatDir();
-    void browseBfMaskDir();
-    void browseNoiseDir();
-    void browseGainDir();
-    void browseWellsDir();
-    void browseBamDir();
-    void currentChanged(int index);
-    void Clear();
-    void Save();
+
 
 private:
     void AutoCompletePaths();
@@ -74,12 +68,16 @@ private:
     NoiseTab *mNoiseTab;
     GainTab *mGainTab;
     AlignmentTab *mAlignmentTab;
+    NumpyTab *mNumpyTab;
+    MicroscopeTab *mMicroscopeTab;
     QString DatFileName="";
     QString BfMaskFileName="";
     QString NoiseFileName="";
     QString GainFileName="";
     QString WellsFileName="";
     QString BamFileName="";
+    QString NumpyFileName="";
+    QString MicroscopeFileName="";
 
     QAction *OpenDatAct=NULL;
     QAction *OpenBfMaskAct=NULL;
@@ -87,7 +85,23 @@ private:
     QAction *OpenGainAct=NULL;
     QAction *OpenWellsAct=NULL;
     QAction *OpenBamAct=NULL;
+    QAction *OpenNumpyAct=NULL;
+    QAction *OpenMicroscopeAct=NULL;
 
+    private slots:
+        void about();
+        void browseDatDir();
+        void browseBfMaskDir();
+        void browseNoiseDir();
+        void browseGainDir();
+        void browseWellsDir();
+        void browseBamDir();
+        void browseNumpyDir();
+        void browseMicroscopeDir();
+        void currentChanged(int index);
+        void Clear();
+        void Save();
+    	void fileNameChanged(QString fname);
 
 };
 //! [0]

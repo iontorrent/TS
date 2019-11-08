@@ -53,7 +53,7 @@ safety<-0.01
 gbscheme<-rgb(0,1:99/100,99:1/100)
 
 #do the fast pass on summary statistics
-for (iFlow in seq(0,maxFlows,by=sampleFlowsBy)){
+for (iFlow in c(seq(0, 11), seq(11,maxFlows,by=sampleFlowsBy))){
 	dat<-readDat(sprintf("%s/acq_%04d.dat",datDir,iFlow),returnWellSD=TRUE,returnSignal=FALSE,returnWellLag=TRUE)
 
 	dv<-dat$wellSD

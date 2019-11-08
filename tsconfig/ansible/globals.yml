@@ -1,44 +1,53 @@
 ---
 # file: globals.yml
-#Define the S5_virtual_guest variable
-- name:
-  stat: path=/etc/init.d/mountExternal
+
+
+# Define the S5_virtual_guest variable
+- name: checking for /etc/init.d/mountExternal
+  stat:
+    path: /etc/init.d/mountExternal
   register: p
 
 - name: set_fact S5_virtual_guest
   set_fact:
     S5_virtual_guest: "{{ p.stat.exists|bool }}"
 
-- debug: var=S5_virtual_guest
+# - debug: var=S5_virtual_guest
+
+
 
 # Test if this install is off a USB
 # Define temporary extension used by tsusb/runme script
-- stat: path=/etc/apt/TS_USB_INSTALLATION
+- stat:
+    path: /etc/apt/TS_USB_INSTALLATION
   register: result
-- name:
-  set_fact: FUNKYEXT=.backup.usb.hiding
+
+- name: set FUNKYEXT when using USB
+  set_fact:
+    FUNKYEXT: .backup.usb.hiding
   when: result.stat.exists|bool == True
 
+
+
 # Load the platform-specific variables, if the file exists
-- name:
+- name: checking for ansible_product_name under group_vars
   stat:
       path: "group_vars/{{ ansible_product_name }}"
   register: p
+
+# Account for situation where ansible_product_name is empty, i.e. VM
 - include_vars: "group_vars/{{ ansible_product_name }}"
   when: p.stat.exists and p.stat.isdir == False
+
 # ...if its a T630 S5 with >128G memory, load PowerEdge T630 v2
 - include_vars: "group_vars/PowerEdge T630 v2"
   when: ansible_product_name == "PowerEdge T630" and ansible_memtotal_mb|int > 130000
-# ...or if its an S5, load the S5 variables
+
+# ...or if its an S5 TSVM, load the S5 variables
 - include_vars: "group_vars/S5"
   when: S5_virtual_guest
 
-# set docker variables
-# include statement will be enabled by Dockerfile
-- name:
-  set_fact:
-      docker_image: false
-  #include: 'dockerparams.yml'
+
 
 # Define the default_interface
 # By design, it is first slot on the PCI network card for T7500 or first on-board NIC for all others
@@ -47,15 +56,38 @@
   set_fact:
       default_interface: "eth0"
   when: ansible_product_name == "Precision WorkStation T7500"
+
 - name: define the interface string for non-T7500
   set_fact:
       default_interface: "em1"
   when: ansible_product_name != "Precision WorkStation T7500"
+
 - name: set the default_interface
   set_fact:
       default_interface: "{{ ansible_default_ipv4.interface|default(default_interface) }}"
 
-- debug: var=default_interface
+# - debug: var=default_interface
+
+# Define the ability to run DHCP services
+- set_fact:
+    has_dhcp_nic: false
+
+- name: check for NIC for DHCP services and set has_dhcp_nic
+  set_fact:
+    has_dhcp_nic: true
+  when:
+    - "item.startswith('eth') or item.startswith('p') or item.startswith('ens') or item.startswith('enp')"
+    - "item != default_interface"
+  with_items: "{{ ansible_interfaces }}"
+
+# set false to "enable_dhcp" if enable_dhcp is originally set true and no available NIC to be used
+- name: set dhcp_capability
+  set_fact:
+    enable_dhcp: false
+  when:
+    - enable_dhcp|bool == true
+    - has_dhcp_nic|bool == false
+
 
 
 # check if fields for static IP exits
@@ -68,8 +100,6 @@
       - static_nm|default(None) == None
       - static_gw|default(None) == None
 
-- debug: var=STATIC_IP
-
 - name: check tap interface static ip fields
   set_fact:
       TAP_STATIC_IP: false
@@ -79,12 +109,16 @@
       - tap_static_nm|default(None) == None
       - tap_static_gw|default(None) == None
 
-- debug: var=TAP_STATIC_IP
+# - debug: var=STATIC_IP
+# - debug: var=TAP_STATIC_IP
+
+
 
 # Define CIDR variable needed when exporting directories via /etc/exports
 # Default netmask is needed when current network settings are unavailable
 - name: Determine CIDR from network netmask
-  cidr: netmask={{ ansible_default_ipv4.netmask|default("255.255.0.0") }}
+  cidr:
+    netmask: '{{ ansible_default_ipv4.netmask|default("255.255.0.0") }}'
   register: cidr_response
   ignore_errors: yes
 
@@ -97,5 +131,18 @@
 
 # setup the spool directory
 - name: Create the ion spool directory
-  file: path=/var/spool/ion owner=www-data group=www-data mode=0775 state=directory
+  file:
+    path: /var/spool/ion
+    owner: www-data
+    group: www-data
+    mode: 0775
+    state: directory
 
+
+
+# set docker variables
+# include statement will be enabled by Dockerfile
+- name:
+  set_fact:
+      docker_image: false
+  #include: 'dockerparams.yml'

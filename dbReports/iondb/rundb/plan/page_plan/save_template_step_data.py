@@ -1,36 +1,43 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+from django.utils.translation import ugettext as _
 from django.core.urlresolvers import reverse
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.plan.page_plan.step_names import StepNames
-from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_QC
+from iondb.rundb.plan.plan_validator import (
+    validate_plan_name,
+    validate_notes,
+    validate_QC,
+)
 
 from iondb.rundb.models import QCType
+from iondb.rundb.labels import (
+    ModelsQcTypeToLabelsQcTypeAsDict,
+    ModelsQcTypeToLabelsQcType,
+)
 
-try:
-    from collections import OrderedDict
-except ImportError:
-    from ordereddict import OrderedDict
+from collections import OrderedDict
 
 import logging
+
+
 logger = logging.getLogger(__name__)
 
 
-class SaveTemplateStepDataFieldNames():
+class SaveTemplateStepDataFieldNames:
     RESOURCE_PATH = "rundb/plan/page_plan/page_plan_save_template.html"
-    TEMPLATE_NAME = "templateName";
-    SET_AS_FAVORITE = "setAsFavorite";
-    NOTE = "note";
+    TEMPLATE_NAME = "templateName"
+    SET_AS_FAVORITE = "setAsFavorite"
+    NOTE = "note"
 
-    LIMS_META = 'LIMS_meta'
-    META = 'meta'
+    LIMS_META = "LIMS_meta"
+    META = "meta"
 
 
-class MonitoringFieldNames():
-    QC_TYPES = 'qcTypes'
+class MonitoringFieldNames:
+    QC_TYPES = "qcTypes"
 
 
 class SaveTemplateStepData(AbstractStepData):
-
     def __init__(self, sh_type):
         super(SaveTemplateStepData, self).__init__(sh_type)
         self.resourcePath = SaveTemplateStepDataFieldNames.RESOURCE_PATH
@@ -50,7 +57,8 @@ class SaveTemplateStepData(AbstractStepData):
 
         # Monitoring
         self.qcNames = []
-        all_qc_types = list(QCType.objects.all().order_by('qcName'))
+        self.ModelsQcTypeToLabelsQcTypeAsDict = ModelsQcTypeToLabelsQcTypeAsDict
+        all_qc_types = list(QCType.objects.all().order_by("qcName"))
         self.prepopulatedFields[MonitoringFieldNames.QC_TYPES] = all_qc_types
         for qc_type in all_qc_types:
             self.savedFields[qc_type.qcName] = qc_type.defaultThreshold
@@ -60,22 +68,30 @@ class SaveTemplateStepData(AbstractStepData):
         self.validationErrors.pop(field_name, None)
 
         if field_name == SaveTemplateStepDataFieldNames.TEMPLATE_NAME:
-            errors = validate_plan_name(new_field_value, 'Template Name')
+            errors = validate_plan_name(
+                new_field_value,
+                field_label=_("workflow.step.savetemplate.fields.templateName.label"),
+            )  #'Template Name'
             if errors:
-                self.validationErrors[field_name] = '\n'.join(errors)
+                self.validationErrors[field_name] = "\n".join(errors)
         elif field_name == SaveTemplateStepDataFieldNames.NOTE:
-            errors = validate_notes(new_field_value)
+            errors = validate_notes(
+                new_field_value,
+                field_label=_("workflow.step.savetemplate.fields.note.label"),
+            )
             if errors:
-                self.validationErrors[field_name] = '\n'.join(errors)
+                self.validationErrors[field_name] = "\n".join(errors)
 
         # validate all qc thresholds must be positive integers
         elif field_name in self.qcNames:
-            errors = validate_QC(new_field_value, field_name)
+            errors = validate_QC(
+                new_field_value, ModelsQcTypeToLabelsQcType(field_name)
+            )
             if errors:
                 self.validationErrors[field_name] = errors[0]
 
         else:
-            for section, sectionObj in self.step_sections.items():
+            for section, sectionObj in list(self.step_sections.items()):
                 self.validationErrors.pop(field_name, None)
 
     def getStepName(self):

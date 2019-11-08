@@ -8,7 +8,7 @@ def textToDict(text):
     pkDict = {}
     # Get Headings for Process Params
     for line in text:
-        if '=' in line:
+        if "=" in line:
             try:
                 parsline = line.strip().split("=")
                 key = parsline[0].strip()
@@ -25,13 +25,14 @@ def fileToDict(fileIn):
     if not os.path.exists(fileIn):
         return None
 
-    f = open(fileIn, 'r')
+    f = open(fileIn, "r")
     text = f.readlines()
     f.close()
     pkDict = textToDict(text)
     return pkDict
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     pkDict = fileToDict(sys.argv[1])
-    print pkDict
+    print(pkDict)

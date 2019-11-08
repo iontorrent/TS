@@ -1,6 +1,6 @@
 $(function() {//DOM ready handler
 
-    jQuery.fn.uniform.language.required = '%s is required';
+    jQuery.fn.uniform.language.required = gettext('uni-form-validation.language.required');
     var $form = $('#contacts_form');
 
     $form.uniform({

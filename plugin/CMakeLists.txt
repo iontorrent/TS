@@ -28,6 +28,7 @@ coverageAnalysis
 immuneResponseRNA
 sampleID
 variantCaller
+molecularCoverageAnalysis
 )
 
 FOREACH(PLUGIN_DIR ${PLUGIN_DIRS})

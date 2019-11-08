@@ -2,7 +2,7 @@
 
 function onDataBinding(arg) {
 	//20130707-TODO-the busy cursor neds to be shown earlier!!
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     $('body').prepend(busyDiv);
 
 }
@@ -27,7 +27,7 @@ function bindActions(source) {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -48,7 +48,7 @@ function bindActions(source) {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -67,7 +67,7 @@ function bindActions(source) {
         e.preventDefault();
         
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -88,7 +88,7 @@ function bindActions(source) {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -110,11 +110,10 @@ $(document).ready(function() {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
-        //url = $(this).attr('href');
-        url = "/sample/sampleattribute/add/"    
+        url = $(this).attr('href');
             
         $('body #modal_add_attribute_popup').remove();
         $.get(url, function(data) {
@@ -131,7 +130,7 @@ $(document).ready(function() {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -142,20 +141,21 @@ $(document).ready(function() {
         });
     });
 
-    
     var checked_ids = [];
+    var urlRead = $("#samplesetitem_attribute_grid").data('urlRead');
+    var urlUpdate = $("#samplesetitem_attribute_grid").data('urlUpdate');
     var grid = $("#samplesetitem_attribute_grid").kendoGrid({
         dataSource : {
             type : "json",
             transport : {
                 read : {
-                    url : "/rundb/api/v1/sampleattribute/?order_by=-lastModifiedDate",
+                    url : urlRead,
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
                 },
                 update : {
-                    url : "/rundb/api/v1/sampleattribute/?order_by=-lastModifiedDate",
+                    url : urlUpdate,
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
@@ -226,33 +226,33 @@ $(document).ready(function() {
 		dataBound : onDataBound,        
         columns : [{
             field : "displayedName",
-            title : "Attribute Name"
+            title : gettext('samplesets.SampleAttribute.fields.displayedName.label'), //"Attribute Name"
 //            sortable : true
             // template: "<a href='/data/project/${id}/results'>${name}</a>"
         }, {
         	field : "description",
-        	title : "Description"
+        	title : gettext('samplesets.SampleAttribute.fields.description.label'), //"Description"
         }, {
         	field : "dataType_name",
-        	title: "Data Type",
-    	    template : kendo.template($("#SampleAttributeDataTypeColumnTemplate").html())
+        	title: gettext('samplesets.SampleAttribute.fields.dataType_name.label'), //"Data Type",
+    	    template : "#= data.dataType_name #"
         }, {
         	field : "isMandatory",
-        	title: "Required",
+        	title: gettext('samplesets.SampleAttribute.fields.isMandatory.label'), //"Required",
 //            sortable : false,        	       	
         	template : kendo.template($("#IsMandatoryColumnTemplate").html())
         }, {
         	field : "isActive",
-        	title: "To Show",
+        	title: gettext('samplesets.SampleAttribute.fields.isActive.label'), //"To Show",
 //            sortable : false,        	
         	template : kendo.template($("#IsActiveColumnTemplate").html())
         }, {
         	field : "sampleCount",
-        	title: "# Samples",
+        	title: gettext('samplesets.SampleAttribute.fields.sampleCount.label'), //"# Samples",
 //            sortable : false,        	       		        		
         }, {
             field : "lastModifiedDate",
-            title : "Date",
+            title : gettext('samplesets.SampleAttribute.fields.lastModifiedDate.label'), //"Date",
 //            sortable : false,
             template : '#= kendo.toString(new Date(Date.parse(lastModifiedDate)),"yyyy/MM/dd hh:mm tt") #'  		
         }, {        	
@@ -269,22 +269,3 @@ $(document).ready(function() {
 	});
   
 }); 
-
-
-
-function sampleAttributeDataTypeDropDownSelector(container, options) {
-	var selectionUrl = "/rundb/api/v1/sampleattributedatatype/?isActive=True&order_by=displayedName";
-                
-	$('<input required data-text-field="datatype"  data-value-field="id"  data-bind="value:' + options.field + '"/>')
-		.appendTo(container)
-		.kendoDropDownList({
-			autoBind : false,
-			dataSource : "json",
-			transport : {
-                url : selectionUrl,
-                contentType : 'application/json; charset=utf-8',
-                type : 'GET',
-                dataType : 'json'
-			}
-		});
-}

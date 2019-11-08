@@ -1,5 +1,6 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <style type="text/css">
 table {
@@ -15,73 +16,91 @@ table {
 {% endblock extra_head %}
 {% block content %}
 
+<script id="UploadPlansForTemplateFailureTemplate" type="text/x-kendo-template">
+    <div class='alert alert-info'>{% trans "global.messages.error.file.upload" %}</div>
+</script>
+
 <div id="modal_batch_planning_upload" title="" class="modal modal-900 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3 id="modal_batch_plan_title">Upload Plan Runs</h3>
+        <h3 id="modal_batch_plan_title">{% trans "upload_plans_for_template.title" %}</h3>
     </div>
     <div class="modal-body" style="max-height: 480px;">
         <div id="modal-success-messages" class="alert alert-success hide"></div>
         <div id="modal-error-messages" class="alert alert-error hide"></div>
         <form class="form-horizontal" id="modalBatchPlanningUpload" method="POST" action="{% url "save_uploaded_plans_for_template" %}" enctype="multipart/form-data" style="margin-bottom: 0px;">
             <div class="control-group">
-                <label for="postedfile" class="control-label">Plan CSV or ZIP File</label>
+                <label for="postedfile" class="control-label">{% trans "upload_plans_for_template.fields.postedfile.label" %}</label>
                 <div class="controls">
-                    <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required" accept=".zip, .csv">
+                    <div class="fileupload fileupload-new" data-provides="fileupload"><input type="hidden">
+                        <div class="input-append">
+                          <div class="uneditable-input span4"><i class="icon-file fileupload-exists"></i><span class="fileupload-preview" style=""></span></div>
+                          <span class="btn btn-file">
+                              <span class="fileupload-new">{% trans "upload_plans_for_template.fields.file.select" %}</span>
+                              <span class="fileupload-exists">{% trans "upload_plans_for_template.fields.file.change" %}</span>
+                              <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required" accept=".zip, .csv" title="{% trans "upload_plans_for_template.fields.file.select" %}">
+                          </span>
+                          <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">{% trans "upload_plans_for_template.fields.file.unselect" %}</a>
+                        </div>
+                    </div>
+                    <p class="help-block">{% trans "upload_plans_for_template.fields.postedfile.helptext" %}</p>
                     <p class="help-block error"></p>
                 </div>
             </div>
         </form>
         <div class="help-block">
-            <font size="5">&#9758;</font>Tips:
-                <ul>
-                    <li>To Download the non-barcoded(single CSV) or barcoded(zip bundle) plans:
-                        <ul>
-                            <li>Go to respective Application</li>
-                            <li>Click the Gear button which is located on the right most side of the respective template</li>
-                            <li>Click Plan Multiple</li>
-                            <li>Enter no of plans to create</li>
-                            <li>Click Download CSV for batch planning</li>
-                        </ul>
-                    </li>
-                </ul>
+            {% trans "upload_plans_for_template.instructions.1" %}
+{#            <font size="5">&#9758;</font> Tips:#}
+{#            <ul>#}
+{#                <li>To Download the non-barcoded(single CSV) or barcoded(zip bundle) plans:#}
+{#                    <ul>#}
+{#                        <li>Go to respective Application</li>#}
+{#                        <li>Click the Gear button which is located on the right most side of the respective template</li>#}
+{#                        <li>Click Plan Multiple</li>#}
+{#                        <li>Enter no of plans to create</li>#}
+{#                        <li>Click Download CSV for batch planning</li>#}
+{#                    </ul>#}
+{#                </li>#}
+{#            </ul>#}
         </div>
         <div class="help-block">
-            <ul>
-                <li>Plan values not included in the CSV file will default to values of the template you are planning from</li>
-                <li>To associate a Plan with multiple Plugins or Projects,
-                <ul>
-                    <li>use "<b>;</b>" as the separator</li>
-                    <li>Example: My Project1; My Project2</li>
-                </ul></li>
-                <li>When configuring the IR Account, specify only the Name (Display Name) of the IR account which is configured in Torrent Suite</li>
-            </ul>
+            {% trans "upload_plans_for_template.instructions.2" %}
+{#            <ul>#}
+{#                <li>Plan values not included in the CSV file will default to values of the template you are planning from</li>#}
+{#                <li>To associate a Plan with multiple Plugins or Projects,#}
+{#                <ul>#}
+{#                    <li>use "<b>;</b>" as the separator</li>#}
+{#                    <li>Example: My Project1; My Project2</li>#}
+{#                </ul></li>#}
+{#                <li>When configuring the IR Account, specify only the Name (Display Name) of the IR account which is configured in Torrent Suite</li>#}
+{#            </ul>#}
         </div>
         <div class="help-block">
-            <font size="5">&#9758;</font>Tips for barcoded planning with single CSV file:
-            <ul>
-                <li>To specify both sample name and sample ID during barcoded planning,
-                    <ul>
-                        <li>use "<b>;</b>" as the separator and "<b>ID:</b>" as the sample ID key</li>
-                        <li>Example: sample 1;ID:ext 1</li>
-                    </ul>
-                </li>
-                <li>To specify reference and/or BED files per barcoded sample during barcoded planning,
-                    <ul>
-                        <li>use "<b>;</b>" as the separator</li>
-                        <li>use "<b>REF:</b>" as the reference key, "<b>TARGET:</b> as the target region BED file key, "<b>HOTSPOT:</b>" as the HotSpot BED file key</li>
-                        <li>Example: sample 1; REF:hg19; TARGET:/hg19/unmerged/detail/target.bed; HOTSPOT:/hg19/unmerged/detail/hotspots.bed</li>
-                    </ul>
-                </li>
-                <li>For DNA and Fusions barcoded planning,
-                    <ul>
-                        <li>use "<b>;</b>" as the separator, "<b>TYPE:</b>" as the Nucleotide Type key. </li>
-                        <li>use "<b>RNA REF:</b>" and "<b>RNA TARGET:</b>" as the keys to specify RNA reference or RNA target regions BED file different from the template defaults</li>
-                        <li>Example: sample 1;ID:ext 1;TYPE:DNA</li>
-                        <li>Example: sample 1;ID:ext 1;TYPE:RNA;RNA REF:hg19_RNA;RNA TARGET:/hg19_RNA/unmerged/detail/BRCA.designed.bed</li>
-                    </ul>
-                </li>
-            </ul>
+            {% trans "upload_plans_for_template.instructions.3" %}
+{#            <font size="5">&#9758;</font>Tips for barcoded planning with single CSV file:#}
+{#            <ul>#}
+{#                <li>To specify both sample name and sample ID during barcoded planning,#}
+{#                    <ul>#}
+{#                        <li>use "<b>;</b>" as the separator and "<b>ID:</b>" as the sample ID key</li>#}
+{#                        <li>Example: sample 1;ID:ext 1</li>#}
+{#                    </ul>#}
+{#                </li>#}
+{#                <li>To specify reference and/or BED files per barcoded sample during barcoded planning,#}
+{#                    <ul>#}
+{#                        <li>use "<b>;</b>" as the separator</li>#}
+{#                        <li>use "<b>REF:</b>" as the reference key, "<b>TARGET:</b> as the target region BED file key, "<b>HOTSPOT:</b>" as the HotSpot BED file key</li>#}
+{#                        <li>Example: sample 1; REF:hg19; TARGET:/hg19/unmerged/detail/target.bed; HOTSPOT:/hg19/unmerged/detail/hotspots.bed</li>#}
+{#                    </ul>#}
+{#                </li>#}
+{#                <li>For DNA and Fusions barcoded planning,#}
+{#                    <ul>#}
+{#                        <li>use "<b>;</b>" as the separator, "<b>TYPE:</b>" as the Nucleotide Type key. </li>#}
+{#                        <li>use "<b>RNA REF:</b>" and "<b>RNA TARGET:</b>" as the keys to specify RNA reference or RNA target regions BED file different from the template defaults</li>#}
+{#                        <li>Example: sample 1;ID:ext 1;TYPE:DNA</li>#}
+{#                        <li>Example: sample 1;ID:ext 1;TYPE:RNA;RNA REF:hg19_RNA;RNA TARGET:/hg19_RNA/unmerged/detail/BRCA.designed.bed</li>#}
+{#                    </ul>#}
+{#                </li>#}
+{#            </ul>#}
         </div>
 
         <div class="bump">
@@ -91,13 +110,14 @@ table {
         </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" id="dismissUpload" data-dismiss="modal">Cancel</a>
-        <a href="#" id="submitUpload" class="btn btn-primary submitUpload" >Upload CSV for batch planning</a>
+        <a class="btn" href="#" id="dismissUpload" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a href="#" id="submitUpload" class="btn btn-primary submitUpload" >{% trans "upload_plans_for_template.action.submit" %}</a>
     </div>
 </div>
 
 <script type="text/javascript">
-TB.plan.batchupload.ready("{% url "planned" %}");</script>
+TB.plan.batchupload.ready("{% url "planned" %}", "{{ KEY_BARCODED_SAMPLES_VALIDATION_ERRORS }}", "{{ KEY_SAMPLE_CSV_FILE_NAME }}", "{{ KEY_IRU_VALIDATION_ERRORS }}");
+</script>
 </div>
 {% endblock %}
 

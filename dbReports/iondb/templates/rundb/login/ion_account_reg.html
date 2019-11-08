@@ -1,16 +1,28 @@
 {% extends "rundb/common/base.html" %}
-
+{% load i18n %}
 {% block content %}
 
-<h3>New User Registration</h3>
-{% for error in form.errors %}
-<p>{{ error }}</p>
-{% endfor %}
-
+<h3>{% trans "signup.title" %}</h3>
+{#{% for error in form.errors %}#}
+{#<p>{{ error }}</p>#}
+{#{% endfor %}#}
+<style>
+p label {
+    font-weight: bold;
+}
+p span.helptext {
+    display: block;
+}
+.errorlist li {
+  color: #b94a48;
+  background-color: #f2dede;
+  border-color: #eed3d7;
+}
+</style>
 <form method="post" action="">
 {% csrf_token %}
 {{ form.as_p }}
-<input type="submit" value="Submit"/>
+<input type="submit" value="{% trans "signup.action.submit.label" %}"/>
 </form>
 
 {% endblock content %}

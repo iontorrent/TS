@@ -18,6 +18,7 @@ from iondb.plugins.launch_utils import get_plugins_dict
 from iondb.rundb.data import dmactions_types
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,29 +27,51 @@ def createReport_and_launch(exp, eas, resultsName, **kwargs):
     Create result and send to the job server.
     Re-analyze page and crawler POST both end up here.
     """
-    blockArgs = kwargs.get('blockArgs', 'fromRaw')
-    doThumbnail = kwargs.get('do_thumbnail', False)
-    username = kwargs.get('username', '')
-    plugins_list = kwargs.get('plugins', [])
+    blockArgs = kwargs.get("blockArgs", "fromRaw")
+    doThumbnail = kwargs.get("do_thumbnail", False)
+    username = kwargs.get("username", "")
+    plugins_list = kwargs.get("plugins", [])
 
-    if blockArgs == 'fromWells':
-        previousReport = kwargs.get('previousThumbReport', '') if doThumbnail else kwargs.get('previousReport', '')
+    if blockArgs == "fromWells":
+        previousReport = (
+            kwargs.get("previousThumbReport", "")
+            if doThumbnail
+            else kwargs.get("previousReport", "")
+        )
     else:
-        previousReport = ''
+        previousReport = ""
 
     result = _createReport(exp, eas, resultsName, doThumbnail, previousReport)
 
     try:
-        dmactions_type = dmactions_types.BASE if blockArgs == "fromWells" else dmactions_types.SIG
+        dmactions_type = (
+            dmactions_types.BASE if blockArgs == "fromWells" else dmactions_types.SIG
+        )
         dmfilestat = result.get_filestat(dmactions_type)
 
-        pathToData, previousReport = find_data_files(exp, dmfilestat, doThumbnail, previousReport)
+        pathToData, previousReport = find_data_files(
+            exp, dmfilestat, doThumbnail, previousReport
+        )
 
-        msg = 'Started from %s %s %s.' % (dmfilestat.get_action_state_display(), dmactions_type, previousReport or pathToData)
+        msg = "Started from %s %s %s." % (
+            dmfilestat.get_action_state_display(),
+            dmactions_type,
+            previousReport or pathToData,
+        )
         models.EventLog.objects.add_entry(result, msg, username)
 
         # create params
-        params = makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousReport, plugins_list, username)
+        params = makeParams(
+            exp,
+            eas,
+            result,
+            blockArgs,
+            doThumbnail,
+            pathToData,
+            previousReport,
+            plugins_list,
+            username,
+        )
         params = json.dumps(params, cls=DjangoJSONEncoder, indent=1)
 
         logger.debug("Start Analysis on %s" % exp.expDir)
@@ -64,7 +87,7 @@ def createReport_and_launch(exp, eas, resultsName, **kwargs):
 
 
 def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
-    ''' create Result and related objects '''
+    """ create Result and related objects """
 
     loc = exp.location()
     if not loc:
@@ -95,16 +118,20 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
 
             # attach project(s)
             projectNames = get_project_names(exp)
-            for name in projectNames.split(','):
+            for name in projectNames.split(","):
                 if name:
                     try:
                         p = models.Project.objects.get(name=name)
                     except models.Project.DoesNotExist:
                         p = models.Project()
                         p.name = name
-                        p.creator = models.User.objects.get(username='ionadmin')
+                        p.creator = models.User.objects.get(username="ionadmin")
                         p.save()
-                        models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, 'ionadmin')
+                        models.EventLog.objects.add_entry(
+                            p,
+                            "Created project name= %s during report creation." % p.name,
+                            "ionadmin",
+                        )
                     result.projects.add(p)
 
             result.save()
@@ -113,13 +140,15 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
             if previousReport:
                 parent_obj = None
                 try:
-                    selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
+                    selected_previous_pk = int(previousReport.strip("/").split("_")[-1])
                     parent_obj = models.Results.objects.get(pk=selected_previous_pk)
-                except:
+                except Exception:
                     # TorrentSuiteCloud plugin 3.4.2 uses reportName for this value
                     try:
-                        parent_obj = models.Results.objects.get(resultsName=os.path.basename(previousReport))
-                    except:
+                        parent_obj = models.Results.objects.get(
+                            resultsName=os.path.basename(previousReport)
+                        )
+                    except Exception:
                         pass
 
                 if parent_obj:
@@ -127,7 +156,9 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
                     result.save()
                     # replace dmfilestat
                     dmfilestat = parent_obj.get_filestat(dmactions_types.BASE)
-                    result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
+                    result.dmfilestat_set.filter(
+                        dmfileset__type=dmactions_types.BASE
+                    ).delete()
                     dmfilestat.pk = None
                     dmfilestat.result = result
                     dmfilestat.save()
@@ -139,18 +170,21 @@ def _createReport(exp, eas, resultsName, doThumbnail, previousReport):
         raise
 
 
-def find_data_files(exp, dmfilestat, doThumbnail, previousReport=''):
+def find_data_files(exp, dmfilestat, doThumbnail, previousReport=""):
 
     pathToData = os.path.join(exp.expDir)
     if doThumbnail:
-        pathToData = os.path.join(pathToData, 'thumbnail')
+        pathToData = os.path.join(pathToData, "thumbnail")
 
     # Determine if data has been archived or deleted
     if dmfilestat:
         dmactions_type = dmfilestat.dmfileset.type
-        if dmfilestat.action_state in ['DG', 'DD']:
-            raise Exception("Analysis cannot start because %s data has been deleted." % dmactions_type)
-        elif dmfilestat.action_state in ['AG', 'AD']:
+        if dmfilestat.action_state in ["DG", "DD"]:
+            raise Exception(
+                "Analysis cannot start because %s data has been deleted."
+                % dmactions_type
+            )
+        elif dmfilestat.action_state in ["AG", "AD"]:
             # replace paths with archived locations
             try:
                 datfiles = os.listdir(dmfilestat.archivepath)
@@ -158,43 +192,52 @@ def find_data_files(exp, dmfilestat, doThumbnail, previousReport=''):
                 if dmactions_type == dmactions_types.SIG:
                     pathToData = dmfilestat.archivepath
                     if doThumbnail:
-                        pathToData = os.path.join(pathToData, 'thumbnail')
+                        pathToData = os.path.join(pathToData, "thumbnail")
                 elif dmactions_type == dmactions_types.BASE:
                     previousReport = dmfilestat.archivepath
                     # on-instrument analysis Basecalling Input data is in onboard_results folder
-                    if exp.log.get('oninstranalysis', '') == "yes" and not doThumbnail:
-                        archived_onboard_path = os.path.join(dmfilestat.archivepath, 'onboard_results')
+                    if exp.log.get("oninstranalysis", "") == "yes" and not doThumbnail:
+                        archived_onboard_path = os.path.join(
+                            dmfilestat.archivepath, "onboard_results"
+                        )
                         if os.path.exists(archived_onboard_path):
                             previousReport = archived_onboard_path
-            except:
+            except Exception:
                 logger.error(traceback.format_exc())
-                raise Exception("Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
-                                % (dmactions_type, dmfilestat.archivepath))
+                raise Exception(
+                    "Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
+                    % (dmactions_type, dmfilestat.archivepath)
+                )
     else:
-        raise Exception("Analysis cannot start because DMFileStat objects refuse to instantiate.  Please know its not your fault!")
+        raise Exception(
+            "Analysis cannot start because DMFileStat objects refuse to instantiate.  Please know its not your fault!"
+        )
 
     # check data input folder exists
     if previousReport:
-        data_input_folder = os.path.join(previousReport, 'sigproc_results')
+        data_input_folder = os.path.join(previousReport, "sigproc_results")
     else:
         data_input_folder = pathToData
 
     if not os.path.exists(data_input_folder):
-        raise Exception("Analysis cannot start because data folder is missing: %s" % data_input_folder)
+        raise Exception(
+            "Analysis cannot start because data folder is missing: %s"
+            % data_input_folder
+        )
 
     return pathToData, previousReport
 
 
 def launch_analysis_job(result, params, doThumbnail):
-    ''' Create files and send to jobServer '''
+    """ Create files and send to jobServer """
 
     def create_tf_conf():
         """
         Build the contents of the report TF file (``DefaultTFs.conf``)
         """
         fname = "DefaultTFs.conf"
-        tfs = models.Template.objects.filter(isofficial=True).order_by('name')
-        lines = ["%s,%s,%s" % (tf.name, tf.key, tf.sequence,) for tf in tfs]
+        tfs = models.Template.objects.filter(isofficial=True).order_by("name")
+        lines = ["%s,%s,%s" % (tf.name, tf.key, tf.sequence) for tf in tfs]
 
         return (fname, "\n".join(lines))
 
@@ -212,7 +255,18 @@ def launch_analysis_job(result, params, doThumbnail):
         db_barcodes = models.dnaBarcode.objects.filter(name=barcodeId).order_by("index")
         lines = []
         for db_barcode in db_barcodes:
-            lines.append('barcode %d,%s,%s,%s,%s,%s,%d' % (db_barcode.index, db_barcode.id_str, db_barcode.sequence, db_barcode.adapter, db_barcode.annotation, db_barcode.type, db_barcode.length))
+            lines.append(
+                "barcode %d,%s,%s,%s,%s,%s,%d"
+                % (
+                    db_barcode.index,
+                    db_barcode.id_str,
+                    db_barcode.sequence,
+                    db_barcode.adapter,
+                    db_barcode.annotation,
+                    db_barcode.type,
+                    db_barcode.length,
+                )
+            )
         if db_barcodes:
             lines.insert(0, "file_id %s" % db_barcodes[0].name)
             lines.insert(1, "score_mode %s" % str(db_barcodes[0].score_mode))
@@ -228,48 +282,53 @@ def launch_analysis_job(result, params, doThumbnail):
 
     def create_meta(experiment, result):
         """Build the contents of a report metadata file (``expMeta.dat``)."""
+
         def get_chipcheck_status(exp):
             """
             Load the explog stored in the log field in the experiment
             table into a python dict.  Check if `calibratepassed` is set
             """
             data = exp.log
-            if data.get('calibratepassed', 'Not Found'):
-                return 'Passed'
+            if data.get("calibratepassed", "Not Found"):
+                return "Passed"
             else:
-                return 'Failed'
+                return "Failed"
 
-        lines = ("Run Name = %s" % experiment.expName,
-                 "Run Date = %s" % experiment.date,
-                 "Run Flows = %s" % experiment.flows,
-                 "Project = %s" % ','.join(p.name for p in result.projects.all()),
-                 "Sample = %s" % experiment.get_sample(),
-                 "Library = N/A",
-                 "Reference = %s" % result.eas.reference,
-                 "Instrument = %s" % experiment.pgmName,
-                 "Flow Order = %s" % (experiment.flowsInOrder.strip() if experiment.flowsInOrder.strip() != '0' else 'TACG'),
-                 "Library Key = %s" % result.eas.libraryKey,
-                 "TF Key = %s" % result.eas.tfKey,
-                 "Chip Check = %s" % get_chipcheck_status(experiment),
-                 "Chip Type = %s" % experiment.chipType,
-                 "Chip Data = %s" % experiment.rawdatastyle,
-                 "Notes = %s" % experiment.notes,
-                 "Barcode Set = %s" % result.eas.barcodeKitName,
-                 "End Barcode Set = %s" % result.eas.endBarcodeKitName,
-                 "Analysis Name = %s" % result.resultsName,
-                 "Analysis Date = %s" % date.today(),
-                 "Analysis Flows = %s" % result.processedflows,
-                 "runID = %s" % result.runid,
-                 )
+        lines = (
+            "Run Name = %s" % experiment.expName,
+            "Run Date = %s" % experiment.date,
+            "Run Flows = %s" % experiment.flows,
+            "Project = %s" % ",".join(p.name for p in result.projects.all()),
+            "Sample = %s" % experiment.get_sample(),
+            "Library = N/A",
+            "Reference = %s" % result.eas.reference,
+            "Instrument = %s" % experiment.pgmName,
+            "Flow Order = %s"
+            % (
+                experiment.flowsInOrder.strip()
+                if experiment.flowsInOrder.strip() != "0"
+                else "TACG"
+            ),
+            "Library Key = %s" % result.eas.libraryKey,
+            "TF Key = %s" % result.eas.tfKey,
+            "Chip Check = %s" % get_chipcheck_status(experiment),
+            "Chip Type = %s" % experiment.chipType,
+            "Chip Data = %s" % experiment.rawdatastyle,
+            "Notes = %s" % experiment.notes,
+            "Barcode Set = %s" % result.eas.barcodeKitName,
+            "End Barcode Set = %s" % result.eas.endBarcodeKitName,
+            "Analysis Name = %s" % result.resultsName,
+            "Analysis Date = %s" % date.today(),
+            "Analysis Flows = %s" % result.processedflows,
+            "runID = %s" % result.runid,
+        )
 
-        return ('expMeta.dat', '\n'.join(lines))
+        return ("expMeta.dat", "\n".join(lines))
 
     # Default control script definition
-    scriptname = 'TLScript.py'
+    from ion import pipelineScriptPath
 
-    from distutils.sysconfig import get_python_lib;
-    python_lib_path = get_python_lib()
-    scriptpath = os.path.join(python_lib_path, 'ion/reports', scriptname)
+    scriptpath = os.path.join(pipelineScriptPath, "TLScript.py")
     try:
         with open(scriptpath, "r") as f:
             script = f.read()
@@ -287,7 +346,7 @@ def launch_analysis_job(result, params, doThumbnail):
 
     # the following files will be written into result's directory
     files = []
-    files.append(create_tf_conf())          # DefaultTFs.conf
+    files.append(create_tf_conf())  # DefaultTFs.conf
     files.append(create_meta(result.experiment, result))  # expMeta.dat
     files.append(create_pk_conf(result.pk))  # primary.key
     # barcodeList.txt
@@ -302,19 +361,38 @@ def launch_analysis_job(result, params, doThumbnail):
 
     try:
         chips = models.Chip.objects.all()
-        chip_dict = dict((c.name, '-pe ion_pe %s' % str(c.slots)) for c in chips)
-    except:
+        chip_dict = dict((c.name, "-pe ion_pe %s" % str(c.slots)) for c in chips)
+    except Exception:
         chip_dict = {}  # just in case we can't read from the db
 
     try:
-        ts_job_type = 'thumbnail' if doThumbnail else ''
-        conn.startanalysis(result.resultsName, script, params, files,
-                           webRootPath, result.pk, result.experiment.chipType, chip_dict, ts_job_type)
+        ts_job_type = "thumbnail" if doThumbnail else ""
+        conn.startanalysis(
+            result.resultsName,
+            script,
+            params,
+            files,
+            webRootPath,
+            result.pk,
+            result.experiment.chipType,
+            chip_dict,
+            ts_job_type,
+        )
     except (socket.error, xmlrpclib.Fault):
         raise Exception("Failed to contact job server.")
 
 
-def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousReport='', plugins_list=[], username=''):
+def makeParams(
+    exp,
+    eas,
+    result,
+    blockArgs,
+    doThumbnail,
+    pathToData,
+    previousReport="",
+    plugins_list=[],
+    username="",
+):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
     will need to be run must be constructed here and included inside the return.
@@ -336,7 +414,7 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
     # floworder field sometimes has whitespace appended (?)  So strip it off
     flowOrder = exp.flowsInOrder.strip()
     # Set the default flow order if its not stored in the dbase.  Legacy support
-    if flowOrder == '0' or flowOrder == None or flowOrder == '':
+    if flowOrder == "0" or flowOrder == None or flowOrder == "":
         flowOrder = "TACG"
 
     # Experiment
@@ -345,21 +423,27 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
     # ExperimentAnalysisSettings
     eas_json = model_to_dict(eas)
     # remove selectedPlugins, it's duplicated in the plugins dict
-    del eas_json['selectedPlugins']
+    del eas_json["selectedPlugins"]
 
     # Get the 3' adapter primer
     try:
-        threePrimeadapter = models.ThreePrimeadapter.objects.filter(sequence=eas.threePrimeAdapter)
+        threePrimeadapter = models.ThreePrimeadapter.objects.filter(
+            sequence=eas.threePrimeAdapter
+        )
         if threePrimeadapter:
             threePrimeadapter = threePrimeadapter[0]
         else:
-            threePrimeadapter = models.ThreePrimeadapter.objects.get(direction="Forward", isDefault=True)
+            threePrimeadapter = models.ThreePrimeadapter.objects.get(
+                direction="Forward", isDefault=True
+            )
 
         adapter_primer_dict = model_to_dict(threePrimeadapter)
-    except:
-        adapter_primer_dict = {'name': 'Ion Kit',
-                               'sequence': 'ATCACCGACTGCCCATAGAGAGGCTGAGAC',
-                               'direction': 'Forward'}
+    except Exception:
+        adapter_primer_dict = {
+            "name": "Ion Kit",
+            "sequence": "ATCACCGACTGCCCATAGAGAGGCTGAGAC",
+            "direction": "Forward",
+        }
 
     if exp.plan:
         plan_json = model_to_dict(exp.plan)
@@ -373,14 +457,16 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
     sampleInfo = {}
     for sample in exp.samples.all():
         sampleInfo[sample.displayedName] = {
-            'name': sample.name,
-            'displayedName': sample.displayedName,
-            'externalId': sample.externalId,
-            'description': sample.description,
-            'attributes': {}
+            "name": sample.name,
+            "displayedName": sample.displayedName,
+            "externalId": sample.externalId,
+            "description": sample.description,
+            "attributes": {},
         }
         for attributeValue in sample.sampleAttributeValues.all():
-            sampleInfo[sample.displayedName]['attributes'][attributeValue.sampleAttribute.displayedName] = attributeValue.value
+            sampleInfo[sample.displayedName]["attributes"][
+                attributeValue.sampleAttribute.displayedName
+            ] = attributeValue.value
 
     barcodedSamples_reference_names = eas.barcoded_samples_reference_names
     # use barcodedSamples' selected reference if NO plan default reference is specified
@@ -407,74 +493,67 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
         alignmentArgs = eas.alignmentargs
         ionstatsArgs = eas.ionstatsargs
 
-    # Special case: add selected regions file to tmap --bed-file parameter
-    tmap_bedfile_option = "--bed-file"
-    if eas.targetRegionBedFile and tmap_bedfile_option in alignmentArgs:
-        alignmentArgs = alignmentArgs.replace(tmap_bedfile_option, "%s %s" % (tmap_bedfile_option, eas.targetRegionBedFile))
-
     # special case: override blocks
-    chipBlocksOverride = ''
-    m = re.search(' --chip.\w+', basecallerArgs)
+    chipBlocksOverride = ""
+    m = re.search(" --chip.\w+", basecallerArgs)
     if m:
         option = m.group()
         chipBlocksOverride = option.split()[1]
         basecallerArgs = basecallerArgs.replace(option, "")
 
     ret = {
-        'exp_json': exp_json,
-        'plan': plan_json,
-        'experimentAnalysisSettings': eas_json,
-
-        'beadfindArgs': beadfindArgs,
-        'analysisArgs': analysisArgs,
-        'prebasecallerArgs': prebasecallerArgs,
-        'basecallerArgs': basecallerArgs,
-        'aligner_opts_extra': alignmentArgs,
-        'recalibArgs': recalibArgs,
-        'ionstatsArgs': ionstatsArgs,
-
-        'resultsName': result.resultsName,
-        'runid': result.runid,
-        'expName': exp.expName,
-        'sample': exp.get_sample(),
-        'chiptype': exp.chipType,
-        'rawdatastyle': exp.rawdatastyle,
-        'flowOrder': flowOrder,
-        'flows': exp.flows,
-        'instrumentName': exp.pgmName,
-        'platform': exp.getPlatform,
-        'referenceName': reference,
-        'libraryKey': eas.libraryKey,
-        'tfKey': eas.tfKey,
-        'reverse_primer_dict': adapter_primer_dict,
-        'barcodeId': eas.barcodeKitName if eas.barcodeKitName else '',
+        "exp_json": exp_json,
+        "plan": plan_json,
+        "experimentAnalysisSettings": eas_json,
+        "beadfindArgs": beadfindArgs,
+        "analysisArgs": analysisArgs,
+        "prebasecallerArgs": prebasecallerArgs,
+        "basecallerArgs": basecallerArgs,
+        "aligner_opts_extra": alignmentArgs,
+        "recalibArgs": recalibArgs,
+        "ionstatsArgs": ionstatsArgs,
+        "resultsName": result.resultsName,
+        "runid": result.runid,
+        "expName": exp.expName,
+        "sample": exp.get_sample(),
+        "chiptype": exp.chipType,
+        "rawdatastyle": exp.rawdatastyle,
+        "flowOrder": flowOrder,
+        "flows": exp.flows,
+        "instrumentName": exp.pgmName,
+        "platform": exp.getPlatform,
+        "referenceName": reference,
+        "libraryKey": eas.libraryKey,
+        "tfKey": eas.tfKey,
+        "reverse_primer_dict": adapter_primer_dict,
+        "barcodeId": eas.barcodeKitName if eas.barcodeKitName else "",
         "endBarcodeKitName": eas.endBarcodeKitName if eas.endBarcodeKitName else "",
         "barcodeSamples_referenceNames": barcodedSamples_reference_names,
-        'barcodeInfo': make_barcodeInfo(eas, exp, doBaseRecal),
-        'sampleInfo': sampleInfo,
-        'plugins': plugins,
-        'project': ','.join(p.name for p in result.projects.all()),
-
-        'pathToData': pathToData,
-        'blockArgs': blockArgs,
-        'previousReport': previousReport,
-        'skipchecksum': False,
-        'doThumbnail': doThumbnail,
-        'mark_duplicates': eas.isDuplicateReads,
-        'doBaseRecal': doBaseRecal,
-        'realign': eas.realign,
-        'align_full': True,
-
-        'net_location': net_location,
-        'site_name': site_name,
-        'url_path': url_path,
-        'tmap_version': settings.TMAP_VERSION,
-        'sam_parsed': True if os.path.isfile('/opt/ion/.ion-internal-server') else False,
-        'username': username,
+        "barcodeInfo": make_barcodeInfo(eas, exp, doBaseRecal),
+        "sampleInfo": sampleInfo,
+        "plugins": plugins,
+        "project": ",".join(p.name for p in result.projects.all()),
+        "pathToData": pathToData,
+        "blockArgs": blockArgs,
+        "previousReport": previousReport,
+        "skipchecksum": False,
+        "doThumbnail": doThumbnail,
+        "mark_duplicates": eas.isDuplicateReads,
+        "doBaseRecal": doBaseRecal,
+        "realign": eas.realign,
+        "align_full": True,
+        "net_location": net_location,
+        "site_name": site_name,
+        "url_path": url_path,
+        "tmap_version": settings.TMAP_VERSION,
+        "sam_parsed": True
+        if os.path.isfile("/opt/ion/.ion-internal-server")
+        else False,
+        "username": username,
     }
 
     if chipBlocksOverride:
-        ret['chipBlocksOverride'] = chipBlocksOverride
+        ret["chipBlocksOverride"] = chipBlocksOverride
 
     return ret
 
@@ -482,123 +561,188 @@ def makeParams(exp, eas, result, blockArgs, doThumbnail, pathToData, previousRep
 def make_barcodeInfo(eas, exp, doBaseRecal):
     # Generate a table of per-barcode info for pipeline use
     barcodeInfo = {}
-    barcodeId = eas.barcodeKitName if eas.barcodeKitName else ''
+    barcodeId = eas.barcodeKitName if eas.barcodeKitName else ""
     endBarcodeKitName = eas.endBarcodeKitName if eas.endBarcodeKitName else ""
-    no_bc_sample = exp.get_sample() if not barcodeId else 'none'
+    no_bc_sample = exp.get_sample() if not barcodeId else "none"
 
-    barcodeInfo['no_barcode'] = {
-        'sample': no_bc_sample or 'none',
-        'referenceName': eas.reference,
-        'calibrate': False if barcodeId else doBaseRecal
+    barcodeInfo["no_barcode"] = {
+        "sample": no_bc_sample or "none",
+        "referenceName": eas.reference,
+        "targetRegionBedFile": eas.targetRegionBedFile,
+        "hotSpotRegionBedFile": eas.hotSpotRegionBedFile,
+        "sseBedFile": eas.sseBedFile,
+        "calibrate": False if barcodeId else doBaseRecal,
     }
 
     if barcodeId:
-        for barcodeObj in models.dnaBarcode.objects.filter(name=barcodeId).order_by('id_str'):
+        for barcodeObj in models.dnaBarcode.objects.filter(name=barcodeId).order_by(
+            "id_str"
+        ):
             id_str = barcodeObj.id_str
             barcode = {
-                'adapter': barcodeObj.adapter,
-                'id_str': id_str,
-                'index': barcodeObj.index,
-                'sequence': barcodeObj.sequence
+                "adapter": barcodeObj.adapter,
+                "id_str": id_str,
+                "index": barcodeObj.index,
+                "sequence": barcodeObj.sequence,
             }
             barcodeInfo[id_str] = barcode
-            barcodeInfo[id_str]['sample'] = 'none'
-            barcodeInfo[id_str]['referenceName'] = eas.reference
-            barcodeInfo[id_str]['calibrate'] = doBaseRecal
-            barcodeInfo[id_str]['controlType'] = ''
+            barcodeInfo[id_str]["sample"] = "none"
+            barcodeInfo[id_str]["referenceName"] = eas.reference
+            barcodeInfo[id_str]["targetRegionBedFile"] = eas.targetRegionBedFile
+            barcodeInfo[id_str]["hotSpotRegionBedFile"] = eas.hotSpotRegionBedFile
+            barcodeInfo[id_str]["sseBedFile"] = eas.sseBedFile
+            barcodeInfo[id_str]["calibrate"] = doBaseRecal
+            barcodeInfo[id_str]["controlType"] = ""
+            barcodeInfo[id_str][
+                "nucleotideType"
+            ] = exp.plan.get_default_nucleotideType()
 
             # dual barcoding fields
-            barcodeInfo[id_str]['endBarcode'] = {}
-            barcodeInfo[id_str]['dualBarcode'] = ""
+            barcodeInfo[id_str]["endBarcode"] = {}
+            barcodeInfo[id_str]["dualBarcode"] = ""
             if barcodeObj.end_sequence:
                 endBarcode = {
-                    'adapter': barcodeObj.end_adapter,
-                    'id_str': barcodeObj.id_str,
-                    'index': barcodeObj.index,
-                    'sequence': barcodeObj.end_sequence
+                    "adapter": barcodeObj.end_adapter,
+                    "id_str": barcodeObj.id_str,
+                    "index": barcodeObj.index,
+                    "sequence": barcodeObj.end_sequence,
                 }
-                barcodeInfo[id_str]['endBarcode'] = endBarcode
-                barcodeInfo[id_str]['dualBarcode'] = id_str
+                barcodeInfo[id_str]["endBarcode"] = endBarcode
+                barcodeInfo[id_str]["dualBarcode"] = id_str
 
         if eas.barcodedSamples:
-            for sample, value in eas.barcodedSamples.items():
+            for sample, value in list(eas.barcodedSamples.items()):
                 try:
-                    info = value.get('barcodeSampleInfo', {})
-                    dna_rna_sample = set([v.get('nucleotideType', '') for v in info.values()]) == set(['DNA', 'RNA'])
-                    for bcId in value['barcodes']:
-                        barcodeInfo[bcId]['sample'] = sample
+                    info = value.get("barcodeSampleInfo", {})
+                    has_dna_rna_sample = set(
+                        [v.get("nucleotideType", "") for v in list(info.values())]
+                    ) == set(["DNA", "RNA"])
+                    for bcId in value["barcodes"]:
+                        barcodeInfo[bcId]["sample"] = sample
+                        nuc_type = info.get(bcId, {}).get("nucleotideType", "")
 
-                        if 'reference' in info.get(bcId, {}):
-                            barcodeInfo[bcId]['referenceName'] = info[bcId]['reference']
+                        # default reference and bed files
+                        if has_dna_rna_sample and nuc_type == "RNA":
+                            default_reference = eas.mixedTypeRNA_reference
+                            default_target_bed = eas.mixedTypeRNA_targetRegionBedFile
+                            default_hotspot_bed = eas.mixedTypeRNA_hotSpotRegionBedFile
+                        else:
+                            default_reference = eas.reference
+                            default_target_bed = eas.targetRegionBedFile
+                            default_hotspot_bed = eas.hotSpotRegionBedFile
+
+                        if "nucleotideType" in info.get(bcId, {}):
+                            barcodeInfo[bcId]["nucleotideType"] = nuc_type
+
+                        if "reference" in info.get(bcId, {}):
+                            barcodeInfo[bcId]["referenceName"] = info[bcId]["reference"]
+                        else:
+                            # reset the default based on nuc type
+                            barcodeInfo[bcId]["referenceName"] = default_reference
+
+                        if "targetRegionBedFile" in info.get(bcId, {}):
+                            barcodeInfo[bcId]["targetRegionBedFile"] = info[bcId][
+                                "targetRegionBedFile"
+                            ]
+                        else:
+                            # reset the default based on nuc type
+                            barcodeInfo[bcId][
+                                "targetRegionBedFile"
+                            ] = default_target_bed
+
+                        if "hotSpotRegionBedFile" in info.get(bcId, {}):
+                            barcodeInfo[bcId]["hotSpotRegionBedFile"] = info[bcId][
+                                "hotSpotRegionBedFile"
+                            ]
+                        else:
+                            # reset the default based on nuc type
+                            barcodeInfo[bcId][
+                                "hotSpotRegionBedFile"
+                            ] = default_hotspot_bed
+
+                        if "sseBedFile" in info.get(bcId, {}):
+                            barcodeInfo[bcId]["sseBedFile"] = info[bcId]["sseBedFile"]
 
                         # exclude RNA barcodes from recalibration (Compendia project RNA/DNA sample)
-                        if dna_rna_sample and info.get(bcId, {}).get('nucleotideType', '') == 'RNA':
-                            barcodeInfo[bcId]['calibrate'] = False
+                        if has_dna_rna_sample and nuc_type == "RNA":
+                            barcodeInfo[bcId]["calibrate"] = False
 
                         # get the controlType from the barcode.json
-                        barcodeInfo[bcId]['controlType'] = info[bcId].get('controlType', '')
-                        
+                        barcodeInfo[bcId]["controlType"] = info[bcId].get(
+                            "controlType", ""
+                        )
+
                         # dynamic dual barcoding
-                        sampleEndBarcode = info[bcId].get('endBarcode', '')
+                        sampleEndBarcode = info[bcId].get("endBarcode", "")
                         if endBarcodeKitName and sampleEndBarcode:
-                            endBarcodeObjs = models.dnaBarcode.objects.filter(name=endBarcodeKitName, id_str=sampleEndBarcode).values('index', 'id_str', 'sequence', 'adapter')
+                            endBarcodeObjs = models.dnaBarcode.objects.filter(
+                                name=endBarcodeKitName, id_str=sampleEndBarcode
+                            ).values("index", "id_str", "sequence", "adapter")
 
                             if endBarcodeObjs.count() > 0:
-                                barcodeInfo[bcId]['endBarcode'] = endBarcodeObjs[0]
-                                
-                                dualBarcodeInfo = value.get('dualBarcodes', {})
+                                barcodeInfo[bcId]["endBarcode"] = endBarcodeObjs[0]
+
+                                dualBarcodeInfo = value.get("dualBarcodes", {})
                                 dualBarcodes_str = [str(x) for x in dualBarcodeInfo]
-                                matchingDualBarcodes = filter(lambda dualBarcode : dualBarcode.startswith(bcId), dualBarcodes_str)
+                                matchingDualBarcodes = filter(
+                                    lambda dualBarcode: dualBarcode.startswith(bcId),
+                                    dualBarcodes_str,
+                                )
                                 if len(matchingDualBarcodes) > 0:
-                                    barcodeInfo[bcId]['dualBarcode'] = matchingDualBarcodes[0]
-                except:
+                                    barcodeInfo[bcId][
+                                        "dualBarcode"
+                                    ] = matchingDualBarcodes[0]
+                except Exception:
                     pass
 
     return barcodeInfo
 
 
 def create_runid(name):
-    '''Returns 5 char string hashed from input string'''
+    """Returns 5 char string hashed from input string"""
     # Copied from TS/Analysis/file-io/ion_util.c
     def DEKHash(key):
         hash = len(key)
         for i in key:
             hash = ((hash << 5) ^ (hash >> 27)) ^ ord(i)
-        return (hash & 0x7FFFFFFF)
+        return hash & 0x7FFFFFFF
 
     def base10to36(num):
-        str = ''
+        str = ""
         for i in range(5):
             digit = num % 36
             if digit < 26:
-                str = chr(ord('A') + digit) + str
+                str = chr(ord("A") + digit) + str
             else:
-                str = chr(ord('0') + digit - 26) + str
+                str = chr(ord("0") + digit - 26) + str
             num /= 36
         return str
 
     return base10to36(DEKHash(name))
 
 
-def get_project_names(exp, names=''):
-    if len(names) > 1: return names
+def get_project_names(exp, names=""):
+    if len(names) > 1:
+        return names
     # get projects from previous report
     if len(exp.sorted_results()) > 0:
         names = exp.sorted_results()[0].projectNames()
-    if len(names) > 1: return names
+    if len(names) > 1:
+        return names
     # get projects from Plan
     if exp.plan:
         try:
             names = [p.name for p in exp.plan.projects.all()]
-            names = ','.join(names)
-        except:
+            names = ",".join(names)
+        except Exception:
             pass
 
-    if len(names) > 1: return names
+    if len(names) > 1:
+        return names
     # last try: get from explog
     try:
-        names = exp.log['project']
-    except:
+        names = exp.log["project"]
+    except Exception:
         pass
     return names
 
@@ -612,7 +756,9 @@ def build_result(experiment, resultsName, server, location, doThumbnail=False):
     """
     # Final "" element forces trailing '/'
     # reportLink is used in calls to dirname, which would otherwise resolve to parent dir
-    link = os.path.join(server.webServerPath, location.name, "%s_%%03d" % resultsName, "")
+    link = os.path.join(
+        server.webServerPath, location.name, "%s_%%03d" % resultsName, ""
+    )
     j = lambda l: os.path.join(link, l)
 
     kwargs = {
@@ -627,7 +773,7 @@ def build_result(experiment, resultsName, server, location, doThumbnail=False):
         "framesProcessed": "0",
         "timeToComplete": 0,
         "reportstorage": server,
-        }
+    }
     result = models.Results(**kwargs)
     result.save()  # generate the pk
 
@@ -636,8 +782,8 @@ def build_result(experiment, resultsName, server, location, doThumbnail=False):
         result.metaData["thumb"] = 1
 
     # What does this do?
-    for k, v in kwargs.iteritems():
-        if hasattr(v, 'count') and v.count("%03d") == 1:
+    for k, v in kwargs.items():
+        if hasattr(v, "count") and v.count("%03d") == 1:
             v = v % result.pk
             setattr(result, k, v)
 

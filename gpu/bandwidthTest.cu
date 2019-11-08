@@ -758,7 +758,7 @@ testHostToDeviceTransfer(unsigned int memSize, memoryMode memMode, bool wc)
     unsigned char *h_cacheClear1 = (unsigned char *)malloc(CACHE_CLEAR_SIZE);
     unsigned char *h_cacheClear2 = (unsigned char *)malloc(CACHE_CLEAR_SIZE);
 
-    if (h_cacheClear1 == 0 || h_cacheClear1 == 0)
+    if (h_cacheClear1 == 0 || h_cacheClear2 == 0)
     {
         fprintf(stderr, "Not enough memory available on host to run test!\n");
         exit(EXIT_FAILURE);

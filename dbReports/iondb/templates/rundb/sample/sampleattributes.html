@@ -1,6 +1,7 @@
 {% extends "rundb/sample/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 
 
@@ -25,8 +26,7 @@
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap-dropdown.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+{% include "rundb/common/head_kendo_script.html" %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
 
@@ -75,9 +75,9 @@ background: #dbdbdb;
 
 
 {% block sub-nav %}
-    <li><a href="{% url "plan_templates" %}">Templates</a></li>
-    <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-    <li><a href="{% url "planned" %}">Planned Runs</a></li>
+    <li><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+    <li class="active"><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+    <li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
 
@@ -91,13 +91,6 @@ background: #dbdbdb;
 	<div class="">
 	<div class="samples"></div>
 	</div>
-</script>
-
-		
-<!--20130724-TODO - does not work # var dataType_id = data.dataType.id; # -->
-<!--does not work #=TB.sampleAttributeDataType_text(dataType_id) # -->
-<script id="SampleAttributeDataTypeColumnTemplate" type="text/x-kendo-template">
-	#= data.dataType_name #
 </script>
 
 <script id="IsActiveColumnTemplate" type="text/x-kendo-template">
@@ -122,58 +115,49 @@ background: #dbdbdb;
     # } #
 </script>
         
-        
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
 	# var _id = id;# 
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "edit_sample_attribute" 999999 %}'.replace('999999',_id)#" class="edit_sampleattribute" data-toggle="modal">Edit</a>
+			<a href="#= '{% url "edit_sample_attribute" 999999 %}'.replace('999999',_id)#" class="edit_sampleattribute">{% trans "samplesets.sampleattributes.action.edit_sample_attribute.label" %}</a>
 		</li>
 		<li>
-			<a href="#= '{% url "toggle_sample_attribute" 999999 %}'.replace('999999',_id)#" class="show_hide_sampleattribute" data-toggle="modal">Show/Hide</a>
+			<a href="#= '{% url "toggle_sample_attribute" 999999 %}'.replace('999999',_id)#" class="show_hide_sampleattribute">{% trans "samplesets.sampleattributes.action.toggle_sample_attribute.label" %}</a>
 		</li>
 		<li class="divider"></li>		
 		<li>
-			<a href="#= '{% url "delete_sample_attribute" 999999 %}'.replace('999999',_id)#" class="delete_sampleattribute">Delete</a>
+			<a href="#= '{% url "delete_sample_attribute" 999999 %}'.replace('999999',_id)#" class="delete_sampleattribute">{% trans "samplesets.sampleattributes.action.delete_sample_attribute.label" %}</a>
 		</li>		
 	</ul>
 </div>	
 </script>
 
-
 		<div class="content group">
 			<ul class="breadcrumb">
-            	<li><a href="{% url "samplesets" %}">Sample Sets</a> <span class="divider">/</span></li>
-            	<li class="active">Sample Attributes</li>
+            	<li><a href="{% url "samplesets" %}">{% trans "samplesets.title" %}</a> <span class="divider">/</span></li>
+            	<li class="active">{% trans "samplesets.sampleattributes.title" %}</li>
             </ul>
 
 			<div class="row-fluid">
 				<div class="span12">
 					<div class="pull-left">
-						<h1 style="margin-bottom:5px;">Sample Attributes</h1>
+						<h1 style="margin-bottom:5px;">{% trans "samplesets.sampleattributes.title" %}</h1>
 					</div>
 					<div class="pull-right">
-		            	<a id="add_sample_attribute" href="#" class="btn btn-primary modal_add_sample_attribute">Add Sample Attribute</a>
+		            	<a id="add_sample_attribute" href="{% url "add_sample_attribute" %}" class="btn btn-primary modal_add_sample_attribute">{% trans "samplesets.sampleattributes.action.add_sample_attribute.label" %}</a>
 					</div>
 				</div>
 			</div>
 			<div class="row-fluid">
 				<div class="span12">
-					<div id="samplesetitem_attribute_grid"></div>
+					<div id="samplesetitem_attribute_grid"
+                         data-url-read="{% url "api_dispatch_list" resource_name="sampleattribute" api_name='v1' %}?order_by=-lastModifiedDate"
+                         data-url-update="{% url "api_dispatch_list" resource_name="sampleattribute" api_name='v1' %}?order_by=-lastModifiedDate"></div>
 				</div>
 			</div>
 		</div>
-
-<script type="text/javascript">
-	//20130711-TODO-cleanup
-	var customAttributes = '{{custom_sample_column_list|safe}}';
-	
-	console.log("customAttributes=", customAttributes);	
-	var customAttributes_json = jQuery.parseJSON(customAttributes);
-	var customAttributes_index = -1;
-</script>
 
 <script type="text/javascript" src="{% static "resources/scripts/sample/sampleattributes.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>

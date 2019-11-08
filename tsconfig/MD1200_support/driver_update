@@ -40,8 +40,8 @@ if ! check_megaraid_driver; then
             dpkg -i $pkgfile
         else
             # should not get here
-            echo "apt-get --assume-yes --force-yes install $pkgname"
-            apt-get --assume-yes --force-yes install $pkgname
+            echo "apt-get --assume-yes --allow-unauthenticated install $pkgname"
+            apt-get --assume-yes --allow-unauthenticated install $pkgname
         fi
     done
     echo -e "==============================\nmegaraid_sas has been updated\n=============================="

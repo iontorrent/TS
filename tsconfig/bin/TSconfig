@@ -43,7 +43,8 @@ version=5.2
 # Only Ubuntu 14.04 allowed at this time
 #-------------------------------------------------------------------------------
 if test ${EXECUTE}; then
-    if [ $(lsb_release -r -s) != '14.04' ]; then
+    LSB_RELEASE=$(lsb_release -r -s)
+    if [ $LSB_RELEASE != '14.04' ] && [ $LSB_RELEASE != '18.04' ]; then
         echo "This release not supported"
         exit 0
     fi
@@ -227,7 +228,7 @@ if [ $UPDATE_SOFTWARE == 1 ]; then
     cd $ANSIBLE_HOME
     ansible-playbook software_update.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo
+        --become
 
     if [ $? == 0 ]; then
         echo "=================================================================="
@@ -324,7 +325,7 @@ if [ $CONF_HEAD_NODE == 1 ]; then
     cd $ANSIBLE_HOME
     ansible-playbook site.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo
+        --become
 
     echo "=================================================================="
     echo "TSconfig configure process completed successfully"
@@ -377,7 +378,7 @@ if [ $UPDATE_HOSTNAME == 1 ]; then
     cd $ANSIBLE_HOME
     ansible-playbook rename_headnode.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo
+        --become
     if [[ "$oldFQDN" != "$newHostName" ]]; then
         (
         set +e
@@ -413,7 +414,7 @@ if [ $SECURITY_UPDATE == 1 ]; then
     cd $ANSIBLE_HOME
     ansible-playbook security_update.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo
+        --become
     ion_daemon_ctrl restart
 fi
 
@@ -425,7 +426,7 @@ if [ $CONF_TIME_ZONE == 1 ]; then
     dpkg-reconfigure tzdata
     # Next, propagate the headnode's settings to the computes
     cd $ANSIBLE_HOME
-    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} timezone.yml --sudo
+    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} timezone.yml --become
 fi
 
 #---

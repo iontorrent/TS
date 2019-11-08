@@ -1,11 +1,9 @@
 {% extends "rundb/sample/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
-
-
 <link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}"/>
-
 <link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
 <link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
 <link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
@@ -17,22 +15,21 @@
 <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
 <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
 
-<script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
-
 <!-- include in cases browser doesn't natively support JSON.stringify -->
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap-dropdown.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+    {% include "rundb/common/head_kendo_script.html" %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"></script>
 
 <script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
+<link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
+<link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+    <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 
 <!-- Must be last to override the bootstrap modal default behavior -->
 <!--[if (gte IE 6)&(lte IE 8)]>
@@ -43,174 +40,249 @@
 <link type="text/css" rel="stylesheet" href="{% static "resources/styles/browser-warning.css"%}" />
 <script type="text/javascript" src="{% static "resources/scripts/browser-warning.js"%}"></script>
 <![endif]-->
-
-<script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
-<link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
-
-<style>
-
-#input_samplesetitem_grid .k-grid-content {
-	height: 350px;
-}
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        height: 40px;
+        float: left;
+        margin: 0 5px 5px 0;
+	}
+    .search-field-data-source {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        height: 30px;
+        float: left;
+        margin: 0 10px 15px 0;
+	}
+    .search-field-run {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        height: 30px;
+        float: left;
+        margin: 0 10px 15px 0 ;
+    }
+    .search-field #rangeA {
+        margin: 0;
+        width: 140px;
+    }
+    .search-field select {
+        width: 400px;
+    }
+    .icon-unchecked {
+        opacity: 0.25;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=25);
+    }
+    .icon-unchecked:hover {
+        opacity: 1.0;
+        /*Dragging IE into the 21st century*/
+        filter: alpha(opacity=100);
+    }
+    .k-grid {
+         margin-top: 6px;
+     }
+    .k-grid tr td:first-child a img {
+        float:none;
+        clear:both;
+        margin:0;
+    }
+    .k-grid tr td:first-child  {
+        text-align: center;
+    }
+    .data-table tr td:last-child {
+        overflow: visible;
+    }
+    .k-grid {
+        min-width: 1000px;
+    }
+    #savedSampleSet .filter-option{
+       font-size: 14px;
+       display: inline-block;
+       color: #333;
+    }
+    #input_samplesetitem_grid .k-grid-content {
+	    height: 350px;
+    }
 </style>
 
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li><a href="{% url "plan_templates" %}">Templates</a></li>
-    <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-    <li><a href="{% url "planned" %}">Planned Runs</a></li>
+    <li><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+    <li class="active"><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+    <li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
-
-
-
 <script id="SampleActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
-	# var _id = pending_id;# 
+	# var _id = pending_id;#
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "edit_pending_sample" 999999 %}'.replace('999999',_id)#" class="edit_sample" data-toggle="modal">Edit</a>
+			<a href="#= {% if edit_amp_sampleSet  %} '{% url "amp_hd_edit_samplesetitem" 999999 %}'.replace('999999',_id) {% else %} '{% url "edit_pending_sample" 999999 %}'.replace('999999',_id) {% endif %}#"  class="edit_sample">{% trans "samplesets.input_samples.action.edit_pending_sample.label" %}</a>
 		</li>
-		<li class="divider"></li>		
+		<li class="divider"></li>
 		<li>
-			<a href="#= '{% url "remove_pending_sample" 999999 %}'.replace('999999',_id)#" class="remove_sample" data-toggle="modal">Remove</a>
-		</li>		
+			<a href="#= {% if edit_amp_sampleSet  %} '{% url "remove_samplesetitem" 999999 %}'.replace('999999',_id) {% else %} '{% url "remove_pending_sample" 999999 %}'.replace('999999',_id) {% endif %}#" class="remove_sample_from_set">{% trans "samplesets.input_samples.action.remove_pending_sample.label" %}</a>
+		</li>
 	</ul>
-</div>	
+</div>
 </script>
+    <div id="data_view" class="content group">
+        <ul class="breadcrumb">
+            <li>
+                <a href="{% url "samplesets" %}">{% trans "samplesets.title" %}</a><span class="divider">/</span>
+            <li class="active">
+                Add or Update Sample Set and Samples
+            </li>
+        </ul>
+    </div>
 
+<div id="save_samplesetitems_into_ss">
+    <form class="form-horizontal workflow-step" id="save_samplesetitems_form" name="save_samplesetitems_form" method="POST" action="">
+        <div id="error-messages" class="format-errors alert alert-error hide" style="margin-left: 4%;" ></div>
+        <div class="row-fluid">
 
+            <div id="savedSampleSet" class="search-field">
+                <select id="sampleset" data-max-options="1" name="sampleset" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="Add "
+                    data-selected-text-format="count" data-width="240px" data-remove-button="false" data-remove-button-title="Sample Set" data-live-search="true"
+                    data-live-search-placeholder="Find Sample Set ..." data-actions-box="false" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="Add to existing sample set: " data-deselect-all-text="{% trans "data.search_bar.fields.project.deselect-all-text" %}" data-none-selected-text="" data-persist-title="true" data-option-size="40" data-selected-text-format="count" {% if edit_amp_sampleSet  %} disabled {% endif  %}>
+                    {% for sampleSet in sampleSet_list %}
+                        <option value="{{sampleSet.id}}" >
+                            {{sampleSet.displayedName}}
+                            {% if sampleSet.SampleGroupType_CV.displayedName %}
+                                ({{sampleSet.SampleGroupType_CV.displayedName}}
+                                {% if sampleSet.libraryPrepType %}
+                                        {% for key, value in libraryPrepType_choices.items %}
+                                            {% ifequal key sampleSet.libraryPrepType  %}
+                                                    - {{ value }}
+                                            {% endifequal %}
+                                        {% endfor %}
+                                {% endif %}
+                                )
+                            {% elif sampleSet.libraryPrepType %}
+                                {% for key, value in libraryPrepType_choices.items %}
+                                    {% ifequal key sampleSet.libraryPrepType  %}
+                                            ({{ value }})
+                                    {% endifequal %}
+                                {% endfor %}
+                            {% endif %}
+                        </option>
+                    {%endfor%}
+                </select>
+            </div>
 
-<!--20130712-TODO: NEED TO BE GENERALIZED #= data.attr_value_{{attribute.displayedName}}# -->
-<script id="CustomSampleAttributeTemplate" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[customAttributes_index]; #
-	#= data.attribute_dict[attribute] + " at index=" + customAttributes_index + " json=" + customAttributes_json[customAttributes_index] #
-</script>
-	
-<script id="CustomSampleAttributeTemplate_0" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[0]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_1" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[1]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_2" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[2]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_3" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[3]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_4" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[4]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_5" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[5]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_6" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[6]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_7" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[7]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_8" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[8]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_9" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[9]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_10" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[10]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-	<script id="CustomSampleAttributeTemplate_11" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[11]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_12" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[12]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-	<script id="CustomSampleAttributeTemplate_13" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[13]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_14" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[14]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_15" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[15]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_16" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[16]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_17" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[17]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_18" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[18]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>
-<script id="CustomSampleAttributeTemplate_19" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[19]; #
-	#= getDisplayValue(data.attribute_dict[attribute]) #
-</script>	
-
-
-		<div class="content group">
-			<ul class="breadcrumb">
-				<li>
-					<a href="{% url "samplesets" %}">Sample Sets</a><span class="divider">/</span>
-				<li class="active">
-					Enter Samples
-				</li>
-			</ul>
-
+        <div>
+          <button id="new_SampleSet" type="button" class="btn" data-toggle="collapse" data-target="#add_sample_set_info"  aria-expanded="false" aria-controls="collapseExample">{% if edit_amp_sampleSet  %} Edit sample set... {% else %} Create sample set {% endif  %}</button>
+            {% include "rundb/sample/sampleset_input_section.html" %}
+        </div>
+        </div>
 			<div class="row-fluid">
 				<div class="span12">
 					<div class="pull-left">
-						<h1 style="margin-bottom:5px;">Enter Samples</h1>
+						<h1 style="margin-bottom:5px;">{% trans "samplesets.input_samples.title" %}</h1>
 					</div>
-					<div class="pull-right">				
-		            	<a id="enter_sample" href="#" class="btn btn-primary modal_enter_sample" data-toggle="modal">Enter New Sample</a>
-					</div>
-				</div>
-			</div>			
-
-			<div class="row-fluid">
-				<div class="span12">
-					<div id="input_samplesetitem_grid"></div>
 					<div class="pull-right">
-            		<a id="clear_input_samples" href="{% url "clear_input_samples" %}" class="btn btn-danger clear_input_samples">Clear All</a>	
-					<a id="save_samplesetitems" href="#" class="btn btn-primary modal_save_samplesetitems">Save Sample Set</a>	            	
+		            	<a id="enter_sample" href="{% url "show_add_pending_sample" %}" class="btn btn-primary modal_enter_sample">{% trans "samplesets.input_samples.action.show_add_pending_samplesetitem.label" %}</a>
 					</div>
 				</div>
 			</div>
-		</div>
-
-
+			<div class="row-fluid">
+				<div class="span12">
+                    <div>
+                        {% if edit_amp_sampleSet %}
+                            <input type="hidden" id="edit_amp_sampleSet" name="edit_amp_sampleSet" value="{% url 'persisted_input_samples_data' setID=edit_amp_sampleSet.id %}">
+                            <input type="hidden" id="sampleset" name="sampleset" value="{{  edit_amp_sampleSet.id }}">
+                            <input type="hidden" id="edit_amp_hd" name="edit_amp_hd" value="edit_detail">
+                            <input type="hidden" id="intent" name="intent" value="edit">
+                            <input type="hidden" id="id" name="id" value="{{edit_amp_sampleSet.id}}">
+                        {% endif %}
+                    </div>
+					<div id="input_samplesetitem_grid"></div>
+					<div class="pull-right">
+            		<a id="clear_input_samples" href="{% url "clear_input_samples" %}" class="btn btn-danger clear_input_samples">{% trans "samplesets.input_samples.action.clear_input_samples.label" %}</a>
+					<a id="save_samplesetitems" href="{% url "show_save_input_samples" %}" class="btn btn-primary done_save_samplesetitems_btn">{% trans "samplesets.input_samples.action.show_save_input_samples_for_sampleset.label" %}</a>
+					</div>
+				</div>
+			</div>
+</form>
+</div>
 <script type="text/javascript">
 	//20130711-TODO-cleanup
 	var customAttributes = '{{custom_sample_column_list|safe}}';
-	
-	console.log("customAttributes=", customAttributes);	
+
+	console.log("customAttributes=", customAttributes);
 	var customAttributes_json = jQuery.parseJSON(customAttributes);
 	var customAttributes_index = -1;
-</script>
 
+</script>
+<script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 <script src="/site_media/resources/scripts/sample/input_samples.js"></script>
+<script type="text/javascript">
+$(document).ready(function(){
+        $("#savedSampleSet").click(function(e) {
+            e.preventDefault();
+            var opened = $('.collapse').hasClass('in collapse');
+            if ( opened === true ) {
+                $('.collapse').collapse('hide');
+            }
+        });
+        $("#new_SampleSet").click(function(e) {
+            e.preventDefault();
+            var opened = $('.collapse').hasClass('in collapse');
+            if (opened === true || $("#sampleset").val()){
+                $('#sampleset').selectpicker("deselectAll", true).selectpicker("refresh");
+            }
+        });
+
+        $('.done_save_samplesetitems_btn').click(function(e){
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            $("#save_samplesetitems_into_ss").scrollTop(0);
+
+            SAMPLESET_URL = "{% url "samplesets" %}"
+
+            url = "{% url "save_input_samples" %}";
+            data = $('#save_samplesetitems_form').serialize();
+            console.log("LOOK!! data=", data);
+            console.log(url);
+
+            $.post(url, data, function(data) {
+                 if (data == "true"){
+                    //$( "#modal_save_samplesetitems_popup" ).modal("hide");
+                    //$('body #modal_save_samplesetitems_popup').remove();
+
+                    window.location = SAMPLESET_URL;
+                  }else {
+
+                    $('#save_samplesetitems_into_ss .workflow-step #error-messages').empty();
+
+                    $('#save_samplesetitems_into_ss .workflow-step #error-messages').removeClass('hide');
+
+                    for (var i=0;i < data.length;i++) {
+                        $('#save_samplesetitems_into_ss .workflow-step #error-messages').append('<p class="error">' + data[i] + '</p>');
+                        console.log("error:", data[i]);
+                    }
+                   }
+            }).done(function(data) {
+               console.log("success:", url);
+            })
+            .fail(function(data) {
+                $('#save_samplesetitems_into_ss .workflow-step #error-messages').empty();
+                $('#save_samplesetitems_into_ss .workflow-step #error-messages').append('<p class="error">' + data.responseText + '</p>');
+                console.log("error:", data);
+            })
+           .always(function(data) { /*console.log("complete:", data);*/ });
+
+            return false;
+    });
+
+});
+
+</script>
 
 {% endblock content %}

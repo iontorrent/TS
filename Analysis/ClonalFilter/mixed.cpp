@@ -50,20 +50,17 @@ void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float
     vec  alpha;
     bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, opts);
 
-    if(converged){
-        bivariate_gaussian clonal(mean[0], sigma[0]);
-        bivariate_gaussian mixed( mean[1], sigma[1]);
-        filter = clonal_filter(clonal, mixed, mixed_ppf_cutoff(), converged);
-    }
+    bivariate_gaussian clonal(mean[0], sigma[0]);
+    bivariate_gaussian mixed( mean[1], sigma[1]);
+    filter = clonal_filter(clonal, mixed, mixed_ppf_cutoff(), converged);
+   
 
-    if(converged){
-        deque<float>::const_iterator p = ppf.begin();
-        for(deque<float>::const_iterator s=ssq.begin(); s!=ssq.end(); ++p, ++s){
-            if(filter.is_clonal(*p,*s, opts.mixed_stringency))
-                ++counts._nclonal;
-        }
-        counts._nmixed = ppf.size() - counts._nclonal;
+    deque<float>::const_iterator p = ppf.begin();
+    for(deque<float>::const_iterator s=ssq.begin(); s!=ssq.end(); ++p, ++s){
+      if(filter.is_clonal(*p,*s, opts.mixed_stringency))
+        ++counts._nclonal;
     }
+    counts._nmixed = ppf.size() - counts._nclonal;
 }
 
 static void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram, const PolyclonalFilterOpts & opts)
@@ -278,17 +275,18 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
                 init(mean, sgma, alpha);
               }
             }
-            converged = true;
         } else {
           cout << "converged to acceptable filter: using adapted filter at iteration " << (iteration-1) << endl;
         }
     }catch(const exception& ex){
-        converged = false;
         cerr << "exception thrown during fit_normals()" << endl;
         cerr << ex.what() << endl;
+        cout << "default parameters used to generate clonal and mixed pdfs" << endl;
+        init(mean, sgma, alpha);
     }catch(...){
-        converged = false;
         cerr << "unknown exception thrown during fit_normals()" << endl;
+        cout << "default parameters used to generate clonal and mixed pdfs" << endl;
+        init(mean, sgma, alpha);
     }
 
     return converged;

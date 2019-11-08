@@ -17,16 +17,17 @@ from django.core.cache import cache
 
 from ion.utils.TSversion import findVersions
 from iondb.rundb.models import IonMeshNode
-from iondb.rundb.api import CompositeExperimentResource, IonAuthentication, DjangoAuthorization
+from iondb.rundb.api import (
+    CompositeExperimentResource,
+    IonAuthentication,
+    DjangoAuthorization,
+)
+from iondb.rundb.labels import IonMeshNodeStatus
 
 
 def fetch_remote_version_process(new_options):
     """ Used in a multiprocess pool to fetch a TS version for a specific host """
-    options = {
-        "address": "localhost",
-        "resource_name": "torrentsuite",
-        "params": {},
-    }
+    options = {"address": "localhost", "resource_name": "torrentsuite", "params": {}}
     options.update(new_options)
 
     object = {}
@@ -34,14 +35,17 @@ def fetch_remote_version_process(new_options):
 
     try:
         response = requests.get(
-            "http://%s/rundb/api/v1/%s/" % (options["address"], options["resource_name"]),
-            params=options["params"])
+            "http://%s/rundb/api/v1/%s/"
+            % (options["address"], options["resource_name"]),
+            params=options["params"],
+        )
         response.raise_for_status()
         object = response.json()
 
     except Exception as e:
         logging.exception(
-            "Mesh api failed to fetch version from %s api on %s" % (options["resource_name"], options["address"])
+            "Mesh api failed to fetch version from %s api on %s"
+            % (options["resource_name"], options["address"])
         )
         exceptions.append(e)
     return options["address"], object, exceptions
@@ -55,7 +59,7 @@ def fetch_remote_resource_list_process(new_options):
         "params": {},
         "object_limit": 500,
         "page_size": 100,
-        "order_by": "-date"
+        "order_by": "-date",
     }
     options.update(new_options)
 
@@ -66,25 +70,29 @@ def fetch_remote_resource_list_process(new_options):
     exceptions = []
     fetched_all_objects = True
 
-    next_url = "http://%s/rundb/api/v1/%s/" % (options["address"], options["resource_name"])
+    next_url = "http://%s/rundb/api/v1/%s/" % (
+        options["address"],
+        options["resource_name"],
+    )
     while next_url:
         try:
-            response = requests.get(
-                next_url,
-                params=options["params"])
+            response = requests.get(next_url, params=options["params"])
             response.raise_for_status()
             response_json = response.json()
             objects.extend(response_json["objects"])
             if not response_json["meta"]["next"]:
                 next_url = None
             elif len(objects) < options["object_limit"]:
-                next_url = ("http://%s/" % options["address"]) + response_json["meta"]["next"]
+                next_url = ("http://%s/" % options["address"]) + response_json["meta"][
+                    "next"
+                ]
             else:
                 next_url = None
                 fetched_all_objects = False
         except Exception as e:
             logging.exception(
-                "Mesh api failed to fetch data from %s api on %s" % (options["resource_name"], options["address"])
+                "Mesh api failed to fetch data from %s api on %s"
+                % (options["resource_name"], options["address"])
             )
             exceptions.append(e)
             fetched_all_objects = False
@@ -108,34 +116,41 @@ class MeshPrefetchResource(ModelResource):
         for mesh_node in servers:
             params = {
                 "api_key": mesh_node.apikey_remote,
-                "system_id": settings.SYSTEM_UUID
+                "system_id": settings.SYSTEM_UUID,
             }
-            job_arguments.append({
-                "address": mesh_node.hostname,
-                "params": params
-            })
+            job_arguments.append({"address": mesh_node.hostname, "params": params})
         job_pool = multiprocessing.Pool(processes=len(job_arguments))
         job_output = job_pool.map(fetch_remote_version_process, job_arguments)
         objects_per_host = {}
         for address, object, exceptions in job_output:
-            objects_per_host[address] = {
-                "object": {},
-                "warnings": []
-            }
+            objects_per_host[address] = {"object": {}, "warnings": []}
             if exceptions:
-                if hasattr(exceptions[0], "response"):
+                if type(exceptions[0]) == requests.exceptions.ConnectionError:
+                    objects_per_host[address]["warnings"].append(
+                        IonMeshNodeStatus.connection_error
+                    )
+                elif type(exceptions[0]) == requests.exceptions.Timeout:
+                    objects_per_host[address]["warnings"].append(
+                        IonMeshNodeStatus.timeout
+                    )
+                elif hasattr(exceptions[0], "response"):
                     response = exceptions[0].response
                     if response.status_code == 401:
-                        objects_per_host[address]["warnings"].append("Invalid Permissions")
+                        objects_per_host[address]["warnings"].append(
+                            IonMeshNodeStatus.unauthorized
+                        )
                 else:
-                    # Instead of showing this warning, just let the other (incompatible) warning show up on its own.
-                    pass
+                    objects_per_host[address]["warnings"].append(
+                        IonMeshNodeStatus.error
+                    )
 
             else:
                 objects_per_host[address]["object"] = object.get("meta_version", "")
+                if local_meta_version != object.get("meta_version", ""):
+                    objects_per_host[address]["warnings"].append(
+                        IonMeshNodeStatus.incompatible
+                    )
 
-            if local_meta_version != object.get("meta_version", ""):
-                objects_per_host[address]["warnings"].append("Incompatible Software Version")
         return objects_per_host
 
     @staticmethod
@@ -144,24 +159,23 @@ class MeshPrefetchResource(ModelResource):
         for mesh_node in servers:
             params = {
                 "api_key": mesh_node.apikey_remote,
-                "system_id": settings.SYSTEM_UUID
+                "system_id": settings.SYSTEM_UUID,
             }
             params.update(filter_params)
-            job_arguments.append({
-                "address": mesh_node.hostname,
-                "resource_name": resource_name,
-                "object_limit": 1000,
-                "order_by": "name",
-                "params": params
-            })
+            job_arguments.append(
+                {
+                    "address": mesh_node.hostname,
+                    "resource_name": resource_name,
+                    "object_limit": 1000,
+                    "order_by": "name",
+                    "params": params,
+                }
+            )
         job_pool = multiprocessing.Pool(processes=len(job_arguments))
         job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
         objects_per_host = {}
         for address, objects, fetched_all_objects, exceptions in job_output:
-            objects_per_host[address] = {
-                "objects": [],
-                "warnings": []
-            }
+            objects_per_host[address] = {"objects": [], "warnings": []}
             if exceptions:
                 objects_per_host[address]["warnings"].append("Prefetch Failure")
             else:
@@ -178,7 +192,7 @@ class MeshPrefetchResource(ModelResource):
                 "references": [],
                 "rigs": [],
                 "plugins": [],
-            }
+            },
         }
 
         compatible_nodes = list(IonMeshNode.objects.filter(active=True))
@@ -187,31 +201,34 @@ class MeshPrefetchResource(ModelResource):
             container_object["nodes"][node.hostname] = {
                 "id": node.id,
                 "compatible": True,
-                "warnings": []
+                "warnings": [],
             }
 
         # Fetch all mesh versions
         if len(compatible_nodes) > 0:
-            versions = self._fetch_versions(
-                compatible_nodes
-            )
-            for host, values in versions.iteritems():
+            versions = self._fetch_versions(compatible_nodes)
+            for host, values in versions.items():
                 container_object["nodes"][host]["version"] = values["object"]
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
 
         # Fetch all mesh projects
         if len(compatible_nodes) > 0:
-            projects = self._fetch_resource(
-                compatible_nodes,
-                "project"
-            )
-            for host, values in projects.iteritems():
+            projects = self._fetch_resource(compatible_nodes, "project")
+            for host, values in projects.items():
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
                 else:
                     for object in values["objects"]:
@@ -220,14 +237,16 @@ class MeshPrefetchResource(ModelResource):
         # Fetch all mesh samples
         if len(compatible_nodes) > 0:
             samples = self._fetch_resource(
-                compatible_nodes,
-                "sample",
-                filter_params={"status": "run"}
+                compatible_nodes, "sample", filter_params={"status": "run"}
             )
-            for host, values in samples.iteritems():
+            for host, values in samples.items():
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
                 else:
                     for object in values["objects"]:
@@ -236,29 +255,34 @@ class MeshPrefetchResource(ModelResource):
         # Fetch all mesh reference genomes
         if len(compatible_nodes) > 0:
             references = self._fetch_resource(
-                compatible_nodes,
-                "referencegenome",
-                filter_params={"enabled": "true"}
+                compatible_nodes, "referencegenome", filter_params={"enabled": "true"}
             )
-            for host, values in references.iteritems():
+            for host, values in references.items():
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
                 else:
                     for object in values["objects"]:
-                        container_object["values"]["references"].append(object["short_name"])
+                        container_object["values"]["references"].append(
+                            object["short_name"]
+                        )
 
         # Fetch all mesh rigs
         if len(compatible_nodes) > 0:
-            references = self._fetch_resource(
-                compatible_nodes,
-                "rig",
-            )
-            for host, values in references.iteritems():
+            references = self._fetch_resource(compatible_nodes, "rig")
+            for host, values in references.items():
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
                 else:
                     for object in values["objects"]:
@@ -266,14 +290,15 @@ class MeshPrefetchResource(ModelResource):
 
         # Fetch all mesh plugins
         if len(compatible_nodes) > 0:
-            references = self._fetch_resource(
-                compatible_nodes,
-                "plugin",
-            )
-            for host, values in references.iteritems():
+            references = self._fetch_resource(compatible_nodes, "plugin")
+            for host, values in references.items():
                 if len(values["warnings"]) > 0:
-                    container_object["nodes"][host]["warnings"].extend(values["warnings"])
-                    compatible_nodes = [node for node in compatible_nodes if node.hostname != host]
+                    container_object["nodes"][host]["warnings"].extend(
+                        values["warnings"]
+                    )
+                    compatible_nodes = [
+                        node for node in compatible_nodes if node.hostname != host
+                    ]
                     container_object["nodes"][host]["compatible"] = False
                 else:
                     for object in values["objects"]:
@@ -326,23 +351,32 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
             "nullable": False,
             "readonly": True,
             "type": "string",
-            "unique": False
+            "unique": False,
         }
         return base_schema
 
     def get_list(self, request, **kwargs):
         base_bundle = self.build_bundle(request=request)
-        objects, warnings = self.obj_get_list(bundle=base_bundle, **self.remove_api_resource_names(kwargs))
+        objects, warnings = self.obj_get_list(
+            bundle=base_bundle, **self.remove_api_resource_names(kwargs)
+        )
         sorted_objects = self.apply_sorting(objects, options=request.GET)
 
-        paginator = self._meta.paginator_class(request.GET, sorted_objects, resource_uri=self.get_resource_uri(),
-                                               limit=self._meta.limit, max_limit=self._meta.max_limit,
-                                               collection_name=self._meta.collection_name)
+        paginator = self._meta.paginator_class(
+            request.GET,
+            sorted_objects,
+            resource_uri=self.get_resource_uri(),
+            limit=self._meta.limit,
+            max_limit=self._meta.max_limit,
+            collection_name=self._meta.collection_name,
+        )
         to_be_serialized = paginator.page()
 
         # Dehydrate the bundles in preparation for serialization.
         bundles = [
-            self.full_dehydrate(self.build_bundle(obj=obj, request=request), for_list=True)
+            self.full_dehydrate(
+                self.build_bundle(obj=obj, request=request), for_list=True
+            )
             for obj in to_be_serialized[self._meta.collection_name]
         ]
 
@@ -357,23 +391,33 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
         if options is None:
             options = {}
 
-        field_name = options.get('order_by', '-date')
+        field_name = options.get("order_by", "-date")
 
         reverse = False
-        if field_name[0] == '-':
+        if field_name[0] == "-":
             reverse = True
             field_name = field_name[1:]
 
         if field_name not in self.fields:
-            raise InvalidSortError("No matching '%s' field for ordering on." % field_name)
+            raise InvalidSortError(
+                "No matching '%s' field for ordering on." % field_name
+            )
 
         if field_name not in self._meta.ordering:
-            raise InvalidSortError("The '%s' field does not allow ordering." % field_name)
+            raise InvalidSortError(
+                "The '%s' field does not allow ordering." % field_name
+            )
 
         if self.fields[field_name].attribute is None:
-            raise InvalidSortError("The '%s' field has no 'attribute' for ordering with." % field_name)
+            raise InvalidSortError(
+                "The '%s' field has no 'attribute' for ordering with." % field_name
+            )
 
-        return sorted(obj_list, key=lambda k: k[self.fields[field_name].attribute], reverse=reverse)
+        return sorted(
+            obj_list,
+            key=lambda k: k[self.fields[field_name].attribute],
+            reverse=reverse,
+        )
 
     def full_dehydrate(self, bundle, for_list=False):
         # The object is a dict not and object, just return it.
@@ -403,22 +447,26 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
         job_arguments = []
 
         if include_local_runs:
-            job_arguments.append({
-                "address": "localhost",
-                "resource_name": "compositeexperiment",
-                "object_limit": self._meta.object_limit,
-                "params": applicable_filters.copy()
-            })
+            job_arguments.append(
+                {
+                    "address": "localhost",
+                    "resource_name": "compositeexperiment",
+                    "object_limit": self._meta.object_limit,
+                    "params": applicable_filters.copy(),
+                }
+            )
         for mesh_node in mesh_nodes:
             params = applicable_filters.copy()
             params["api_key"] = mesh_node.apikey_remote
             params["system_id"] = settings.SYSTEM_UUID
-            job_arguments.append({
-                "address": mesh_node.hostname,
-                "resource_name": "compositeexperiment",
-                "object_limit": self._meta.object_limit,
-                "params": params
-            })
+            job_arguments.append(
+                {
+                    "address": mesh_node.hostname,
+                    "resource_name": "compositeexperiment",
+                    "object_limit": self._meta.object_limit,
+                    "params": params,
+                }
+            )
         job_pool = multiprocessing.Pool(processes=len(job_arguments))
         job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
 
@@ -442,7 +490,9 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
             if not exceptions:
                 if not fetched_all_objects:
                     servers_with_truncated_data.append(address)
-                    object_date = parse_datetime(objects[-1]["date"]).date()  # Strip Time
+                    object_date = parse_datetime(
+                        objects[-1]["date"]
+                    ).date()  # Strip Time
                     if object_date > object_truncation_date:
                         object_truncation_date = object_date
 
@@ -462,13 +512,14 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
         if len(servers_with_truncated_data) > 0:
             warnings.append(
                 "The Torrent Server(s) %s have too many results to display. "
-                "Only experiments newer than %s are displayed. Try searching or adding additional filters." %
-                (",".join(servers_with_truncated_data), str(object_truncation_date))
+                "Only experiments newer than %s are displayed. Try searching or adding additional filters."
+                % (",".join(servers_with_truncated_data), str(object_truncation_date))
             )
 
         if len(servers_with_exceptions) > 0:
             warnings.append(
-                "Could not fetch runs from Torrent Server(s) %s!" % ",".join(servers_with_exceptions)
+                "Could not fetch runs from Torrent Server(s) %s!"
+                % ",".join(servers_with_exceptions)
             )
         return merged_obj_list, warnings
 
@@ -499,7 +550,9 @@ class AutoDiscoveredHostsResource(Resource):
     def _validate_list(self, hosts_list):
         for host_entry in hosts_list:
             if sorted(host_entry.keys()) != ["hostname", "ipv4"]:
-                raise BadRequest("Invalid list object keys. Must be 'hostname', 'ipv4'.")
+                raise BadRequest(
+                    "Invalid list object keys. Must be 'hostname', 'ipv4'."
+                )
             if not host_entry["hostname"]:
                 raise BadRequest("Empty hostname key.")
             if not host_entry["ipv4"]:
@@ -513,7 +566,6 @@ class AutoDiscoveredHostsResource(Resource):
 
     def post_detail(self, request, **kwargs):
         return HttpNotImplemented()
-
 
     def get_list(self, request, **kwargs):
         return HttpNotImplemented()

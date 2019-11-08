@@ -9,6 +9,8 @@ USERINPUT.workflows = [];
 USERINPUT.relations = [];
 USERINPUT.genders = [];
 USERINPUT.cancerTypes = [];
+USERINPUT.populations = [];
+USERINPUT.mouseStrains = [];
 USERINPUT.relations_with_gender = {};
 
 var SEPARATOR = " | ";
@@ -37,11 +39,23 @@ function getIonReporterFields(){
         },
         irtag_isFactoryProvidedWorkflow: { type: "bool", defaultValue: USERINPUT.tag_isFactoryProvidedWorkflow },
         irRelationRole: { type: "string",
-            defaultValue: function getdefaultrelation(){ return defaultRelation(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow)},
+            defaultValue: function getdefaultrelation(){return defaultRelation(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow)},
             isValueRequired: true,
             editable: function(){return USERINPUT.is_ir_connected}
         },
         irGender:       { type: "string", defaultValue: "",
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irPopulation:       { type: "string", defaultValue: "",
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irmouseStrains:       { type: "string", defaultValue: "",
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irSampleCollectionDate:       { type: "date", defaultValue: "",
+            editable: function(){return USERINPUT.is_ir_connected}
+        },
+        irSampleReceiptDate:       { type: "date", defaultValue: "",
             editable: function(){return USERINPUT.is_ir_connected}
         },
         irSetID:        { type: "number" }
@@ -61,6 +75,22 @@ function getIonReporterColumns(){
             headerTemplate: columnSectionTemplate({'id':'annotationsSectionTab', 'text': 'Annotations'}),
             hidden: !$('#isOnco').is(':checked') && !$('#isPgs').is(':checked'),
             editor: " ",
+        },
+        {
+            field: "irSampleCollectionDate", title: "Sample Collection Date",
+            width: '150px',
+            attributes: { "name": "irSampleCollectionDate", "class": "date" },
+            editor: irSampleCollectionDateEditor,
+            format: "{0:yyyy-MM-dd}",
+        },
+        {
+            field: "irSampleReceiptDate", title: "Sample Receipt Date",
+            width: '150px',
+            attributes: { "name": "irSampleReceiptDate", "class": "date" },
+            editor: irSampleReceiptDateEditor,
+            format: "{0:yyyy-MM-dd}",
+            headerAttributes: { "rel": "tooltip", "data-original-title": "Sample Receipt date must be later than or the same as the sample collection date"},
+            headerTemplate: '<i class="icon-info-sign"></i> Sample Receipt Date'
         },
         // Oncology
         {
@@ -127,6 +157,20 @@ function getIonReporterColumns(){
             attributes: { "name": "irGender" },
             editor: irGenderEditor,
             template: dropDnTemplate({'html': '#=irGender#'})
+        },
+        {
+            field: "irPopulation", title: "Population",
+            width: '100px',
+            attributes: { "name": "irPopulation" },
+            editor: irPopulationEditor,
+            template: dropDnTemplate({'html': '#=irPopulation#'})
+        },
+        {
+            field: "irmouseStrains", title: "Mouse Strains",
+            width: '100px',
+            attributes: { "name": "irmouseStrains" },
+            editor: irmouseStrainsEditor,
+            template: dropDnTemplate({'html': '#=irmouseStrains#'})
         },
         {
             field: "irSetID", title: "IR Set ID",
@@ -266,6 +310,33 @@ function irGenderEditor(container, options) {
         });
 }
 
+function irPopulationEditor(container, options) {
+    $('<input id="irPopulationEditor" name="irPopulationEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: populations,
+            dataTextField: "display",
+            dataValueField: "value",
+            optionLabel: "---",
+            change: function(e){
+                updateIRvalidationErrors(options.model.row, ['irPopulation']);
+            }
+        });
+}
+function irmouseStrainsEditor(container, options) {
+    $('<input id="irmouseStrainsEditor" name="irmouseStrainsEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: mouseStrains,
+            dataTextField: "display",
+            dataValueField: "value",
+            optionLabel: "---",
+            change: function(e){
+                updateIRvalidationErrors(options.model.row, ['irmouseStrains']);
+            }
+        });
+}
+
 function irCancerTypeEditor(container, options) {
     $('<input id="irCancerTypeEditor" name="irCancerTypeEditor" data-bind="value:' + options.field + '"/>')
         .appendTo(container)
@@ -286,6 +357,28 @@ function ircellularityPctEditor(container, options) {
         .kendoNumericTextBox({ min: 0, max: 100, step: 1 });
 }
 
+function irSampleCollectionDateEditor(container, options) {
+    $('<input id="irSampleCollectionDateEditor" name="irSampleCollectionDateEditor" data-bind="value:' + options.field +'" />')
+        .appendTo(container)
+          .kendoDatePicker({format: "yyyy MMMM dd",
+          change: function(e){
+            /* validate: Sample Receipt date must be later than or the same as the sample collection date */
+              var collectDate = this.value();
+              var receiptDate = options.model.irSampleReceiptDate;
+              if ((receiptDate) && (Date.parse(collectDate) > Date.parse(receiptDate))) {
+                options.model.set('irSampleReceiptDate', '')
+              }
+          }
+          });
+}
+
+function irSampleReceiptDateEditor(container, options) {
+    $('<input id="irSampleReceiptDateEditor" name="irSampleReceiptDateEditor" data-bind="value:' + options.field +'" />')
+        .appendTo(container)
+          .kendoDatePicker({format: "yyyy MMMM dd",
+              min: new Date(options.model.irSampleCollectionDate)
+          });
+}
 function hasGender(Relation){
     return (Relation in USERINPUT.relations_with_gender)
 }
@@ -458,6 +551,16 @@ function check_selected_values(){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Cancer Type not found: " + row.ircancerType);
             //row.ircancerType = ""; // allow TS-based annotation even if not present on IR
         }
+        if (row.irPopulation && ($.grep(USERINPUT.populations, function(obj){ return obj.Population == row.irPopulation } ).length == 0) ){
+            errors.push("<br>Row "+ (row.row+1) + ": Selected Population not found: " + row.irPopulation);
+            //console.log("UnComment the above line once IRU implements the validation for population");
+            //row.irPopulation = ""; // allow TS-based annotation even if not present on IR
+        }
+        if (row.irmouseStrains && ($.grep(USERINPUT.mouseStrains, function(obj){ return obj.MouseStrains == row.irmouseStrains } ).length == 0) ){
+            //errors.push("<br>Row "+ (row.row+1) + ": Selected Mouse Strains not found: " + row.irmouseStrains);
+            console.log("UnComment the above line once IRU implements the validation for population");
+            //row.irmouseStrains = ""; // allow TS-based annotation even if not present on IR
+        }
         if (!row.irSetID){
             if( i > 0 && row.irWorkflow) {
                 if (planOpt.isDualNucleotideType && isSameSampleForDual && !isEven(i)){
@@ -578,6 +681,22 @@ function populate_userinput_from_response(data){
                 };
             });
         }
+        if (column["Name"] == "Population"){
+            USERINPUT.populations = $.map(column["Values"], function(value, key){
+                return {
+                    "Population": value,
+                    "display": value
+                };
+            });
+        }
+        if (column["Name"] == "MouseStrains"){
+            USERINPUT.mouseStrains = $.map(column["Values"], function(value, key){
+                return {
+                    "MouseStrains": value,
+                    "display": value
+                };
+            });
+        }
     });
 }
 
@@ -634,6 +753,10 @@ function load_and_set_ir_fields() {
             }
         }
     });
+
+
+
+
 }
 
 $(document).ready(function(){

@@ -9,9 +9,11 @@ PORT = 10000
 def connect(host, port):
     return xmlrpclib.ServerProxy("http://%s:%d" % (host, port), allow_none=True)
 
+
 def get_running_jobs(host, port):
     conn = connect(host, port)
     return conn.running()
+
 
 def load(fname):
     infile = open(fname)
@@ -19,15 +21,13 @@ def load(fname):
     infile.close()
     return ret
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # do some testing
-    server = connect('localhost', PORT)
+    server = connect("localhost", PORT)
     tscript = load("testscript.py")
-    name = server.startanalysis("test1",
-                                tscript,
-                                load("testparams.json"))
-    print "Run name:", name
-    name2 = server.startanalysis("test2",
-                                 tscript,
-                                 {"name": "test script 2",
-                                  "numbers": [1, 2, 3, 4, 5]})
+    name = server.startanalysis("test1", tscript, load("testparams.json"))
+    print("Run name:", name)
+    name2 = server.startanalysis(
+        "test2", tscript, {"name": "test script 2", "numbers": [1, 2, 3, 4, 5]}
+    )

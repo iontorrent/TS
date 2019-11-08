@@ -8,7 +8,7 @@ from django.db import models
 from django.utils.functional import cached_property
 import gnupg
 
-HOME = '/tmp'
+HOME = "/tmp"
 
 
 class SecureString(models.Model):
@@ -27,14 +27,19 @@ class SecureString(models.Model):
     @classmethod
     def get_secure_key(cls):
         # read the super secret key from the file system
-        with open('/var/spool/ion/key') as key_fp:
+        with open("/var/spool/ion/key") as key_fp:
             key = key_fp.read().strip()
             return key
 
     @classmethod
     def create(cls, unencrypted, name):
         gpg = gnupg.GPG(gnupghome=HOME)
-        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=cls.get_secure_key())
+        ep = gpg.encrypt(
+            data=str(unencrypted),
+            recipients=None,
+            symmetric="AES256",
+            passphrase=cls.get_secure_key(),
+        )
         if not ep:
             raise Exception("Failed to encrypt the data.")
 
@@ -49,7 +54,7 @@ class SecureString(models.Model):
         if not self.encrypted_string:
             raise Exception("Cannot save an empty string for " + self.name)
 
-        if not self.encrypted_string.startswith('-----BEGIN PGP MESSAGE-----'):
+        if not self.encrypted_string.startswith("-----BEGIN PGP MESSAGE-----"):
             raise Exception("This is not a pgp encrypted string.")
 
         super(SecureString, self).save(*args, **kwargs)
@@ -61,7 +66,12 @@ class SecureString(models.Model):
     def encrypt(self, unencrypted):
         """Used to update the encrypted string"""
         gpg = gnupg.GPG(gnupghome=HOME)
-        ep = gpg.encrypt(data=str(unencrypted), recipients=None, symmetric='AES256', passphrase=self.get_secure_key())
+        ep = gpg.encrypt(
+            data=str(unencrypted),
+            recipients=None,
+            symmetric="AES256",
+            passphrase=self.get_secure_key(),
+        )
         if not ep:
             raise Exception("Failed to encrypt the data.")
         self.encrypted_string = ep.data.strip()
@@ -69,4 +79,8 @@ class SecureString(models.Model):
     @cached_property
     def decrypted(self):
         """This will decrypt a encrypted message and make sure the unencrypted string never hits the disk"""
-        return str(gnupg.GPG(gnupghome=HOME).decrypt(self.encrypted_string, passphrase=self.get_secure_key()))
+        return str(
+            gnupg.GPG(gnupghome=HOME).decrypt(
+                self.encrypted_string, passphrase=self.get_secure_key()
+            )
+        )

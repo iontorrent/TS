@@ -12,7 +12,7 @@ from iondb.rundb.data import dmactions_types
 sys.stdout.write("Report Name," + ",".join(dmactions_types.FILESET_TYPES) + "\n")
 
 # Get list of Result objects from database
-results = Results.objects.all().order_by('timeStamp')
+results = Results.objects.all().order_by("timeStamp")
 
 for result in results:
     sys.stdout.write(result.resultsName)
@@ -21,4 +21,4 @@ for result in results:
         dmfilestat = result.get_filestat(dm_type)
         sys.stdout.write(",")
         sys.stdout.write(str(dmfilestat.archivepath))
-    print
+    print()

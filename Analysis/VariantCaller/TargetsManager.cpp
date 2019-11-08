@@ -365,7 +365,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   int best_overlap = 0;
   GetBestTargetIndex(rai, unmerged_target_hint, best_target_idx, best_fit_penalty, best_overlap);
 
-  if (best_target_idx < 0 or rai->target_coverage_indices.empty()){
+  if ((best_target_idx < 0 or rai->target_coverage_indices.empty()) and min_coverage_fraction > 0.0f){
 	  rai->filtered = true;
 	  return;
   }
@@ -546,56 +546,13 @@ bool TargetsManager::FilterReadByRegion(Alignment* rai, int unmerged_target_hint
 	return is_filtered_out;
 }
 
-
-void TargetsManager::WriteTargetsCoverage(const string& target_cov_file, const ReferenceReader& ref_reader, bool use_best_target, bool use_mol_tag) const {
-	ofstream target_cov_out;
-	target_cov_out.open(target_cov_file.c_str(), ofstream::out);
-	target_cov_out << "chr"           << "\t"
-				   << "pos_start"     << "\t"
-				   << "pos_end"       << "\t"
-				   << "name"          << "\t"
-				   << "read_depth";
-	if (use_mol_tag){
-		target_cov_out << "\t"
-				       << "family_depth" << "\t"
-				       << "fam_size_hist";
-	}
-	target_cov_out << endl;
-
-	for (vector<UnmergedTarget>::const_iterator target_it = unmerged.begin(); target_it != unmerged.end(); ++target_it){
-		unsigned int check_read_cov = 0;
-		unsigned int check_fam_cov = 0;
-		target_cov_out << ref_reader.chr_str(target_it->chr) << "\t"
-				       << target_it->begin << "\t"
-					   << target_it->end << "\t"
-					   << (target_it->name.empty()? "." : target_it->name) << "\t"
-			           << (use_best_target ? target_it->my_stat.read_coverage_by_best_target : target_it->my_stat.read_coverage);
-		if (use_mol_tag){
-			target_cov_out << "\t"
-					       << target_it->my_stat.family_coverage << "\t";
-			for (map<int, unsigned int>::const_iterator hist_it = target_it->my_stat.fam_size_hist.begin(); hist_it != target_it->my_stat.fam_size_hist.end(); ++hist_it){
-				target_cov_out << "(" << hist_it->first << "," << hist_it->second <<"),";
-				check_fam_cov += hist_it->second;
-				check_read_cov += (hist_it->second * (unsigned int) hist_it->first);
-			}
-			// Check fam_size_hist matches read/family coverages.
-			assert((check_read_cov == target_it->my_stat.read_coverage) and (check_fam_cov == target_it->my_stat.family_coverage));
-		}
-		target_cov_out << endl;
-	}
-	target_cov_out.close();
-}
-
-void TargetsManager::AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets){
+void TargetsManager::AddToRawReadCoverage(const Alignment* const rai){
 	pthread_mutex_lock(&coverage_counter_mutex_);
-	for (map<int, TargetStat>::const_iterator stat_it = stat_of_targets.begin(); stat_it != stat_of_targets.end(); ++stat_it){
-		int target_idx = stat_it->first;
-		unmerged[target_idx].my_stat.read_coverage += stat_it->second.read_coverage;
-		unmerged[target_idx].my_stat.family_coverage += stat_it->second.family_coverage;
-		for (map<int, unsigned int>::const_iterator hist_it = stat_it->second.fam_size_hist.begin(); hist_it != stat_it->second.fam_size_hist.end(); ++hist_it){
-			unmerged[target_idx].my_stat.fam_size_hist[hist_it->first] += hist_it->second;
-		}
-		unmerged[target_idx].my_stat.read_coverage_by_best_target += stat_it->second.read_coverage_by_best_target;
+	for (vector<int>::const_iterator target_it = rai->target_coverage_indices.begin(); target_it != rai->target_coverage_indices.end(); ++target_it){
+		++unmerged[*target_it].my_stat.raw_read_coverage;
+	}
+	if (rai->best_coverage_target_idx >= 0){
+		++unmerged[rai->best_coverage_target_idx].my_stat.raw_read_coverage_by_best_target;
 	}
 	pthread_mutex_unlock(&coverage_counter_mutex_);
 }
@@ -683,4 +640,61 @@ int TargetsManager::FindMergedTargetIndex(int chr, long pos) const{
 		probe_idx = merged_idx_start + (merged_idx_end - merged_idx_start) / 2;
 	}
 	return -1;
+}
+
+void TargetsManager::WriteTargetsCoverage(const string& target_cov_file, const ReferenceReader& ref_reader, bool use_best_target, bool use_mol_tag) const {
+	ofstream target_cov_out;
+	target_cov_out.open(target_cov_file.c_str(), ofstream::out);
+	target_cov_out << "chr"           << "\t"
+				   << "pos_start"     << "\t"
+				   << "pos_end"       << "\t"
+				   << "name"          << "\t"
+				   << "read_depth";
+	if (use_mol_tag){
+		target_cov_out << "\t"
+				       << "family_depth" << "\t"
+				       << "fam_size_hist" << "\t"
+					   << "raw_read_depth";
+	}
+	target_cov_out << endl;
+
+	for (vector<UnmergedTarget>::const_iterator target_it = unmerged.begin(); target_it != unmerged.end(); ++target_it){
+		unsigned int check_read_cov = 0;
+		unsigned int check_fam_cov = 0;
+		target_cov_out << ref_reader.chr_str(target_it->chr) << "\t"
+				       << target_it->begin << "\t"
+					   << target_it->end << "\t"
+					   << (target_it->name.empty()? "." : target_it->name) << "\t"
+			           << (use_best_target ? target_it->my_stat.read_coverage_in_families_by_best_target : target_it->my_stat.read_coverage_in_families);
+		if (use_mol_tag){
+			target_cov_out << "\t"
+					       << target_it->my_stat.family_coverage << "\t";
+			for (map<int, unsigned int>::const_iterator hist_it = target_it->my_stat.fam_size_hist.begin(); hist_it != target_it->my_stat.fam_size_hist.end(); ++hist_it){
+				target_cov_out << "(" << hist_it->first << "," << hist_it->second <<"),";
+				check_fam_cov += hist_it->second;
+				check_read_cov += (hist_it->second * (unsigned int) hist_it->first);
+			}
+			// Check fam_size_hist matches read/family coverages.
+			assert((check_read_cov == target_it->my_stat.read_coverage_in_families) and (check_fam_cov == target_it->my_stat.family_coverage));
+			target_cov_out << "\t";
+			// raw read depth
+			target_cov_out << (use_best_target ? target_it->my_stat.raw_read_coverage_by_best_target : target_it->my_stat.raw_read_coverage);
+		}
+		target_cov_out << endl;
+	}
+	target_cov_out.close();
+}
+
+void TargetsManager::AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets){
+	pthread_mutex_lock(&coverage_counter_mutex_);
+	for (map<int, TargetStat>::const_iterator stat_it = stat_of_targets.begin(); stat_it != stat_of_targets.end(); ++stat_it){
+		int target_idx = stat_it->first;
+		unmerged[target_idx].my_stat.read_coverage_in_families += stat_it->second.read_coverage_in_families;
+		unmerged[target_idx].my_stat.family_coverage += stat_it->second.family_coverage;
+		for (map<int, unsigned int>::const_iterator hist_it = stat_it->second.fam_size_hist.begin(); hist_it != stat_it->second.fam_size_hist.end(); ++hist_it){
+			unmerged[target_idx].my_stat.fam_size_hist[hist_it->first] += hist_it->second;
+		}
+		unmerged[target_idx].my_stat.read_coverage_in_families_by_best_target += stat_it->second.read_coverage_in_families_by_best_target;
+	}
+	pthread_mutex_unlock(&coverage_counter_mutex_);
 }

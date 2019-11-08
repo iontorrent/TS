@@ -36,19 +36,21 @@ enum AlleleHint {
   NO_HINT = 0,
   FWD_BAD_HINT = 1,
   REV_BAD_HINT = 2,
-  BOTH_BAD_HINT = 3
+  BOTH_BAD_HINT = 3,
+  SPEC_BAD_HINT = 4
 };
 
 class hint_item {
  public:
   hint_item() {
-     afmean = afsd = 0;
+     afmean = afsd = AFf=AFr= 0;
   }
   int chr_ind;
   long int pos;
   long int value;
   long int rlen;
   double afmean, afsd;
+  double AFf, AFr;
   string alt;
 }; 
  
@@ -77,11 +79,18 @@ public:
 	af = hint_vec[hint_cur_].afmean; sd = hint_vec[hint_cur_].afsd;
 	return true;
   }
+  bool hint_AF_good_allele(int af, int ar, int cf, int cr) {
+	if (hint_value() != SPEC_BAD_HINT) return false; 
+	double AFf = hint_vec[hint_cur_].AFf, AFr = hint_vec[hint_cur_].AFr;
+	return (AFf*cf < (double) af and AFr*cr < (double) ar); // is a good allele
+  }
   string hint_alt() const { return hint_vec[hint_cur_].alt; }
   bool hint_empty() const { return hint_vec.empty() || hint_header_ >=  hint_vec.size();}
   void hint_pop() { hint_header_++;}
   void hint_next() { hint_cur_++;}
   void hint_start() { hint_cur_ = hint_header_;}
+  void hint_store_checkpt() { checkpt_ = hint_cur_;}
+  void hint_back2checkpt() { hint_cur_ = checkpt_; checkpt_ = hint_header_;}
   bool hint_more() { return hint_cur_ < hint_vec.size();}
 
   void MakeHintQueue(const string& hotspot_vcf_filename);
@@ -93,6 +102,7 @@ private:
   int                     next_pos_;
   bool                    has_more_variants_;
   unsigned int 			  hint_header_;
+  unsigned int			  checkpt_;
   unsigned int			  hint_cur_;
 
 

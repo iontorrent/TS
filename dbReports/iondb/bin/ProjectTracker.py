@@ -53,26 +53,30 @@ import locale
 
 # format the numbers is a more readable way
 try:
-    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+    locale.setlocale(locale.LC_ALL, "en_US.UTF-8")
 except locale.Error:
-    locale.setlocale(locale.LC_ALL, '')
+    locale.setlocale(locale.LC_ALL, "")
 
 
 def get_project2(db, project_name, daterange, timeStart, timeEnd):
     """get exps with that look that they are for project micole"""
-    results = models.Experiment.objects.using(db).filter(library='hg19')
-    results = results.exclude(project__icontains='test').exclude(project__icontains='library').exclude(
-        project__icontains='enrichment').exclude(project__icontains='emulsionstability')
+    results = models.Experiment.objects.using(db).filter(library="hg19")
+    results = (
+        results.exclude(project__icontains="test")
+        .exclude(project__icontains="library")
+        .exclude(project__icontains="enrichment")
+        .exclude(project__icontains="emulsionstability")
+    )
 
-    report_storage = models.ReportStorage.objects.using(db).all().order_by('id')[0]
+    report_storage = models.ReportStorage.objects.using(db).all().order_by("id")[0]
     if daterange:
         results = results.filter(date__range=(timeStart, timeEnd))
 
     gc = models.GlobalConfig.objects.using(db).all()[0]
     web_root = gc.web_root
     if len(web_root) > 0:
-        if web_root[-1] == '/':
-            web_root = web_root[:len(web_root) - 1]
+        if web_root[-1] == "/":
+            web_root = web_root[: len(web_root) - 1]
 
     return (db, results, report_storage, web_root)
 
@@ -80,16 +84,18 @@ def get_project2(db, project_name, daterange, timeStart, timeEnd):
 def get_project(db, project_name, daterange, timeStart, timeEnd):
     """get exps with that look that they are for project micole"""
     # results = models.Experiment.objects.using(db).filter(project__iexact=project_name)
-    results = models.Experiment.objects.using(db).filter(project__istartswith=project_name)
-    report_storage = models.ReportStorage.objects.using(db).all().order_by('id')[0]
+    results = models.Experiment.objects.using(db).filter(
+        project__istartswith=project_name
+    )
+    report_storage = models.ReportStorage.objects.using(db).all().order_by("id")[0]
     if daterange:
         results = results.filter(date__range=(timeStart, timeEnd))
 
     gc = models.GlobalConfig.objects.using(db).all()[0]
     web_root = gc.web_root
     if len(web_root) > 0:
-        if web_root[-1] == '/':
-            web_root = web_root[:len(web_root) - 1]
+        if web_root[-1] == "/":
+            web_root = web_root[: len(web_root) - 1]
 
     return (db, results, report_storage, web_root)
 
@@ -110,7 +116,7 @@ def data_find(project_name, big_list):
     # now we will iterate through all of the reports returned to us by get_project.
     # while going through the loop we will pull out the values we are interested in.
 
-    csv = open(project_name + "_All-" + str(datetime.date.today()) + ".csv", 'w')
+    csv = open(project_name + "_All-" + str(datetime.date.today()) + ".csv", "w")
     csv.write("reportname , id , chip , path , site , timestamp\n")
 
     count = 0
@@ -125,8 +131,13 @@ def data_find(project_name, big_list):
                 # if not r.libmetrics_set.all()[0].align_sample:
                 if True:
                     iAQ17 = iAQ17 + r.libmetrics_set.all()[0].q17_mapped_bases
-                    i100bpAQ17 = i100bpAQ17 + r.libmetrics_set.order_by('i100Q17_reads')[0].i100Q17_reads
-                    i100bpLIST.append((place[0], r, r.libmetrics_set.all()[0].i100Q17_reads, place[3]))
+                    i100bpAQ17 = (
+                        i100bpAQ17
+                        + r.libmetrics_set.order_by("i100Q17_reads")[0].i100Q17_reads
+                    )
+                    i100bpLIST.append(
+                        (place[0], r, r.libmetrics_set.all()[0].i100Q17_reads, place[3])
+                    )
                     """
                 else:
                     iAQ17 = iAQ17 + r.libmetrics_set.all()[0].extrapolated_mapped_bases_in_q17_alignments
@@ -140,14 +151,30 @@ def data_find(project_name, big_list):
                     # east
                     innerpath = innerpath.replace("outputB/", "")
                     # west
-                    innerpath = innerpath.replace("http://ionwest.iontorrent.com/IonWest", "/IonWest")
+                    innerpath = innerpath.replace(
+                        "http://ionwest.iontorrent.com/IonWest", "/IonWest"
+                    )
                     innerpath = "/".join(innerpath.split("/")[:-1])
                     runid = str(exp.pk)
                     chipType = exp.chipType
-                    csv.write('"' + r.resultsName + '",' + runid + ',' + chipType + ',"' + \
-                              result_dir + innerpath + '","' + place[0] + '","' + str(r.timeStamp) + '"\n')
+                    csv.write(
+                        '"'
+                        + r.resultsName
+                        + '",'
+                        + runid
+                        + ","
+                        + chipType
+                        + ',"'
+                        + result_dir
+                        + innerpath
+                        + '","'
+                        + place[0]
+                        + '","'
+                        + str(r.timeStamp)
+                        + '"\n'
+                    )
 
-            except:
+            except Exception:
                 pass
     csv.close()
 
@@ -159,28 +186,35 @@ def data_find(project_name, big_list):
     for top in reversed(top5):
         r = top[1]
         one = "100AQ17 reads: "
-        two = locale.format('%d', top[2], True)
+        two = locale.format("%d", top[2], True)
         three = " -- From Report: " + str(top[1])
         four = " -- URL: " + top[3] + r.reportLink
         tu = (one, two, three, four)
         results.append(tu)
         if not r.libmetrics_set.all()[0].align_sample:
             top5_AQ17Bases = top5_AQ17Bases + r.libmetrics_set.all()[0].q17_mapped_bases
-            top5_100AQ17Reads = top5_100AQ17Reads + \
-                r.libmetrics_set.order_by('i100Q17_reads')[0].i100Q17_reads
+            top5_100AQ17Reads = (
+                top5_100AQ17Reads
+                + r.libmetrics_set.order_by("i100Q17_reads")[0].i100Q17_reads
+            )
         else:
-            top5_AQ17Bases = top5_AQ17Bases + \
-                r.libmetrics_set.all()[0].extrapolated_mapped_bases_in_q17_alignments
-            top5_100AQ17Reads = top5_100AQ17Reads + r.libmetrics_set.all()[0].extrapolated_100q17_reads
+            top5_AQ17Bases = (
+                top5_AQ17Bases
+                + r.libmetrics_set.all()[0].extrapolated_mapped_bases_in_q17_alignments
+            )
+            top5_100AQ17Reads = (
+                top5_100AQ17Reads + r.libmetrics_set.all()[0].extrapolated_100q17_reads
+            )
 
     return i100bpAQ17, iAQ17, count, results, top5_AQ17Bases, top5_100AQ17Reads
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     # get the project to track
     try:
         project_name = sys.argv[1]
-    except:
+    except Exception:
         quit()
 
     # get the start and end data (thanks Mel)
@@ -195,11 +229,11 @@ if __name__ == '__main__':
     timeEnd = timeEnd - datetime.timedelta(seconds=1)
     DoWeekly = False
 
-    html = open(project_name + "_Report-" + str(datetime.date.today()) + ".html", 'w')
+    html = open(project_name + "_Report-" + str(datetime.date.today()) + ".html", "w")
 
     html.write("<html><head><title>Micol Report</title></head><body>")
     if DoWeekly:
-        html.write('<h1>Experiments between %s and %s </h1>' % (timeStart, timeEnd))
+        html.write("<h1>Experiments between %s and %s </h1>" % (timeStart, timeEnd))
 
     # build the list of all project best results
     beverly = get_project2("beverly", project_name, DoWeekly, timeStart, timeEnd)
@@ -210,18 +244,21 @@ if __name__ == '__main__':
     html.write("</br> <h2>Summary Micol Report for site(s)")
     for i, site in enumerate(big_list):
         html.write(site[0])
-        if i + 1 != len(big_list): html.write(",")
+        if i + 1 != len(big_list):
+            html.write(",")
     html.write("</h2>")
 
     # get the data for all the sites in big_list
-    i100bpAQ17, iAQ17, count, results, top5_AQ17Bases, top5_100AQ17Reads = data_find(project_name, big_list)
+    i100bpAQ17, iAQ17, count, results, top5_AQ17Bases, top5_100AQ17Reads = data_find(
+        project_name, big_list
+    )
 
     # print the summary totals for all runs
     html.write("<ul><li>Runs: " + str(count))
     html.write("</li><li>Total 100AQ17 reads: ")
-    html.write(locale.format('%d', i100bpAQ17, True))
+    html.write(locale.format("%d", i100bpAQ17, True))
     html.write("</li><li>Total AQ17 bases: ")
-    html.write(locale.format('%d', iAQ17, True))
+    html.write(locale.format("%d", iAQ17, True))
     html.write("</li><ul>")
 
     # print top 5 results
@@ -238,7 +275,7 @@ if __name__ == '__main__':
 
     html.write("<h3>Totals for top 5 runs</h3><ul>")
     html.write("<li>Total 100AQ17 reads: ")
-    html.write(locale.format('%d', top5_100AQ17Reads, True))
+    html.write(locale.format("%d", top5_100AQ17Reads, True))
     html.write("</li><li>Total AQ17 bases: ")
-    html.write(locale.format('%d', top5_AQ17Bases, True))
+    html.write(locale.format("%d", top5_AQ17Bases, True))
     html.write("</li></ul>")

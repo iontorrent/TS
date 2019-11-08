@@ -144,7 +144,7 @@ echo "=================================================================="
 echo "Add Compute Node: $nodelist"
 echo "=================================================================="
 cd $ANSIBLE_HOME
-cmd="ansible-playbook site.yml -i ${ANSIBLE_HOME}/${MY_HOSTS} --sudo --limit=${nodelist[@]}"
+cmd="ansible-playbook site.yml -i ${ANSIBLE_HOME}/${MY_HOSTS} --become --limit=${nodelist[@]}"
 if [ $DEBUG == True ]; then
     echo "CMD: $cmd"
 else

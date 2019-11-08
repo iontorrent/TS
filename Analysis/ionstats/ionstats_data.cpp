@@ -3,6 +3,8 @@
 
 #include "ionstats_data.h"
 
+unsigned int PerReadFlowMatrix::h5_group_counter_ = 0;
+
 static const char all_nucleotides_char[] = {'A','C','G','T'};
 vector<char> all_nucleotides( all_nucleotides_char, all_nucleotides_char + sizeof(all_nucleotides_char)/sizeof(all_nucleotides_char[0]) );
 
@@ -491,7 +493,7 @@ int HpData::MergeFrom(HpData &other) {
 }
 
 
-hid_t H5CreateOrOpenGroup(hid_t &file_id, string &group_name) {
+hid_t H5CreateOrOpenGroup(hid_t &file_id, const string &group_name) {
   hid_t group_id;
   if(group_name == "/") {
     group_id = H5Gopen2(file_id, group_name.c_str(), H5P_DEFAULT);
@@ -773,10 +775,9 @@ int RegionalSummary::readH5(hid_t group_id) {
 }
 
 
-void PerReadFlowMatrix::Initialize(unsigned int n_flow, unsigned int read_buffer_size, unsigned int h5_group_counter) {
+void PerReadFlowMatrix::Initialize(unsigned int n_flow, unsigned int read_buffer_size) {
   n_flow_ = n_flow;
   read_buffer_size_ = read_buffer_size;
-  h5_group_counter_ = h5_group_counter;
   read_id_.assign(read_buffer_size_,"");
   n_substitutions_.assign(read_buffer_size_,0);
   unsigned int n_values = n_flow_ * read_buffer_size_;
@@ -871,9 +872,11 @@ int PerReadFlowMatrix::Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> 
 void PerReadFlowMatrix::FlushToH5Buffered(void) {
   if(n_read_ == read_buffer_size_)
     FlushToH5Forced();
+    Initialize(n_flow_,read_buffer_size_);
 }
 
 void PerReadFlowMatrix::FlushToH5Forced(void) {
+ 
   string h5_group_counter_string = static_cast<ostringstream*>( &(ostringstream() << h5_group_counter_) )->str();
   string group_name = "/per_read_per_flow/" + h5_group_counter_string;
   hid_t group_id = H5CreateOrOpenGroup(h5_file_id_, group_name);
@@ -898,7 +901,7 @@ void PerReadFlowMatrix::FlushToH5Forced(void) {
   H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_flow_);
   H5Dclose (dataset_id);
   H5Sclose (dataspace_id);
-
+  
   // read_id
   vector<const char *> read_id_cstr;
   read_id_cstr.reserve(n_read_);
@@ -939,7 +942,9 @@ void PerReadFlowMatrix::FlushToH5Forced(void) {
   H5Dwrite (dataset_id, H5T_NATIVE_SCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, &err_flow_[0]);
   H5Dclose (dataset_id);
   H5Sclose (dataspace_id);
-
+  
   H5Gclose (group_id);
-  Initialize(n_flow_,read_buffer_size_,h5_group_counter_+1);
+  
+  // write next set of reads for this thread in a new group
+  h5_group_counter_++;
 }

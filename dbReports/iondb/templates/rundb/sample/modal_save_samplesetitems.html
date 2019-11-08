@@ -1,10 +1,11 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 
-<div id="modal_save_samplesetitems_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+<div id="modal_save_samplesetitems_popup" class="modal modal-750 fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
-        <h3 id="modal_addLabel">Save Samples
+        <h3 id="modal_addLabel">{% trans "samplesets.input_samples.save.title" %}
         </h3>
     </div>
 	
@@ -17,44 +18,40 @@
 			<div class="alert alert-success modal-success-messages hide"></div -->
 
 			<form class="form-horizontal" id="save_samplesetitems_form" name="save_samplesetitems_form" method="POST" action="">
-            	<div class="control-group">
-					<label for="sampleset" class="form-label">Select a Sample Set to Receive Samples</label>            	
-					<!--div class="controls" -->
-					<select id="sampleset" name="sampleset" multiple="multiple" class="span4" style="margin-bottom: 10px;">
-    					{% for sampleSet in sampleSet_list %}
-                            <option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} {% if sampleSet.SampleGroupType_CV.displayedName %}({{sampleSet.SampleGroupType_CV.displayedName}}){% endif %}</option>    						
-    					{%endfor%}
-    				</select>
-    				<div>
-						<div class="input-append">								
-							<input class="span3" id="sampleset_search_text" type="text" placeholder="Search sample set names" />
-							<button id="search_text_go" class="btn" type="button">Search</button>
-
-							<button class="btn addSampleSet_btn" type="button">Add Sample Set...</button>
-						
-							<!--20130728-donotwork-yet a class="btn search_text_go_btn">Search</a>
-							<a class="btn addSampleSet_btn">Add Sample Set...</a -->						
-						</div>
-						<!--/div -->
-						<div class="help-block"></div>
-					</div>
-				</div>
+                <div class="control-group">
+                    <div class="">
+                        <label for="sampleset" class="form-label">{% trans "samplesets.input_samples.save.fields.sampleset.label" %}</label>
+                        <select id="sampleset" name="sampleset" multiple="multiple" class="span6" style="margin-bottom: 10px;">
+                            {% for sampleSet in sampleSet_list %}
+                                <option value="{{sampleSet.id}}" >{{sampleSet.displayedName}}
+                                    {% if sampleSet.SampleGroupType_CV.displayedName %}({{sampleSet.SampleGroupType_CV.displayedName}}){% endif %}</option>
+                            {%endfor%}
+                        </select>
+                        <div class="help-block">{% trans "samplesets.input_samples.save.fields.sampleset.helptext" %}</div>
+                    </div>
+                    <div class="">
+                        <label for="sampleset_search_text" class="">&nbsp;</label>
+                        <div class="input-append">
+                            <input class="span3" id="sampleset_search_text" type="text" placeholder="{% trans "samplesets.input_samples.save.search_bar.fields.sampleset_search_text.placeholder" %}">
+                            <button id="search_text_go" class="btn" type="button">{% trans "samplesets.input_samples.save.search_bar.fields.sampleset_search_text.label" %}</button>
+                            <button class="btn addSampleSet_btn" type="button">{% trans "samplesets.input_samples.save.action.addsampleset.label" %}</button>
+                        </div>
+                        <div class="help-block">{% trans "samplesets.input_samples.save.action.addsampleset.helptext" %}</div>
+                    </div>
+                </div>
                 {% include "rundb/sample/sampleset_input_section.html" %}
-
-		          <!--/div -->           	
-
 		    </form>
 		</div>
 	</div>
 	
 	<div class="modal-footer">
-		<button class="btn" data-dismiss="modal">Cancel</button>
-		<a class="btn btn-primary done_save_samplesetitems_btn">Save</a>
+		<button class="btn" data-dismiss="modal">{% trans "global.action.cancel" %}</button>
+		<a class="btn btn-primary done_save_samplesetitems_btn">{% trans "global.action.save" %}</a>
 	</div>
 
 
 <script type="text/javascript">
-	$(document).ready(function(){
+$(document).ready(function(){
     
   	$(".addSampleSet_btn").click(function(e) {      		
 		e.preventDefault();	
@@ -85,9 +82,10 @@
 
     	SAMPLESET_URL = "{% url "samplesets" %}"
     	
-        url = "{% url "save_input_samples" %}"       	
+        url = "{% url "save_input_samples" %}";
         data = $('#save_samplesetitems_form').serialize();
         console.log("LOOK!! data=", data);
+        console.log(url);
         
         $.post(url, data, function(data) {
              if (data == "true"){
@@ -119,7 +117,8 @@
          return false;
     });
 
-    });
+});
+//# sourceURL=templates/rundb/sample/modal_save_samplesetitems.html
 </script>
 
 

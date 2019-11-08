@@ -35,7 +35,7 @@ class PoissonCDFApproxMemo{
 };
 
 #ifdef ION_COMPILE_CUDA
-    #include <host_defines.h>		// for __host__ and __device__
+    #include <cuda_runtime.h>		// for __host__ and __device__
 #endif
 
 // Functions for computing the poisson cdf (aka the normalized incomplete gamma function).

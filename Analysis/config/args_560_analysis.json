@@ -3,7 +3,7 @@
       "bkg-dont-emphasize-by-compression" : 1,
       "bkg-washout-flow-detection" : 6,
       "bkg-washout-threshold" : 2.0,
-      "clonal-filter-bkgmodel" : false,
+      "clonal-filter-bkgmodel" : true,
       "clonal-filter-debug" : false,
       "clonal-filter-use-last-iter-params" : true,
       "filter-extreme-ppf-only" : false,
@@ -190,11 +190,12 @@
       "wells-save-queue-size" : 0
    },
    "ThumbnailControl" : {
-      "bkg-debug-files" : true,
-      "bkg-debug-param" : 0,
       "mask-datacollect-exclude-regions" : false,
       "region-size" : [ 100, 100 ],
-      "total-timeout" : 36000
+      "total-timeout" : 36000,
+      "bkg-debug-files" : true,
+      "bkg-debug-param" : 3,
+      "gpuworkload" : 0
    },
    "TraceControl" : {
       "bkg-empty-well-normalization" : false,

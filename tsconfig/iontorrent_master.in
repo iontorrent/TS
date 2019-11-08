@@ -1,0 +1,53 @@
+---
+# file: group_vars/iontorrent_master
+
+# APT package list
+ionmaster_syspkg_list:
+    - postfix
+    - rabbitmq-server
+    - samba
+    - python-amqp
+    - postgresql
+    - openipmi
+    - ipmitool
+    - expect
+    - gcc
+    - make
+    - build-essential
+    - lsscsi
+    - xfsprogs
+    - lvm2
+    - clusterssh
+    - libdevmapper-event1.02.1
+    - watershed
+    - megacli
+    - dkms
+    - apache2
+    - avahi-daemon
+    - python-gobject
+    - python-gnupg
+    - python-pyftpdlib
+    - python-apt
+    - dmidecode
+    - python-avahi
+    - coreutils
+    - debconf
+    - debconf-utils
+
+ionmaster_ionpkg_list:
+    - ion-dbreports
+    - ion-gpu
+    - ion-analysis
+    - ion-pipeline
+    - ion-torrentr
+    - ion-torrentpy
+    - ion-publishers
+    - ion-plugins
+    - ion-rsmts
+
+ionmaster_pluginpkg_list:
+    - ion-plugin-ionreporteruploader
+
+ionmaster_oempkg_list:
+    - @OEM_PROJECT_NAME@
+

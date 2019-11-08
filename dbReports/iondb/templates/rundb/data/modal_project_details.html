@@ -1,17 +1,18 @@
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_project_details" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>{{methodDescription|lower|capfirst}} Project</h3>
+        <h3>{{title}}</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <form class="form-horizontal" id="modal_project_details_form" action="{{action}}">
             <fieldset>
                 <div class="control-group">
-                    <label for="input01" class="control-label">New Project Name</label>
+                    <label for="input01" class="control-label">{{ projectNameLabel }}</label>
                     <div class="controls">
-                        <input value="{{project.name}}" name="name" id="name" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="64" type="text">
+                        <input value="{{project.name}}" name="name" id="name" data-value="{{project.name}}" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="64" type="text">
                         <p class="help-block"></p>
                     </div>
                 </div>
@@ -22,24 +23,28 @@
         </form>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a class="btn btn-primary" href="#">Save</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a class="btn btn-primary" href="#">{% trans "global.action.save" %}</a>
     </div>
 
-<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
+{% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
 <script type="text/javascript">
-$('#modal_project_details_form').uniform({
+var $form = $('#modal_project_details_form');
+
+$form.uniform({
     holder_class : 'control-group'
     , msg_selector: 'p.help-block'
     , error_class : 'alert alert-error'
 });
 uniq = {{otherList|safe}};
 
+jQuery.fn.uniform.isValid($form, $form.uniform.defaults);
+
 $('#modal_project_details').on('hidden', function () {
     $('body #modal_project_details').remove();
    });
-$('#modal_project_details_form').submit(function(e){
+$form.submit(function(e){
     e.preventDefault();
     return false;
 });
@@ -47,20 +52,23 @@ $('#modal_project_details_form').submit(function(e){
 $('#modal_project_details .btn-primary').click(function(e) {
     var that = this;
     e.preventDefault();
+
     $('#modal_project_details #modal-error-messages').hide().empty();
 
-    if ($("#modal_project_details_form *").hasClass("error")) {
-        $("#modal_project_details_form").animate({scrollTop : 0}, "slow");
-        $(".error").effect("highlight", {"color" : "#F20C18"}, 2000);
+    var isValid = jQuery.fn.uniform.isValid($form, $form.uniform.defaults);
+
+    if (!isValid) {
+        $form.animate({scrollTop : 0}, "slow");
+        $(".alert-error").effect("highlight", {"color" : "#F20C18"}, 2000);
         return false;
     }
 
-    console.log($('#modal_project_details_form').serializeArray());
-    var json = $('#modal_project_details_form').serializeJSON()
-        , url = $('#modal_project_details_form').attr('action')
+    console.log($form.serializeArray());
+    var json = $form.serializeJSON()
+        , url = $form.attr('action')
         , type = '{{method}}';
 
-    if ($('#modal_project_details_form').attr('method') == "POST") {
+    if ($form.attr('method') == "POST") {
         json.results = []
     }
     json = JSON.stringify(json);
@@ -89,17 +97,18 @@ $('#modal_project_details .btn-primary').click(function(e) {
         $('#modal_project_details').modal("hide");
     })
     .fail(function(data) {
-        $('#modal_project_details #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+        $('#modal_project_details #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
         console.log("error:", data);
     })
     .always(function(data) { /*console.log("complete:", data);*/ });
 });
-// $.ajax($('#modal_project_details_form').attr('action'), params,
+// $.ajax($form.attr('action'), params,
     // function(data) {
       // alert(data);
       // return false;
     // }
 // );
+    //# sourceURL=templates/rundb/data/modal_project_details.html.js
 </script>
 </div>
 

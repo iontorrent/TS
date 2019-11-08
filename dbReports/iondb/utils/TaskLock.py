@@ -5,25 +5,25 @@ import uuid
 from iondb.bin import djangoinit
 from django.core.cache import get_cache
 
+
 def test_cache(cache):
     # test to make sure the cache is accessible to store locks
     key = str(uuid.uuid4())
-    cache.add(key, 'testing')
+    cache.add(key, "testing")
     if cache.get(key) is None:
-        raise Exception('Unable to create TaskLock in cache')
+        raise Exception("Unable to create TaskLock in cache")
     else:
         cache.delete(key)
 
 
 class TaskLock(object):
-
     def __init__(self, lock_id, timeout=None):
         self.lock_id = lock_id
         try:
-            self.cache = get_cache('file')
+            self.cache = get_cache("file")
             test_cache(self.cache)
-        except:
-            self.cache = get_cache('default')
+        except Exception:
+            self.cache = get_cache("default")
             test_cache(self.cache)
 
         if timeout:
@@ -36,32 +36,34 @@ class TaskLock(object):
         return val
 
     def update(self, value):
-        '''Creates, or updates this key'''
+        """Creates, or updates this key"""
         val = self.cache.set(self.lock_id, value, self.timeout)
         return val
 
     def get(self):
-        '''Show cache value'''
+        """Show cache value"""
         val = self.cache.get(self.lock_id)
         return val
 
     def unlock(self):
         self.cache.delete(self.lock_id)
 
+
 # Test main routine
-if __name__ == '__main__':
+if __name__ == "__main__":
     import time
-    applock = TaskLock('Test.lock')
+
+    applock = TaskLock("Test.lock")
     if applock.lock():
         # Hint: try running 2nd program instance while this instance sleeps
-        print "Obtained lock, sleeping 10 seconds"
+        print("Obtained lock, sleeping 10 seconds")
         time.sleep(10)
-        print "Unlocking"
+        print("Unlocking")
         applock.unlock()
     else:
-        print "Unable to obtain lock, exiting"
+        print("Unable to obtain lock, exiting")
 
-'''
+"""
 To clear a specific lock manually:
 start python shell
 from iondb.bin import djangoinit
@@ -73,4 +75,4 @@ python -c "from iondb.bin import djangoinit; from django.core.cache import get_c
 
 to delete everything from cache:
 python -c "from iondb.bin import djangoinit; from django.core.cache import cache; cache.clear()"
-'''
+"""

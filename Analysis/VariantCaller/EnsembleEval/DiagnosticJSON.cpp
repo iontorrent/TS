@@ -63,14 +63,14 @@ void DiagnosticJsonFrequency(Json::Value &json, const PosteriorInference &cur_po
   json["PriorLL"] = cur_posterior.clustering.germline_log_prior_normalization;
 }
 
-void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_cross) {
+void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_cross, const vector<vector<float> >& stranded_bias_adj) {
   // output relevant data from the individual read hypothesis tester
   json["strand"] = my_cross.strand_key;
   json["success"] = my_cross.success ? 1 : 0;
   json["usecorr"] = my_cross.use_correlated_likelihood ? 1: 0;
   json["read_counter"] = my_cross.read_counter;
 
-  json["heavy"] = my_cross.heavy_tailed;
+  json["heavy"] = my_cross.GetHeavyTailed();
   json["lastrelevantflow"] = my_cross.max_last_flow;
   json["correlation"] = my_cross.delta_state.delta_correlation;
 
@@ -88,8 +88,8 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
   my_cross_temp.predictions_all_flows = my_cross.predictions_all_flows;
   my_cross_temp.InitializeRelevantToTestFlows();
   my_cross_temp.delta_state.ComputeDelta(my_cross_temp.predictions);
-  my_cross_temp.SetModPredictions();
-  my_cross_temp.ComputeResiduals();
+  my_cross_temp.ResetModPredictions();
+  my_cross_temp.ComputeResiduals(stranded_bias_adj);
   my_cross_temp.InitializeSigma();
 
   // fill the data at test flows
@@ -201,27 +201,27 @@ void TinyDiagnosticJsonEvalFamily(Json::Value &json, const EvalFamily &my_family
 	}
 }
 
-void DiagnosticJsonCrossStack(Json::Value &json, const HypothesisStack &hypothesis_stack) {
-  for (unsigned int i_read = 0; i_read < hypothesis_stack.total_theory.my_hypotheses.size(); i_read++) {
-    DiagnosticJsonCrossHypotheses(json["Cross"][i_read], hypothesis_stack.total_theory.my_hypotheses[i_read]);
+void DiagnosticJsonCrossStack(Json::Value &json, const ShortStack &total_theory) {
+  for (unsigned int i_read = 0; i_read < total_theory.my_hypotheses.size(); i_read++) {
+    DiagnosticJsonCrossHypotheses(json["Cross"][i_read], total_theory.my_hypotheses[i_read], total_theory.stranded_bias_adj);
   }
 
   // mol tag
-  if(hypothesis_stack.total_theory.GetIsMolecularTag()){
-	  for(unsigned int i_fam = 0; i_fam < hypothesis_stack.total_theory.my_eval_families.size(); ++i_fam){
-		  DiagnosticJsonEvalFamily(json["EvalFamily"][i_fam], hypothesis_stack.total_theory.my_eval_families[i_fam]);
+  if(total_theory.GetIsMolecularTag()){
+	  for(unsigned int i_fam = 0; i_fam < total_theory.my_eval_families.size(); ++i_fam){
+		  DiagnosticJsonEvalFamily(json["EvalFamily"][i_fam], total_theory.my_eval_families[i_fam]);
 	  }
   }
 }
 
-void TinyDiagnosticJsonCrossStack(Json::Value &json, const HypothesisStack &hypothesis_stack) {
-  for (unsigned int i_read = 0; i_read < hypothesis_stack.total_theory.my_hypotheses.size(); i_read++) {
-    TinyDiagnosticJsonCrossHypotheses(json["Cross"][i_read], hypothesis_stack.total_theory.my_hypotheses[i_read]);
+void TinyDiagnosticJsonCrossStack(Json::Value &json, const ShortStack &total_theory) {
+  for (unsigned int i_read = 0; i_read < total_theory.my_hypotheses.size(); i_read++) {
+    TinyDiagnosticJsonCrossHypotheses(json["Cross"][i_read], total_theory.my_hypotheses[i_read]);
   }
   // mol tag
-  if(hypothesis_stack.total_theory.GetIsMolecularTag()){
-	  for(unsigned int i_fam = 0; i_fam < hypothesis_stack.total_theory.my_eval_families.size(); ++i_fam){
-		  TinyDiagnosticJsonEvalFamily(json["EvalFamily"][i_fam], hypothesis_stack.total_theory.my_eval_families[i_fam]);
+  if(total_theory.GetIsMolecularTag()){
+	  for(unsigned int i_fam = 0; i_fam < total_theory.my_eval_families.size(); ++i_fam){
+		  TinyDiagnosticJsonEvalFamily(json["EvalFamily"][i_fam], total_theory.my_eval_families[i_fam]);
 	  }
   }
 }
@@ -258,11 +258,19 @@ void DiagnosticJsonMisc(Json::Value &json, const LatentSlate &cur_state) {
   }
   for (unsigned int i_freq=0; i_freq<cur_state.start_freq_of_winner.size(); i_freq++)
     json["startfreq"][i_freq] = cur_state.start_freq_of_winner[i_freq];
+  for (unsigned int i_strand=0; i_strand<cur_state.bias_checker.stranded_bias_adj.size(); i_strand++){
+    for (unsigned int i_alt=0; i_alt<cur_state.bias_checker.stranded_bias_adj[i_strand].size(); i_alt++){
+	  json["stranded_bias_adjustment"][i_strand][i_alt] = cur_state.bias_checker.stranded_bias_adj[i_strand][i_alt];
+    }
+  }
 }
 
 void DiagnosticJsonHistory(Json::Value &json, const HypothesisStack &hypothesis_stack){
   for (unsigned int i_start=0; i_start<hypothesis_stack.ll_record.size(); i_start++){
     json["LLrecord"][i_start] = hypothesis_stack.ll_record[i_start];
+  }
+  for (unsigned int i_start=0; i_start<hypothesis_stack.ll_record_with_bias_adj.size(); i_start++){
+    json["LLrecord_bias_adj"][i_start] = hypothesis_stack.ll_record_with_bias_adj[i_start];
   }
 }
 
@@ -277,7 +285,7 @@ void TinyDiagnosticOutput(const vector<const Alignment *>& read_stack, const Hyp
             + ref_allele + "." + var_allele + ".tiny.json";
   // just a little bit of data
   DiagnosticJsonReadStack(diagnostic_json["ReadStack"], read_stack, global_context);
-  TinyDiagnosticJsonCrossStack(diagnostic_json["CrossHypotheses"], hypothesis_stack);
+  TinyDiagnosticJsonCrossStack(diagnostic_json["CrossHypotheses"], hypothesis_stack.total_theory);
   DiagnosticJsonBias(diagnostic_json["Latent"], hypothesis_stack.cur_state.bias_generator);
   // write it out
   DiagnosticWriteJson(diagnostic_json, outFile);
@@ -297,11 +305,11 @@ void RichDiagnosticOutput(const vector<const Alignment *>& read_stack, const Hyp
   DiagnosticJsonFrequency(diagnostic_json["TopLevel"], hypothesis_stack.cur_state.cur_posterior);
 
   DiagnosticJsonReadStack(diagnostic_json["ReadStack"], read_stack, global_context);
-  DiagnosticJsonCrossStack(diagnostic_json["CrossHypotheses"], hypothesis_stack);
+  DiagnosticJsonCrossStack(diagnostic_json["CrossHypotheses"], hypothesis_stack.total_theory);
   DiagnosticJsonBias(diagnostic_json["Latent"], hypothesis_stack.cur_state.bias_generator);
   DiagnosticJsonSigma(diagnostic_json["Latent"], hypothesis_stack.cur_state.sigma_generator.fwd);
   DiagnosticJsonSigma(diagnostic_json["Latent"]["SigmaRev"], hypothesis_stack.cur_state.sigma_generator.rev);
-    DiagnosticJsonSkew(diagnostic_json["Latent"], hypothesis_stack.cur_state.skew_generator);
+  DiagnosticJsonSkew(diagnostic_json["Latent"], hypothesis_stack.cur_state.skew_generator);
   DiagnosticJsonMisc(diagnostic_json["Misc"], hypothesis_stack.cur_state);
   DiagnosticJsonHistory(diagnostic_json["History"],hypothesis_stack);
 

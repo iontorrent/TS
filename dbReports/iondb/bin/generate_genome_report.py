@@ -20,7 +20,7 @@ def getResults():
     # daysFromMonday = timeStart.weekday() # Monday is 0, so if its Thursday (3), we need to go back 3 days
     # lengthOfReport = 7 # report for 7 days, with Monday being the first day included in a report
     # if daysFromMonday < lengthOfReport: # we want to go back to the start of the full week, if we are in the middle of a week, need to go back to the start of last week
-        # daysFromMonday = daysFromMonday + 7
+    # daysFromMonday = daysFromMonday + 7
     # timeStart = timeStart - datetime.timedelta(days=daysFromMonday)
     # print 'TimeStart is %s' % timeStart
     # timeEnd = timeStart + datetime.timedelta(days=lengthOfReport) # technically this is one second too much but who really will notice
@@ -30,7 +30,7 @@ def getResults():
     # exp = models.Experiment.objects.filter(date__range=(timeStart,timeEnd))
     library = "hg19"
     exp = models.Experiment.objects.filter(library=library)
-    print 'Found %s experiments for library %s' % (len(exp), library)
+    print("Found %s experiments for library %s" % (len(exp), library))
     # get best result for each experiment, the 'best' is 100Q17 reads right now
     # we will build an array of the best results for each experiment and return that to the caller
     res = []
@@ -41,7 +41,8 @@ def getResults():
         for r in rep:
             try:
                 libmetrics = r.libmetrics_set.all()[
-                                                  0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
+                    0
+                ]  # ok, there's really only one libmetrics set per result, but we still need to get at it
             except IndexError:
                 libmetrics = None
 
@@ -51,8 +52,8 @@ def getResults():
                 else:
                     numReads = libmetrics.i100Q17_reads
                 if numReads > bestNumReads:
-                        bestNumReads = numReads
-                        bestResult = r
+                    bestNumReads = numReads
+                    bestResult = r
 
         if bestResult is not None:
             res.append(bestResult)
@@ -61,14 +62,15 @@ def getResults():
 
 
 class topRecord:
-
     def __init__(self):
         self.r = None
         self.reads = 0
 
 
 def byReads(a, b):
-    return cmp(b.reads, a.reads)  # compare the integer reads values in each topRecord instance
+    return cmp(
+        b.reads, a.reads
+    )  # compare the integer reads values in each topRecord instance
 
 
 def generateReport():
@@ -76,12 +78,12 @@ def generateReport():
     gc = models.GlobalConfig.get()
     web_root = gc.web_root
     if len(web_root) > 0:
-        if web_root[-1] == '/':
-            web_root = web_root[:len(web_root) - 1]
+        if web_root[-1] == "/":
+            web_root = web_root[: len(web_root) - 1]
     if gc.site_name:
-        print 'Cumulative Report for %s' % gc.site_name
+        print("Cumulative Report for %s" % gc.site_name)
     else:
-        print 'Cumulative Report for %s' % web_root
+        print("Cumulative Report for %s" % web_root)
 
     # get all analysis results from the specified period
     res = getResults()
@@ -101,7 +103,8 @@ def generateReport():
     for r in res:
         try:
             libmetrics = r.libmetrics_set.all()[
-                                              0]  # ok, there's really only one libmetrics set per result, but we still need to get at it
+                0
+            ]  # ok, there's really only one libmetrics set per result, but we still need to get at it
         except IndexError:
             libmetrics = None
 
@@ -127,17 +130,28 @@ def generateReport():
             topNRecord.reads = reads
             topN.append(topNRecord)
 
-    print 'Totals  100Q17 reads: %s 100Q17 bases: %s in %s runs' % (sum_100Q17Reads, sum_Q17Bases, sum_Runs)
+    print(
+        "Totals  100Q17 reads: %s 100Q17 bases: %s in %s runs"
+        % (sum_100Q17Reads, sum_Q17Bases, sum_Runs)
+    )
     if bestRun:
-        print 'Best run: %s' % (web_root + bestRun.reportLink)  # need to handle bestRun = None case?
-        print 'Best run 100Q17 reads: %s 100Q17 bases: %s' % (curBestReads, curBestBases)
+        print(
+            "Best run: %s" % (web_root + bestRun.reportLink)
+        )  # need to handle bestRun = None case?
+        print(
+            "Best run 100Q17 reads: %s 100Q17 bases: %s" % (curBestReads, curBestBases)
+        )
     else:
-        print 'There were no best runs for this report.'
+        print("There were no best runs for this report.")
 
     # top 5
     top5 = sorted(topN, byReads)[:5]
     for i, top in enumerate(top5):
-        print 'Run: %s 100Q17 reads: %s link: %s' % (i + 1, top.reads, web_root + top.r.reportLink)
+        print(
+            "Run: %s 100Q17 reads: %s link: %s"
+            % (i + 1, top.reads, web_root + top.r.reportLink)
+        )
+
 
 if __name__ == "__main__":
     generateReport()

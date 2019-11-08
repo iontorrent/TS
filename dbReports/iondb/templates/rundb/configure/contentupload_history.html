@@ -1,6 +1,8 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
+
 {% block content %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <style type="text/css">
@@ -15,28 +17,28 @@
 </style>
 
 <div class="content">
-    <h1>Upload History</h1>
+    <h1>{% trans "ContentUpload.list.title" %}</h1>
     <div class="row-fluid">
         <div class="search-field">
-            <input type="text" class="filter" id="search_name" placeholder="Search file"/>
+            <input type="text" class="filter" id="search_name" placeholder="{% trans "ContentUpload.list.search_bar.search_name.placeholder" %}"/>
         </div>
         <div class="search-field">
             <select id='search_pub' class="filter">
-                <option value="">All</option>
+                <option value="">{% trans "global.choice.any" %}</option>
                 {% for pub in publishers %}
                     <option value={{pub}} {% if pub.name == selected %} selected {% endif %}>{{pub}}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="input-append search-field">
-            <button id="clear_filters" class="btn" type="button">Clear Filters</button>
+            <button id="clear_filters" class="btn" type="button">{% trans "ContentUpload.list.search_bar.action.clear_filters.label" %}</button>
         </div>    
     </div>
     <div id="upload_grid"></div>
 </div>
 
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 
 <script type="text/x-kendo-template" id="statusTemplate">
     # if (data.indexOf('Error') >= 0 ) { #
@@ -103,19 +105,19 @@ $(document).ready(function(){
         selectable: false,
         columns: [ {
                 field: "upload_date",
-                title: "Date",
+                title: "{% trans 'entity.ContentUpload.fields.upload_date.verbose_name' %}",
                 width: '12%',
                 format: "{0:yyyy/MM/dd}"
             } , {
                 field: "name",
-                title: "Uploaded File",
+                title: "{% trans 'entity.ContentUpload.fields.name.verbose_name' %}",
                 template: '<a href="/rundb/uploadstatus/${id}/">${name}</a>'
             } , {
                 field: "upload_type",
-                title: "Type",
+                title: "{% trans 'entity.ContentUpload.fields.upload_type.verbose_name' %}",
             } , {
                 field: "status",
-                title: "Status",
+                title: "{% trans 'entity.ContentUpload.fields.status.verbose_name' %}",
                 template: "#=statusTemplate(status)#"
             }
         ],

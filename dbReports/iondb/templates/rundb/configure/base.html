@@ -1,36 +1,44 @@
 {% extends "rundb/common/base.html" %}
 {% load url from future %}
-
+{% load i18n %}
 {% block configure_menu %}active{% endblock %}
 {% block sub-nav %}
     {% block tab-configure-about %}
-        <li><a href="{% url "configure_about" %}">About</a></li>
+        <li><a href="{% url "configure_about" %}">{% trans "global.nav.menu.configure.menu.about.label" %}</a></li>
     {% endblock tab-configure-about %}
     {% block tab-configure-accounts %}
-        <li><a href="{% url "configure_account" %}">Accounts</a></li>
+        <li><a href="{% url "configure_account" %}">{% trans "global.nav.menu.configure.menu.account.label" %}</a></li>
     {% endblock tab-configure-accounts %}
     {% block tab-configure-analysisargs %}
-        <li><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
+        {% if featureflags.CONFIGURE_ANALYSISPARAMETERS %}
+        <li><a href="{% url "configure_analysisargs" %}">{% trans "global.nav.menu.configure.menu.analysisargs.label" %}</a></li>
+        {% endif %}
     {% endblock tab-configure-analysisargs %}
     {% block tab-configure-configure %}
-        <li><a href="{% url "configure_configure" %}">Configure</a></li>
+        <li><a href="{% url "configure_configure" %}">{% trans "global.nav.menu.configure.menu.configure.label" %}</a></li>
     {% endblock tab-configure-configure %}
     {% block tab-configure-mesh %}
-        <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
+        <li><a href="{% url "configure_mesh" %}">{% trans "global.nav.menu.configure.menu.mesh.label" %}</a></li>
     {% endblock tab-configure-mesh %}
     {% block tab-configure-ionreporter %}
-        <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+        {% if featureflags.IONREPORTERUPLOADER %}
+        <li><a href="{% url "configure_ionreporter" %}">{% trans "global.nav.menu.configure.menu.ionreporter.label" %}</a></li>
+        {% endif %}
     {% endblock tab-configure-ionreporter %}
     {% block tab-configure-plugins %}
-        <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+        <li><a href="{% url "configure_plugins" %}">{% trans "global.nav.menu.configure.menu.plugins.label" %}</a></li>
     {% endblock tab-configure-plugins %}
     {% block tab-configure-references %}
-        <li><a href="{% url "configure_references" %}">References</a></li>
+        <li><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
     {% endblock tab-configure-references %}
     {% block tab-configure-services %}
-        <li><a href="{% url "configure_services" %}">Services</a></li>
+        {% if featureflags.CONFIGURE_SERVICES %}
+        <li><a href="{% url "configure_services" %}">{% trans "global.nav.menu.configure.menu.services.label" %}</a></li>
+        {% endif %}
     {% endblock tab-configure-services %}
     {% block tab-configure-updates %}
-        <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
+        {% if featureflags.OFFCYCLE_UPDATES %}
+        <li><a href="{% url "offcycle_updates" %}">{% trans "global.nav.menu.configure.menu.updates.label" %}</a></li>
+        {% endif %}
     {% endblock tab-configure-updates %}
 {% endblock sub-nav %}

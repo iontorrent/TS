@@ -155,7 +155,11 @@ void SpatialContext::SetOpts(OptArgs &opts, Json::Value& json_params)
 		{
 			chipRegion.col = vec3[0];
 			chipRegion.row = vec3[1];
-			chipRegion.w = vec3[2];
+			if(vec3[2]%8 == 0){  // width needs to be a multiplier of 8
+				chipRegion.w = vec3[2];
+			}else{
+				chipRegion.w = vec3[2]/8*8 + 8;
+			}
 			chipRegion.h = vec3[3];
 		}
 		else

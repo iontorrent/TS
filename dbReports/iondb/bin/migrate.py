@@ -25,10 +25,10 @@ def fix_south_issues(log):
     # tastypie started using migrations in 0.9.11
     # So we may have the initial tables already
     try:
-        management.call_command('migrate', 'tastypie', verbosity=0, ignore_ghosts=True)
+        management.call_command("migrate", "tastypie", verbosity=0, ignore_ghosts=True)
     except DatabaseError as e:
         if "already exists" in str(e):
-            management.call_command('migrate', 'tastypie', '0001', fake=True)
+            management.call_command("migrate", "tastypie", "0001", fake=True)
         else:
             raise
     except NoMigrations:
@@ -40,8 +40,10 @@ def fix_south_issues(log):
 def has_south_init():
     try:
         cursor = db.connection.cursor()
-        cursor.execute("""SELECT * FROM south_migrationhistory WHERE app_name='rundb' AND migration='0001_initial' LIMIT 1""")
-        found_init = (cursor.rowcount == 1)
+        cursor.execute(
+            """SELECT * FROM south_migrationhistory WHERE app_name='rundb' AND migration='0001_initial' LIMIT 1"""
+        )
+        found_init = cursor.rowcount == 1
         cursor.close()
         return found_init
     except (IntegrityError, DatabaseError):
@@ -51,11 +53,10 @@ def has_south_init():
             pass
     return False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     if has_south_init():
         # south handles this from now on.
         # Ensure south is sane and let it handle the rest.
         fix_south_issues(sys.stdout)
-
-

@@ -6,29 +6,11 @@ enable_testing()
 
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
+include(../buildTools/cmake/CMakeLists.installpath.txt)
 
-FIND_PACKAGE(PythonInterp)
-# Determine python site-packages or dist-packages directory
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
-        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
-        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-execute_process (
-        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
-        OUTPUT_VARIABLE PYTHON_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-# Where to install - override with: -DION_INSTALL_PREFIX
-set(ION_INSTALL_PREFIX "/usr" CACHE PATH "Ion Install Prefix")
-set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
-set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+# # Where to install - override with: -DION_PIPELINE_PREFIX
+set(CMAKE_INSTALL_PREFIX "${ION_PIPELINE_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_PIPELINE_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
 
 add_custom_target(compileall ALL
@@ -65,12 +47,16 @@ install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
     PATTERN "*.in" EXCLUDE
 )
 
+set(PICARD_PATH "/opt/picard/picard-tools-current/picard.jar")
+set(REFERENCE_BASE_PATH "/results/referenceLibrary/tmap-f3/")
+
 install(FILES "${PROJECT_SOURCE_DIR}/cluster_settings.py" DESTINATION /etc/torrentserver )
 # We are copying an existing __init__.py, they are all the same.
 configure_file (
 	"${PROJECT_SOURCE_DIR}/python/ion/__init__.py.in"
 	"${PROJECT_BINARY_DIR}/python/ion/__init__.py" @ONLY
 )
+
 install(FILES "${PROJECT_BINARY_DIR}/python/ion/__init__.py" DESTINATION /etc/torrentserver)
 install(FILES "${PROJECT_BINARY_DIR}/python/ion/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion )
 
@@ -81,10 +67,10 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
+    ion-django,
     python-matplotlib,
     python-scipy,
-    python-django,
-    python-imaging,
+    python-pil,
     python-argparse,
     python-dev")
 

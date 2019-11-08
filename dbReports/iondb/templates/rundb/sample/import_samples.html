@@ -1,6 +1,7 @@
 {% extends "rundb/sample/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
@@ -25,8 +26,7 @@
 
 <script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+{% include "rundb/common/head_kendo_script.html" %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
 
@@ -34,20 +34,20 @@
 
 <script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
-<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
+{% include "rundb/common/head_uni-form-validation.jquery.js.html" %} <!-- Using updated uni-form JS -->
 
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li><a href="{% url "plan_templates" %}">Templates</a></li>
-    <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-    <li><a href="{% url "planned" %}">Planned Runs</a></li>
+    <li><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+    <li class="active"><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+    <li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
 
 	<div class="content group">
 		<ul class="breadcrumb">
-            <li><a href="{% url "samplesets" %}">Sample Sets</a> <span class="divider">/</span></li>
-			<li class="active">Import Samples</li>
+            <li><a href="{% url "samplesets" %}">{% trans "samplesets.title" %}</a> <span class="divider">/</span></li>
+			<li class="active">{% trans "import_samples.title" %}</li>
 		</ul>
 		
 		<div class="row-fluid">
@@ -55,58 +55,65 @@
 			<div class="span8">			
 	        	<form class="form-horizontal" id="import_sample_upload" name="import_sample_upload" method="post" enctype="multipart/form-data" action="{% url "save_import_samples" %}">			
 				<!--form class="form-horizontal" -->
-					<legend><h1>Import Samples</h1></legend>
+					<legend><h1>{% trans "import_samples.title" %}</h1></legend>
                
-					<div id="modal-error-messages" class="alert alert-error hide"></div>	
+					<div id="modal-success-messages" class="alert alert-success hide"></div>
+					<div id="modal-error-messages" class="alert alert-error hide"></div>
 
 					<div class="control-group">
 						<label class="control-label" for="file"><span class="badge">1</span></label>
 						<div class="controls">
-							<label for="postedfile" class="form-label">Select Sample File to Import</label>
+							<label for="postedfile" class="form-label">{% trans "import_samples.fields.file.label" %}</label>
 							<div class="fileupload fileupload-new" data-provides="fileupload"><input type="hidden">
 				                <div class="input-append">
 				                  <div class="uneditable-input span3"><i class="icon-file fileupload-exists"></i> 
 				                  <span class="fileupload-preview" style=""></span></div>
 				                  <span class="btn btn-file">
-				                  <span class="fileupload-new">Select file</span>
-				                  <span class="fileupload-exists">Change</span>
-				                  <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required"></span>
-				                  <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">Remove</a>
+				                  <span class="fileupload-new">{% trans "import_samples.fields.file.select" %}</span>
+				                  <span class="fileupload-exists">{% trans "import_samples.fields.file.change" %}</span>
+				                  <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required" title="{% trans "import_samples.fields.file.select" %}"></span>
+				                  <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">{% trans "import_samples.fields.file.unselect" %}</a>
 				                </div>
 				            </div>
 							<!--div class="help-block">Sample File (csv, tsv, xls)</div -->
-							<div class="help-block">Sample File (csv)</div>
-	                    	<a class="btn sample_fileupload_format" href="{% url "download_samplefile_format" %}">Sample File Format</a>
-							<div class="help-block">Click button to download sample file format</div>
+							<div class="help-block">{% trans "import_samples.fields.file.helptext" %}</div>
 						</div>
+                        <div class="controls">
+                            <label for="" class="" class="">&nbsp;</label>
+                            <a class="btn sample_fileupload_format" href="{% url "download_samplefile_format" %}">{% trans "import_samples.action.download_samplefile_format.label" %}</a>
+                            <div class="help-block">{% trans "import_samples.action.download_samplefile_format.helptext" %}</div>
+                        </div>
 					</div>
 					<div class="control-group">
 						<label class="control-label" for="sampleset"><span class="badge">2</span></label>
 						<div class="controls">
-							<label for="sampleset" class="form-label">Select a Sample Set to Receive Samples</label>
+							<label for="sampleset" class="form-label">{% trans "import_samples.fields.sampleset.label" %}</label>
 							<select id="sampleset" name="sampleset" multiple="multiple" class="span6" style="margin-bottom: 10px;">
                 				{% for sampleSet in sampleSet_list %}
                 					<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} {% if sampleSet.SampleGroupType_CV.displayedName %}({{sampleSet.SampleGroupType_CV.displayedName}}){% endif %}</option>
                 				{%endfor%}
 							</select>
-							<div>
-								<div class="input-append">								
-									<input class="span10" id="sampleset_search_text" type="text" placeholder="Search sample set names">
-									<button class="btn modal_addSampleSet">Add Sample Set...</button>
-								</div>
-							</div>
-							<div class="help-block"></div>
+                            <div class="help-block">{% trans "import_samples.fields.sampleset.helptext" %}</div>
+                        </div>
+                        <div class="controls">
+                            <label for="sampleset_search_text" class="">&nbsp;</label>
+                            <div class="input-append">
+                                <input class="span10" id="sampleset_search_text" type="text" placeholder="{% trans "import_samples.search_bar.fields.sampleset_search_text.placeholder" %}">
+                                <button class="btn modal_addSampleSet">{% trans "import_samples.action.addsampleset.label" %}</button>
+                            </div>
+                            <div class="help-block">{% trans "import_samples.action.addsampleset.helptext" %}</div>
                             {% include "rundb/sample/sampleset_input_section.html" %}
-						</div>
+                        </div>
 					</div>
 
 					<div class="control-group">
 						<label class="control-label" for="sampleset"><span class="badge">3</span></label>
 						<div class="controls">
-							<a href="#" id="submitUpload" class="btn btn-primary submitUpload" >Save & Finish</a>
-							<div class="help-block" style="margin-top: 10px;">Uploads, parses & validates file, and saves if no errors found</div>				        
+							<a href="#" id="submitUpload" class="btn btn-primary submitUpload" >{% trans "import_samples.action.submit.label" %}</a>
+							<div class="help-block" style="margin-top: 10px;">{% trans "import_samples.action.submit.helptext" %}</div>
 							<!--span class="help-inline">No samples imported yet</span -->
-							<div class="help-block" id="import_sample_info" name="import_sample_info">No samples imported yet</div>
+							<div class="help-block" id="import_sample_info" name="import_sample_info">{% trans "import_samples.action.submit.helptext.2" %}</div>
+							<!--div class="help-block" id="import_sample_info" name="import_sample_info">{% trans "import_samples.action.submit.helptext.3" %}</div -->
 						</div>
 					</div>
 				</form>
@@ -115,17 +122,17 @@
 			<div class="span4">
 			
 				<div class="summary-section">
-					<h3>Summary</h3>
+					<h3>{% trans "import_samples.summary.title.label" %}</h3>
 
 					<hr class="summary">
 					<p>
-						Create sample set(s) with samples in the imported sample sheet
+						{% trans "import_samples.summary.title.helptext" %}
 					</p>
 					<dl class="dl">
-						<dt class="summaryfile hide">Import File:</dt>
+						<dt class="summaryfile hide">{% trans "import_samples.field.file.label" %}:</dt>
 						<dd class="summaryfile hide" id="summary_selectedFileName" name="summary_selectedFileName">2012-11-02_TrialCohort_001.xls</dd>
 						
-						<dt class="summarysampleset hide">Sample Set(s):</dt>
+						<dt class="summarysampleset hide">{% trans "import_samples.fields.sampleset.label" %}:</dt>
 						<dd class="summarysampleset hide" id="summary_selectedSampleSets" name="summary_selectedSampleSets">CFTR Trio Study</dd>
 						
 						<dt class="summarysampleinfo hide">6 samples:</dt>
@@ -166,10 +173,41 @@
 			sampleset_items["{{sampleSet.id}}"] = "{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})";
 		{%endfor%}
 	</script>
-	<script src="/site_media/resources/scripts/sample/import_samples.js"></script>
+
+    <script id="ImportSamplesFailureTemplate" type="text/x-kendo-template">
+        <p>{% trans "global.messages.error.file.upload" %}</p>
+    </script>
+    <script id="ImportSamplesResponseTemplate" type="text/x-kendo-template">
+        # var rowErrorsFormat = '{{ rowErrorsFormat|safe }}'; #
+        # var columnErrorsFormat = '{{ columnErrorsFormat|safe }}'; #
+        # var fieldErrorsFormat = '{{ fieldErrorsFormat|safe }}'; #
+
+        <p>#= data.status #</p>
+        # if (data.error) { #
+        <ul class='unstyled'>
+            # for (var key in data.failed) { #
+                # if ($.isNumeric(key)) { #
+                    <li><strong>#=interpolate(rowErrorsFormat, {'n': key}, true)#</strong>
+                    # if (data.failed[key].length) { #
+                        <ul>
+                        # for (var i = 0; i < data.failed[key].length; i++) { #
+                           <li>#=interpolate(columnErrorsFormat, {'columnName': data.failed[key][i][0], 'columnErrors': data.failed[key][i][1]}, true)#</li>
+                        # } #
+                        </ul>
+                    # } #
+                    </li>
+                # } else { #
+                    <li><strong>#=interpolate(fieldErrorsFormat, {'fieldName': key}, true)#</strong>
+                        <ul><li>#=data.failed[key]#</li></ul>
+                    </li>
+                # } #
+            # } #
+        </ul>
+        # } #
+    </script>
+	<script type="text/javascript" src="{% static "resources/scripts/sample/import_samples.js" %}"></script>
 	
-    <script type="text/javascript">
-    TB.sample.batchupload.ready("{% url "samplesets" %}");</script>
+    <script type="text/javascript">TB.sample.batchupload.ready("{% url "samplesets" %}");</script>
 
 
 {% endblock content %}

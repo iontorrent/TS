@@ -10,10 +10,10 @@ from scipy import stats, signal
 
 def makeRawPlot(data, labels, flowOrder):
     title = None
-    if labels == 'TCAG':
-        title = 'Library'
-    elif labels == 'ATCG':
-        title = 'Test Fragment'
+    if labels == "TCAG":
+        title = "Library"
+    elif labels == "ATCG":
+        title = "Test Fragment"
     trace = {}
     for line in data:
         t = line.strip().split(" ")
@@ -25,19 +25,22 @@ def makeRawPlot(data, labels, flowOrder):
         if k != "G":
             toPlot.append(trace[k])
     expected = [1, 1, 1]
-    tracePlot = plotters.Iontrace(flowOrder, expected, toPlot, title="Consensus Key 1-Mer - %s" % title)
+    tracePlot = plotters.Iontrace(
+        flowOrder, expected, toPlot, title="Consensus Key 1-Mer - %s" % title
+    )
     tracePlot.render()
-    pylab.savefig(os.path.join(os.getcwd(), 'iontrace_%s' % title))
+    pylab.savefig(os.path.join(os.getcwd(), "iontrace_%s" % title))
 
 
 def start(data, labels):
-    makeRawPlot(data, labels, 'TCAG')
+    makeRawPlot(data, labels, "TCAG")
+
 
 if __name__ == "__main__":
     f = open(sys.argv[1])
     data = f.readlines()
     f.close()
     exp = sys.argv[1].strip().split("_")
-    print exp
+    print(exp)
     labels = exp[-1].split(".")
-    makeRawPlot(data, labels[0], 'TACG')
+    makeRawPlot(data, labels[0], "TACG")

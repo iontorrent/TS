@@ -1,4 +1,5 @@
 {% load url from future %}
+{% load i18n %}
 <style>
 .summaryTable tr td:first-child {
  width: 30%;
@@ -12,7 +13,7 @@
 <div id="tabs">
     <h1 id="details" class="section-header">
         <span class="anchor" id="details-section"></span>
-        Details
+        {% trans "report.section.details.title" %}
     </h1>
 	<ul class="nav nav-tabs inContentTabs" id="ReportDetailsTab">
 		<li class="active">
@@ -38,7 +39,9 @@
 		<li>
 			<a data-toggle="tab" href="#SoftwareVersion">Software Version</a>
 		</li>
+		{% if featureflags.REPORT_METAL %}
 		<div class="pull-right"><a style="color:gray; font-weight:normal" href="metal/">H+</a></div>
+		{% endif %}
 	</ul>				
 	<div id="ReportDetailsTabContent" class="tab-content">
 

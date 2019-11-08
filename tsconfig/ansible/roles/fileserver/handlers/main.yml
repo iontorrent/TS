@@ -28,4 +28,3 @@
   
 - name: resolvconf update
   shell: bash -lc 'resolvconf -u'
-  

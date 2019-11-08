@@ -32,20 +32,7 @@ $(function() {  //DOM ready handler
         selectable: false,
         sortable: true,
         pageable: false,
-        columns: [ {
-                field: "id",
-                title: "Edit",
-                sortable: false,
-                template: "<a class='edit_email' href='editemail/${id}'>Edit</a> | <a class='delete_email' href='deleteemail/${id}'>Delete</a>"
-            } , {
-                field: "selected",
-                title: "Enabled",
-                template: "<input data-pk='${id}' type='checkbox' class='emailselected' # if(data.selected){ # checked # } # >"
-            } , {
-                field: "email",
-                title: "Email Address",
-            }
-        ],
+        columns: EMAIL_COLUMNS,  // Defined by templates/rundb/configure/configure.html
         dataBound: function(e) {
             $(".emailselected").change(function() {
                 var checked = $(this).is(":checked"), pk = $(this).data("pk");

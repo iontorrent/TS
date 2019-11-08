@@ -11,24 +11,30 @@ from optparse import OptionParser
 
 parser = OptionParser()
 
-parser.add_option("-i", "--ion", dest="ion",
-                  action="store_true", default=False,
-                  help="Remove ion- from the start of a string", metavar="ion")
+parser.add_option(
+    "-i",
+    "--ion",
+    dest="ion",
+    action="store_true",
+    default=False,
+    help="Remove ion- from the start of a string",
+    metavar="ion",
+)
 
 (options, args) = parser.parse_args()
 
-sys.path.append('/opt/ion/')
+sys.path.append("/opt/ion/")
 
-os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+os.environ["DJANGO_SETTINGS_MODULE"] = "iondb.settings"
 
 from ion.utils.TSversion import findVersions
 
 ret, meta = findVersions()
 
-print "Torrent_Suite=" + version
-print "host=" + socket.gethostname()
+print("Torrent_Suite=" + version)
+print("host=" + socket.gethostname())
 
-for package, version in ret.iteritems():
+for package, version in ret.items():
     if not options.ion:
         package = package.replace("ion-", "")
-    print "%s=%s" % (package, version)
+    print("%s=%s" % (package, version))

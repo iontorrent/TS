@@ -1,36 +1,37 @@
 {% load pagetools %}
 {% load ion_readable %}
+{% load i18n %}
 
 <div id="readlength" class="span4 well centered read-length">
     <div class="number-chunk row-fluid">
         <div class="span4">
             <h2>{{read_stats.mean_length|float2int}} bp</h2>
-            <small rel='tooltip' title="Mean length of called reads">Mean</small>
+            <small rel='tooltip' title="{% trans "report.section.unaligned.read_stats.mean_length.tooltip" %}">{% trans "report.section.unaligned.read_stats.mean_length.label" %}</small>
         </div>
         <div class="span4">
             <h2>{{read_stats.median_length|float2int}} bp</h2>
-            <small rel='tooltip' title="Median length of called reads">Median</small>
+            <small rel='tooltip' title="{% trans "report.section.unaligned.read_stats.median_length.tooltip" %}">{% trans "report.section.unaligned.read_stats.median_length.label" %}</small>
         </div>
         <div class="span4">
             <h2>{{read_stats.mode_length|float2int}} bp</h2>
-            <small rel='tooltip' title="Mode length of called reads">Mode</small>
+            <small rel='tooltip' title="{% trans "report.section.unaligned.read_stats.mode_length.tooltip" %}">{% trans "report.section.unaligned.read_stats.mode_length.label" %}</small>
         </div>
     </div>
     <a data-toggle="modal" class="report-metric-visual showImg" href="#readLengthModal">
-        <h2>Read Length</h2>
+        <h2>{% trans "report.section.unaligned.readlength.title" %}</h2>
         <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/readLenHisto2.png"> <i class="icon-zoom-in"></i>
     </a>
 
     <div class="modal hide" id="readLengthModal" style="width: 830px; margin-left: -415px;">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Read Length Details</h3>
+            <h3>{% trans "report.section.unaligned.readlength.title.details" %}</h3>
         </div>
         <div class="modal-body" id="readlength_body" style="max-height: 500px;">
             <img style="width: 800px;" src="{{report.reportWebLink}}/basecaller_results/readLenHisto.png">
         </div>
         <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
         </div>
     </div>
 </div>

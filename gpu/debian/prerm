@@ -10,21 +10,21 @@ set -e
 case "$1" in
 	remove)
         # only if drivers were installed do we uninstall them
-        if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
-            cd @ION_INSTALL_PREFIX@/devdriver
+        if [ -d @ION_GPU_PREFIX@/devdriver ]; then
+            cd @ION_GPU_PREFIX@/devdriver
             ./nvidia-installer --uninstall --ui=none --no-questions
             cd - >/dev/null
         fi
-    	rm -rf @ION_INSTALL_PREFIX@/devdriver
+    	rm -rf @ION_GPU_PREFIX@/devdriver
         rm -rf /etc/modprobe.d/nvidia-installer-disable-nouveau.conf
-        sed -i "/create_nvidia_files/d" /etc/rc.local
-        rm -f /etc/ld.so.conf.d/cuda.conf
-        ldconfig
+        if [ -e /etc/rc.local ]; then 
+            sed -i "/create_nvidia_files/d" /etc/rc.local
+	    fi
     ;;
     upgrade)
         # only if drivers were installed do we uninstall them
-        if [ -d @ION_INSTALL_PREFIX@/devdriver ]; then
-            cd @ION_INSTALL_PREFIX@/devdriver
+        if [ -d @ION_GPU_PREFIX@/devdriver ]; then
+            cd @ION_GPU_PREFIX@/devdriver
             ./nvidia-installer --uninstall --ui=none --no-questions
             cd - >/dev/null
         fi

@@ -1,3 +1,4 @@
+{# TODO: SUSPECTED DEAD CODE  #}
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
@@ -25,7 +26,7 @@
 	</div>
 </div>
     
-<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script> {# {% static "jquery/js/uni-form-validation.jquery.js"%} is DEPRECATED, use {% include "rundb/common/head_uni-form-validation.jquery.js.html" %} #}
 <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
 <script type="text/javascript">
 	$('#submit_email').click(function(){

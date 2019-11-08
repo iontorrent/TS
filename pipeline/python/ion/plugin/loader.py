@@ -13,7 +13,7 @@ from hashlib import md5
 # import ion.plugin.base
 # from ion.plugin.base import IonPluginBase
 
-__all__ = ('cache', 'get_plugin')
+__all__ = ("cache", "get_plugin")
 
 _log = logging.getLogger(__name__)
 
@@ -25,19 +25,15 @@ class ModuleCache(object):
         module_store={},
         # mapping of installed plugin names to python module for that plugin
         module_labels={},
-
         # mapping of plugin names to plugin classes
         module_cache={},
-
         # Log of errors during import/loading
         module_errors={},
-
         handled={},
         loaded=False,
         write_lock=threading.RLock(),
         installed_modules=[],
-
-        _get_plugin_cache={}
+        _get_plugin_cache={},
     )
 
     def __init__(self):
@@ -57,14 +53,18 @@ class ModuleCache(object):
                 return
             installed_modules = self.get_installed_modules()
             if not installed_modules:
-                #_log.info("No plugin modules installed")
+                # _log.info("No plugin modules installed")
                 return  # Do not set loaded with empty installed_modules
             _log.debug("Scanning for installed modules")
             for (module_name, module_path) in installed_modules:
                 if module_name in self.handled:
                     continue
-                _log.debug("Searching for plugin module: '%s' from '%s'", module_name, module_path)
-                if '.py' == module_path[-3:]:
+                _log.debug(
+                    "Searching for plugin module: '%s' from '%s'",
+                    module_name,
+                    module_path,
+                )
+                if ".py" == module_path[-3:]:
                     self.load_module(module_name, module_path)
                 else:
                     self.load_compat_module(module_name, module_path)
@@ -85,12 +85,19 @@ class ModuleCache(object):
         # return models.Plugin.objects.filter(active=True)$
         return self.installed_modules or []
 
-    def load_compat_module(self, module_name, module_path, add_to_store = True):
+    def load_compat_module(self, module_name, module_path, add_to_store=True):
         import ion.plugin.launchcompat
+
         try:
-            mod = ion.plugin.launchcompat.get_launch_class(module_name, module_path, add_to_store)
+            mod = ion.plugin.launchcompat.get_launch_class(
+                module_name, module_path, add_to_store
+            )
         except Exception as e:
-            _log.exception("Failed to import legacy plugin wrapper '%s':'%s'", module_name, module_path)
+            _log.exception(
+                "Failed to import legacy plugin wrapper '%s':'%s'",
+                module_name,
+                module_path,
+            )
             self.module_errors[module_name] = e
             return None
         if not mod:
@@ -116,7 +123,7 @@ class ModuleCache(object):
         # modules[name] = imp.load_source(name, path)
         module_dir, pyfile = os.path.split(module_path)
         name, ext = os.path.splitext(pyfile)
-        if ext != '.py':
+        if ext != ".py":
             return self.load_compat_module(module_name, module_path, add_to_store)
 
         try:
@@ -149,7 +156,7 @@ class ModuleCache(object):
     def register_plugin(self, module_name, cls):
         _log.debug("Registering plugin class: %s -> %s", module_name, cls)
         self.module_cache[module_name] = cls
-        pluginname = getattr(cls, 'name', cls.__name__)
+        pluginname = getattr(cls, "name", cls.__name__)
         if pluginname != module_name:
             self.module_cache[pluginname] = cls
         self._get_plugin_cache.clear()
@@ -175,7 +182,7 @@ class ModuleCache(object):
         return p
 
     def get_plugins(self):
-        return self.module_labels.keys()
+        return list(self.module_labels.keys())
 
     def get_module(self, name, seed_cache=True, only_installed=True):
         if seed_cache:
@@ -192,6 +199,7 @@ class ModuleCache(object):
         "Returns the map of known problems with the INSTALLED_PLUGINS."
         self._populate()
         return self.module_errors
+
 
 cache = ModuleCache()
 get_plugin = cache.get_plugin

@@ -118,7 +118,8 @@ tmap_file_fdopen(int filedes, const char *mode, int32_t compression)
   fp->gz=NULL;
   fp->c=compression;
 
-  switch(fp->c) {
+  switch(fp->c) 
+  {
     case TMAP_FILE_NO_COMPRESSION:
       fp->fp = fdopen(filedes, mode);
       if(NULL == fp->fp) {
@@ -148,6 +149,7 @@ tmap_file_fdopen(int filedes, const char *mode, int32_t compression)
           // 30 workFactor
           fp->bz2 = BZ2_bzWriteOpen(&fp->bzerror, fp->fp, 9, 0, 30); 
       }
+      break;
 #endif
     case TMAP_FILE_GZ_COMPRESSION:
       fp->gz = gzdopen(filedes, mode);

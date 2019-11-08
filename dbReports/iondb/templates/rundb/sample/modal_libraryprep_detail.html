@@ -1,85 +1,86 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_libraryprep_detail" title="" class="modal">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
         <h3>
-            Library Prep Summary
+            {% trans "samplesets.library_prep_summary.title" %}
         </h3>
     </div>
     <div class="modal-body">
         {% if data %}
         <table class="table table-striped">
             <tr>
-                <td><b>Library Prep Type:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.libraryPrepData_sampleSet.get_libraryPrepType_display.label" %}:</b></td>
                 <td>{{ data.libraryPrepData_sampleSet.all.0.get_libraryPrepType_display }}</td>
             </tr>
             <tr>
-                <td><b>PCR Plate Type:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.libraryPrepData_sampleSet.libraryPrepPlateType.label" %}:</b></td>
                 <td>{{ data.libraryPrepData_sampleSet.all.0.libraryPrepPlateType }}</td>
             </tr>
             <tr>
-                <td><b>PCR Plate Serial Number:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.libraryPrepData_sampleSet.pcrPlateSerialNum.label" %}:</b></td>
                 <td>{{ data.libraryPrepData_sampleSet.all.0.pcrPlateSerialNum }}</td>
             </tr>
             <tr>
-                <td><b>Combined Library Tube Label:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.libraryPrepData_sampleSet.combinedLibraryTubeLabel.label" %}:</b></td>
                 <td>{{ data.libraryPrepData_sampleSet.all.0.combinedLibraryTubeLabel }}</td>
             </tr>
             <tr>
-                <td><b>Chef Last Updated:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.lastUpdate.label" %}:</b></td>
                 <td>{{ data.lastUpdate }}</td>
             </tr>
             <tr>
-                <td><b>Chef Instrument Name:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.instrumentName.label" %}:</b></td>
                 <td>{{ data.instrumentName }}</td>
             </tr>
             <tr>
-                <td><b>Tip Rack Barcode:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.tipRackBarcode.label" %}:</b></td>
                 <td>{{ data.tipRackBarcode }}</td>
             </tr>
             <tr>
-                <td><b>Library Kit Type:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.kitType.label" %}:</b></td>
                 <td>{{ data.kitType }}</td>
             </tr>
             <tr>
-                <td><b>Reagent Lot Number:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.reagentsLot.label" %}:</b></td>
                 <td>{{ data.reagentsLot }}</td>
             </tr>
             <tr>
-                <td><b>Reagent Part Number:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.reagentsPart.label" %}:</b></td>
                 <td>{{ data.reagentsPart }}</td>
             </tr>
             <tr>
-                <td><b>Reagent Expiration:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.reagentsExpiration.label" %}:</b></td>
                 <td>{{ data.reagentsExpiration }}</td>
             </tr>
             <tr>
-                <td><b>Solution Lot Number:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.solutionsLot.label" %}:</b></td>
                 <td>{{ data.solutionsLot }}</td>
             </tr>
             <tr>
-                <td><b>Solution Part Number:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.solutionsPart.label" %}:</b></td>
                 <td>{{ data.solutionsPart }}</td>
             </tr>
             <tr>
-                <td><b>Solution Expiration:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.solutionsExpiration.label" %}:</b></td>
                 <td>{{ data.solutionsExpiration }}</td>
             </tr>
             <tr>
-                <td><b>Chef Script Version:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.scriptVersion.label" %}:</b></td>
                 <td>{{ data.scriptVersion }}</td>
             </tr>
             <tr>
-                <td><b>Chef Package Version:</b></td>
+                <td><b>{% trans "samplesets.library_prep_summary.fields.packageVer.label" %}:</b></td>
                 <td>{{ data.packageVer }}</td>
             </tr>
         </table>
         {% else %}
-        <p>No library prep info is available for this Sample Set</p>
+        <p>{% trans "samplesets.library_prep_summary.messages.empty" %}</p>
         {% endif %}
     </div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Close</a>
+        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
     </div>
 </div>

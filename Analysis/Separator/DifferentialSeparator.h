@@ -73,6 +73,7 @@ class DifSepOpt
       isThumbnail = false; // is this a thumbnail set of dats (implicitly aligned to 100x100 regions)
       doComparatorCorrect = false; // should we be doing comparator noise correction
       doGainCorrect = true;
+      exclusionMaskSet = false;
       useBeadfindGainCorrect = true; // should we be using gain correction using beadfind step
       useDataCollectGainCorrect = false; // should we be using gain correction from datacollect using Gain.lsr
       sdAsBf = true; // should we use the sd signal for clustering
@@ -144,6 +145,7 @@ class DifSepOpt
     bool useSeparatorRef;
     bool isThumbnail;
     bool doGainCorrect;
+    bool exclusionMaskSet;
     bool useBeadfindGainCorrect;
     bool useDataCollectGainCorrect;
     bool doDataCollectGainCorrect;

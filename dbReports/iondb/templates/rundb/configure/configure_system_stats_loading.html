@@ -1,10 +1,11 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block content %}
 <div id="main" class="content clearfix">
-  <h1>System Diagnostics <small>Results from: /usr/bin/ion_netinfo, /usr/bin/ion_sysinfo, /usr/bin/ion_raidinfo</small></h1>
+  <h1>{% trans "configure_system_stats.title" %}<small> {% trans "configure_system_stats.subtitle" %} </small></h1>
     <p>
-      <a href="{% url "configure_support_archive" %}">System Status Support Archive</a>
+      <a href="{% url "configure_support_archive" %}">{% trans "configure_support_archive.title" %}</a>
     </p>
     <div id='loading' class="modal-backdrop in k-loading-image"></div>
 </div>

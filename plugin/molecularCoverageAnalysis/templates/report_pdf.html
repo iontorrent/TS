@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<link type="text/css" rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css"/>
+<link rel="stylesheet" type="text/css" href="flot/css/smoothness/jquery-ui-1.8.20.custom.css"/>
+
+<!--[if lt IE 9]>
+  <script type="text/javascript" src="flot/FlashCanvas/bin/flashcanvas.js"></script>
+  <script type="text/javascript" src="flot/FlashCanvas/bin/canvas2png.js"></script>
+<![endif]-->
+<script language="javascript" type="text/javascript" src="flot/js/jquery-1.7.2.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/js/jquery-ui-1.8.20.custom.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/js/jquery.rightClick.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.selection.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.axislabels.js"></script>
+
+<script language="javascript" type="text/javascript" src="lifechart/FileLinksTable.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/PictureFrame.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/DepthOfCoverageChart.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/ReferenceCoverageChart.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/TargetCoverageChart.js"></script>
+
+{% load humanize %}
+
+<style type="text/css">
+  body {
+    background:white;
+    padding: 0;
+    margin: 8px;
+  }
+  .block-rounded {
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help;
+    border-bottom: 1px dotted #A9A9A9
+  }
+   .repsnap {
+     width:774px;
+     height:280px;
+     page-break-inside:avoid;
+   }
+   .page-break {
+     display: block;
+     clear: both;
+     page-break-after: always;
+   }
+</style>
+
+<title>Torrent Coverage Analysis Report</title>
+
+</head>
+
+<body>
+
+<h1><center>Molecular Coverage Analysis Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% else %}
+<h3>&nbsp;</center></h3>
+{% endif %}
+<h3><center>{{run_name}}</center></h3>
+
+<table class="center">
+<tr><td><h4>
+  <b>Library type:</b> {{library_type}}<br/>
+  <b>Reference:</b> {{Reference_Genome}}{% if libnuc_type %} ({{libnuc_type}}){% endif %}<br/>
+  <b>Target regions:</b> {{Target_Regions}}<br/>
+</h4></td></tr><tr><td>
+
+<br/>
+
+<table class="center block-rounded">
+  <td><div class="statsdata"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Number_of_amplicons}}">Number of amplicons</span></td>
+      <td class="inright">{{Number_of_amplicons|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.funcfam}}">Median functional molecules per amplicon</span></td>
+      <td class="inright">{{Median_funcfam_coverage_per_amplicon|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Fam_uniformity_of_amplicon_coverage}}">Uniformity of amplicon molecular coverage</span></td>
+      <td class="inright">{{Fam_uniformity_of_amplicon_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.lod}}">Amplicons with LOD less than 5%</span></td>
+      <td class="inright">{{Amplicons_with_5per_lod}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.lod}}">Amplicons with LOD less than 1%</span></td>
+      <td class="inright">{{Amplicons_with_1per_lod}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.lod}}">Amplicons with LOD less than 0.5%</span></td>
+      <td class="inright">{{Amplicons_with_05per_lod}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.lod}}">Amplicons  with LOD around 0.1%</span></td>
+      <td class="inright">{{Amplicons_with_01per_lod}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.famsize}}">Median number of reads perl molecule</span></td>
+      <td class="inright">{{Median_average_fam_size}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Median_fam_loss_by_strand_bias}}">Median  molecular loss due to strand bias</span></td>
+      <td class="inright">{{Median_fam_loss_by_strand_bias}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Median_convertion_detail}}">Median reads to molecular conversion rate</span></td>
+      <td class="inright">{{Median_convertion_rate}}</td></tr>
+  </table></div></td>
+</table>
+</div>
+<br/>
+
+<div id='DepthOfCoverageChart' datafile='{{base_cov_tsv}}'  class='center' style='width:800px;height:300px'></div> <br/>
+<div id='TargetCoverageChart'  amplicons=1 datafile='{{output_dir}}/{{finecov_tsv}}' initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
+
+<div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+  <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
+
+  <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>

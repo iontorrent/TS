@@ -1,9 +1,10 @@
+{% load pagetools %}
 {% if 'Save_plan' in helper.getStepDict.keys %}
     {% for key, value in helper.getStepDict.Save_plan.getCurrentSavedFieldDict.items %}
         {% if key in helper.getStepDict.Save_plan.qcNames %}
         <tr>
             <td>
-                <b>{{key}}:</b>
+                <b>{{helper.getStepDict.Save_plan.ModelsQcTypeToLabelsQcTypeAsDict|bracket:key}}:</b>
             </td>
             <td data-summary-name="{{key}}">{{value}}</td>
         </tr>
@@ -14,7 +15,7 @@
         {% if key in helper.getStepDict.Save_plan_by_sample.qcNames %}
         <tr>
             <td>
-                <b>{{key}}:</b>
+                <b>{{helper.getStepDict.Save_plan_by_sample.ModelsQcTypeToLabelsQcTypeAsDict|bracket:key}}:</b>
             </td>
             <td data-summary-name="{{key}}">{{value}}</td>
         </tr>

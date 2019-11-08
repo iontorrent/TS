@@ -128,17 +128,17 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     #config.vm.provision :shell, :inline => 'echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99hashsumerrorfix.conf' # Work around broken proxy? Avoids 'Hash Sum error'
 
     # SETUP APT REPOSITORY LOCATION - DEPLOY
-    ION_APT = "deb http://updates.ite/updates/software/ "+DIST+"-beta/"
+    ION_APT = "deb [arch=amd64 trusted=yes] http://updates.ite/updates/software/ "+DIST+"-beta/"
     config.vm.provision :shell, :inline => "echo \"" + ION_APT + "\" > /etc/apt/sources.list.d/iontorrent.list"
     # SETUP APT REPOSITORY LOCATION - DEVELOPMENT
-    #config.vm.provision :shell, :inline => "echo deb http://updates.ite/updates/software "+DIST+"-alpha/ > /etc/apt/sources.list.d/iontorrent.list"
-    #config.vm.provision :shell, :inline => "echo deb http://updates.ite/updates/software "+DIST+"-dev/ >> /etc/apt/sources.list.d/iontorrent.list"
+    #config.vm.provision :shell, :inline => "echo deb [arch=amd64 trusted=yes] http://updates.ite/updates/software "+DIST+"-alpha/ > /etc/apt/sources.list.d/iontorrent.list"
+    #config.vm.provision :shell, :inline => "echo deb [arch=amd64 trusted=yes] http://updates.ite/updates/software "+DIST+"-dev/ >> /etc/apt/sources.list.d/iontorrent.list"
 
     config.vm.provision :shell, :inline => 'apt-get -qq update'
 
     # Bootstrap server to latest release of the Ion TS Platform
     #config.vm.provision :shell, :inline => 'apt-get install build-essential python-pkg-resources --no-upgrade -y'
-    config.vm.provision :shell, :inline => 'apt-get install ion-tsconfig -y --force-yes'
+    config.vm.provision :shell, :inline => 'apt-get install ion-tsconfig -y --allow-unauthenticated'
     config.vm.provision :shell, :path => './tsvm-prepare'
     config.vm.provision :shell, :inline => 'TSconfig --configure-server'
 

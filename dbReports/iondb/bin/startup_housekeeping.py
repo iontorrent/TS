@@ -27,23 +27,26 @@ def bother_the_user():
     """
     desired_contacts = ["lab_contact", "it_contact"]
     info = []
-    for profile in models.UserProfile.objects.filter(user__username__in=desired_contacts):
+    for profile in models.UserProfile.objects.filter(
+        user__username__in=desired_contacts
+    ):
         info.extend([profile.phone_number, profile.user.email])
     if not any(info):
-        models.Message.info("""Please supply some customer support contact info.
-<br/><a href="/configure/configure">Add contact information.</a>""")
+        models.Message.info(
+            """Please supply some customer support contact info.
+<br/><a href="/configure/configure">Add contact information.</a>"""
+        )
 
 
 def events_from_settings():
     try:
-        event_consumers = getattr(settings, 'EVENTAPI_CONSUMERS', {})
+        event_consumers = getattr(settings, "EVENTAPI_CONSUMERS", {})
         events.register_events(event_consumers)
     except Exception as err:
         logger.exception("Error during event consumer registration")
 
 
 class StartupHousekeeping(object):
-
     def __init__(self):
         """This class is instatiated when the Django process is started, once
         and only once.  The MiddlewareNotUsed exception at the end removes this

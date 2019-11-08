@@ -141,7 +141,7 @@ double second (void)
     }
 }
 
-#elif defined(__linux) || defined(__QNX__)
+#elif defined(__linux__) || defined(__QNX__)
 #include <stddef.h>
 #include <sys/time.h>
 #include <sys/resource.h>

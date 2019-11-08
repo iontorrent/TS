@@ -1,23 +1,27 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_references_new_genome" title="" class="modal hide" data-width="800">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>Add New Reference Genome</h3>
-    </div>
+        <h3>{% trans "add_custom_genome.title" %}</h3>
+    </div>`
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <ul class="nav nav-tabs">
-            <li class="active"><a href="#" id="nav_file" data-toggle="tab">Upload File</a></li>
-            <li><a href="#" id="nav_url" data-toggle="tab">Install via URL</a></li>
+            <li class="active"><a href="#" id="nav_file" data-toggle="tab">{% trans "add_custom_genome.section.byfile.title" %}</a></li>
+            <li><a href="#" id="nav_url" data-toggle="tab">{% trans "add_custom_genome.section.byurl.title" %}</a></li>
         </ul>
-        <form class="form-horizontal" id="modal_references_new_genome_form" method="POST" action="{% url "add_custom_genome" %}">
+        <form class="form-horizontal form-horizontal-200" id="modal_references_new_genome_form" method="POST" action="{% url "add_custom_genome" %}">
             <fieldset>
                 <div id="upload-fasta" class="control-group">
-                    <label for="pickfile" class="control-label">Upload a FASTA file (required)</label>
+                    <label for="pickfile" class="control-label">{% trans "add_custom_genome.fields.pickfile.label" %} <i>{% trans "global.field.label.required" %}</i></label>
                     <div class="controls">
-                        <div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
+                        <div id="filelist"><a id="pickfile" name="pickfile" class="btn">{% trans "add_custom_genome.fields.pickfile.select" %}</a></div>
                         <div id="file_info" class="help-block"></div>
+                        <p class="help-block">
+                            {% trans "add_custom_genome.fields.pickfile.helptext"|safe %}
+                        </p>
                     </div>
                     <div class="controls">
                         <div id="upload-progress" class="progress progress-striped active hide">
@@ -26,43 +30,49 @@
                     </div>
                 </div>
                 <div id="url-install" class="control-group hide">
-                    <label for="reference_url" class="control-label">Reference URL <i>(required)</i></label>
+                    <label for="reference_url" class="control-label">{% trans "add_custom_genome.fields.reference_url.label" %} <i>{% trans "global.field.label.required" %}</i></label>
                     <div class="controls">
                         <input name="reference_url" id="reference_url" placeholder="e.g. http://updates.iontorrent.com/reference_downloads/mm10.zip" type="text" class="input-xxlarge textInput required"/>
                         <p class="help-block">
-                            URL to the reference, a zip or gzip file on a remote server.
+                            {% trans "add_custom_genome.fields.reference_url.helptext" %}
                         </p>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="short_name" class="control-label">Short name <i>(required)</i></label>
+                    <label for="short_name" class="control-label">{% trans "add_custom_genome.fields.short_name.verbose_name" %} <i>{% trans "global.field.label.required" %}</i></label>
                     <div class="controls">
-                        <input name="short_name" id="short_name" placeholder='eg "hg19", "rs_005296_1", "hs_ampl_set1"' maxlength="50" type="text" class="input-xlarge textInput required validateAlphaNumUnderscorePlusDotDashNoSpace"/>
+                        <input name="short_name" id="short_name" placeholder='{% trans "add_custom_genome.fields.short_name.placeholder" %}' maxlength="50" type="text" class="input-xlarge textInput required validateAlphaNumUnderscorePlusDotDashNoSpace"/>
                         <p class="help-block">
-                            Short form of reference name, use letters, numbers and (+.-_) only
+                            {% trans "add_custom_genome.fields.short_name.helptext" %}
                         </p>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="name" class="control-label">Description <i>(required)</i></label>
+                    <label for="name" class="control-label">{% trans "add_custom_genome.fields.name.verbose_name" %} <i>{% trans "global.field.label.required" %}</i></label>
                     <div class="controls">
-                        <input name="name" id="name" placeholder='eg "Homo sapiens hg19", "Homo sapiens Amplicon Set 1"'  maxlength="512" type="text" class="input-xxlarge textInput required"/>
+                        <input name="name" id="name" placeholder='{% trans "add_custom_genome.fields.name.placeholder" %}'  maxlength="512" type="text" class="input-xxlarge textInput required"/>
                         <p class="help-block">
-                            A longer, more descriptive reference name.
+                            {% trans "add_custom_genome.fields.name.helptext" %}
                         </p>
                     </div>
                 </div>
-                <div class="control-group" title="The version information for this reference">
-                    <label for="version" class="control-label" style="font-weight: normal;">Version (optional)</label>
+                <div class="control-group">
+                    <label for="version" class="control-label" style="font-weight: normal;">{% trans "add_custom_genome.fields.version.verbose_name" %} <i>{% trans "global.field.label.optional" %}</i></label>
                     <div class="controls">
-                        <input name="version" id="version" placeholder='eg "hg19", "gi|39933080|ref|NC_005296.1", "1.0"'
+                        <input name="version" id="version" placeholder='{% trans "add_custom_genome.fields.version.placeholder" %}'
                         maxlength="100" type="text" class="input-xlarge"/>
+                        <p class="help-block">
+                            {% trans "add_custom_genome.fields.version.helptext" %}
+                        </p>
                     </div>
                 </div>
-                <div class="control-group" title="Miscellaneous notes on this reference.">
-                    <label for="notes" class="control-label" style="font-weight: normal;">Notes (optional)</label>
+                <div class="control-group">
+                    <label for="notes" class="control-label" style="font-weight: normal;">{% trans "add_custom_genome.fields.notes.verbose_name" %} <i>{% trans "global.field.label.optional" %}</i></label>
                     <div class="controls">
                         <textarea name="notes" id="notes" class="input-xxlarge"></textarea>
+                        <p class="help-block">
+                            {% trans "add_custom_genome.fields.notes.helptext" %}
+                        </p>
                     </div>
                 </div>
             </fieldset>
@@ -77,8 +87,8 @@
     </div>    
   </div>    
   <div class="modal-footer">    
-      <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-      <a id="uploadfile" class="btn btn-primary" href="#">Import Reference</a>
+      <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+      <a id="uploadfile" class="btn btn-primary" href="#">{% trans "add_custom_genome.action.submit" %}</a>
   </div>
 <script type="text/javascript">
 $(function(){
@@ -151,9 +161,7 @@ $(function(){
     });       
     uploader.bind('Init', function (up, params) {
         $("#upload-fasta, #pickfile").show();
-        $('#upload-help').html("<p>Please select a FASTA file to upload, with the .fasta extension. FASTA files can be found at the \
-         <a href='http://www.ncbi.nlm.nih.gov/sites/genome' target='_blank'>NCBI web page</a>.</p> \
-         <p>FASTA files which are zip compressed are also accepted.</p>");
+        $('#upload-help').html("{% trans "add_custom_genome.fields.pickfile.helptext" %}");
     });  
           
     uploader.bind('FilesAdded', function (up, files) {
@@ -173,7 +181,7 @@ $(function(){
             //if they are using flash and select a file greater than 2 gigs give them a warning.
             //TODO: remove this message if the user selects a 2 gig file, and then changes it.
             if (up.runtime == "flash" && file.size > 2147483648) {
-                $('#upload-help').append(" <span id='flash_warn' class='file_item'>  <p> <em> Flash was the only plugin found by your web browser. When using Flash, file uploads to are limited to 2 Gigabytes. To upload files larger than 2 Gigabytes please install the <a href='http://www.microsoft.com/getsilverlight/'>silverlight</a> runtime.</em>  </p> </span>");
+                $('#upload-help').append("<span id='flash_warn' class='file_item'>  <p> <em> Flash was the only plugin found by your web browser. When using Flash, file uploads to are limited to 2 Gigabytes. To upload files larger than 2 Gigabytes please install the <a href='http://www.microsoft.com/getsilverlight/'>silverlight</a> runtime.</em>  </p> </span>");
                 $('#flash_warn').append("<p><em>You can also ZIP the FASTA file, and uploaded the compressed file.</em></p>");
                 $('#flash_warn').effect('pulsate');
                 flashFail = true;
@@ -200,7 +208,7 @@ $(function(){
                 $("#update").addClass('alert alert-error').html(data.status);
             } else {
                 $("#update").removeClass('alert-error').addClass('alert alert-success');
-                $("#update").html("Started genome reference creation");
+                $("#update").html('{% trans "add_custom_genome.messages.success" %}');
                 setTimeout(function () {
                     $('#modal_references_new_genome').trigger('modal_references_new_genome_done', {});
                     $('#modal_references_new_genome').modal('hide'); 
@@ -225,7 +233,7 @@ $(function(){
         } else {
             //ERROR : Must select a file
             $('#upload-fasta').addClass('invalid alert alert-error');
-            $("#file_info").addClass('alert-error').html("You must select FASTA or ZIP file to upload").show();
+            $("#file_info").addClass('alert-error').html('{% trans "add_custom_genome.messages.validation.pickedfile.required" %}').show();
         }
         
         return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).not('#url-install,#reference_url').exists();
@@ -241,6 +249,7 @@ $(function(){
         $('#url-install').show();
     });
 });
+//# sourceURL=templates/rundb/configure/modal_references_new_genome.html
 </script>
 </div>
  

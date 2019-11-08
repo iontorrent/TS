@@ -2,6 +2,7 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
 <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
@@ -91,7 +92,6 @@
     }
     #toggle_more_columns_container {
         display: inline-block;
-        width: 100px;
     }
     #toggle_more_columns_container.disabled > span {
         display: none;
@@ -128,7 +128,7 @@
             return false;
         }).fail(function(data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
             console.log("Send to project error:", data);
         });
     });
@@ -136,38 +136,38 @@
 </script>
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url "data" %}">Completed Runs & Reports</a></li>
-    <li><a href="{% url "projects" %}">Projects</a></li>
-    <li><a href="{% url "datamanagement" %}">Data Management</a></li>
+    <li class="active"><a href="{% url "data" %}">{% trans "global.nav.menu.data.menu.data.label" %}</a></li>
+    <li><a href="{% url "projects" %}">{% trans "global.nav.menu.data.menu.projects.label" %}</a></li>
+    <li><a href="{% url "datamanagement" %}">{% trans "global.nav.menu.data.menu.datamanagement.label" %}</a></li>
 {% endblock sub-nav %}
 {%block extra-main-class%}no-padding{%endblock extra-main-class%}
 {% block content %}
 <div id="data_view" class="content group">
     <div class="pull-right">
         <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;">
-            <a href="#full" id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">Table View</a>&nbsp;
+            <a href="#full" id="view_full" class="">{% trans "global.mode.listview.label" %}</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">{% trans "global.mode.tableview.label" %}</a>&nbsp;
             <span id="toggle_more_columns_container">
-                <span>(<a id="toggle_more_columns" data-more-text="More Columns" data-less-text="Less Columns">More Columns</a>)</span>
+                <span>(<a id="toggle_more_columns" data-more-text="{% trans "global.mode.tableview.mode.toggle_more_columns.more-columns" %}" data-less-text="{% trans "global.mode.tableview.mode.toggle_more_columns.less-columns" %}">{% trans "global.mode.tableview.mode.toggle_more_columns.more-columns" %}</a>)</span>
             </span>
         </div>
-        <a id='live_button' class="btn btn-success">Auto Refresh</a>
+        <small style="display: none;" id="update_status" data-live-on="{% trans "global.mode.live.enable.helptext" %}" data-live-off="{% trans "global.mode.live.disable.helptext" %}" >{% trans "global.mode.live.disable.helptext" %}</small> <a id='live_button' class="btn btn-success" data-live-on="{% trans "global.mode.live.enable" %}" data-live-off="{% trans "global.mode.live.disable" %}">{% trans "global.mode.live.enable" %}</a>
     </div>
-    <h1>Completed Runs & Reports</h1>
+    <h1>{% trans "data.title" %}</h1>
     <div id="search_bar" class="" style="margin-top:5px;">
         {%spaceless%}
         <div class="row-fluid">
             <div class="search-field">
-                <img rel="tooltip" title="Favorite" data-placement="top" id="id_star_img" src="{% static "resources/img/star_off.png"%}">
+                <img rel="tooltip" title="{% trans "data.search_bar.fields.star.title" %}" data-placement="top" id="id_star_img" data-src-checked-true="{% static "resources/img/star_off.png"%}" data-src-checked-false="{% static "resources/img/star-blue.png"%}" src="{% static "resources/img/star_off.png"%}">
                 <input id="id_star" name="star" type="checkbox">
                 <script type="text/javascript">
                     $(document).ready(function () {
                         $('#id_star_img').click(function (e) {
                             var $checkbox = $("#id_star");
                             if ($checkbox.attr('checked')) {
-                                $(this).attr("src", "{% static "resources/img/star_off.png"%}");
+                                $(this).attr("src", $(this).data('srcChecked' + 'True'));
                                 $checkbox.attr('checked', false);
                             } else {
-                                $(this).attr("src", "{% static "resources/img/star-blue.png"%}");
+                                $(this).attr("src", $(this).data('srcChecked' + 'False'));
                                 $checkbox.attr('checked', true);
                             }
                             $checkbox.change();
@@ -177,113 +177,117 @@
             </div>
         	<div class="input-append search-field-run">
                 <label for="searchText" class="hide">Search</label>
-                <input id="search_text" type="text" placeholder="Search" style="width: 140px;" rel="tooltip" title="Searches Run Name, Run Notes, Report Name, Sample Tube Label, Plan Short ID and Chip Barcode" data-delay="500"/>
-                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+                <input id="search_text" type="text" placeholder="{% trans "data.search_bar.fields.search_text.placeholder" %}" style="width: 140px;" rel="tooltip" title="{% trans "data.search_bar.fields.search_text.tooltip" %}" data-delay="500"/>
+                <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">{% trans "data.search_bar.fields.search_text.label" %}</button>
             </div>
             <div class="search-field">
-                <label for="dateRange" class=" hide">Date</label>
-                <input type="text" name="dateRange" id="rangeA" placeholder="Date" style="width: 134px">
+                <label for="dateRange" class=" hide">{% trans "data.search_bar.fields.dateRange.label" %}</label>
+                <input type="text" name="dateRange" id="rangeA" placeholder="{% trans "data.search_bar.fields.dateRange.placeholder" %}" style="width: 134px">
             </div>
             <div class="search-field">
-                <label for="id_status" class=" hide">Result Status</label>
-                <select id="id_status" name="resultStatus" class="selectpicker" data-width="140px" title="Status:" data-persist-title="true">
-                    <option value="">All</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Progress">Progress</option>
-                    <option value="Error">Error</option>
-                    <option value="Other">Other</option>
+                <label for="id_status" class=" hide">{% trans "data.search_bar.fields.resultStatus.label" %}</label>
+                <select id="id_status" name="resultStatus" class="selectpicker" data-width="140px" title="{% trans "data.search_bar.fields.resultStatus.title" %}" data-persist-title="true">
+                    <option value="">{% trans "data.search_bar.fields.resultStatus.choice.default" %}</option>
+                    <option value="Completed">{% trans "data.search_bar.fields.resultStatus.choice.Completed" %}</option>
+                    <option value="Progress">{% trans "data.search_bar.fields.resultStatus.choice.Progress" %}</option>
+                    <option value="Error">{% trans "data.search_bar.fields.resultStatus.choice.Error" %}</option>
+                    <option value="Other">{% trans "data.search_bar.fields.resultStatus.choice.Other" %}</option>
                 </select>
             </div>
             <div class="search-field">
-                <label for="id_project" class=" hide">Project</label>
-                <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="Remove this filter" data-live-search="true" data-live-search-placeholder="Find Projects..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Project:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_project" class=" hide">{% trans "data.search_bar.fields.project.label" %}</label>
+                <select id="id_project" name="project" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.project.count-selected-text" %}"
+                    data-selected-text-format="count" data-width="140px" data-remove-button="false" data-remove-button-title="{% trans "data.search_bar.fields.project.remove-button-title" %}" data-live-search="true"
+                    data-live-search-placeholder="{% trans "data.search_bar.fields.project.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;"
+                    title="{% trans "data.search_bar.fields.project.title" %}" data-select-all-text="{% trans "data.search_bar.fields.project.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.project.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.project.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for project in search.combined.projects %}
                         <option value="{{ project }}">{{ project }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field-data-source">
-                <label for="id_data_source" class=" hide">Data Source</label>
-                <select id="id_data_source" disabled="disabled" name="data_source" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search-placeholder="Find Servers..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Server:" data-deselect-all-text="Clear" data-none-selected-text="Local TS" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
-                    <option selected value="local">Local TS</option>
+                <label for="id_data_source" class=" hide">{% trans "data.search_bar.fields.data_source.label" %}</label>
+                <select id="id_data_source" disabled="disabled" name="data_source" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.data_source.count-selected-text" %}" data-selected-text-format="count" data-width="160px" data-live-search-placeholder="{% trans "data.search_bar.fields.data_source.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.data_source.title" %}" data-select-all-text="{% trans "data.search_bar.fields.data_source.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.data_source.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.data_source.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                    <option selected value="local">{% trans "data.search_bar.fields.data_source.choice.local" %}</option>
                 </select>
             </div>
             <div class="search-field">
-                <button id="toggle_more_filters" class="btn btn-primary" type="button" data-more-text="More Filters" data-less-text="Less Filters">More Filters</button>
+                <button id="toggle_more_filters" class="btn btn-primary" type="button" data-more-text="{% trans "data.search_bar.action.toggle_more_filters.more-text" %}" data-less-text="{% trans "data.search_bar.action.toggle_more_filters.less-text" %}">{% trans "data.search_bar.action.toggle_more_filters.more-text" %}</button>
             </div>
             <div class="search-field">
-                <button id="clear_filters" class="btn" type="button">Clear All</button>
+                <button id="clear_filters" class="btn" type="button">{% trans "data.search_bar.action.clear_filters.label" %}</button>
             </div>
             <div class="search-field order-by">
-                <label for="order_by" class=" hide">Sort</label>
-                <select id="order_by" name="order_by" class="selectpicker" title="Sort:" data-width="170px" data-persist-title="true">
-                    <option value="-resultDate">Reports New to Old </option>
-                    <option value="resultDate">Reports Old to New</option>
-                    <option value="-date">Run Date New to Old</option>
-                    <option value="date">Run Date Old to New</option>
-                    <option value="expName">Run Name A-Z</option>
-                    <option value="-expName">Run Name Z-A</option>
-                    <option value="chipType">Chip Asc.</option>
-                    <option value="-chipType">Chip Desc.</option>
-                    <option value="flows">No. of Flows Asc.</option>
-                    <option value="-flows">No. of Flows Desc.</option>
+                <label for="order_by" class=" hide">{% trans "data.search_bar.fields.order_by.label" %}</label>
+                <select id="order_by" name="order_by" class="selectpicker" title="{% trans "data.search_bar.fields.order_by.title" %}" data-width="170px" data-persist-title="true">
+                    <option value="-resultDate">{% trans "data.search_bar.fields.order_by.choice.-resultDate" %}</option>
+                    <option value="resultDate">{% trans "data.search_bar.fields.order_by.choice.resultDate" %}</option>
+                    <option value="-date">{% trans "data.search_bar.fields.order_by.choice.-date" %}</option>
+                    <option value="date">{% trans "data.search_bar.fields.order_by.choice.date" %}</option>
+                    <option value="displayName">{% trans "data.search_bar.fields.order_by.choice.expName" %}</option>
+                    <option value="-displayName">{% trans "data.search_bar.fields.order_by.choice.-expName" %}</option>
+                    <option value="chipType">{% trans "data.search_bar.fields.order_by.choice.chipType" %}</option>
+                    <option value="-chipType">{% trans "data.search_bar.fields.order_by.choice.-chipType" %}</option>
+                    <option value="flows">{% trans "data.search_bar.fields.order_by.choice.flows" %}</option>
+                    <option value="-flows">{% trans "data.search_bar.fields.order_by.choice.-flows" %}</option>
                 </select>
             </div>
             <div class="search-field clearfix optional hide">
-                <label for="id_sample" class=" hide">Sample</label>
-                <select id="id_sample" name="sample" data-placeholder="Any Sample" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="194px" data-live-search="true" data-live-search-placeholder="Find Samples..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Sample:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_sample" class=" hide">{% trans "data.search_bar.fields.sample.label" %}</label>
+                <select id="id_sample" name="sample" data-placeholder="{% trans "data.search_bar.fields.sample.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.sample.count-selected-text" %}" data-selected-text-format="count" data-width="194px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.sample.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.sample.title" %}" data-select-all-text="{% trans "data.search_bar.fields.sample.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.sample.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.sample.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for sample in search.experiment.sample %}
                         <option value="{{ sample }}">{{ sample }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_reference" class=" hide">Reference</label>
-                <select id="id_reference" name="reference" data-placeholder="Any Reference" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="148px" data-live-search="true" data-live-search-placeholder="Find References..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Reference:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_reference" class=" hide">{% trans "data.search_bar.fields.reference.label" %}</label>
+                <select id="id_reference" name="reference" data-placeholder="{% trans "data.search_bar.fields.reference.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.reference.count-selected-text" %}" data-selected-text-format="count" data-width="148px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.reference.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.reference.title" %}" data-select-all-text="{% trans "data.search_bar.fields.reference.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.reference.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.reference.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for reference in search.experiment.library %}
                         <option value="{{ reference }}">{{ reference }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_flows" class=" hide">Flow</label>
-                <select id="id_flows" name="flows" data-placeholder="All Flows" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="Find Flows..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Flows:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_flows" class=" hide">{% trans "data.search_bar.fields.flows.label" %}</label>
+                <select id="id_flows" name="flows" data-placeholder="{% trans "data.search_bar.fields.flows.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.flows.count-selected-text" %}" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.flows.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.flows.title" %}" data-select-all-text="{% trans "data.search_bar.fields.flows.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.flows.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.flows.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for flows in search.combined.flows %}
                         <option value="{{ flows }}">{{ flows }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_chip" class=" hide">Chip</label>
-                <select id="id_chip" name="chipType" data-placeholder="Any Chip" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="Find Chips..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Chip:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_chip" class=" hide">{% trans "data.search_bar.fields.chipType.label" %}</label>
+                <select id="id_chip" name="chipType" data-placeholder="{% trans "data.search_bar.fields.chipType.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.chipType.count-selected-text" %}" data-selected-text-format="count" data-width="140px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.chipType.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.chipType.title" %}" data-select-all-text="{% trans "data.search_bar.fields.chipType.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.chipType.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.chipType.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for chip in search.experiment.chipType %}
                         <option value="{{ chip.value }}">{{ chip.display_name }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_sample_prep" class=" hide">Template Kit</label>
-                <select id="id_sample_prep" name="samplePrep" data-placeholder="Any Sample Prep" class="selectpicker"
+                <label for="id_sample_prep" class=" hide">{% trans "data.search_bar.fields.samplePrep.label" %}</label>
+                <select id="id_sample_prep" name="samplePrep" data-placeholder="{% trans "data.search_bar.fields.samplePrep.placeholder" %}" class="selectpicker"
                         data-width="160px" data-actions-box="true" data-dropup-auto="false"
-                        data-dropdown-align-right="auto" style="display:none;" title="Sample Prep:"
-                        data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true"
+                        data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.samplePrep.title" %}"
+                        data-select-all-text="{% trans "data.search_bar.fields.samplePrep.select-all-text" %}"
+                        data-deselect-all-text="{% trans "data.search_bar.fields.samplePrep.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.samplePrep.none-selected-text" %}" data-persist-title="true"
                         data-option-size="20">
-                    <option value="">All</option>
-                    <option value="OT">OneTouch</option>
-                    <option value="IC">IonChef</option>
+                    <option value="">{% trans "data.search_bar.fields.sampleprep.choice.default" %}</option>
+                    <option value="OT">{% trans "data.search_bar.fields.sampleprep.choice.OT" %}</option>
+                    <option value="IC">{% trans "data.search_bar.fields.sampleprep.choice.IC" %}</option>
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_pgm" class=" hide">Instrument</label>
-                <select id="id_pgm" name="pgmName" data-placeholder="Any Instrument" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="Find Instruments..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Instrument:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_pgm" class=" hide">{% trans "data.search_bar.fields.pgmName.label" %}</label>
+                <select id="id_pgm" name="pgmName" data-placeholder="{% trans "data.search_bar.fields.pgmName.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.pgmName.count-selected-text" %}" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.pgmName.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.pgmName.title" %}" data-select-all-text="{% trans "data.search_bar.fields.pgmName.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.pgmName.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.pgmName.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for pgm in search.experiment.pgmName %}
                         <option value="{{ pgm }}">{{ pgm }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="search-field optional hide">
-                <label for="id_plugin" class=" hide">Plugin</label>
-                <select id="id_plugin" name="plugin" data-placeholder="Any Plugin" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{0} Selected" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="Find Plugins..." data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="Plugin:" data-deselect-all-text="Clear" data-none-selected-text="All" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
+                <label for="id_plugin" class=" hide">{% trans "data.search_bar.fields.plugin.label" %}</label>
+                <select id="id_plugin" name="plugin" data-placeholder="{% trans "data.search_bar.fields.plugin.placeholder" %}" class="selectpicker" multiple data-move-selected="true" data-count-selected-text="{% trans "data.search_bar.fields.plugin.count-selected-text" %}" data-selected-text-format="count" data-width="160px" data-live-search="true" data-live-search-placeholder="{% trans "data.search_bar.fields.plugin.live-search-placeholder" %}" data-actions-box="true" data-dropup-auto="false" data-dropdown-align-right="auto" style="display:none;" title="{% trans "data.search_bar.fields.plugin.title" %}" data-select-all-text="{% trans "data.search_bar.fields.plugin.select-all-text" %}" data-deselect-all-text="{% trans "data.search_bar.fields.plugin.deselect-all-text" %}" data-none-selected-text="{% trans "data.search_bar.fields.plugin.none-selected-text" %}" data-persist-title="true" data-option-size="20" data-selected-text-format="nmore">
                     {% for plugin in search.combined.plugins %}
                         <option value="{{ plugin }}">{{ plugin }}</option>
                     {% endfor %}
@@ -300,8 +304,9 @@
     </div>
 
     <div id="data_panel"></div>
+{% if featureflags.DATA_DOWNLOAD_FILTERED_RESULTS_AS_CSV %}
     <div align='center'><a id="download_csv" href="/data/getCSV.csv">Download filtered results as CSV</a></div>
-
+{% endif %}
     <div id="modal_data_management" title="" class="modal hide">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -340,12 +345,12 @@
 <script src="{% static "js/backbone.js"%}"></script>
 <script src="{% static "js/chosen.jquery.min.js"%}"></script>
 <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing
     iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 <script src="{% static "js/date.min.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.min.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 <script src="{% static "js/template.min.js"%}"></script>
 <script src="{% static "js/compiler.min.js"%}"></script>
 <script src="{% static "js/messagebox.min.js"%}"></script>
@@ -389,12 +394,12 @@
             <h4>
                 <div class="span3">
                     {{#in_progress}}
-                        {{progress_flows}}/{{exp.flows}} flows
+                        {{progress_flows}}/{{exp.flows}} {% endraw %}{% trans "data.fields.flows.label.lowercase" %}{% raw %}
                         <div class="progress progress-striped">
                             <div class="bar" style="width: {{progress_percent}}%;"></div>
                         </div>
                     {{/in_progress}}
-                    {{^in_progress}}Flows {{exp.ftpStatus}}{{/in_progress}}
+                    {{^in_progress}}{% endraw %}{% trans "data.fields.flows.label" %}{% raw %} {{exp.ftpStatus}}{{/in_progress}}
                 </div>
                 <div>{{ date_string }}</div>
             </h4>
@@ -404,23 +409,23 @@
         </div>
         <div class="completedrun-items span3">
             <ul class="unstyled">
-                {{#exp.barcodeId}}<li><b>Barcode:</b> {{exp.barcodeId}}</li>{{/exp.barcodeId}}
-                <li><b>Reference:</b>
+                {{#exp.barcodeId}}<li><b>{% endraw %}{% trans "data.fields.barcodeId.label" %}{% raw %}:</b> {{exp.barcodeId}}</li>{{/exp.barcodeId}}
+                <li><b>{% endraw %}{% trans "data.fields.references.label" %}{% raw %}:</b>
 		    {{ exp.references }}
 		</li>
             	{{#exp.sampleSetName}}
-                <li><b>Sample Set:</b>
+                <li><b>{% endraw %}{% trans "data.fields.sampleSetName.label" %}{% raw %}:</b>
     				{{exp.sampleSetName}}
                 </li>
     			{{/exp.sampleSetName}}                
-                <li><b>Sample:</b> {{ exp.sample }}</li>
-                <li><b>Chip:</b> {{ exp.chipDescription }}</li>
-                <li><b>Project:</b> {{#king_report.projects}}<span class="label">{{name}}</span> {{/king_report.projects}}</li>
+                <li><b>{% endraw %}{% trans "data.fields.sample.label" %}{% raw %}:</b> {{ exp.sample }}</li>
+                <li><b>{% endraw %}{% trans "data.fields.chipDescription.label" %}{% raw %}:</b> {{ exp.chipDescription }}</li>
+                <li><b>{% endraw %}{% trans "data.fields.results.projects.name.label" %}{% raw %}:</b> {{#king_report.projects}}<span class="label">{{name}}</span> {{/king_report.projects}}</li>
             </ul>
         </div>
         <div class="run-actions pull-right">
-            <a class="btn btn-tertiary reanalyze-run btn75" href="{{url_prefix}}/report/analyze/{{exp.id}}/0" >Reanalyze</a>
-            <a class="btn btn-tertiary btn75" href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">Edit</a>
+            <a class="btn btn-tertiary reanalyze-run btn75" href="{{url_prefix}}/report/analyze/{{exp.id}}/0" >{% endraw %}{% trans "data.action.reanalyze" %}{% raw %}</a>
+            <a class="btn btn-tertiary btn75" href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">{% endraw %}{% trans "data.action.editplan" %}{% raw %}</a>
             {{#comment}}
             <div class="btn-group storage">
 				{{#exp.archived}}
@@ -446,15 +451,17 @@
     <table class="data-table table-striped table-dense">
         <thead>
             <tr>
+{% endraw %}
                 <th>&nbsp;</th>
-                <th>Report Name</th>
-                <th>Total Reads</th>
-                <th>Mean Read Len.</th>
-                <th>Q20 Bases</th>
-                <th>Output</th>
-                <th>Date</th>
-                <th>Status</th>
+                <th>{% trans "data.fields.results.resultsName.label" %}</th>
+                <th>{% trans "data.fields.results.quality_metrics.q0_reads.label" %}</th>
+                <th>{% trans "data.fields.results.quality_metrics.q0_mean_read_length.label" %}</th>
+                <th>{% trans "data.fields.results.quality_metrics.q20_bases.label" %}</th>
+                <th>{% trans "data.fields.results.quality_metrics.q0_bases.label" %}</th>
+                <th>{% trans "data.fields.results.timeStamp.label" %}</th>
+                <th>{% trans "data.fields.results.status.label" %}</th>
                 <th>&nbsp;</th>
+{% raw %}
             </tr>
         </thead>
         <tbody class='reports-top'>
@@ -463,7 +470,7 @@
         </tbody>
     </table>
     {{#more_reports}}
-        <center><a href="#" class="reports-show-more">Show all {{count}} reports</a></center>
+        <center><a href="#" class="reports-show-more">{{ more_reports_text }}</a></center>
     {{/more_reports}}
 </script>
 <script type="text/template" id="report_template">
@@ -475,7 +482,7 @@
         <td>{{total_q20bp}}</td>
         <td>{{total_q0bp}}</td>
         <td>{{date_string}}</td>
-        <td>{{status}}</td>
+        <td>{{i18nstatus.i18n}}</td>
         <td style="overflow:visible;">
             {{#is_local}}
             <div class="btn-group pull-right">
@@ -485,17 +492,21 @@
 {% raw %}
                 </a>
                 <ul class="dropdown-menu">
-                    <li><a class="send_to_project" href="/data/results/{{id}}/project/"> Add Report to Project</a></li>
+                    <li><a class="send_to_project" href="/data/results/{{id}}/project/">{% endraw %}{% trans "data.action.results_to_projects.label" %}{% raw %}</a></li>
                     <li class="divider"></li>
                     <li>
                         <a href="/data/datamanagement/log/{{id}}" class="reportLog" data-pk="{{id}}" data-toggle="modal" data-target="#modal_report_log">
 {% endraw %}
-                            View Log&nbsp;&nbsp;<img src="{% static "images/View_Log_Blue.png"%}"/>
+                            {% trans "data.action.viewlog.label" %}&nbsp;&nbsp;<img src="{% static "images/View_Log_Blue.png"%}"/>
 {% raw %}
                         </a>
                     </li>
+                    {% endraw %}
+                    {% if request.user.is_staff %}
                     <li class="divider"></li>
-                    <li><a href="#" class="dm-actions">Data management</a></li>
+                    <li><a href="#" class="dm-actions">{% trans "data.action.dm.label" %}</a></li>
+                    {% endif %}
+                    {% raw %}
                 </ul>
             </div>
             {{/is_local}}
@@ -530,23 +541,23 @@
             <thead class="k-grid-header">
                 <tr>
                     <th class="k-header"></th>
-                    <th class="k-header"><a class="sort_link" data-name="expName" href="#">Run Name<span class="order_indicator"></span></a></th>
-                    <th class="k-header">Sample</th>
-                    {{#more_columns}}<th class="k-header">Sample Set</th>{{/more_columns}}
-                    <th class="k-header">Res App</th>
-                    <th class="k-header"><a class="sort_link" data-name="date" href="#">Run<span class="order_indicator"></span></a></th>
-                    <th class="k-header"><a class="sort_link" data-name="resultDate" href="#">Analysis<span class="order_indicator"><span class="k-icon k-i-arrow-s"></span></span></a></th>
-                    <th class="k-header">Status</th>
-                    <th class="k-header"><a class="sort_link" data-name="chipType" href="#">Chip<span class="order_indicator"></span></a></th>
-                    <th class="k-header">Report Name</th>
-                    {{#more_columns}}<th class="k-header">Reference</th>{{/more_columns}}
-                    {{#more_columns}}<th class="k-header">Barcodes</th>{{/more_columns}}
-                    {{#more_columns}}<th class="k-header">Sample Tube Label</th>{{/more_columns}}
-                    {{#more_columns}}<th class="k-header"><a class="sort_link" data-name="flows" href="#">Flows<span class="order_indicator"></span></a></th>{{/more_columns}}
-                    {{#more_columns}}<th class="k-header">Total Reads</th>{{/more_columns}}
-                    {{#more_columns}}<th class="k-header">Mean Read Len.</th>{{/more_columns}}
-                    <th class="k-header">Q20 Bases</th>
-                    <th class="k-header">Output</th>
+                    {% endraw %}<th class="k-header"><a class="sort_link" data-name="expName" href="#">{% trans "data.fields.displayName.label" %}<span class="order_indicator"></span></a></th>{% raw %}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.sample.label" %}</th>{% raw %}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.sampleSetName.label" %}</th>{% raw %}{{/more_columns}}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.plan.runType.label" %}</th>{% raw %}
+                    {% endraw %}<th class="k-header"><a class="sort_link" data-name="date" href="#">{% trans "data.fields.date.label" %}<span class="order_indicator"></span></a></th>{% raw %}
+                    {% endraw %}<th class="k-header"><a class="sort_link" data-name="resultDate" href="#">{% trans "data.fields.resultDate.label" %}<span class="order_indicator"><span class="k-icon k-i-arrow-s"></span></span></a></th>{% raw %}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.results.status.label" %}</th>{% raw %}
+                    {% endraw %}<th class="k-header"><a class="sort_link" data-name="chipType" href="#">{% trans "data.fields.chipDescription.label" %}<span class="order_indicator"></span></a></th>{% raw %}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.results.resultsName.label" %}</th>{% raw %}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.results.eas.references.label" %}</th>{% raw %}{{/more_columns}}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.results.eas.barcodeKitName.label" %}</th>{% raw %}{{/more_columns}}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.plan.sampleTubeLabel.label" %}</th>{% raw %}{{/more_columns}}
+                    {{#more_columns}}{% endraw %}<th class="k-header"><a class="sort_link" data-name="flows" href="#">{% trans "data.fields.flows.label" %}<span class="order_indicator"></span></a></th>{% raw %}{{/more_columns}}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.results.quality_metrics.q0_reads.label" %}</th>{% raw %}{{/more_columns}}
+                    {{#more_columns}}{% endraw %}<th class="k-header">{% trans "data.fields.results.quality_metrics.q0_mean_read_length.label" %}</th>{% raw %}{{/more_columns}}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.results.quality_metrics.q20_bases.label" %}</th>{% raw %}
+                    {% endraw %}<th class="k-header">{% trans "data.fields.results.quality_metrics.q0_bases.label" %}</th>{% raw %}
                     <th class="k-header"></th>
                 </tr>
             </thead>
@@ -591,7 +602,7 @@
                 <div class="bar" style="width: {{progress_percent}}%;"></div>
             </div>
         {{/in_progress}}
-        {{^in_progress}}{{ king_report.status }}{{/in_progress}}
+        {{^in_progress}}{{ king_report.i18nstatus.i18n }}{{/in_progress}}
     </td>
     <td>{{ exp.chipDescription }}</td>
     <td style="overflow: visible;">
@@ -627,32 +638,32 @@
             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
 {% raw %}
             <ul class="dropdown-menu">
-                <li><a href="{{url_prefix}}/report/analyze/{{exp.id}}/0/" class="reanalyze-run">Reanalyze</a></li>
-                <li><a href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">Edit</a></li>
+                <li><a href="{{url_prefix}}/report/analyze/{{exp.id}}/0/" class="reanalyze-run">{% endraw %}{% trans "data.action.reanalyze" %}{% raw %}</a></li>
+                <li><a href="{{url_prefix}}/plan/page_plan_edit_run/{{exp.id}}/">{% endraw %}{% trans "data.action.editplan" %}{% raw %}</a></li>
             </ul>
         </div>
     </td>
 </script>
 <script type="text/template" id="pagination_template">
     {{^is_first}}
-    <a class="first k-link" title="Go to the first page" href="#" tabindex="-1">
-        <span class="k-icon k-i-seek-w">Go to the first page</span>
+    <a class="first k-link" title="{{ not_is_first_tooltip }}" href="#" tabindex="-1">
+        <span class="k-icon k-i-seek-w">{{ not_is_first_tooltip }}</span>
     </a>
     {{/is_first}}
     {{#is_first}}
-    <a class="k-link k-state-disabled" title="On the first page" onclick="return false;" tabindex="-1">
-        <span class="k-icon k-i-seek-w">On the first page</span>
+    <a class="k-link k-state-disabled" title="{{ is_first_tooltip }}" onclick="return false;" tabindex="-1">
+        <span class="k-icon k-i-seek-w">{{ is_first_tooltip }}</span>
     </a>
     {{/is_first}}
 
     {{#prev}}
-    <a class="prev k-link" title="Go to the previous page" href="#" tabindex="-1">
-        <span class="k-icon k-i-arrow-w">Go to the previous page</span>
+    <a class="prev k-link" title="{{ prev_tooltip }}" href="#" tabindex="-1">
+        <span class="k-icon k-i-arrow-w">{{ prev_tooltip }}</span>
     </a>
     {{/prev}}
     {{^prev}}
-    <a class="k-link k-state-disabled" onclick="return false;" title="No previous page" tabindex="-1">
-        <span class="k-icon k-i-arrow-w">No previous page</span>
+    <a class="k-link k-state-disabled" onclick="return false;" title="{{ not_prev_tooltip }}" tabindex="-1">
+        <span class="k-icon k-i-arrow-w">{{ not_prev_tooltip }}</span>
     </a>
     {{/prev}}
 
@@ -673,26 +684,26 @@
         {{/page_numbers.next}}
     </ul>
     {{#next}}
-        <a class="next k-link" title="Go to the next page" href="#" tabindex="-1">
-            <span class="k-icon k-i-arrow-e">Go to the next page</span>
+        <a class="next k-link" title="{{ next_tooltip }}" href="#" tabindex="-1">
+            <span class="k-icon k-i-arrow-e">{{ next_tooltip }}</span>
         </a>
     {{/next}}
     {{^next}}
-        <a class="k-link k-state-disabled" onclick="return false;" title="No next page" tabindex="-1">
-            <span class="k-icon k-i-arrow-e">No next page</span>
+        <a class="k-link k-state-disabled" onclick="return false;" title="{{ not_next_tooltip }}" tabindex="-1">
+            <span class="k-icon k-i-arrow-e">{{ not_next_tooltip }}</span>
         </a>
     {{/next}}
     {{^is_last}}
-        <a class="last k-link" title="Go to the last page" href="#" tabindex="-1">
-            <span class="k-icon k-i-seek-e">Go to the last page</span>
+        <a class="last k-link" title="{{ not_is_last_tooltip }}" href="#" tabindex="-1">
+            <span class="k-icon k-i-seek-e">{{ not_is_last_tooltip }}</span>
         </a>
     {{/is_last}}
     {{#is_last}}
-        <a class="k-link k-state-disabled" onclick="return false;" title="On last page" tabindex="-1">
-            <span class="k-icon k-i-seek-e">On last page</span>
+        <a class="k-link k-state-disabled" onclick="return false;" title="{{ is_last_tooltip }}" tabindex="-1">
+            <span class="k-icon k-i-seek-e">{{ is_last_tooltip }}</span>
         </a>
     {{/is_last}}
-    <span class="k-pager-info k-label">{{lower_range}} - {{upper_range}} of {{total}} runs</span>
+    <span class="k-pager-info k-label">{{pager_info}}</span>
 </script>
 {% endraw %}
 <script src="{% static "js/data_models.js"%}"></script>

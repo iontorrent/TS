@@ -5,9 +5,12 @@ set -e
 
 case "$1" in
     upgrade|remove)
-        sed -i "/.*TSchkconfig.*/d" /etc/rc.local
-        sed -i '/qdel.*/d' /etc/rc.local
-        sed -i '/clear/d' /etc/rc.local
+        if [ -e /etc/rc.local ]; then
+            sed -i "/.*TSchkconfig.*/d" /etc/rc.local
+            sed -i '/qdel.*/d' /etc/rc.local
+            sed -i '/clear/d' /etc/rc.local
+        fi
+
         find @PYTHON_SITE_PACKAGES@/ion_tsconfig -name \*.pyc -exec rm {} \; || true
     ;;
 esac

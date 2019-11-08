@@ -3,7 +3,7 @@
 # First stage plugin driver script that uses user input to generate document.json with the help of django template
 # This template takes user.json in the form of individual contents - table, images
 
-__version__ = '1.0'
+__version__ = "1.0"
 
 import os, sys, logging
 from optparse import OptionParser
@@ -26,15 +26,15 @@ class Utility(object):
 
     def generateID(self):
         """Generate a ID number using random module of python. And ID should be unique"""
-        return random.choice('abcdefghijklmn') + str(random.randint(1, 50))
+        return random.choice("abcdefghijklmn") + str(random.randint(1, 50))
 
     def parseJsonFile(self, jsonFile):
         try:
-            with open(jsonFile, 'r') as f:
+            with open(jsonFile, "r") as f:
                 content = f.read()
                 try:
                     result = json.loads(content)
-                except:
+                except Exception:
                     logging.error("Invalid Json file %s " % jsonFile)
                     sys.exit(0)
                 return result
@@ -46,5 +46,5 @@ class Utility(object):
         try:
             content = render_to_string(template, context)
             return content
-        except Exception, e:
+        except Exception as e:
             logging.error("Report Generation failed for %s " % template, e)

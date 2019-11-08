@@ -12,4 +12,4 @@
 - include: iontorrent_auxiliary.yml # Headnode only
 - include: instrument_update.yml    # Headnode only
 - include: iontorrent_computes.yml  # Compute nodes (or headnode if stand-alone)
-- include: igv.yml                  # not necessary if ion-plugins is installed
+- include: igv.yml                  # ion-plugins no long pulls in ion-jk and ion-igv

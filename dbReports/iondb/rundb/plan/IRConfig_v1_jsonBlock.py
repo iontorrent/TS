@@ -5,7 +5,21 @@
 
 def sample_relationship_fields():
     # Webservice Call For Workflow Data Structure goes here. Replace later
-    webservice_call = [{"Workflow": "TargetSeq Germline"}, {"Workflow": "myTGWorkflow"}, {"Workflow": "myDirectorsTGWorkflow"}, {"Workflow": "DepartmentTGWorkflow"}, {"Workflow": "Whole Genome"}, {"Workflow": "Annotate Variants"}, {"Workflow": "TargetSeq Somatic"}, {"Workflow": "AmpliSeq Germline"}, {"Workflow": "AmpliSeq Somatic"}, {"Workflow": "AmpliSeq2Wfl"}, {"Workflow": "TumorNormal"}, {"Workflow": "myTNWorkflow"}, {"Workflow": "myIR_v1 Test Workflow"}]
+    webservice_call = [
+        {"Workflow": "TargetSeq Germline"},
+        {"Workflow": "myTGWorkflow"},
+        {"Workflow": "myDirectorsTGWorkflow"},
+        {"Workflow": "DepartmentTGWorkflow"},
+        {"Workflow": "Whole Genome"},
+        {"Workflow": "Annotate Variants"},
+        {"Workflow": "TargetSeq Somatic"},
+        {"Workflow": "AmpliSeq Germline"},
+        {"Workflow": "AmpliSeq Somatic"},
+        {"Workflow": "AmpliSeq2Wfl"},
+        {"Workflow": "TumorNormal"},
+        {"Workflow": "myTNWorkflow"},
+        {"Workflow": "myIR_v1 Test Workflow"},
+    ]
     jsonfile = {}  # Represents JSON Object
     workflow_list = []
 
@@ -15,7 +29,13 @@ def sample_relationship_fields():
 
     # "columns" key in JSON
     columns_list = []
-    order1 = {"Name": "Workflow", "Order": "1", "Type": "list", "ValueType": "String", "Values": workflow_list}
+    order1 = {
+        "Name": "Workflow",
+        "Order": "1",
+        "Type": "list",
+        "ValueType": "String",
+        "Values": workflow_list,
+    }
     columns_list.append(order1)
     jsonfile["columns"] = columns_list
 
@@ -28,6 +48,7 @@ def sample_relationship_fields():
 
 def main():
     sample_relationship_fields()
+
 
 # For development use
 if __name__ == "__main__":

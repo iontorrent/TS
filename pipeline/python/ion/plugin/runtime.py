@@ -6,12 +6,13 @@ import json
 
 def parseJsonFile(jsonFile):
     try:
-        with open(jsonFile, 'r') as f:
+        with open(jsonFile, "r") as f:
             content = f.read()
             result = json.loads(content)
-    except IOError, OSError:
+    except IOError as OSError:
         return None
     return result
+
 
 # Mixin Class for some runtime methods
 
@@ -33,20 +34,22 @@ class IonPluginRuntime(object):
     """
 
     def get_restobj(self, resource, params={}, timeout=30, attempts=5):
-        def get_apiurl(resource, params={}, api_version='v1'):
+        def get_apiurl(resource, params={}, api_version="v1"):
             """Preprocess URL and return url, params, and headers. Override to change auth method."""
-            runinfo = self.startplugin.get('runinfo', {})
-            api_url = runinfo.get('api_url', "http://localhost/rundb/api")
+            runinfo = self.startplugin.get("runinfo", {})
+            api_url = runinfo.get("api_url", "http://localhost/rundb/api")
 
             # Authentication via api_key as GET parameter
-            api_key = runinfo.get('api_key')
-            prpk = runinfo.get('pluginresult') or runinfo.get('plugin', {}).get('pluginresult')
-            params.update({'pluginresult': prpk, 'api_key': api_key})
+            api_key = runinfo.get("api_key")
+            prpk = runinfo.get("pluginresult") or runinfo.get("plugin", {}).get(
+                "pluginresult"
+            )
+            params.update({"pluginresult": prpk, "api_key": api_key})
 
-            headers = {'content-type': 'application/json'}
+            headers = {"content-type": "application/json"}
 
-            query_url = '/'.join(s + '/' for s in (api_url, api_version, resource))
-            return (query_url, {'params': params, 'headers': headers, })
+            query_url = "/".join(s + "/" for s in (api_url, api_version, resource))
+            return (query_url, {"params": params, "headers": headers})
 
         (url, args) = get_apiurl(resource, params)
         while True:
@@ -76,9 +79,9 @@ class IonPluginRuntime(object):
     @property
     def startplugin(self):
         try:
-            with open('startplugin.json', 'r') as fh:
+            with open("startplugin.json", "r") as fh:
                 spj = json.load(fh)
             return spj
-        except:
+        except Exception:
             self.log.exception("Error reading start plugin json")
         return {}

@@ -2,9 +2,10 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 
 {% block tab-configure-mesh %}
-    <li class="active"><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
+    <li class="active"><a href="{% url "configure_mesh" %}">{% trans "global.nav.menu.configure.menu.mesh.label" %}</a></li>
 {% endblock tab-configure-mesh %}
 
 {% block extra_head_styles %}
@@ -13,13 +14,14 @@
 {% endblock extra_head_styles %}
 
 {% block extra_head_js %}
+{% get_language_info for LANGUAGE_CODE as lang %}
     <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
     <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
-    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script>
+    {% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
     <script type="text/javascript">
         window.system_id = "{{ system_id }}";
     </script>
@@ -50,7 +52,7 @@
                 msg_selector : 'p.help-block.error',
                 error_class : 'alert alert-error'
             });
-            jQuery.fn.uniform.language.required = '%s is required';
+            jQuery.fn.uniform.language.required = '{% trans "uni-form-validation.language.required" %}';  //'%s is required'
 
             buttonSetup.prop('disabled', $('#computer-selection option').size() === 0);
 
@@ -66,6 +68,8 @@
             buttonSetupCustom.on('click', function() {
                 inputHostname.val('');
                 inputHostname.prop('disabled', false);
+                inputUsername.parent().show();
+                inputPassword.parent().show();
             });
             
             // edit existing record
@@ -73,6 +77,8 @@
                 inputHostname.val(hostname);
                 inputHostname.prop('disabled', true);
                 inputName.val(name);
+                inputUsername.parent().hide();
+                inputPassword.parent().hide();
             }
 
             // setup modal clearing
@@ -92,7 +98,7 @@
                 form.find(':input').prop('disabled',false);
                 var formJSON = form.serializeJSON();
 
-                $.post('link/', formJSON, function(data){
+                $.post('{% url "link_mesh_node" %}', formJSON, function(data){
                     if (data.error){
                         statusText.text(data.error).show();
                     } else {
@@ -137,20 +143,20 @@
                 columns: [
                     {
                         field: "name",
-                        title: "Nickname"
+                        title: "{{ IonMeshNode.name.verbose_name }}"
                     } , {
                         field: "hostname",
-                        title: "Address"
+                        title: "{{ IonMeshNode.hostname.verbose_name }}"
                     } , {
                         field: "active",
-                        title: "Enabled",
+                        title: "{{ IonMeshNode.active.verbose_name }}",
                         template: "<input name='active' type='checkbox' class='chkbx' #= active ? checked='checked' : '' #/>"
                     } , {
-                        title: "Status",
+                        title: "{{ IonMeshNode.status.verbose_name }}",
                         attributes: { "name": "status" },
                         template: kendo.template($("#loadingTemplate").html())
                     } , {
-                        title: "TS Version",
+                        title: "{{ IonMeshNode.version.verbose_name }}",
                         width: "90px",
                         attributes: { "name": "version" },
                     } , {
@@ -163,8 +169,13 @@
                     var grid = this;
                     grid.tbody.find("tr").each(function(i,row){
                         var pk = grid.dataItem(row).id;
-                        
-                        $.get('/rundb/api/v1/ionmeshnode/'+pk+'/validate/', function(data){
+                        $.ajax({
+                            type: 'GET',
+                            url: '/rundb/api/v1/ionmeshnode/'+pk+'/validate/',
+                            headers: {
+                                'Accept-Language': '{{ lang.code }}'  // Set language to override the default SDK language when performing a Transfer
+                            }
+                        }).done(function(data){
                             $(row).children('[name=version]').empty().text(data.version);
                             if (data.error){
                                 $(row).find('[name=status]').empty().html(
@@ -172,12 +183,12 @@
                                 );
                             } else {
                                 $(row).find('[name=status]').empty().html(
-                                    '<span class="label label-success">Good</span>'
+                                    '<span class="label label-success">{{ IonMeshNodeStatus.good }}</span>'
                                 );
                             }
                         }).fail(function(){
                             $(row).find('[name=status]').empty().html(
-                                '<span class="label" title="Unable to validate remote server">Unknown</span>'
+                                    '<span class="label" title="{% trans "entity.IonMeshNode.fields.status.choices.unknown.description" %}">{{ IonMeshNodeStatus.unknown }}</span>'
                             );
                         });
                     });
@@ -185,7 +196,7 @@
             });
 
             $("#mesh-table tbody").on("click", ".unlink", function (e) {
-                if (confirm("Are you sure you want to remove this TS?")) {
+                if (confirm("{% trans "configure_mesh.messages.unlink.confirmmsg" %}")) {
                     $.blockUI();
                     var grid = $("#mesh-table").data("kendoGrid");
                     var dataItem = grid.dataItem($(e.target).closest("tr"));
@@ -225,6 +236,9 @@
                     data: JSON.stringify(node_data),
                     contentType: 'application/json',
                     async: false,
+                    headers: {
+                        'Accept-Language': '{{ lang.code }}'
+                    },
                     error: function (jqXHR, textStatus, errorThrown) {
                         console.log(errorThrown ? errorThrown : "An unknown error occured.");
                     }
@@ -252,8 +266,8 @@
                 <img src="{% static "resources/img/gear-active.png"%}" border="0">
             </a>
             <ul class="dropdown-menu">
-                <li><a class="edit" href="\\#">Edit</a></li>
-                <li><a class="unlink" href="\\#"> Unlink</a></li>
+                <li><a class="edit" href="\\#">{% trans "configure_mesh.action.setup" %}</a></li>
+                <li><a class="unlink" href="\\#">{% trans "configure_mesh.action.unlink" %}</a></li>
             </ul>
         </div>
     </script>
@@ -261,15 +275,15 @@
 
 {% block content %}
     <div class="row-fluid">
-        <h1>Configure Mesh</h1>
+        <h1>{% trans "configure_mesh.title" %}</h1>
         <select id="computer-selection" style="margin-bottom: 0px" {% if mesh_hosts|length == 0 %} disabled="disabled" {% endif %}>
             {% for mesh_computer in mesh_hosts %}
                 <option value="{{ mesh_computer }}">{{ mesh_computer }}</option>
             {% endfor %}
         </select>
 
-        <button id="button-setup" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">Link Selected TS</button>
-        <button id="button-setup-custom" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">Link TS Manually</button>
+        <button id="button-setup" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">{% trans "configure_mesh.action.setup.selected" %}</button>
+        <button id="button-setup-custom" type="button" class="btn" data-toggle="modal" data-target="#modal_setup_computer">{% trans "configure_mesh.action.setup.manual" %}</button>
     </div>
 
     <div id="mesh-table">
@@ -280,35 +294,35 @@
         <div class="modal-dialog">
             <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h3 id="modal-header-text" class="modal-title">Setup Mesh Computer</h3>
+                <h3 id="modal-header-text" class="modal-title">{% trans "configure_mesh.setup.title" %}</h3>
             </div>
             <div class="modal-body">
                 <form class="form-horizontal" name="login" style="margin: 10px">
                     <div id="status-text" class="alert alert-error hide"></div>
                     <div class="control-group">
-                        <label class="control-label">Hostname/Address</label>
+                        <label class="control-label">{{ IonMeshNode.hostname.verbose_name }}</label>
                         <input id="input-hostname" class="textInput required" type="text" name="hostname"/>
                         <p class="help-block error"></p>
                     </div>
                     <div class="control-group">
-                        <label for="input-name" class="control-label">Nickname</label>
+                        <label for="input-name" class="control-label">{{ IonMeshNode.name.verbose_name }}</label>
                         <input id="input-name" type="text" name="name"/>
                         <p class="help-block error"></p>
                     </div>
                     <div class="control-group">
-                        <label class="control-label">Username</label>
+                        <label class="control-label">{{ User.username.verbose_name }}</label>
                         <input id="input-username" class="textInput required" type="text" name="userid"/>
                         <p class="help-block error"></p>
                     </div>
                     <div class="control-group">
-                        <label class="control-label">Password</label>
+                        <label class="control-label">{{ User.password1.verbose_name }}</label>
                         <input id="input-password" class="textInput required" type="password" name="pswrd" autocomplete="new-password"/>
                         <p class="help-block error"></p>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <input id="submit-button" type="button" value="Setup" class="btn btn-primary"/>
+                <input id="submit-button" type="button" value="{% trans "configure_mesh.setup.action.submit" %}" class="btn btn-primary"/>
             </div>
         </div>
     </div>

@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+
+# services are listed in expected start order
+postgresql
+apache2
+gridengine-master
+gridengine-exec
+rabbitmq-server
+celeryd
+celerybeat
+ionJobServer
+ionCrawler
+ionPlugin
+DjangoFTP
+{%  if ansible_distribution_version == "14.04" %}
+tomcat7
+{%  elif ansible_distribution_version == "18.04" %}
+tomcat8
+{% endif %}
+{% for service in telemetric_services %}
+{{service}}
+{% endfor %}
+{% if enable_dhcp %}
+dhcp
+{% endif %}
+ntp

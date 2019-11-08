@@ -1,2 +1,9 @@
 #this is the the value used for the Torrent Suite meta version
 version = "@TS_MAJOR@.@TS_MINOR@.@TS_RELEASE@"
+
+#these variables are set so that it will be compatible with Dx platform
+picardPath = "@PICARD_PATH@"
+
+referenceBasePath = "@REFERENCE_BASE_PATH@"
+
+pipelineScriptPath = "@PYTHON_SITE_PACKAGES@/ion/reports/"

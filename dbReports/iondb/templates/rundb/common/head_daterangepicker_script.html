@@ -1,0 +1,13 @@
+{% load static from staticfiles %}
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
+<script src="{% static "js/jquery.daterangepicker.js" %}"></script>
+<script src="{% static "resources/scripts/jquery.daterangepickersettings.js" %}"></script>
+{# relies on {% get_language_info for LANGUAGE_CODE as lang %}  #}
+<!-- {{ lang.code }} -->
+{% ifequal lang.code|lower "zh-cn" %}
+    <script src="{% static "resources/scripts/jquery.daterangepickersettings.zh-CN.js" %}"></script>
+{% endifequal %}
+{% ifequal lang.code|lower "ru" %}
+    <script src="{% static "resources/scripts/jquery.daterangepickersettings.ru.js" %}"></script>
+{% endifequal %}

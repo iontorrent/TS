@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
-'''
+"""
     Provides diskspace available to be deleted after the agethreshold expires, as well as diskspace of data currently not at age threshold.
-'''
+"""
 import pytz
 from iondb.bin import djangoinit
 from iondb.rundb import models
@@ -15,10 +15,15 @@ THRESHOLD_DAYS = None
 whole_enchillada_exceeds = 0
 whole_enchillada_safe = 0
 for dmtype in FILESET_TYPES:
-    stats = models.DMFileStat.objects.filter(dmfileset__type=dmtype).filter(
-        action_state__in=['L', 'S', 'N', 'A']).order_by('created')
+    stats = (
+        models.DMFileStat.objects.filter(dmfileset__type=dmtype)
+        .filter(action_state__in=["L", "S", "N", "A"])
+        .order_by("created")
+    )
     # Get age threshold for this category
-    dmfileset = models.DMFileSet.objects.filter(version=settings.RELVERSION).filter(type=dmtype)
+    dmfileset = models.DMFileSet.objects.filter(version=settings.RELVERSION).filter(
+        type=dmtype
+    )
     if not THRESHOLD_DAYS:
         AGE_THRESH_DAYS = dmfileset[0].auto_trigger_age
     else:
@@ -42,18 +47,26 @@ for dmtype in FILESET_TYPES:
         else:
             unknownsafe += 1
 
-    print ""
-    print "Shows amount of disk space used by datasets that have exceeded the current age limits."
-    print ""
-    print "%23s: %d" % (dmtype, stats.count())
-    print "%23s: %d days" % ("Age threshold", AGE_THRESH_DAYS)
-    print "%23s: %9d MB (%d)" % ("Over-threshold", howmuchexceeds, exceed_thresh_stats.count())
-    print "%23s: %9d MB (%d)" % ("Under-threshold", howmuchsafe, within_thresh_stats.count())
-    print "%23s: %d" % ("Unknown Exceeding", unknownexceeds)
-    print "%23s: %d" % ("Unknown Safe", unknownsafe)
+    print("")
+    print(
+        "Shows amount of disk space used by datasets that have exceeded the current age limits."
+    )
+    print("")
+    print("%23s: %d" % (dmtype, stats.count()))
+    print("%23s: %d days" % ("Age threshold", AGE_THRESH_DAYS))
+    print(
+        "%23s: %9d MB (%d)"
+        % ("Over-threshold", howmuchexceeds, exceed_thresh_stats.count())
+    )
+    print(
+        "%23s: %9d MB (%d)"
+        % ("Under-threshold", howmuchsafe, within_thresh_stats.count())
+    )
+    print("%23s: %d" % ("Unknown Exceeding", unknownexceeds))
+    print("%23s: %d" % ("Unknown Safe", unknownsafe))
     whole_enchillada_exceeds += howmuchexceeds
     whole_enchillada_safe += howmuchsafe
 
-print "%s" % ('=' * 46)
-print "%23s: %9d MB" % ("Total Available to Free", whole_enchillada_exceeds)
-print "%23s: %9d MB" % ("Total Protected", whole_enchillada_safe)
+print("%s" % ("=" * 46))
+print("%23s: %9d MB" % ("Total Available to Free", whole_enchillada_exceeds))
+print("%23s: %9d MB" % ("Total Protected", whole_enchillada_safe))

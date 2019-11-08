@@ -1,20 +1,20 @@
 {% load static from staticfiles %}
-
+{% load i18n %}
 {% if report.status %}
 <div id="progress" class="alert alert-error alert-block">
     <button type="button" class="close" data-dismiss="alert">&times;</button>
     <h3>
     {% if "Completed" in report.status %}
-        The report is finished.
+        {% trans "report.messages.status.completed" %}
     {% else %}
-        This report is still being generated.
+        {% trans "report.messages.status.inprogress" %}
     {% endif %}
     </h3>
     <div id="analysis_started_content">
     {% if "Completed" not in report.status %}
         <img src="{% static "resources/img/dna-loader-64.gif" %}">
     {% endif %}
-        <span id="progress_message">{{ report.status }}</span>
+        <span id="progress_message">{{ progress_message.i18n }}</span>
     </div>
 </div>
 {% endif %}

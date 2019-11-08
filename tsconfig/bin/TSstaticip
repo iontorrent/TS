@@ -269,9 +269,9 @@ fi
 #-------------------------------------------------------------------------
 if [ $DEMO == False ]; then
     cd $ANSIBLE_HOME
-    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} fileserver.yml --tags network-reset --sudo
+    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} fileserver.yml --tags network-reset --become
 else
-    echo "CMD: ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} fileserver.yml --tags network-reset --sudo"
+    echo "CMD: ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} fileserver.yml --tags network-reset --become"
 fi
 
 exit

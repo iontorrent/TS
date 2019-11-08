@@ -23,33 +23,38 @@ from django.conf import settings
 from django.template.response import TemplateResponse
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 # No login_required
 def logout_view(request):
-    reset_page_plan_session(request)  
+    reset_page_plan_session(request)
     clear_samplesetitem_session(request)
     return logout_then_login(request)
 
 
 @sensitive_post_parameters()
-#@csrf_protect
+# @csrf_protect
 @never_cache
-def remember_me_login(request, template_name='registration/login.html',
-          redirect_field_name=REDIRECT_FIELD_NAME,
-          authentication_form=AuthenticationRememberMeForm,
-          current_app=None, extra_context=None):
+def remember_me_login(
+    request,
+    template_name="registration/login.html",
+    redirect_field_name=REDIRECT_FIELD_NAME,
+    authentication_form=AuthenticationRememberMeForm,
+    current_app=None,
+    extra_context=None,
+):
     """
     Displays the login form and handles the login action.
     """
 
     if request.method == "POST":
-        redirect_to = request.POST.get(redirect_field_name, '')
+        redirect_to = request.POST.get(redirect_field_name, "")
 
-        #plan template is NOT re-entrantable
-        if ("page_plan" in redirect_to):
+        # plan template is NOT re-entrantable
+        if "page_plan" in redirect_to:
             redirect_to = ""
-        
+
         form = authentication_form(data=request.POST)
         if form.is_valid():
             netloc = urlparse.urlparse(redirect_to)[1]
@@ -64,11 +69,11 @@ def remember_me_login(request, template_name='registration/login.html',
                 redirect_to = settings.LOGIN_REDIRECT_URL
 
             ##### BEGIN REMEMBER ME #######
-            if not form.cleaned_data.get('remember_me'):
-                logger.debug('setting session expiry 0')
+            if not form.cleaned_data.get("remember_me"):
+                logger.debug("setting session expiry 0")
                 request.session.set_expiry(0)
             else:
-                logger.debug('setting session expiry %s' % settings.SESSION_COOKIE_AGE)
+                logger.debug("setting session expiry %s" % settings.SESSION_COOKIE_AGE)
                 request.session.set_expiry(settings.SESSION_COOKIE_AGE)
             ##### END REMEMBER ME #######
 
@@ -80,7 +85,7 @@ def remember_me_login(request, template_name='registration/login.html',
 
             return HttpResponseRedirect(redirect_to)
     else:
-        redirect_to = request.GET.get(redirect_field_name, '')
+        redirect_to = request.GET.get(redirect_field_name, "")
         # Don't make user click Begin if they have next url and are logged in
         if redirect_to and request.user.is_authenticated():
             return HttpResponseRedirect(redirect_to)
@@ -92,34 +97,41 @@ def remember_me_login(request, template_name='registration/login.html',
     current_site = get_current_site(request)
 
     context = {
-        'form': form,
+        "form": form,
         redirect_field_name: redirect_to,
-        'site': current_site,
-        'site_name': current_site.name,
+        "site": current_site,
+        "site_name": current_site.name,
     }
     if extra_context is not None:
         context.update(extra_context)
-    return TemplateResponse(request, template_name, context,
-                            current_app=current_app)
+    return TemplateResponse(request, template_name, context, current_app=current_app)
+
 
 @sensitive_post_parameters()
-#@csrf_protect
+# @csrf_protect
 @never_cache
-def login_ajax(request, template_name='registration/login.html',
-               redirect_field_name=REDIRECT_FIELD_NAME,
-               authentication_form=AuthenticationRememberMeForm,
-               current_app=None, extra_context=None):
-    result = remember_me_login(request,
-                   template_name=template_name,
-                   redirect_field_name=redirect_field_name,
-                   authentication_form=authentication_form,
-                   current_app=current_app, extra_context=extra_context)
+def login_ajax(
+    request,
+    template_name="registration/login.html",
+    redirect_field_name=REDIRECT_FIELD_NAME,
+    authentication_form=AuthenticationRememberMeForm,
+    current_app=None,
+    extra_context=None,
+):
+    result = remember_me_login(
+        request,
+        template_name=template_name,
+        redirect_field_name=redirect_field_name,
+        authentication_form=authentication_form,
+        current_app=current_app,
+        extra_context=extra_context,
+    )
     response_data = {}
     if isinstance(result, HttpResponseRedirect):
-        response_data['redirect'] = result['Location']
+        response_data["redirect"] = result["Location"]
     else:
         result.render()
-        response_data['form'] = result.content
+        response_data["form"] = result.content
     return HttpResponse(json.dumps(response_data), mimetype="application/json")
 
 
@@ -127,37 +139,50 @@ def login_ajax(request, template_name='registration/login.html',
 @sensitive_post_parameters()
 @csrf_protect
 def registration(request):
-    if request.method == 'POST':  # If the form has been submitted...
+    if request.method == "POST":  # If the form has been submitted...
         form = UserRegistrationForm(request.POST)
         if form.is_valid():  # All validation rules pass
             # create user from cleaned_data
-            username = form.cleaned_data['username']
-            email = form.cleaned_data['email']
-            password = form.cleaned_data['password1']
+            username = form.cleaned_data["username"]
+            email = form.cleaned_data["email"]
+            password = form.cleaned_data["password1"]
 
             new_user = User.objects.create_user(username, email, password)
             new_user.is_active = False  # Users created inactive by default
 
             # Add users to ionusers group, for a default set of permissions
             try:
-                group = Group.objects.get(name='ionusers')
+                group = Group.objects.get(name="ionusers")
                 new_user.groups.add(group)
             except Group.DoesNotExist:
-                logger.warn("Group ionusers not found. " +
-                         "New user %s will lack permission to do anything beyond look!", username)
+                logger.warn(
+                    "Group ionusers not found. "
+                    + "New user %s will lack permission to do anything beyond look!",
+                    username,
+                )
             new_user.save()
 
+            # update UserProfile to indicate this account needs activation
+            new_user.userprofile.needs_activation = True
+            new_user.userprofile.save()
+
             # Send global message notifying of pending registration
-            msg = "New pending user registration for '%s'. " + \
-                "Please visit <a href='%s'>Account Management</a> to review."
-            Message.warn(msg % (username, urlresolvers.reverse('configure_account')), route=Message.USER_STAFF)
+            msg = (
+                "New pending user registration for '%s'. "
+                + "Please visit <a href='%s'>Account Management</a> to review."
+            )  # TODO: i18n ?
+            Message.warn(
+                msg % (username, urlresolvers.reverse("configure_account")),
+                route=Message.USER_STAFF,
+            )
 
             # Otherwise redirect to a success page. Awaiting approval
-            return shortcuts.redirect(urlresolvers.reverse('signup_pending'))
+            return shortcuts.redirect(urlresolvers.reverse("signup_pending"))
     else:
         # Blank Form
         form = UserRegistrationForm()
 
-    context = template.RequestContext(request, {'form': form, })
-    return shortcuts.render_to_response("rundb/login/ion_account_reg.html",
-                                        context_instance=context)
+    context = template.RequestContext(request, {"form": form})
+    return shortcuts.render_to_response(
+        "rundb/login/ion_account_reg.html", context_instance=context
+    )

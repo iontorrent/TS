@@ -9,7 +9,7 @@
 # will likely be delayed because of custom modifications to this file.
 no-hosts
 addn-hosts=/etc/hosts-dnsmasq
-{% for interface in ansible_interfaces if interface[0] == 'p' %}
+{% for interface in ansible_interfaces if (interface.startswith('p') or interface.startswith('ens') or interface.startswith('enp')) %}
 interface={{interface}}
 no-dhcp-interface={{interface}}
 {% endfor %}

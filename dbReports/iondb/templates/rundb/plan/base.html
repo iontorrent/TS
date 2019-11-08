@@ -1,11 +1,11 @@
 {% extends "rundb/common/base.html" %}
 {% load url from future %}
-
+{% load i18n %}
 {% block plan_menu %}active{% endblock %}
 {% block sub-nav %}
 
-<li><a href="{% url "samplesets" %}">Samples</a></li>
-<li class="active"><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "planned" %}">Planned Runs</a></li>
+<li><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+<li class="active"><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+<li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 
 {% endblock sub-nav %}

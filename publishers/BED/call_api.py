@@ -17,7 +17,9 @@ def get(where, **query):
     body = urllib.urlencode(query)
     query_string = "%s?%s" % (url % where, body)
     h = httplib2.Http()
-    response, content = h.request(query_string, method="GET", body=body, headers=headers)
+    response, content = h.request(
+        query_string, method="GET", body=body, headers=headers
+    )
     return json.loads(content), response, content
 
 
@@ -58,7 +60,7 @@ def delete(where, item_id):
 
 def update_meta(meta, args):
     print("Updating Meta")
-    meta_file_handle = open(args.meta_file, 'w')
+    meta_file_handle = open(args.meta_file, "w")
     json.dump(meta, meta_file_handle, cls=JSONEncoder, sort_keys=True, indent=4)
     meta_file_handle.close()
     patch("contentupload", args.upload_id, meta=meta)

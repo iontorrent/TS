@@ -1,32 +1,33 @@
-{% for sampleAttribute in sampleAttribute_list %}               
+{% load i18n %}
+{% for sampleAttribute in sampleAttribute_list %}
 	<div class="control-group">
 		<label class="control-label" for="sampleAttribute|{{sampleAttribute.id}}">{{sampleAttribute.displayedName}}</label>
 		<div class="controls">
 		<input maxlength="1024" id="sampleAttribute|{{sampleAttribute.id}}" name="sampleAttribute|{{sampleAttribute.id}}" 
 		{% if sampleAttribute.isMandatory %}
 			{% if sampleAttribute.dataType.dataType == "Integer" %}
-				class="mandatory integer" placeholder="Required (whole number)" 
+				class="mandatory integer" placeholder="{% trans "samplesets.samplesetitem.section.userDefinedAttributes.datatype.integer.required.placeholder" %}"
 			{% else %}
-				placeholder="Required (text)" 
+				placeholder="{% trans "samplesets.samplesetitem.section.userDefinedAttributes.datatype.text.required.placeholder" %}"
 			{% endif %}
 		{% else %}
 			{% if sampleAttribute.dataType.dataType == "Integer" %}
-				class="integer" placeholder="Optional (whole number)" 
+				class="integer" placeholder="{% trans "samplesets.samplesetitem.section.userDefinedAttributes.datatype.integer.optional.placeholder" %}"
 			{% else %}
-				placeholder="Optional (text)" 
+				placeholder="{% trans "samplesets.samplesetitem.section.userDefinedAttributes.datatype.text.optional.placeholder" %}"
 			{% endif %}                             
 		{% endif %}                         
 		{% if intent == "edit" %}
 			{% for attributeValue in sampleAttributeValue_list %}
 				{% if attributeValue.sampleAttribute.displayedName == sampleAttribute.displayedName  %}
-					value = "{{attributeValue.value}}" 
+					value = "{{attributeValue.value|default_if_none:''}}"
 				{% endif %}
 			{% endfor %}
 		{% elif intent == "edit_pending" %}
 			var attributeName = sampleAttribute.displayedName
 			 {% for pendingKey,pendingValue in pending_sampleSetItem.attribute_dict.items %}
 				{% if pendingKey == sampleAttribute.displayedName %}
-					value = "{{pendingValue}}"
+					value = "{{pendingValue|default_if_none:''}}"
 				{% endif %}
 			{% endfor %}
 		{% endif %}

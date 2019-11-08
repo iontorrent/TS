@@ -1,23 +1,24 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block tab-configure-about %}
-    <li class="active"><a href="{% url "configure_about" %}">About</a></li>
+    <li class="active"><a href="{% url "configure_about" %}">{% trans "global.nav.menu.configure.menu.about.label" %}</a></li>
 {% endblock tab-configure-about %}
 {% block content %}
 
 		<div class="content clearfix">
-			<h1>Releases</h1>
-			<p><b>OS:</b> {{osversion.ID}} {{osversion.RELEASE}}</p>
+			<h1>{% trans "configure_about.section.releases.title" %}</h1>
+			<p><b>{% trans "configure_about.section.releases.field.os.label" %}:</b> {{osversion.ID}} {{osversion.RELEASE}}</p>
 			<table id="releases" class="">
 		        <thead>
 					<tr>
-						<th>Product</th>
-						<th>Version</th>
+						<th data-field="productname">{% trans "configure_about.section.releases.field.productname.label" %}</th>
+						<th data-field="version">{% trans "configure_about.section.releases.field.version.label" %}</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr>
-						<td><strong>Torrent Suite</strong></td><td><strong>{{meta}}</strong></td>
+						<td><strong>{{productname}}</strong></td><td><strong>{{productversion}}</strong></td>
 					</tr>
 					{% for label,version in versions.items %}
 					<tr>
@@ -30,12 +31,14 @@
 		</div>
 
 		<div class="content clearfix">
-			<h1>More Information and Assistance</h1>
+			<h1>{% trans "configure_about.section.moreinfo.title" %}</h1>
 			<ul>
-				<li><a href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html">Support</a></li>
-				<li><a href="/ion-docs/Home.html">Local Documentation</a></li>
-				<li><a href="/configure/info">System Support Diagnostics</a></li>
-				<li><a href="/configure/chips">Instrument Diagnostics</a></li>
+				<li><a target="_blank" href="{% trans "global.footer.p.2.a.1.href" %}">{% trans "global.footer.p.2.a.1.text" %}</a></li>
+                {% if featureflags.HELP_ION_DOCS %}
+				<li><a target="_blank" href="/ion-docs/Home.html">Software Help</a></li>
+                {% endif %}
+				<li><a href="{% url "configure_system_stats" %}">{% trans "configure_system_stats.title" %}</a></li>
+				<li><a href="{% url "configure_instrument_stats" %}">{% trans "configure_instrument_stats.title" %}</a></li>
 			</ul>
 		</div>
 
@@ -50,7 +53,6 @@
                         sortable: false,
                         pageable: false
             });
-			
 		});
 	</script>	
 {% endblock content %}

@@ -154,12 +154,30 @@ void Mask::Set ( int x, int y, MaskType type )
   }
 }
 
+// sets a specified type flag for a single well in the mask
+void Mask::SetOneWell ( int x, int y, MaskType type )
+{
+  if ( ( x >= 0 ) && ( x < w ) && ( y >= 0 ) && ( y < h ) ) {
+    mask[x+y*w] &= MaskNone;
+    mask[x+y*w] |= type;
+  }
+}
+
 // sets specified type flag to all wells in the mask; resets all other flags
 void Mask::SetAll(MaskType type )
 {
   int i;
   for ( i=0;i<w*h;i++ ) {
     mask[i] = type; 
+    }
+}
+
+// sets exclude to all wells in the mask; resets all other flags
+void Mask::SetAllExclude()
+{
+  int i;
+  for ( i=0;i<w*h;i++ ) {
+    mask[i] = MaskExclude;
     }
 }
 

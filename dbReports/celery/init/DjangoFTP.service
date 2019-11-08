@@ -1,0 +1,15 @@
+# Should be /etc/systemd/system/DjangoFTP.service
+[Unit]
+Description=This service manages the FTP server which authenticates against Django.
+After=postgresql.service
+
+[Service]
+Type=simple
+Environment=DJANGO_SETTINGS_MODULE=iondb.settings
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ion/
+ExecStart=/usr/bin/python /opt/ion/manage.py ftpserver
+
+[Install]
+WantedBy=multi-user.target

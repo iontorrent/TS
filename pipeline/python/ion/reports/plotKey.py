@@ -6,7 +6,6 @@ from numpy import median
 
 
 class KeyPlot:
-
     def __init__(self, key, floworder, title=None):
         self.data = None
         self.key = key
@@ -14,17 +13,22 @@ class KeyPlot:
         self.title = title
         self.average_peak = None
 
-    def plot(self):
-        expected = [1 for i in range(len(self.key)-1)]
-        tracePlot = plotters.Iontrace(self.key,
-                                      expected,
-                                      self.data,
-                                      title="Consensus Key 1-Mer - %s Ave. Peak = %s" % (self.title, self.average_peak))
+    def plot(self, outdir=os.getcwd()):
+        expected = [1 for i in range(len(self.key) - 1)]
+        tracePlot = plotters.Iontrace(
+            self.key,
+            expected,
+            self.data,
+            title="Consensus Key 1-Mer - %s Ave. Peak = %s"
+            % (self.title, self.average_peak),
+        )
         tracePlot.render()
-        tracePlot.save(os.path.join(os.getcwd(), 'iontrace_%s' % self.title.replace(" ", "_")))
+        tracePlot.save(
+            os.path.join(outdir, "iontrace_%s" % self.title.replace(" ", "_"))
+        )
 
     def parse(self, fileIn):
-        d = open(fileIn, 'r')
+        d = open(fileIn, "r")
         data = d.readlines()
         d.close()
         trace = {}
@@ -37,7 +41,7 @@ class KeyPlot:
                 max = len(fTrace)
         toPlot = []
         for k in self.key:
-            if k in trace.keys():
+            if k in list(trace.keys()):
                 toPlot.append(trace[k])
             else:
                 toPlot.append([0 for i in range(max)])
@@ -46,8 +50,10 @@ class KeyPlot:
 
     def dump_max(self, fileName):
         try:
-            with open(fileName, 'a') as f:
-                max_array = [max(trace) for k, trace in self.data.iteritems() if k in self.key]
+            with open(fileName, "a") as f:
+                max_array = [
+                    max(trace) for k, trace in list(self.data.items()) if k in self.key
+                ]
                 self.average_peak = int(median(max_array)) if len(max_array) > 0 else 0
                 f.write("%s = %s\n" % (self.title, self.average_peak))
         except Exception:
@@ -59,7 +65,7 @@ if __name__ == "__main__":
     floworder = sys.argv[3]
     fileIn = sys.argv[1]
     fileOut = sys.argv[4]
-    kp = KeyPlot(libKey, floworder, 'Test Fragment')
+    kp = KeyPlot(libKey, floworder, "Test Fragment")
     kp.parse(fileIn)
     kp.dump_max(fileOut)
     kp.plot()

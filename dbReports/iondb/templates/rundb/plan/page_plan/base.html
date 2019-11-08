@@ -1,12 +1,13 @@
 {% extends "rundb/plan/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js" %}"></script>
 <script type="text/javascript" src="{% static "resources/jquery/jquery.scannerdetection.js"%}"></script>
 
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" %}"/>
-<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 
 <link href="{% static "resources/bootstrap-select/bootstrap-select.css"%}" rel="stylesheet"/>
 <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
@@ -44,31 +45,12 @@
 </style>
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url "plan_templates" %}">Templates</a></li>
-<li><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "planned" %}">Planned Runs</a></li>
+<li><a href="{% url "plan_templates" %}">{% trans "global.nav.menu.plan.menu.plantemplates.label" %}</a></li>
+<li><a href="{% url "samplesets" %}">{% trans "global.nav.menu.plan.menu.samplesets.label" %}</a></li>
+<li><a href="{% url "planned" %}">{% trans "global.nav.menu.plan.menu.planned.label" %}</a></li>
 <li class="active">
     <a href="#">
-        {% if helper.isPlan %}
-            {% if helper.isEdit %}
-                Edit Plan 
-            {% elif helper.isEditRun %}
-                Edit Run 
-            {% elif helper.isCopy %}
-                Copy Plan 
-            {% else %}
-                Create Plan from 
-            {% endif %}
-        {% else %}
-            {% if helper.isEdit %}
-                Edit Template 
-            {% elif helper.isCopy %}
-                Copy Template 
-            {% else %}
-                Create Template from 
-            {% endif %}
-        {% endif %}
-        {{helper.parentName|truncatechars:40}}
+        {{ helper.getSubNavMenuLabel }}
     </a>
 </li>
 {% endblock sub-nav %}
@@ -78,50 +60,33 @@
                 <!--img src="resources/img/Torrent_Browser_Chevron2.jpg" alt="Torrent_Browser_Chevron2" width="1352" height="56" style="margin-bottom:20px;" /-->           
                 <div class="row-fluid chevrons workflow">
                     <ul>
-                        {% if helper.isPlan %}
-                            {% if helper.isEdit %}
-                                <li class="parent"><a href="#" style="color: #FFFF66">Edit Plan</a></li>
-                            {% elif helper.isEditRun %}
-                                <li class="parent"><a href="#" style="color: #99FFFF;">Edit Run</a></li>
-                            {% elif helper.isCopy %}
-                                <li class="parent"><a href="#" style="color: #FFCC33;">Copy Plan</a></li>
-                            {% else %}
-                                <li class="parent"><a href="#" style="color: #FFCC33;">Create Plan</a></li>                            
-                            {% endif %}
-                        {% else %}
-                            {% if helper.isEdit %}
-                                <li class="parent"><a href="#">Edit Template</a></li> 
-                            {% elif helper.isCopy %}
-                                <li class="parent"><a href="#">Copy Template</a></li>                             
-                            {% else %}
-                                <li class="parent"><a href="#">Create Template</a></li>                                
-                            {% endif %}
+                        <li class="parent" title="{{ helper.getFullSubNavLabel }}"><a href="#" style="color: #FFFF66">{{ helper.getChevronParentLabel }}</a></li>
+                        {% if featureflags.IONREPORTERUPLOADER %}
+                        <li class="disabled" id="Ionreporter"><a class="submitStepForm" href='{% url "page_plan_ionreporter" %}'>{% trans "workflow.step.ionreporter.title" %}</a></li>
                         {% endif %}
-                        
-                        <li class="disabled" id="Ionreporter"><a class="submitStepForm" href='{% url "page_plan_ionreporter" %}'>Ion Reporter</a></li>
-                        <li id="Application" class="disabled"><a class="submitStepForm" href='{% url "page_plan_application" %}'>Research Application</a></li>
-                        <li id="Kits" class="disabled"><a class="submitStepForm" href='{% url "page_plan_kits" %}'>Kits</a></li>
+                        <li id="Application" class="disabled"><a class="submitStepForm" href='{% url "page_plan_application" %}'>{% trans "workflow.step.application.title" %}</a></li>
+                        <li id="Kits" class="disabled"><a class="submitStepForm" href='{% url "page_plan_kits" %}'>{% trans "workflow.step.kits.title" %}</a></li>
                         <!--- TODO: Remove Dead Monitoring Page Code
                             <li id="Monitoring" class="disabled"><a class="submitStepForm" href='{% url "page_plan_monitoring" %}'>Monitoring</a></li>
                         -->
-                        <li id="Plugins" class="disabled"><a class="submitStepForm" href='{% url "page_plan_plugins" %}'>Plugins</a></li>
+                        <li id="Plugins" class="disabled"><a class="submitStepForm" href='{% url "page_plan_plugins" %}'>{% trans "workflow.step.plugins.title" %}</a></li>
                         {%if helper.isPlanBySample%}
-                            <li id="Barcode_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_by_sample_barcode" %}'>Barcoding</a></li>
-                            <li id="Output" class="disabled"><a class="submitStepForm" href='{% url "page_plan_output" %}'>Projects</a></li>
-                            <li id="Save_plan_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_by_sample_save_plan" %}'>Save & Finish</a></li>
+                            <li id="Barcode_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_by_sample_barcode" %}'>{% trans "workflow.step.barcoding.title" %}</a></li>
+                            <li id="Output" class="disabled"><a class="submitStepForm" href='{% url "page_plan_output" %}'>{% trans "workflow.step.output.title" %}</a></li>
+                            <li id="Save_plan_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_by_sample_save_plan" %}'>{% trans "workflow.step.saveplan.bysample.title" %}</a></li>
                         {%else%}
-                            <li id="Output" class="disabled"><a class="submitStepForm" href='{% url "page_plan_output" %}'>Projects</a></li>
+                            <li id="Output" class="disabled"><a class="submitStepForm" href='{% url "page_plan_output" %}'>{% trans "workflow.step.output.title" %}</a></li>
                             {% if helper.isPlan %}
                                 {% if helper.isCreate %}
-                                    <li id="Save_plan" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_plan" %}'>Plan</a></li>
+                                    <li id="Save_plan" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_plan" %}'>{% trans "workflow.step.saveplan.title2" %}</a></li>
                                 {% else %}
-                                    <li id="Save_plan" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_plan" %}'>Save</a></li>
+                                    <li id="Save_plan" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_plan" %}'>{% trans "workflow.step.saveplan.title" %}</a></li>
                                 {% endif %}
                             {% else %}
                                 {%if helper.isTemplateBySample%}
-                                    <li id="Save_template_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_template_by_sample" %}'>Save</a></li>
+                                    <li id="Save_template_by_sample" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_template_by_sample" %}'>{% trans "workflow.step.savetemplate.bysample.title" %}</a></li>
                                 {%else%}
-                                    <li id="Save_template" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_template" %}'>Save</a></li>
+                                    <li id="Save_template" class="disabled"><a class="submitStepForm" href='{% url "page_plan_save_template" %}'>{% trans "workflow.step.savetemplate.title" %}</a></li>
                                 {%endif%}
                             {% endif %}
                         {%endif%}
@@ -129,12 +94,12 @@
                 </div>
                 <div class="row-fluid">
                     <div class="span8" id="mainContent">
-                        <a class="btn pull-right hide" style="margin-top: 10px;" id="showSummary" href="#">Show Summary</a>
+                        <a class="btn pull-right hide" style="margin-top: 10px;" id="showSummary" href="#">{% trans "workflow.action.showsummary" %}</a>
                         {% if step.warnings %}
                         <div class="alert alert-error">
                             <ul>
                             {% for warning in step.warnings %}
-                                <li>{{warning}}</li>
+                                <li>{{warning|safe}}</li>
                             {% endfor %}
                             </ul>
                         </div>
@@ -148,8 +113,10 @@
                         <div class="row-fluid">
                             <br><br>
                             {% block prevnext-buttons %}
-                            <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
-                            <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">Next &rarr;</a>
+                            {% if step.prev_step_url %}
+                            <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">{% trans "workflow.action.previousstep" %}</a>
+                            {% endif %}
+                            <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}">{% trans "workflow.action.nextstep" %}</a>
                             {% endblock prevnext-buttons %}
                         </div>
                         <br>
@@ -158,9 +125,9 @@
                         <div class="summary-section">
                             <a href="#" id="sidebarCollapse" class="close-box pull-right">&times;</a>
                             <h3>
-                                Summary
+                                {% trans "workflow.summary.title.label" %}
                                 {% if helper.isPlanBySample %}
-                                <h4>Sample Set: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.all|join:", "}}</h4>
+                                <h4>{% trans "workflow.step.saveplan.bysample.fields.sampleSets.label" %}: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.all|join:", "}}</h4>
                                 {% endif %}
                             </h3>
                             <hr class="summary">
@@ -286,12 +253,8 @@
         chipNameToDisplayName = {};
         chipNameToWarning = {};
         {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
-        	{% if chipType.name|first in "5" %}
-				chipNameToInstrumentName['{{chipType.name}}'] = '{{chipType.get_instrumentType_display}} System'
-			{%else%}
-				chipNameToInstrumentName['{{chipType.name}}'] = 'Ion {{chipType.get_instrumentType_display}}\u2122 System'
-			{%endif%}
-            chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}\u2122{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}';
+            chipNameToInstrumentName['{{chipType.name}}'] = '{{ chipType.get_instrumentType_display|safe }}';
+            chipNameToDisplayName['{{chipType.name}}'] = '{{ chipType.getI18NDisplayedName|safe }}';
             chipNameToWarning['{{chipType.name}}'] = '{{chipType.getChipWarning}}';
         {% endfor %}
         $("#selectedInstrumentName").html(chipNameToInstrumentName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
@@ -303,7 +266,7 @@
 
         baseRecalibrationModesValueToName = {};
         {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
-            baseRecalibrationModesValueToName["{{mode}}"] = "{{displayedMode}}";
+            baseRecalibrationModesValueToName["{{mode}}"] = "{{displayedMode.text}}";
         {% endfor %}
         $("#selectedBaseCalibrationMode").html(baseRecalibrationModesValueToName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.base_recalibrate}}']);
 

@@ -54,15 +54,17 @@ from logging import handlers
 
 from twisted.web import xmlrpc, server
 
-#for tmap queue
+# for tmap queue
 from twisted.internet import reactor
 
 
-LOG_FILENAME = '/var/log/ion/jobserver.log'
+LOG_FILENAME = "/var/log/ion/jobserver.log"
 logger = logging.getLogger(__name__)
 logger.propagate = False
 logger.setLevel(logging.INFO)
-rothandle = logging.handlers.RotatingFileHandler(LOG_FILENAME, maxBytes=1024 * 1024 * 10, backupCount=5)
+rothandle = logging.handlers.RotatingFileHandler(
+    LOG_FILENAME, maxBytes=1024 * 1024 * 10, backupCount=5
+)
 cachehandle = logging.handlers.MemoryHandler(1024, logging.ERROR, rothandle)
 fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 rothandle.setFormatter(fmt)
@@ -72,12 +74,14 @@ logger.addHandler(cachehandle)
 REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 
 import iondb.anaserve.djangoinit
-#from iondb.bin import djangoinit
-#from iondb.rundb import models
+
+# from iondb.bin import djangoinit
+# from iondb.rundb import models
 try:
     import iondb.version as version  # @UnresolvedImport
+
     GITHASH = version.IonVersionGetGitHash()
-except:
+except Exception:
     GITHASH = ""
 __version__ = GITHASH
 
@@ -108,12 +112,18 @@ try:
     # Set env. vars necessary to talk to SGE. The SGE root contains files
     # describing where the grid master lives. The other variables determine
     # which of several possible grid masters to talk to.
-    for k in ("SGE_ROOT", "SGE_CELL", "SGE_CLUSTER_NAME",
-              "SGE_QMASTER_PORT", "SGE_EXECD_PORT", "DRMAA_LIBRARY_PATH"):
-        print "DEBUG: " + k
+    for k in (
+        "SGE_ROOT",
+        "SGE_CELL",
+        "SGE_CLUSTER_NAME",
+        "SGE_QMASTER_PORT",
+        "SGE_EXECD_PORT",
+        "DRMAA_LIBRARY_PATH",
+    ):
+        print("DEBUG: " + k)
         logger.info(k)
         if not k in os.environ:
-            print "DEBUG: " + str(getattr(settings, k))
+            print("DEBUG: " + str(getattr(settings, k)))
             logger.info(str(getattr(settings, k)))
             os.environ[k] = str(getattr(settings, k))
     try:
@@ -124,6 +134,7 @@ try:
         logger.error("libdrmaa1.0 may not be installed")
         raise ImportError
     import atexit  # provides cleanup of the session object
+
     try:
         HAVE_DRMAA = True
         # create a single drmaa session
@@ -137,17 +148,16 @@ try:
         djs = drmaa.JobState
         # globally define some status messages
         _decodestatus = {
-            djs.UNDETERMINED: 'process status cannot be determined',
-            djs.QUEUED_ACTIVE: 'job is queued and active',
-            djs.SYSTEM_ON_HOLD: 'job is queued and in system hold',
-            djs.USER_ON_HOLD: 'job is queued and in user hold',
-            djs.USER_SYSTEM_ON_HOLD: ('job is queued and in user '
-                                      'and system hold'),
-            djs.RUNNING: 'job is running',
-            djs.SYSTEM_SUSPENDED: 'job is system suspended',
-            djs.USER_SUSPENDED: 'job is user suspended',
-            djs.DONE: 'job finished normally',
-            djs.FAILED: 'job finished, but failed',
+            djs.UNDETERMINED: "process status cannot be determined",
+            djs.QUEUED_ACTIVE: "job is queued and active",
+            djs.SYSTEM_ON_HOLD: "job is queued and in system hold",
+            djs.USER_ON_HOLD: "job is queued and in user hold",
+            djs.USER_SYSTEM_ON_HOLD: ("job is queued and in user " "and system hold"),
+            djs.RUNNING: "job is running",
+            djs.SYSTEM_SUSPENDED: "job is system suspended",
+            djs.USER_SUSPENDED: "job is user suspended",
+            djs.DONE: "job finished normally",
+            djs.FAILED: "job finished, but failed",
         }
         InvalidJob = drmaa.errors.InvalidJobException
     except drmaa.errors.InternalException as err:
@@ -162,7 +172,7 @@ except (ImportError, AttributeError):
     InvalidJob = ValueError
 
 # regexps
-SCRIPTNAME_RE = re.compile(r'^ion_analysis_(\d+)\.py$')
+SCRIPTNAME_RE = re.compile(r"^ion_analysis_(\d+)\.py$")
 
 
 # utility functions
@@ -177,7 +187,7 @@ def index2paramsname(index):
 def safewrite(fname, s):
     outfile = None
     try:
-        outfile = open(fname, 'w')
+        outfile = open(fname, "w")
         outfile.write(s.encode("UTF-8"))
     finally:
         if outfile is not None:
@@ -215,9 +225,12 @@ class Analysis(object):
     ``suspend()``, ``resume()``, and ``terminate()`` methods, a job can be
     paused (suspended), resumed, or terminated.
     """
+
     ANALYSIS_TYPE = ""
 
-    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, job_type):
+    def __init__(
+        self, name, script, params, files, savePath, pk, chipType, chips, job_type
+    ):
         """Initialize by storing essential parameters."""
         super(Analysis, self).__init__()
         self.name = name
@@ -283,14 +296,16 @@ class Analysis(object):
     def _write_out(self, adir):
         """Dump out files needed for the analysis into directory 'adir'."""
         # make sure we have params as JSON text
-        os.umask(0002)
+        os.umask(0o0002)
         if isinstance(self.params, dict):
             self.params = json.dumps(self.params)
         if not path.isdir(adir):
             try:
                 os.makedirs(adir)
-            except:
-                logger.error("Analysis cannot start. Failed to create directory: %s." % adir)
+            except Exception:
+                logger.error(
+                    "Analysis cannot start. Failed to create directory: %s." % adir
+                )
                 logger.debug(traceback.format_exc())
                 return None, None
         # find the appropriate script index, in case we are re-running
@@ -299,7 +314,7 @@ class Analysis(object):
         params_fname = path.join(adir, index2paramsname(script_index))
         # dump out script and parameters
         safewrite(script_fname, self.script)
-        os.chmod(script_fname, 0775)
+        os.chmod(script_fname, 0o0775)
         safewrite(params_fname, self.params)
         for name, content in self.files:
             safewrite(path.join(adir, name), content)
@@ -310,6 +325,7 @@ class Analysis(object):
 
 def tolerate_invalid_job(fn):
     """Decorator to catch invalid job references and handle them silently."""
+
     def ret(*args):
         try:
             result = fn(*args)
@@ -317,6 +333,7 @@ def tolerate_invalid_job(fn):
             logger.warning("Invalid job id requested: %s" % str(args))
             result = False
         return result
+
     ret.func_name = fn.func_name
     ret.__doc__ = fn.__doc__
     return ret
@@ -324,11 +341,13 @@ def tolerate_invalid_job(fn):
 
 class DRMAnalysis(Analysis):
     """``DRMAnalysis`` implements analysis on Sun Grid Engine."""
+
     ANALYSIS_TYPE = "grid"
 
     class DRMWaiter(object):
         """Wrapper around a job id to allow the AnalysisQueue to .communicate()
         with a grid job as if it were a process."""
+
         def __init__(self, jobid, parent):
             self.jobid = jobid
             self.parent = parent
@@ -341,16 +360,20 @@ class DRMAnalysis(Analysis):
                 logger.warning("Session wait exception: %s" % err)
                 self.parent.terminated = True
 
-    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, job_type):
-        super(DRMAnalysis, self).__init__(name, script, params, files, savePath, pk, chipType, chips, job_type)
+    def __init__(
+        self, name, script, params, files, savePath, pk, chipType, chips, job_type
+    ):
+        super(DRMAnalysis, self).__init__(
+            name, script, params, files, savePath, pk, chipType, chips, job_type
+        )
         self.retval = None
         self.jobid = None
         self.terminated = False
 
     def get_sge_params(self, chip_to_slots, chipType):
-        ret = '-pe ion_pe 1'
-#       ret = '-pe ion_pe 1 -l h_vmem=10000M'
-        for chip, args in chip_to_slots.iteritems():
+        ret = "-pe ion_pe 1"
+        #       ret = '-pe ion_pe 1 -l h_vmem=10000M'
+        for chip, args in chip_to_slots.items():
             if chip in chipType:
                 ret = args.strip()
                 return ret
@@ -368,17 +391,20 @@ class DRMAnalysis(Analysis):
         if script_fname is None:
             return None
         jt = _session.createJobTemplate()
-        qname = 'tl.q'
-        if self.job_type == 'thumbnail':
-            qname = 'thumbnail.q'
-        #SGE
-        jt.nativeSpecification = "%s -w w -q %s" % (self.get_sge_params(self.chips, self.chipType), qname)
-        #TORQUE
-        #jt.nativeSpecification = ""
+        qname = "tl.q"
+        if self.job_type == "thumbnail":
+            qname = "thumbnail.q"
+        # SGE
+        jt.nativeSpecification = "%s -w w -q %s" % (
+            self.get_sge_params(self.chips, self.chipType),
+            qname,
+        )
+        # TORQUE
+        # jt.nativeSpecification = ""
         jt.remoteCommand = "python"
         jt.workingDirectory = adir
         jt.outputPath = ":" + path.join(adir, "drmaa_stdout.txt")
-        #jt.errorPath = ":" + path.join(adir, "drmaa_stderr.txt")
+        # jt.errorPath = ":" + path.join(adir, "drmaa_stderr.txt")
         jt.args = (script_fname, params_fname)
         jt.joinFiles = True  # Merge stdout and stderr
         self.jobid = _session.runJob(jt)
@@ -431,19 +457,24 @@ class DRMAnalysis(Analysis):
         if not self._running():
             return False
 
-        joblistfile = os.path.join(self.savePath, 'job_list.json')
+        joblistfile = os.path.join(self.savePath, "job_list.json")
         if os.path.exists(joblistfile):
             try:
                 with open(joblistfile) as f:
                     contents = json.load(f)
-                blocks = sum([block.values() for block in contents.values()], [])
+                blocks = sum(
+                    [list(block.values()) for block in list(contents.values())], []
+                )
                 for blockjobid in blocks:
                     try:
-                        logger.debug("terminate job %s, status %s" % (blockjobid, _session.jobStatus(blockjobid)))
+                        logger.debug(
+                            "terminate job %s, status %s"
+                            % (blockjobid, _session.jobStatus(blockjobid))
+                        )
                         _session.control(blockjobid, drmaa.JobControlAction.TERMINATE)
                     except Exception:
                         logger.error("Failed to terminate %s" % blockjobid)
-            except:
+            except Exception:
                 logger.error("DRMAA terminate error reading from %s" % joblistfile)
 
         _session.control(self.jobid, drmaa.JobControlAction.TERMINATE)
@@ -464,10 +495,15 @@ class DRMAnalysis(Analysis):
 
 class LocalAnalysis(Analysis):
     """Describes a local, non-grid analysis. Runs by spawning a process."""
+
     ANALYSIS_TYPE = "local"
 
-    def __init__(self, name, script, params, files, savePath, pk, chipType, chips, job_type):
-        super(LocalAnalysis, self).__init__(name, script, params, files, savePath, pk, chipType, chips, job_type)
+    def __init__(
+        self, name, script, params, files, savePath, pk, chipType, chips, job_type
+    ):
+        super(LocalAnalysis, self).__init__(
+            name, script, params, files, savePath, pk, chipType, chips, job_type
+        )
         self.proc = None
 
     def initiate(self, rootdir):
@@ -572,6 +608,7 @@ class AnalysisQueue(object):
     have the ``AnalysisQueue``'s main thread wait until there are less than
     N analyses running before initiating another.
     """
+
     def __init__(self, rootdir):
         if rootdir.startswith("../"):
             rootdir = path.join(os.getcwd(), rootdir)
@@ -589,6 +626,7 @@ class AnalysisQueue(object):
 
     def run_analysis(self, a):
         """Spawn a thread which attempts to start an analysis."""
+
         def go():
             # acquire a lock while initiating
             self.cv.acquire()
@@ -616,6 +654,7 @@ class AnalysisQueue(object):
                 # bail, initiation failed
                 logger.error("%s failed to start" % str(a.name))
                 return
+
         tr = threading.Thread(target=go)
         tr.setDaemon(True)
         self.monitors.append(tr)
@@ -638,6 +677,7 @@ class AnalysisQueue(object):
                 a = self.q.pop(0)
                 self.cv.release()
                 self.run_analysis(a)
+
         tr = threading.Thread(target=_loop)
         tr.setDaemon(True)
         tr.start()
@@ -681,7 +721,7 @@ class AnalysisQueue(object):
 
     def all_jobs(self):
         """Return a list of (pk,proxy) for all currently running jobs."""
-        return self.running.items()
+        return list(self.running.items())
 
     def n_jobs(self):
         """Return the number of jobs currently running."""
@@ -707,9 +747,9 @@ class AnalysisQueue(object):
                 ret = (False, "not running")
             else:
                 a = self.running[pk]
-                fn = {"term": a.terminate,
-                      "stop": a.suspend,
-                      "cont": a.resume, }.get(signal.lower())
+                fn = {"term": a.terminate, "stop": a.suspend, "cont": a.resume}.get(
+                    signal.lower()
+                )
                 if fn is None:
                     ret = (False, "invalid signal")
                 else:
@@ -731,16 +771,15 @@ class AnalysisServer(xmlrpc.XMLRPC):
 
     Built on top of Twisted's XMLRPC server.
     """
+
     def __init__(self, analysis_queue):
         xmlrpc.XMLRPC.__init__(self)
         self.q = analysis_queue
 
-    def xmlrpc_updatestatus(self,
-                            primarykeyPath,
-                            status,
-                            reportLink):
+    def xmlrpc_updatestatus(self, primarykeyPath, status, reportLink):
 
         from ion.reports import uploadMetrics
+
         try:
             uploadMetrics.updateStatus(primarykeyPath, status, reportLink)
         except Exception:
@@ -748,23 +787,26 @@ class AnalysisServer(xmlrpc.XMLRPC):
             return traceback.format_exc()
         return 0
 
-    def xmlrpc_uploadmetrics(self,
-                             tfmapperstats_outputfile,
-                             procPath,
-                             beadPath,
-                             ionstats_alignment_json_path,
-                             ionParamsPath,
-                             peakOut,
-                             ionstats_basecaller_json_path,
-                             BaseCallerJsonPath,
-                             primarykeyPath,
-                             uploadStatusPath,
-                             STATUS,
-                             reportLink,
-                             cwd):
+    def xmlrpc_uploadmetrics(
+        self,
+        tfmapperstats_outputfile,
+        procPath,
+        beadPath,
+        ionstats_alignment_json_path,
+        ionParamsPath,
+        peakOut,
+        ionstats_basecaller_json_path,
+        BaseCallerJsonPath,
+        primarykeyPath,
+        uploadStatusPath,
+        STATUS,
+        reportLink,
+        cwd,
+    ):
         """Upload Metrics to the database"""
 
         from ion.reports import uploadMetrics
+
         try:
             return_message = uploadMetrics.writeDbFromFiles(
                 tfmapperstats_outputfile,
@@ -778,7 +820,8 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 BaseCallerJsonPath,
                 primarykeyPath,
                 uploadStatusPath,
-                cwd)
+                cwd,
+            )
 
             # this will replace the five progress squares with a re-analysis button
             uploadMetrics.updateStatus(primarykeyPath, STATUS, reportLink)
@@ -791,6 +834,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
     def xmlrpc_uploadanalysismetrics(self, beadPath, primarykeyPath):
         logger.info("Updating bead find metrics for %s" % primarykeyPath)
         from ion.reports import uploadMetrics
+
         try:
             message = uploadMetrics.updateAnalysisMetrics(beadPath, primarykeyPath)
             logger.info("Completed Upload Analysis Metrics")
@@ -798,9 +842,16 @@ class AnalysisServer(xmlrpc.XMLRPC):
             logger.error("Upload Analysis Metrics failed: %s", err)
         return message
 
-    def xmlrpc_submitjob(self, jt_nativeSpecification, jt_remoteCommand,
-                         jt_workingDirectory, jt_outputPath,
-                         jt_errorPath, jt_args, jt_joinFiles):
+    def xmlrpc_submitjob(
+        self,
+        jt_nativeSpecification,
+        jt_remoteCommand,
+        jt_workingDirectory,
+        jt_outputPath,
+        jt_errorPath,
+        jt_args,
+        jt_joinFiles,
+    ):
         jt = _session.createJobTemplate()
         jt.nativeSpecification = jt_nativeSpecification
         jt.remoteCommand = jt_remoteCommand
@@ -818,17 +869,21 @@ class AnalysisServer(xmlrpc.XMLRPC):
         try:
             logger.debug("xmlrpc jobstatus for %s" % jobid)
             status = _session.jobStatus(jobid)
-        except:
+        except Exception:
             logger.error("Job Status failure for %s" % jobid)
             status = "DRMAA BUG"
         return status
 
-    def xmlrpc_startanalysis(self, name, script, parameters, files, savePath, pk, chipType, chips, job_type):
+    def xmlrpc_startanalysis(
+        self, name, script, parameters, files, savePath, pk, chipType, chips, job_type
+    ):
         """Add an analysis to the ``AnalysisQueue``'s queue of waiting
         analyses."""
         logger.debug("Analysis request received: %s" % name)
         ACls = self.q.best_analysis_class()
-        la = ACls(name, script, parameters, files, savePath, pk, chipType, chips, job_type)
+        la = ACls(
+            name, script, parameters, files, savePath, pk, chipType, chips, job_type
+        )
         self.q.add_analysis(la)
         return name
 
@@ -853,7 +908,10 @@ class AnalysisServer(xmlrpc.XMLRPC):
         ret = []
         for pk, a in items:
             ret.append((a.name, a.get_id(), a.pk, a.ANALYSIS_TYPE, a.status_string()))
-            logger.debug("Name:%s JobId:%s PK:%s State:'%s'" % (a.name, a.get_id(), a.pk, a.status_string()))
+            logger.debug(
+                "Name:%s JobId:%s PK:%s State:'%s'"
+                % (a.name, a.get_id(), a.pk, a.status_string())
+            )
         return ret
 
     def xmlrpc_control_job(self, pk, signal):
@@ -869,37 +927,39 @@ class AnalysisServer(xmlrpc.XMLRPC):
     def xmlrpc_createRSMExperimentMetrics(self, resultId):
         try:
             from iondb.rundb.report import tasks as rsmtasks
+
             rsmtasks.createRSMExperimentMetrics(resultId)
             return True, "RSM createExperimentMetrics"
-        except:
+        except Exception:
             logger.error(traceback.format_exc())
             return False, traceback.format_exc()
 
     def xmlrpc_resultdiskspace(self, pk):
-        '''Launches celery task which determines disk space usage and records it
-           in the Results object for the given primary key reference'''
+        """Launches celery task which determines disk space usage and records it
+           in the Results object for the given primary key reference"""
         # Update the Data Management DMFileStat objects related to this Result object
         try:
             from iondb.rundb.data.tasks import update_dmfilestat_diskusage
+
             update_dmfilestat_diskusage.delay(pk)
-        except:
+        except Exception:
             logger.warn("update_diskusage celery task failed to launch")
 
         # Generate serialized json file for future Data Management Import
         try:
             from iondb.rundb.data.tasks import save_serialized_json
+
             save_serialized_json.delay(pk)
-        except:
+        except Exception:
             logger.warn("save_serialized_json celery task failed")
 
         return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     try:
         logger.info("ionJobServer Started Ver: %s" % __version__)
-
 
         aq = AnalysisQueue(settings.ANALYSIS_ROOT)
         aq.loop()

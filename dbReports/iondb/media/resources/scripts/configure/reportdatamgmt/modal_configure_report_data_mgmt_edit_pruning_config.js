@@ -14,7 +14,7 @@ TB.configure.reportdatamgmt.modal_edit_pruning_config.init = function() {
 
         TB.toggleContent();
 
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = gettext('uni-form-validation.language.required');
         $('#modal_configure_report_data_mgmt_edit_pruning_config_form').uniform({
             holder_class : 'control-group',
             msg_selector : 'div.help-block.error',

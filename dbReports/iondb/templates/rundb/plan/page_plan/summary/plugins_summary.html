@@ -1,6 +1,7 @@
-{%include "rundb/plan/page_plan/summary/kit_summary.html"%}
+{% include "rundb/plan/page_plan/summary/kit_summary.html" %}
+{% load i18n %}
 <tr>
-    <td><b>Plugins:</b></td>
+    <td><b>{% trans "workflow.step.plugins.title" %}:</b></td>
     <td id="selectedPlugins"></td>
 </tr>
 {% if step.getStepName == "Plugins" %}

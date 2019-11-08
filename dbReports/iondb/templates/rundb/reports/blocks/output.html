@@ -1,7 +1,8 @@
+{% load i18n %}
 <div id="OutputFiles">
     <h1 id="output" class="section-header">
         <span class="anchor" id="output-section"></span>
-        Output Files
+        {% trans "report.section.output.title" %}
     </h1>
 	<div>				
 		<div id="fileSection" class="row-fluid">
@@ -9,11 +10,11 @@
 			<table id="file_table" class="">
 				<thead>
 					<tr>
-						<th>File Type</th>
-						<th>Unaligned Reads</th>
-						<th>Aligned Reads</th>
+						<th data-field="name">{% trans "report.section.output.filetype.label" %}</th>
+						<th data-field="unaligned">{% trans "report.section.output.unaligned.label" %}</th>
+						<th data-field="aligned">{% trans "report.section.output.aligned.label" %}</th>
 						{% if output_file_groups.0.vcf.exists %}
-							<th>Variants</th>
+							<th data-field="variants">{% trans "report.section.output.variants.label" %}</th>
 						{% endif %}
 					</tr>
 				</thead>
@@ -23,32 +24,32 @@
 						<td>{{out.name}}</td>
 						<td>
 						{% if out.basecaller_bam.exists %}
-			              <a class="btn" rel="tooltip" title="Trimmed Reads in Unaligned BAM" href="{{out.basecaller_bam.link}}">BAM</a>
+			              <a download class="btn" rel="tooltip" title="{% trans "report.section.output.unaligned.basecaller_bam.tooltip" %}" href="{{out.basecaller_bam.link}}">{% trans "report.section.output.unaligned.basecaller_bam.label" %}</a>
 						{% else %}
-			              <a class="btn disabled" rel="tooltip" title="For full-chip Proton runs the unmapped BAM is only produced if there is no genomic reference. When there is a reference the mapped BAM contains all the information that would have been present in the unmapped BAM. Producing only one BAM enables faster report generation and reduces storage burden.">BAM</a>
+			              <a class="btn disabled" rel="tooltip" title="{% trans "report.section.output.unaligned.basecaller_bam.tooltip.notexist" %}">{% trans "report.section.output.unaligned.basecaller_bam.label" %}</a>
 						{% endif %}
 						</td>
 						<td>
 							<span class="btn-group">
 						{% if out.bam.exists %}
-				              <a class="btn" href="{{out.bam.link}}">BAM</a>
+				              <a download class="btn" rel="tooltip" title="{% trans "report.section.output.aligned.bam.tooltip" %}" href="{{out.bam.link}}">{% trans "report.section.output.aligned.bam.label" %}</a>
 				        {% else %}
-				              <a class="btn disabled">BAM</a>
+				              <a class="btn disabled" rel="tooltip" title="{% trans "report.section.output.aligned.bam.tooltip" %}">{% trans "report.section.output.aligned.bam.label" %}</a>
 						{% endif %}
 
 						{% if out.bai.exists %}
-				              <a class="btn" rel="tooltip" title="BAM index file"  href="{{out.bai.link}}">BAI</a>
+				              <a download class="btn" rel="tooltip" title="{% trans "report.section.output.aligned.bai.tooltip" %}"  href="{{out.bai.link}}">{% trans "report.section.output.aligned.bai.label" %}</a>
 				        {% else %}
-				              <a class="btn disabled" rel="tooltip" title="BAM index file">BAI</a>
+				              <a class="btn disabled" rel="tooltip" title="{% trans "report.section.output.aligned.bai.tooltip" %}">{% trans "report.section.output.aligned.bai.label" %}</a>
 						{% endif %}
 				            </span>
 						</td>
 						{% if output_file_groups.0.vcf.exists %}
 							<td>
 								{% if out.vcf.exists %}
-					              <a class="btn" rel="tooltip" title="Variants in a gzipped VCF file" href="{{out.vcf.link}}">VCF</a>
+					              <a download class="btn" rel="tooltip" title="{% trans "report.section.output.variants.vcf.tooltip" %}" href="{{out.vcf.link}}">{% trans "report.section.output.variants.vcf.label" %}</a>
 								{% else %}
-					              <a class="btn disabled" rel="tooltip" title="The VCF file is not produced by default. It can be made with the VariantCaller plugin.">VCF</a>
+					              <a class="btn disabled" rel="tooltip" title="{% trans "report.section.output.messages.vcf.tooltip.notexist" %}">{% trans "report.section.output.variants.vcf.label" %}</a>
 								{% endif %}
 							</td>
 						{% endif %}

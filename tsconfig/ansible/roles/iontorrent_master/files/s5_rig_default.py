@@ -5,10 +5,10 @@
 from iondb.bin import djangoinit
 from iondb.rundb import models
 
-if __name__ == '__main__':
-    resultobj = models.Rig.objects.get(name='default')
-    resultobj.ftpserver = '192.168.122.249'
-    resultobj.ftpusername = 'ionguest'
-    resultobj.ftppassword = 'ionguest'
-    resultobj.updatehome = '192.168.122.249'
+if __name__ == "__main__":
+    resultobj = models.Rig.objects.get(name="default")
+    resultobj.ftpserver = "192.168.122.249"
+    resultobj.ftpusername = "ionguest"
+    resultobj.ftppassword = "ionguest"
+    resultobj.updatehome = "192.168.122.249"
     resultobj.save()

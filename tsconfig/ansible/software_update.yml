@@ -10,42 +10,15 @@
 
     # Ensure Ion system daemons are stopped
     - name: Ion Daemons shutting down...
-      service: name={{ item }} state=stopped
-      with_items:
-        - ionCrawler
-        - ionJobServer
-        - ionPlugin
-        - celerybeat
-        - celeryd
+      service:
+        name: "{{ item }}"
+        state: stopped
+      with_items: "{{ ion_services_list[::-1] }}"
       ignore_errors: Yes
 
-    # Replace official ubuntu repo with Ion-sourced ubuntu repo
-    - name: Disable /etc/apt/sources.list
-      template: src=templates/sources.list.j2
-                dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
-                owner=root group=root mode=644
-
-    - name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
-      template: src=templates/iontorrent-ubuntu.j2
-                dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
-                owner=root group=root mode=644
-
-    - name: Add /etc/apt/sources.list.d/iontorrent-offcycle.list
-      template: src=templates/iontorrent-offcycle.j2
-                dest=/etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
-                owner=root group=root mode=644
-
-    # Adding IonReporter plugin repository
-    - name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
-      template: src=templates/ionreporter-plugin.j2
-                dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
-                owner=root group=root mode=644
-
-    - name:
-      apt: update_cache=yes
-
-    - name: apt-get autoclean
-      shell: bash -c 'apt-get autoclean'
+    # setup repo lists and update caches
+    - name: update repo lists
+      include: repos.yml
 
     - name: Set tmpreaper package preseed values
       script: '{{ ansible_env.PWD }}/roles/common/files/tmpreaper.preseed'
@@ -59,53 +32,115 @@
     - name: Backup postgres database
       script: files/postgres_bckup.sh
 
+    # Setting grub packages to hold during software update stage as well
+    # for backward compatibility.
+    - name: set grub related packages to hold to prevent non-interactive updates
+      command: apt-mark hold {{ item }}
+      with_items:
+        - grub-pc
+        - grub-pc-bin
+        - grub-common
+        - grub2-common
+        - grub-gfxpayload-lists
+
+    - name: show the packages that have been held back
+      command: apt-mark showhold
+      register: apthold
+
+    - debug:
+        var: apthold.stdout_lines
+
     # Install or Update all packages listed
     - name: Install common system packages
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ common_syspkg_list }}"
       when: item != ''
+
     - name: Install system packages for head node
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ ionmaster_syspkg_list }}"
       when: item != ''
+
     - name: Install Ion packages for head node
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ ionmaster_ionpkg_list }}"
       when: item != ''
+
     - name: Install 3rd party plugin packages
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ ionmaster_pluginpkg_list }}"
       when: item != ''
       ignore_errors: yes
 
+
     # Packages to remove from system
-    # this step needs to be after ion-dbreports>=5.2.x install
-    # samtools is required by ion-dbreports<5.2
+    # samtools was required by ion-dbreports<5.2
+    # python-django and related pkgs replaced by ion-django in 5.11.x
     - name: Packages Removal Process
-      apt: name={{ item }} state=absent
+      apt:
+        name: "{{ item }}"
+        state: absent
       with_items:
         - samtools
+        - python-django
+        - python-django-south
+        - python-django-tastypie
+        - python-celery
+
 
     # Updates all installed packages.
     - name: Install any available updates
       shell: bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
-      register: debug
+      register: upgrade
       when: UPDATE_SYSTEM|default(True)
 
-    - debug: var=debug.stdout_lines
+    - debug:
+        var: upgrade.stdout_lines
+
+    # Install or remove OEM packages
+    - name: Install OEM packages if "is_oem" is {{ is_oem }}
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
+      with_items: "{{ ionmaster_oempkg_list }}"
+      when:
+        - item != ''
+        - is_oem
+
+    - name: Remove OME packages if "is_oem" is {{ is_oem }}
+      apt:
+        name: "{{ item }}"
+        state: absent
+        force: yes
+      with_items: "{{ ionmaster_oempkg_list }}"
+      when:
+        - item != ''
+        - not is_oem
+
 
     - name: configuration error fixing.
       include: fixes.yml
 
     # Ensure Ion system daemons are started
     - name: Ion Daemons starting up...
-      service: name={{ item }} state=started
-      with_items:
-        - celeryd
-        - celerybeat
-        - ionCrawler
-        - ionJobServer
-        - ionPlugin
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      with_items: "{{ ion_services_list }}"
       ignore_errors: Yes
 
     #-----------------------------------------------------------------------------
@@ -116,28 +151,17 @@
       register: tsconfig_version
 
     - name: Create/Update tsconf.log
-      template: src=templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+      template:
+        src: templates/tsconf.conf.j2
+        dest: /etc/torrentserver/tsconf.conf
+        mode: 0644
+        owner: root
+        group: root
 
 - hosts: iontorrent_computes
   tasks:
-    #-----------------------------------------------------------------------------
-    # On each compute node, we need to replicate the Ion Repository configured
-    # on the head node.
-    #-----------------------------------------------------------------------------
-
-    # Replace sources.list with empty file
-    - name: Disable /etc/apt/sources.list
-      template: src=templates/sources.list.j2
-                dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
-                owner=root group=root mode=644
-
-    - name: Purge compute node's /etc/apt/sources.list.d directory
-      shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
-
-    - name: Replicating head node's /etc/apt/source.list.d/
-      copy: src={{ item }} dest=/etc/apt/sources.list.d/ mode=0644
-      with_fileglob:
-        - /etc/apt/sources.list.d/*
+    - name: update repo lists
+      include: repos.yml
 
     - name:
       apt: update_cache=yes
@@ -147,31 +171,49 @@
 
     # Install or Update all packages listed
     - name: Install common system packages
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ common_syspkg_list }}"
       when: item != ''
+
     - name: Install system packages for compute resource - apt
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ ioncompute_syspkg_list }}"
       when: item != ''
+
     - name: Install Ion packages for compute resource - apt
-      apt: name={{ item }} state=latest force=yes
+      apt:
+        name: "{{ item }}"
+        state: latest
+        force: yes
       with_items: "{{ ioncompute_ionpkg_list }}"
       when: item != ''
 
     # Packages to remove from system
     - name: Packages Removal Process
-      apt: name={{ item }} state=absent
+      apt:
+        name: "{{ item }}"
+        state: absent
       with_items:
         - samtools
         - ion-rsmts
 
-    # Install all available updates to installed packages
+    # Updates all installed packages.
+    # DEBIAN_FRONTEND=noninteractive is set by default
     - name: Install any available updates
-      shell: bash -c 'DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
-      register: debug
+      apt:
+        upgrade: safe
+        force: yes
+        dpkg_options: 'force-confnew,force-confdef'
+      register: upgrade
       when: UPDATE_SYSTEM|default(True)
 
-    - debug: var=debug.stdout_lines
+    - debug:
+        var: upgrade.stdout_lines
 
     - include: roles/iontorrent_computes/tasks/software_update.yml

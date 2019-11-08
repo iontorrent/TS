@@ -1,11 +1,12 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head_js %}
     <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
 {% endblock extra_head_js %}
 {% block tab-configure-ionreporter %}
-    <li class="active"><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+    <li class="active"><a href="{% url "configure_ionreporter" %}">{% trans "global.nav.menu.configure.menu.ionreporter.label" %}</a></li>
 {% endblock tab-configure-ionreporter %}
 {% block content %}
 
@@ -20,9 +21,16 @@
 }
 </style>
 
-		<div class="content clearfix">
-            <iframe id="iru" src="{% url "configure_plugins_plugin_configure" iru.id 'config' %}" class="auto-height auto-width full-width" scrolling="no" frameborder="0"></iframe>
-		</div>
+    <div class="content clearfix">
+        {% if iru %}
+            <iframe id="iru" src="{% url "configure_plugins_plugin_configure" iru.id 'config' %}"
+                    class="auto-height auto-width full-width" scrolling="no" frameborder="0"></iframe>
+        {% else %}
+            <p>
+                Please install the <strong>ion-plugin-ionreporteruploader</strong> debian package before configuring Ion Reporter.
+            </p>
+        {% endif %}
+    </div>
 
 
 	<script>

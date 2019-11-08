@@ -1,23 +1,41 @@
+{% load i18n %}
+<style type="text/css">
+    select[readonly]{
+    background: #eee;
+    cursor:no-drop;
+}
+
+select[readonly] option{
+    display:none;
+}
+</style>
 <div class="control-group">
-	<label class="control-label" for="sampleDescription">Description</label>
+	<label class="control-label" for="sampleDescription">{% trans "samplesets.samplesetitem.fields.sampleDescription.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional" value="{{sampleSetItem.description}}">{{sampleSetItem.description}}</textarea>
+			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="{% trans "samplesets.samplesetitem.fields.sampleDescription.placeholder" %}" value="{{sampleSetItem.description}}">{{sampleSetItem.description}}</textarea>
 		{% elif intent == "edit_pending" %}
-			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional" value="{{pending_sampleSetItem.description}}">{{pending_sampleSetItem.description}}</textarea>                        
+			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="{% trans "samplesets.samplesetitem.fields.sampleDescription.placeholder" %}" value="{{pending_sampleSetItem.description}}">{{pending_sampleSetItem.description}}</textarea>
 		{% else %}
-			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="Optional"></textarea>
+			<textarea maxlength="1024" id="sampleDescription" name="sampleDescription" placeholder="{% trans "samplesets.samplesetitem.fields.sampleDescription.placeholder" %}"></textarea>
 		{% endif %}
 
 		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.sampleDescription.helptext" %}
 		</div>                      
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="nucleotideType">DNA/ RNA/ Fusions</label>
+	<label class="control-label" for="nucleotideType">Nucleotide Type {# TODO: localize all the values for OEM #}</label>
 	<div class="controls">
-		<select id="nucleotideType" name="nucleotideType"style="height:28px;">
+		<select id="nucleotideType" name="nucleotideType" style="height:28px;"
+            {% if isAmpliseqHD %}
+                readonly="true"
+                rel="tooltip"
+                data-toggle="tooltip"
+                title="Nucleotide Type cannot be changed for Ampliseq HD on Chef. Use edit sample set option."
+            {% endif %}
 		<option value="" >.....</option>                 
 		{% if intent == "edit" %}
 			{% for nucType, displayedNucType in nucleotideType_choices %}
@@ -41,16 +59,116 @@
 			{% endfor %}                                              
 		{% endif %}
 		</select>
+    {% if isAmpliseqHD %}
+            <i class="icon-info-sign" rel="tooltip" data-placement="right" title="Nucleotide Type cannot be changed for Ampliseq HD on Chef. Use edit sample set option."></i>
+        {% endif %}
 
 		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.nucleotideType.helptext" %}
 		</div>
 	</div>
 </div>
-
 <div class="control-group">
-	<label class="control-label" for="gender">Gender</label>
+	<label class="control-label" for="sampleSource">Sample Source</label>
 	<div class="controls">
-		<select id="gender" name="gender"style="height:28px;">
+		<select id="sampleSource" name="sampleSource" style="height:28px;"
+            {% if isAmpliseqHD %}
+                readonly="true"
+                data-toggle="tooltip"
+                rel="tooltip"
+                title="Sample Source cannot be changed for Ampliseq HD on Chef. Use edit sample set option."
+            {% endif %}>
+		<option value="" >.....</option>
+		{% if intent == "edit" %}
+			{% for sampleSource in sampleSource_CV_list %}
+				{% ifequal sampleSetItem.sampleSource sampleSource.value %}
+					<option SELECTED {% if isAmpliseqHD%} disabled {% endif %} value="{{sampleSetItem.sampleSource}}">{{sampleSetItem.sampleSource}}</option>
+				{% else %}
+					{% if sampleSource.isActive %}
+						<option value="{{sampleSource.value}}" >{{sampleSource.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}
+			{% for sampleSource in sampleSource_CV_list %}
+				{% ifequal pending_sampleSetItem.sampleSource sampleSource.value %}
+					<option SELECTED value="{{pending_sampleSetItem.sampleSource}}">{{pending_sampleSetItem.sampleSource}}</option>
+				{% else %}
+					{% if sampleSource.isActive %}
+						<option value="{{sampleSource.value}}" >{{sampleSource.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% else %}
+			{% for sampleSource in sampleSource_CV_list %}
+				{% if sampleSource.isActive %}
+					<option value="{{sampleSource.value}}" >{{sampleSource.value}}</option>
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		</select>
+        {% if isAmpliseqHD %}
+            <i class="icon-info-sign" rel="tooltip" data-placement="right" title="Sample Source cannot be changed for Ampliseq HD on Chef. Use edit sample set option."></i>
+        {% endif %}
+
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.gender.helptext" %}
+		</div>
+	</div>
+</div>
+<div class="control-group">
+	<label class="control-label" for="panelPoolType">Panel Pool Type</label>
+	<div class="controls">
+		<select id="panelPoolType" name="panelPoolType" style="height:28px;"
+            {% if isAmpliseqHD %}
+                readonly="true"
+                rel="tooltip"
+                data-toggle="tooltip"
+                title="Panel Pool Type cannot be changed for Ampliseq HD on Chef. Use edit sample set option."
+            {% endif %}
+        >
+		<option value="" >.....</option>
+		{% if intent == "edit" %}
+			{% for panelPoolType in panelPoolType_CV_list %}
+				{% ifequal sampleSetItem.panelPoolType panelPoolType.value %}
+					<option SELECTED value="{{sampleSetItem.panelPoolType}}">{{panelPoolType.value}}</option>
+				{% else %}
+					{% if panelPoolType.isActive %}
+						<option value="{{panelPoolType.value}}" >{{panelPoolType.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% elif intent == "edit_pending" %}
+			{% for panelPoolType in panelPoolType_CV_list %}
+				{% ifequal pending_sampleSetItem.panelPoolType panelPoolType.value %}
+					<option SELECTED disabled value="{{pending_sampleSetItem.panelPoolType}}">{{pending_sampleSetItem.panelPoolType}}</option>
+				{% else %}
+					{% if panelPoolType.isActive %}
+						<option value="{{panelPoolType.value}}" >{{panelPoolType.value}}</option>
+					{% endif %}
+				{% endifequal %}
+			{% endfor %}
+		{% else %}
+			{% for panelPoolType in panelPoolType_CV_list %}
+				{% if panelPoolType.isActive %}
+					<option value="{{panelPoolType.value}}" >{{panelPoolType.value}}</option>
+				{% endif %}
+			{% endfor %}
+		{% endif %}
+		</select>
+    {% if isAmpliseqHD %}
+                        <i class="icon-info-sign" rel="tooltip" data-placement="right" title="Panel Pool Type cannot be changed for Ampliseq HD on Chef. Use edit sample set option."></i>
+                    {% endif %}
+
+		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.gender.helptext" %}
+		</div>
+	</div>
+</div>
+<div class="control-group">
+	<label class="control-label" for="gender">{% trans "samplesets.samplesetitem.fields.gender.label" %}</label>
+	<div class="controls">
+		<select id="gender" name="gender" style="height:28px;">
 		<option value="" >.....</option>
 		{% if intent == "edit" %}
 			{% for gender in gender_CV_list %}
@@ -82,14 +200,15 @@
 		</select>
 
 		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.gender.helptext" %}
 		</div>
 	</div>
 </div>
 							
 <div class="control-group">
-	<label class="control-label" for="relationshipRole">Type</label>
+	<label class="control-label" for="relationshipRole">{% trans "samplesets.samplesetitem.fields.relationshipRole.label" %}</label>
 	<div class="controls">
-		<select id="relationshipRole" name="relationshipRole"style="height:28px;">
+		<select id="relationshipRole" name="relationshipRole" style="height:28px;">
 		<option value="" >.....</option>
 		{% if intent == "edit" %}
 			{% for role in sample_role_CV_list %}
@@ -121,23 +240,24 @@
 		</select>
 
 		<div class="help-block">
+            {% trans "samplesets.samplesetitem.fields.relationshipRole.helptext" %}
 		</div>
 	</div>
 </div>
 
 <div class="control-group">
-	<label class="control-label" for="relationshipGroup">Relationship Group</label>
+	<label class="control-label" for="relationshipGroup">{% trans "samplesets.samplesetitem.fields.relationshipGroup.label" %}</label>
 	<div class="controls">
 		{% if intent == "edit" %}
-			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number" value="{{sampleSetItem.relationshipGroup}}" />
+			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.relationshipGroup.placeholder" %}" value="{{sampleSetItem.relationshipGroup|default_if_none:''}}" />
 		{% elif intent == "edit_pending" %}
-			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number" value="{{pending_sampleSetItem.relationshipGroup}}" />                        
+			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.relationshipGroup.placeholder" %}" value="{{pending_sampleSetItem.relationshipGroup|default_if_none:''}}" />
 		{% else %}
-			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="whole number"/>
+			<input id="relationshipGroup" name="relationshipGroup" class="integer" placeholder="{% trans "samplesets.samplesetitem.fields.relationshipGroup.placeholder" %}"/>
 		{% endif %}
 
 		<div class="help-block">                        
-			FYI: A unique number (e.g., 1) to designate multiple samples within the sample set as a group (e.g., a trio group).
+			{% trans "samplesets.samplesetitem.fields.relationshipGroup.helptext" %}
 		</div>                                  
 	</div>
 </div>

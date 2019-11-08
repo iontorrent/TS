@@ -326,15 +326,19 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		Rcpp::IntegerVector    out_q47Len(nReadOut);
 
 		// Structures Reads: Read hard clipped sequence bits from tags
+		Rcpp::StringVector     out_prefixStartUMI(nReadOut); // ZK tag
 		Rcpp::StringVector     out_startUMI(nReadOut);       // ZT tag
 		Rcpp::StringVector     out_endUMI(nReadOut);         // YT tag
+		Rcpp::StringVector     out_suffixEndUMI(nReadOut);   // YK tag
 		Rcpp::StringVector     out_ExtraClipLeft(nReadOut);  // ZE tag
 		Rcpp::StringVector     out_ExtraClipRight(nReadOut); // YE tag
 
-		bool                   have_startUMI       = false;
-		bool                   have_endUMI         = false;
-		bool                   have_ExtraClipLeft  = false;
-		bool                   have_ExtraClipRight = false;
+		bool                   have_prefixStartUMI   = false;
+		bool                   have_startUMI         = false;
+		bool                   have_endUMI           = false;
+		bool                   have_suffixEndUMI     = false;
+		bool                   have_ExtraClipLeft    = false;
+		bool                   have_ExtraClipRight   = false;
 
 		// Extra tags for reading the spades file into R XXX
 		//Rcpp::NumericVector    out_SpadesDelta(nReadOut);
@@ -397,6 +401,11 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			// Not every read is guaranteed to have structures detected
 			string temp_tag;
 
+                        if (alignment.GetTag("ZK", temp_tag)){
+			  have_prefixStartUMI = true;
+			  out_prefixStartUMI(nReadsFromBam) = temp_tag;
+			}
+
 			if (alignment.GetTag("ZT", temp_tag)){
 			  have_startUMI = true;
 			  out_startUMI(nReadsFromBam) = temp_tag;
@@ -405,6 +414,11 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			if (alignment.GetTag("YT", temp_tag)){
 			  have_endUMI = true;
 			  out_endUMI(nReadsFromBam) = temp_tag;
+			}
+
+			if (alignment.GetTag("YK", temp_tag)){
+			  have_suffixEndUMI = true;
+			  out_suffixEndUMI(nReadsFromBam) = temp_tag;
 			}
 
 			if (alignment.GetTag("ZE", temp_tag)){
@@ -585,8 +599,10 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			Rcpp::IntegerVector    out2_q20Len(nReadsFromBam);
 			Rcpp::IntegerVector    out2_q47Len(nReadsFromBam);
 
+			Rcpp::StringVector     out2_prefixStartUMI(nReadOut);
 			Rcpp::StringVector     out2_startUMI(nReadOut);
 			Rcpp::StringVector     out2_endUMI(nReadOut);
+			Rcpp::StringVector     out2_suffixEndUMI(nReadOut);
 			Rcpp::StringVector     out2_ExtraClipLeft(nReadOut);
 			Rcpp::StringVector     out2_ExtraClipRight(nReadOut);
 
@@ -627,8 +643,10 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					out2_flowIndex(i,j)    = out_flowIndex(i,j);
 				}
 
+				out2_prefixStartUMI(i) = out_prefixStartUMI(i);
 				out2_startUMI(i) = out_startUMI(i);
 				out2_endUMI(i) = out_endUMI(i);
+				out2_suffixEndUMI(i) = out_suffixEndUMI(i);
 				out2_ExtraClipLeft(i) = out_ExtraClipLeft(i);
 				out2_ExtraClipRight(i) = out_ExtraClipRight(i);
 
@@ -692,10 +710,14 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 	        map["qual"]             = Rcpp::wrap( out2_qual );
 
 	        // Structured reads, report tags only if present in BAM
+	        if (have_prefixStartUMI)
+	          map["prefixStartTag"] = Rcpp::wrap( out2_prefixStartUMI );
 	        if (have_startUMI)
 	          map["startTag"]       = Rcpp::wrap( out2_startUMI );
 	        if (have_endUMI)
 	          map["endTag"]         = Rcpp::wrap( out2_endUMI );
+	        if (have_suffixEndUMI)
+	          map["suffixEndTag"]   = Rcpp::wrap( out2_suffixEndUMI );
 	        if (have_ExtraClipLeft)
 	          map["extraClipLeft"]  = Rcpp::wrap( out2_ExtraClipLeft );
 	        if (have_ExtraClipRight)
@@ -755,10 +777,14 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
              map["flowIndex"]        = Rcpp::wrap( out_flowIndex );
 
  	         // Structured reads, report tags only if present in BAM
+ 	         if (have_prefixStartUMI)
+ 	           map["prefixStartTag"] = Rcpp::wrap( out_prefixStartUMI );
  	         if (have_startUMI)
  	           map["startTag"]       = Rcpp::wrap( out_startUMI );
  	         if (have_endUMI)
  	           map["endTag"]         = Rcpp::wrap( out_endUMI );
+ 	         if (have_suffixEndUMI)
+ 	           map["suffixEndTag"]   = Rcpp::wrap( out_suffixEndUMI );
  	         if (have_ExtraClipLeft)
  	           map["extraClipLeft"]  = Rcpp::wrap( out_ExtraClipLeft );
  	         if (have_ExtraClipRight)

@@ -17,6 +17,7 @@ my $opt = {
   "genomeNameLong"    => undef,
   "genomeVersion"     => undef,
   "compressed"        => undef,
+  "outputDir"         => undef,
   "tmapDir"           => "/usr/local/bin/",
   "picardDir"         => "/opt/picard/picard-tools-current/",
   "readSampleSize"    => 0,
@@ -38,6 +39,7 @@ GetOptions(
   "p|picard-dir=s"          => \$opt->{"picardDir"},
   "read-sample-size=i"      => \$opt->{"readSampleSize"},
   "read-exclude-length=i"   => \$opt->{"readExcludeLength"},
+  "o|outputDir=s"           => \$opt->{"outputDir"},
   "h|help"                  => \$opt->{"help"},
 );
 if($opt->{"help"}) {
@@ -81,9 +83,10 @@ usage: $0
     -a,--auto-fix                      : Attempt to fix common fasta format issues
     -m,--reference-mask                : Masking bed file for reference sequence
     -c,--compressed hg19.fasta         : Expand a compressed zip. Requires name
-    									 fasta as an argument.
+                                         fasta as an argument.
     -t,--tmapDir /path/to/tmap         : Location of TMAP executable
     -p,--picard-dir /path/to/picard    : Location of Picard jar files
+    -o,--outputDir /path/to/output     : output directory
     --read-sample-size 10000           : Number of reads to randomly sample for
                                          alignment.  Default is to align all
     --read-exclude-length 20           : Alignments of this length or less will
@@ -94,11 +97,15 @@ usage: $0
 EOF
 }
 
-my $outDir    = $opt->{"genomeNameShort"};
+my $outDir = $opt->{"genomeNameShort"};
+if (defined($opt->{"outputDir"})) {
+  $outDir = $opt->{"outputDir"};
+}
+
 my $shortName = $opt->{"genomeNameShort"};
 my $fastaFile = $opt->{"fastaFile"};
-my $bedfile = "";
 
+my $bedfile = "";
 if (defined($opt->{"bedfileName"})) {
   $bedfile = $opt->{"bedfileName"};
 }
@@ -106,9 +113,9 @@ if (defined($opt->{"bedfileName"})) {
 
 #try to uncompress a zip file
 if($opt->{"compressed"}) {
-	&uncompress($opt->{"fastaFile"}, $opt->{"compressed"});
-	#If the uncompression did not die, then use a resulting fasta from this point on
-	$fastaFile = $opt->{"compressed"};
+  &uncompress($opt->{"fastaFile"}, $opt->{"compressed"});
+  #If the uncompression did not die, then use a resulting fasta from this point on
+  $fastaFile = $opt->{"compressed"};
 }
 
 
@@ -148,18 +155,18 @@ sub checkInput {
     $origFastaFile = "$fastaFile.orig";
     print STDERR "$0: $fastaFile is fixed and the original is kept as $origFastaFile \n\n";
     if(&executeSystemCall("mv $fastaFile $origFastaFile; mv $fastaFile.fix $fastaFile",\$returnString,\$returnErrString)) {
-	print STDERR "$returnErrString\n";
-        print STDERR "$returnString\n";
-        print STDERR "$0: problem encountered when moving $fastaFile to $origFastaFile and $fastaFile.fix to $fastaFile.\n\n";
-       	die;
+      print STDERR "$returnErrString\n";
+      print STDERR "$returnString\n";
+      print STDERR "$0: problem encountered when moving $fastaFile to $origFastaFile and $fastaFile.fix to $fastaFile.\n\n";
+      die;
     }
     $origFastaChecksum = &getChecksum($origFastaFile);
   }
   elsif($autoFix) {
     if(&executeSystemCall("rm -f $fastaFile.fix",\$returnString,\$returnErrString)) {
-	print STDERR "$returnErrString\n";
-        print STDERR "$returnString\n";
-        print STDERR "$0: problem encountered when removing $fastaFile.fix.\n\n";
+      print STDERR "$returnErrString\n";
+      print STDERR "$returnString\n";
+      print STDERR "$0: problem encountered when removing $fastaFile.fix.\n\n";
     }
   }
   my $fastaChecksum = &getChecksum($fastaFile);
@@ -203,30 +210,31 @@ sub makeIndex {
   my $cwd = &Cwd::getcwd();
 
   # copy fasta file to index dir
-  
+
   my $fastaFileCopy = "$shortName.fasta";
   if ($bedfile ne "") {
     #ZZ, with bed file, generate trimmed version of fasta and a masked file.
     #chdir $outDir || die "$0: unable to chdir to output dir $outDir\n";
     #print STDOUT "Making masked and small reference files\n";
     my $tmapLogFile = "tmap.log";
-    #my $command = "$opt->{'tmapDir'}/tmap mask -o $outDir/$fastaFileCopy.noMask $bedfile $fastaFile > $outDir/$fastaFileCopy 2>> $outDir/$tmapLogFile";
+    my $outFastaFile = "$outDir/$fastaFileCopy";
+    die "$0: $outDir/$fastaFileCopy exists. Please use different short name.\n" if(-e $outFastaFile);
     my $command = "$opt->{'tmapDir'}/tmap mask $bedfile $fastaFile > $outDir/$fastaFileCopy 2>> $outDir/$tmapLogFile";
     die "$0: Problem encountered making tmap mask, check tmap log file $outDir/$tmapLogFile for details.\n" if(&executeSystemCall($command));
     print STDOUT "  ...tmap mask complete\n";
-    #chdir $cwd || die "$0: unable to chdir to top-level dir $cwd\n";
+
     &copy($bedfile, "$outDir/maskfile_donot_remove.bed") || die  "$0: Problem copying $bedfile to $outDir/maskfile_donot_remove.bed: $!\n";
+  } elsif (defined($opt->{"outputDir"})) {
+    print STDOUT "$fastaFile is not copied since --outputDir is specified.\n"
   } else {
-    my $command = "cp $fastaFile $outDir/$fastaFileCopy";
     print STDOUT "Copying $fastaFile to $outDir/$fastaFileCopy...\n";
     &copy($fastaFile,"$outDir/$fastaFileCopy") || die "$0: Problem copying $fastaFile to $outDir/$fastaFileCopy: $!\n";
     print STDOUT "  ...copy complete\n";
   }
 
-  # copy original fasta file to index dir, if it exists
-  if($origFastaFile ne "") {
+  # copy original fasta file to index dir, if it exists and outputDir is not specified.
+  if($origFastaFile ne "" && !defined($opt->{"outputDir"})) {
     my $origFastaFileCopy = "$shortName.fasta.orig";
-    my $command = "cp $origFastaFile $outDir/$origFastaFileCopy";
     print STDOUT "Copying $origFastaFile to $outDir/$origFastaFileCopy...\n";
     &copy($origFastaFile,"$outDir/$origFastaFileCopy") || die "$0: Problem copying $origFastaFile to $outDir/$origFastaFileCopy: $!\n";
     print STDOUT "  ...copy complete\n";
@@ -247,7 +255,7 @@ sub makeIndex {
     #remove the masked file, replace it with the trimmed file
     #my $command = "mv -f $fastaFileCopy.noMask $fastaFileCopy";
     #die "can not rename file.\n" if(&executeSystemCall($command));
-  #}  
+  #}
 
   # make samtools index.  For now we're putting it in the same place
   # as the tmap index, though that's not a very natural place for it
@@ -261,7 +269,7 @@ sub makeIndex {
 
   # make picard .dict file and put it with tmap index
   my $picardErr = "";
-  $picardErr = &makePicardDictFile($opt->{"picardDir"},$fastaFileCopy,$outDir) if(defined($opt->{"picardDir"})); 
+  $picardErr = &makePicardDictFile($opt->{"picardDir"},$fastaFileCopy,$outDir) if(defined($opt->{"picardDir"}));
   warn "WARNING: $picardErr\n" if($picardErr ne "");
 
   # determine genome length
@@ -276,22 +284,26 @@ sub makeIndex {
 
 sub prepareOutDir {
   my($outDir) = @_;
-
-  die "$0: output directory $outDir already exits, aborting.\n" if(-e $outDir);
-  mkdir $outDir || die "$0: unable to make directory $outDir: $!\n";
+  # checkout if outDir exists or else try to create it
+  if(-e $outDir) {
+    # if outDir already exists, it should error our when outputDir is not explicitly defined
+    die "$0: output directory $outDir already exits, aborting.\n" if(!defined($opt->{"outputDir"}));
+  } else {
+    mkdir $outDir || die "$0: unable to make directory $outDir: $!\n";
+  }
 }
 
 sub uncompress{
   my ($compressed, $zipped_fasta_name) = @_;
-  
+
   #Test the zip file
   &zip_test(@_);
 
   #Run system calls to uncompress the data
-  #unzip expects only 1 file to be in the .zip file and redirects the out to 
+  #unzip expects only 1 file to be in the .zip file and redirects the out to
   #a file named <shortname>.fasta
   my $unzip_command = join(" ", "unzip", $compressed, $zipped_fasta_name);
-  
+
   die "$0: Problem encountered with unziping file's system call\n" if(&executeSystemCall($unzip_command,\$compressed));
 
 }

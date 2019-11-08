@@ -23,6 +23,7 @@ public:
   vector<float> update_ref_bias_v;
   vector<float> weight_variant_v;
   vector<float> weight_ref_v;
+  vector<vector<float> > stranded_bias_adj;
   float damper_bias;
   float soft_clip;
   BiasChecker(){
@@ -31,6 +32,8 @@ public:
   }
   void ResetUpdate();
   void Init(int num_hyp_no_null);
+  void SetBiasAdj(const vector<vector<float> >& stranded_bias_adjustment);
+  void ClearBiasAdj();
   void DoUpdate();
   void UpdateBiasChecker(ShortStack &my_theory);
   void AddCrossUpdate(CrossHypotheses &my_cross);

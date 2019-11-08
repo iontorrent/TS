@@ -1,6 +1,9 @@
 {% load url from future %}
 {% load static from staticfiles %}
-
+{% load i18n %}
+{% block extra_head %}
+<script type="text/javascript" src="{% static "resources/jquery/jquery-ui-1.8.20.custom.min.js"%}"></script>
+<link type="text/css" rel="stylesheet" href="{% static "resources/jquery/css/jquery-ui-1.8.20.custom.css"%}" />
 <style type="text/css">
     .nav ~ .tab-content {
         border-top: 0px;
@@ -25,13 +28,13 @@
       *margin-left: 0;
     }      
 </style>
-
-<div id="modal_add_samplesetitem_popup" class="modal modal-900 fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+{% endblock extra_head %}
+<div id="modal_add_samplesetitem_popup" class="modal modal-1000 fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
         <h3 id="modal_addLabel">
-        	{% if intent == "edit" or intent == "edit_pending" %}Edit Sample
-        	{% else %}Add Sample
+        	{% if intent == "edit" or intent == "edit_pending" %}{% trans "samplesets.samplesetitem.edit.title" %}
+        	{% else %}{% trans "samplesets.samplesetitem.add.title" %}
         	{% endif %}
         </h3>
     </div>
@@ -44,46 +47,65 @@
 			<div class="alert alert-success modal-success-messages hide"></div -->
 
 			<form class="form-horizontal" id="save_samplesetitem" name="save_samplesetitem" method="POST" action="">
-			     {% include "rundb/sample/samplesetitem_main_section.html" %}
-			
-                <div class="span6">
-                <ul class="nav nav-tabs">
-                <li class="active"><a href="#annotations" data-toggle="tab">Basic Annotations</a></li>
-                <li><a href="#extraAnnotations" data-toggle="tab">Extra Annotations</a></li>                
-                <li><a href="#userDefinedAttributes" data-toggle="tab">User-defined Attributes</a></li>                  
-                </ul>
-                
-                <!-- Tab panes -->
-                <div class="tab-content">
-                  <div class="tab-pane fade in active" id="annotations">
-                     {% include "rundb/sample/samplesetitem_annotation_section.html" %}
-                </div>                
-                  
-                <div class="tab-pane fade" id="extraAnnotations">
-                     {% include "rundb/sample/samplesetitem_annotation2_section.html" %}                                
-                </div>
+                <div class="row-fluid">
+                    <div class="span5">
+			            {% include "rundb/sample/samplesetitem_main_section.html" %}
+                    </div>
+                    <div class="span7">
+                        <ul class="nav nav-tabs">
+                            <li class="active"><a href="#annotations" data-toggle="tab">{% trans "samplesets.samplesetitem.section.annotations.title" %}</a></li>
+                            <li><a href="#extraAnnotations" data-toggle="tab">{% trans "samplesets.samplesetitem.section.extraAnnotations.title" %}</a></li>
+                            <li><a href="#userDefinedAttributes" data-toggle="tab">{% trans "samplesets.samplesetitem.section.userDefinedAttributes.title" %}</a></li>
+                        </ul>
 
-                 <div class="tab-pane fade" id="userDefinedAttributes">
-                    {% include "rundb/sample/samplesetitem_customattributes_section.html" %}           
-                 </div>
+                        <!-- Tab panes -->
+                        <div class="tab-content">
+                            <div class="tab-pane fade in active" id="annotations">
+                                {% include "rundb/sample/samplesetitem_annotation_section.html" %}
+                            </div>
+
+                            <div class="tab-pane fade" id="extraAnnotations">
+                                {% include "rundb/sample/samplesetitem_annotation2_section.html" %}
+                            </div>
+
+                            <div class="tab-pane fade" id="userDefinedAttributes">
+                                {% include "rundb/sample/samplesetitem_customattributes_section.html" %}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                </div>
-            </div>
- 
-		</form>
+		    </form>
 		</div>
-		</div>
+    </div>
 	<div class="modal-footer">
-		<button class="btn" data-dismiss="modal">Cancel</button>
-		<a class="btn btn-primary done_add_sampleSetItem_btn">Done</a>
+		<button class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</button>
+		<a class="btn btn-primary done_add_sampleSetItem_btn">{% trans "samplesets.samplesetitem.action.submit.label" %}</a>
 	</div>
 
 
 <script type="text/javascript">
 
     $(document).ready(function(){
-    	$('#sampleName').focus();
-    	
+    	$('#sampleDisplayedName').focus();
+    	/* validate: Sample Receipt date must be later than or the same as the sample collection date */
+        $('#sampleCollectionDate').datepicker({
+            dateFormat: "yy-mm-dd",
+            onClose: function () {
+                var receiptDate = $('#sampleReceiptDate').val();
+                var collectDate = $('#sampleCollectionDate').val();
+                if ((receiptDate) && (Date.parse(collectDate) > Date.parse(receiptDate))) {
+                        $("#sampleReceiptDate").val("");
+
+                }
+                $("#sampleReceiptDate").datepicker(
+                        "change", {
+                            minDate: new Date($('#sampleCollectionDate').val())
+                        });
+                $("#sampleCollectionDate").datepicker({dateFormat: "yy-mm-dd"});
+            }
+        });
+        $("#sampleReceiptDate").datepicker({dateFormat: "yy-mm-dd", minDate: $('#sampleCollectionDate').val()});
+
         $(".integer").keydown(function(event) {
             /* restrict user input for integer fields */
            if(event.shiftKey)
@@ -115,8 +137,6 @@
         });
         
       $('.done_add_sampleSetItem_btn').click(function(e){    	  
-    	  console.log(">>>> at modal_add_samplesetitem - done_add_sampleSetItem_btn");
-    	  
           e.preventDefault();
           e.stopImmediatePropagation();         
 
@@ -131,23 +151,24 @@
           
           data = $('#save_samplesetitem').serialize();
           $.post(url, data, function(data) {
-        	  
-        	  console.log(">>>> at modal_add_samplesetitem - done_add_sampleSetItem_btn - data=", data);
-	            
-  	  
                if (data == "true"){            	   
                   $( "#modal_add_samplesetitem_popup" ).modal("hide");
                   $('body #modal_add_samplesetitem_popup').remove();
-
   	            	if (("{{intent}}" == "add_pending") || ("{{intent}}" == "edit_pending")) {
-  	            		//console.log("at modal_add_samplesetitem.html - save_samplesetitem - intent=", "{{intent}}");
-  	            		
   	            		refreshKendoGrid("#input_samplesetitem_grid");
   	            	}
   	            	else {
-                        $(".samples").each(function(){refreshKendoGrid($(this))});
-  	            		refreshKendoGrid("#samplesetitem_attribute_grid");
+  	            	    if(("{{intent}}" == "edit") && ($("#input_samplesetitem_grid").length)){
+  	            	        refreshKendoGrid("#input_samplesetitem_grid");
+                        }
+                        else {
+                            $(".samples").each(function () {
+                                refreshKendoGrid($(this))
+                            });
+                            refreshKendoGrid("#samplesetitem_attribute_grid");
+                        }
   	            	}
+
                 }else {
                   
                 	$('#modal_add_samplesetitem_popup .modal-body .workflow-step #error-messages').empty();
@@ -198,7 +219,7 @@
         	});
         }
     };
-
+    //# sourceURL=templates/rundb/sample/modal_add_samplesetitem.html
 </script>
 
 </div>

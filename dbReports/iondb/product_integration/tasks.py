@@ -1,43 +1,28 @@
 # Copyright (C) 2017 Ion Torrent Systems, Inc. All Rights Reserved
-import json
 from datetime import timedelta
-
+from utils import send_deep_laser_metrics
 from celery.task import periodic_task
-from django.core.cache import cache
-
-from iondb.product_integration.models import ThermoFisherCloudAccount
-from iondb.product_integration.utils import send_deep_laser_iot_request, get_deep_laser_instrument_status
-from iondb.rundb.models import GlobalConfig
+from metrics import get_server_metrics, get_report_metrics, get_plugin_metrics
 
 
-#@periodic_task(run_every=timedelta(minutes=1), queue="periodic")
-def update_instrument_status_deep_laser():
-    """ Sends the instrument status to deep laser periodically if it has changed. """
+@periodic_task(run_every=timedelta(hours=1), queue="periodic")
+def send_deep_laser_server_metrics():
+    """ Sends health metrics periodically """
+    send_deep_laser_metrics("SERVER_METRICS", get_server_metrics(), schema=1)
 
-    # If deeplaser is disabled bail out
-    gc = GlobalConfig.objects.get()
-    if not gc.telemetry_enabled:
-        return
 
-    new_status = get_deep_laser_instrument_status()
-    old_status = cache.get("instrument_status_deep_laser", "{}")
+@periodic_task(run_every=timedelta(hours=24), queue="periodic")
+def send_deep_laser_report_metrics():
+    """ Sends report metrics periodically """
+    send_deep_laser_metrics("NEW_REPORT", get_report_metrics(hours=36), schema=1)
 
-    if new_status != old_status:
-        send_deep_laser_iot_request({
-            "request": "updatedevicestatus",
-            "status": json.loads(new_status)
-        })
 
-    cache.set("instrument_status_deep_laser", new_status, None)
+@periodic_task(run_every=timedelta(hours=24), queue="periodic")
+def send_deep_laser_plugin_metrics():
+    """ Sends plugin metrics periodically """
+    send_deep_laser_metrics("NEW_PLUGIN", get_plugin_metrics(hours=36), schema=1)
 
 
 def handle_deep_laser_device_request(key, parameters, principal_id=None):
     """ Handle a device request like disconnectDevice. Should raise an exception on error. """
-    if key == "disconnectDevice":
-        assert principal_id is not None
-        for account in ThermoFisherCloudAccount.objects.all():
-            account.delete()
-    if key == "unlinkUser":
-        for account in ThermoFisherCloudAccount.objects.filter(deeplaser_principleid=principal_id):
-            account.delete()
-        assert principal_id is not None
+    pass

@@ -1,7 +1,8 @@
+{% load i18n %}
 <div id="PluginOutput">
     <h1 id="plugins" class="section-header">
         <span class="anchor" id="plugins-section"></span>
-        Plugins
+        {% trans "report.section.plugins.title" %}
     </h1>
 
     <script type="text/javascript">
@@ -41,12 +42,14 @@
                 <div class='pluginGroupHeadInner'>
                     <div class="pluginGroupButtons">
                         # if(result.validation_errors.length === 0) { #
-                            <a class="pluginLog btn" title="Log File for #= result.Name #" href="#= result.URL #drmaa_stdout.txt">View Log</a>
+                            # var viewLogTooltip = interpolate('{% trans "report.section.plugins.action.viewlog.tooltip" %}', {name:result.Name}, true); #
+                            <a class="pluginLog btn" title="#= viewLogTooltip #" href="#= result.URL #drmaa_stdout.txt" data-title="{% trans "report.section.plugins.log.title" %} #=result.Name#">{% trans "report.section.plugins.action.viewlog.label" %}</a>
                         # } #
                         # if (result.can_terminate) { #
-                            <a class="pluginCancel btn" data-id="#=result.id#" href="##">Stop</a>
+                            <a class="pluginCancel btn" data-id="#=result.id#" href="##">{% trans "report.section.plugins.action.terminate" %}</a>
                         # } else { #
-                            <a class="pluginRemove btn" title="Delete plugin #= result.Name #" href="/rundb/api/v1/pluginresult/#= result.id #/delete/">Delete</a>
+                            # var removePluginTooltip = interpolate('{% trans "report.section.plugins.action.removeplugin.tooltip" %}', {name:result.Name}, true); #
+                            <a class="pluginRemove btn" title="#= removePluginTooltip #" href="/rundb/api/v1/pluginresult/#= result.id #/delete/">{% trans "report.section.plugins.action.removeplugin.label" %}</a>
                         # } #
                     </div>
                     <div>
@@ -68,7 +71,7 @@
                         <br>
 
                         # if(result.validation_errors.length > 0) { #
-                            <span>Plugin did not pass validation step and returned the reasons.</span>
+                            <span>{% trans "report.section.plugins.messages.validationerrors" %}</span>
                             <ul>
                                 # result.validation_errors.forEach(function(validation_error, i){ #
                                     <li>#= validation_error #</li>
@@ -98,7 +101,7 @@
                         # } #
                     # } #
                 # } else { #
-                    <div>No Data</div>
+                    <div>{% trans "report.section.plugins.messages.nofiles" %}</div>
                 # } #
             </div>
         </div>
@@ -114,11 +117,11 @@
 			<div id="modal_plugin_log" class="modal container hide">
 			    <div class="modal-header">
 			        <button type="button" class="close" data-dismiss="modal">&times;</button>
-			        <h3>Plugin Log</h3>
+			        <h3>{% trans "report.section.plugins.log.title" %}</h3>
 			    </div>
 			    <div class="modal-body"></div>
 			    <div class="modal-footer">
-			        <a href="#" class="btn" data-dismiss="modal">Close</a>
+			        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
 			    </div>
 			    <script>
 			        $('#modal_plugin_log').on('hidden', function() {
@@ -146,10 +149,10 @@
   </div>
   <div class="modal-footer">
       <div class="input-append pull-left" style="margin-bottom: 0">
-          <input class="span3" type="text" placeholder="Search" id="plugin_search_input">
-          <button class="btn" type="button" id="plugin_search_clear">Clear</button>
+          <input class="span3" type="text" placeholder="{% trans "report.section.plugins.execute.action.search.placeholder" %}" id="plugin_search_input">
+          <button class="btn" type="button" id="plugin_search_clear">{% trans "report.section.plugins.execute.action.searchclear.label" %}</button>
       </div>
-	<button class="btn" data-dismiss="modal">Close</button>
+	<button class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</button>
   </div>
 </div>
 
@@ -158,13 +161,13 @@
 <div class="modal container hide" id="plugin-iframe-modal" data-modal-Overflow="true">
   <div class="modal-header">
 	<button class="close" data-dismiss="modal">&times;</button>
-	<h3 id="modal-header">Configure Plugin</h3>
+	<h3 id="modal-header">{% trans "report.section.plugins.configure.title" %}</h3>
   </div>
   <div class="modal-body">
       <div id="plugin_barcodes_table"></div>
       <iframe src="" class="auto-height" scrolling="no" frameborder="0" style="height: 400px;"></iframe>
   </div>
   <div class="modal-footer">
-	<button class="btn" data-dismiss="modal">Close</button>
+	<button class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</button>
   </div>
 </div>

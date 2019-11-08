@@ -2,7 +2,8 @@
 #include "WellsTab.h"
 
 static const maskCheckBox_t mcbt1[] = {
-    {"Show Masked",8,Qt::Unchecked}
+    {"Show Masked",8,Qt::Unchecked},
+    {"Normalize Reads",9,Qt::Unchecked}
 
 };
 

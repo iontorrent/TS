@@ -44,6 +44,8 @@ void PrepareHotspotsHelp()
   printf ("  -s,--allow-block-substitutions on/off     do not filter out block substitution hotspots [on]\n");
   printf ("  -u,--unmerged-bed              FILE       input a target bed file to filter out hotspots that contain a junction of 2 amplicons (optional)\n");
   printf ("  -S,--strict-check              on/off     exit with 1 if lines are filtered (on)\n");
+  printf ("  -t,--remove-trim               on/off     If unmerged-bed file lines contain TRIM_LEFT or TRIME_RIGHT, trim the target region accordingly\n");
+  printf ("  -x,--remove-padding            on/off     Whether padding in input will be removed (off)\n");
   printf ("\n");
 }
 
@@ -215,7 +217,7 @@ class junction {
 	    if (junc_.size() == 0) return true;
 	    if (id < 0) return false;
             if (id >= (int) junc_.size()) return false;
-	    return junc_[id].contained_in_ampl(pos, pos+len);
+	    return junc_[id].contained_in_ampl(pos, pos+len-1);
         }
 	void add(int id, int beg, int end) {
 	    if (id  >= (int) junc_.size()) return;
@@ -353,6 +355,8 @@ int PrepareHotspots(int argc, const char *argv[])
   bool filter_bypass              = opts.GetFirstBoolean('f', "filter-bypass", false);
   bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
   bool strict_check               = opts.GetFirstBoolean('S', "strict-check", true);
+  bool remove_trim                = opts.GetFirstBoolean('t', "remove-trim", false);
+  bool remove_padding		  = opts.GetFirstBoolean('x', "remove-padding", false);
   opts.CheckNoLeftovers();
 
   if((input_bed_filename.empty() == (input_vcf_filename.empty() and input_real_vcf_filename.empty())) or
@@ -421,7 +425,21 @@ int PrepareHotspots(int argc, const char *argv[])
       char chr[100];
       int b, e;
       sscanf(line2, "%s %d %d", chr,  &b, &e);
-      junc.add(ref_map[chr], b, e);
+      if (remove_trim) {
+        char *s = strstr(line2, "TRIM_LEFT");
+        int x;
+        if (s) {
+	  x = atoi(s+9);
+	  if (x>0) b+=x;
+        }
+        s = strstr(line2, "TRIM_RIGHT");
+        if (s) {
+          x = atoi(s+10);
+          if (x>0) e-=x;
+        }
+      }
+      if (b < e) 
+      	junc.add(ref_map[chr], b, e-1);
     }
     fclose(fp);
   }
@@ -911,23 +929,26 @@ int PrepareHotspots(int argc, const char *argv[])
       int ref_end = A->ref.size();
       int alt_end = A->alt.size();
 
-      // Option 1: trim all trailing bases;
 
-      //while(ref_end and alt_end and A->ref[ref_end-1] == A->alt[alt_end-1]) {
-      //  --ref_end;
-      //  --alt_end;
-      //}
+      if (remove_padding) {
+	// trim all trailing bases;
 
-      // Option 2: trim all leading basees;
+      	while(ref_end and alt_end and A->ref[ref_end-1] == A->alt[alt_end-1]) {
+            --ref_end;
+      	    --alt_end;	
+	}
 
-      //while (ref_start < ref_end and ref_start < alt_end and A->ref[ref_start] == A->alt[ref_start])
-      //  ++ref_start;
+        // trim all leading basees;
 
-      // Option 3: trim anchor base if vcf
+      	while (ref_start < ref_end and ref_start < alt_end and A->ref[ref_start] == A->alt[ref_start])
+            ++ref_start;
 
-      if (!input_vcf_filename.empty()) {
-        if (ref_end and alt_end and (ref_end == 1 or alt_end == 1) and A->ref[0] == A->alt[0])
-          ref_start = 1;
+      } else {
+	  // always need to trim the anchor base of vcf input
+          if (!input_vcf_filename.empty()) {
+              if (ref_end and alt_end and (ref_end == 1 or alt_end == 1) and A->ref[0] == A->alt[0])
+          	ref_start = 1;
+          }
       }
 
       A->pos += ref_start;
@@ -1062,11 +1083,14 @@ int PrepareHotspots(int argc, const char *argv[])
       for (deque<Allele>::iterator I = alleles[chr_idx].begin(); I != alleles[chr_idx].end(); ++I) {
         if (I->filtered)
           continue;
-        if (not I->ref.empty() and not I->alt.empty())
-          continue;
+        if (not I->ref.empty() and not I->alt.empty()) {
+	   if (I->ref.size() == I->alt.size() or I->ref[0] == I->alt[0]) // mnp or complex with leading match
+         	continue;
+	   // complex with no leading match also need to add a padding base
+	}
         if (I->pos == 0) {
           I->filtered = true;
-          I->line_status->filter_message_prefix = "INDELs at chromosome start not supported";
+          I->line_status->filter_message_prefix = "INDELs or complex at chromosome start not supported";
           continue;
         }
         I->pos--;

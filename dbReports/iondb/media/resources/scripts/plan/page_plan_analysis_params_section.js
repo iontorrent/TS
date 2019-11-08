@@ -30,7 +30,7 @@ $(document).ready(function () {
 	    $("#analysis_params_select .best_match").prop('selected',true).change();
 	}else{
 	    if (!$(".extra_analysis_params_info").is(":visible")){
-		$(".extra-analysis-params-inline").text("Details -");
+		$(".extra-analysis-params-inline").text(gettext('workflow.step.analysisparams.action.viewupdate.label.collapse'));//"Details -"
 		$(".extra_analysis_params_info").show();
 		hide_summary_view();
 	    }
@@ -46,11 +46,11 @@ $(document).ready(function () {
  
     $(".extra-analysis-params-inline").click(function() {
         if ($(".extra_analysis_params_info").is(":visible")) {
-            $(".extra-analysis-params-inline").text("Details +");
+            $(".extra-analysis-params-inline").text(gettext('workflow.step.analysisparams.action.viewupdate.label.expand'));
             $(".extra_analysis_params_info").hide();
             show_summary_view();
         } else {
-            $(".extra-analysis-params-inline").text("Details -");
+            $(".extra-analysis-params-inline").text(gettext('workflow.step.analysisparams.action.viewupdate.label.collapse'));
             $(".extra_analysis_params_info").show();
             hide_summary_view();
         }

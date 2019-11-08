@@ -1,0 +1,56 @@
+# Copyright (C) 2018 Thermo Fisher Scientific, Inc. All Rights Reserved.
+
+FIND_PACKAGE(PythonInterp)
+# Determine python site-packages or dist-packages directory
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
+        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+# NOTE: still used in postinst to purge files that used to be installed here
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='${CMAKE_INSTALL_PREFIX}')"
+        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
+        OUTPUT_VARIABLE PYTHON_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+
+# DESTINATION (/usr/local) - override with: -DCMAKE_INSTALL_PREFIX
+
+# override with: -DION_INSTALL_PREFIX
+set(ION_INSTALL_PREFIX "/opt/ion" CACHE PATH "Ion Install Prefix")
+
+# override with: -DION_PICARD_PREFIX
+set(ION_PICARD_PREFIX "/opt/picard" CACHE PATH "Ion Picard Prefix")
+
+# override with: -DION_HTML_PREFIX
+set(ION_HTML_PREFIX "/var/www" CACHE PATH "Ion HTML Prefix")
+
+# override with: -DION_GPU_PREFIX
+set(ION_GPU_PREFIX "/opt/ion/gpu" CACHE PATH "Ion GPU Prefix")
+
+# override with: -DION_TSCONFIG_PREFIX
+set(ION_TSCONFIG_PREFIX "/usr" CACHE PATH "Ion TSconfig Prefix")
+
+# override with: -DION_PIPELINE_PREFIX
+set(ION_PIPELINE_PREFIX "/usr" CACHE PATH "Ion Pipeline Prefix")
+
+# override with: -DION_PUBLISHER_PREFIX
+set(ION_PUBLISHER_PREFIX "/results" CACHE PATH "Ion Publisher Prefix")
+
+# override with: -DION_TORRENTR_PREFIX
+set(ION_TORRENTR_PREFIX "/usr/local/lib/R/site-library" CACHE PATH "Ion TorrentR Prefix")
+
+# override with: -DION_TORRENTPY_PREFIX
+set(ION_TORRENTPY_PREFIX "/usr" CACHE PATH "Ion TorrentPy Prefix")
+
+# override with: -DION_TSVM_PREFIX
+set(ION_TSVM_PREFIX "/results/tsvm" CACHE PATH "Ion TSVM Prefix")
+
+set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
+set(CPACK_SET_DESTDIR "ON")

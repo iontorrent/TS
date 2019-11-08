@@ -51,29 +51,29 @@
             {% if summary.services.show_cluster %}
                 {% if summary.services.number_nodes_down == 0 %}
                     <li><i class="fa fa-check-circle text-success"></i>
-                        <a href="{{ summary.services.url }}">Cluster normal</a></li>
+                        <a href="{{summary.services.url}}#cluster_nav">Cluster normal</a></li>
                 {% else %}
                     <li><i class="fa fa-exclamation-circle text-error"></i>
-                        <a href="{{ summary.services.url }}">{{ summary.services.number_nodes_down }} cluster
+                        <a href="{{summary.services.url}}#cluster_nav">{{ summary.services.number_nodes_down }} cluster
                             node{{ summary.services.number_nodes_down|pluralize }} down</a></li>
                 {% endif %}
             {% endif %}
             {% if summary.services.show_nas %}
                 {% if summary.services.nas_status == "good" %}
-                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{ summary.services.url }}">Torrent NAS normal</a></li>
+                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{summary.services.url}}#torrentnas_nav">Torrent NAS normal</a></li>
                 {% elif summary.services.nas_status == "warning" %}
-                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{ summary.services.url }}">Torrent NAS warning</a></li>
+                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{summary.services.url}}#torrentnas_nav">Torrent NAS warning</a></li>
                 {% elif summary.services.nas_status == "error" %}
-                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{ summary.services.url }}">Torrent NAS error</a></li>
+                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{summary.services.url}}#torrentnas_nav">Torrent NAS error</a></li>
                 {% endif  %}
             {% endif %}
             {% if summary.services.show_raid %}
                 {% if summary.services.raid_status == "good" %}
-                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{ summary.services.url }}">RAID storage normal</a></li>
+                    <li><i class="fa fa-check-circle text-success"></i> <a href="{{summary.services.url}}#raid_nav">RAID storage normal</a></li>
                 {% elif summary.services.raid_status == "warning" %}
-                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{ summary.services.url }}">RAID storage warning</a></li>
+                    <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{summary.services.url}}#raid_nav">RAID storage warning</a></li>
                 {% elif summary.services.raid_status == "error" %}
-                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{ summary.services.url }}">RAID storage error</a></li>
+                    <li><i class="fa fa-exclamation-circle text-error"></i> <a href="{{summary.services.url}}#raid_nav">RAID storage error</a></li>
                 {% endif  %}
             {% endif %}
         </ul>
@@ -89,17 +89,20 @@
                         <i class="fa fa-exclamation-triangle text-warning"></i>
                     {% else %}<i class="fa fa-exclamation-circle text-error"></i>
                     {% endif %}
-                    <a href="{{ summary.data_management.url }}">Disk usage {{ disk_usage|floatformat:1 }}%
+                    <a href="{{summary.data_management.url}}#disk_usage_nav">Disk usage {{ disk_usage|floatformat:1 }}%
                         {% if summary.data_management.show_path %}- {{ path }}{% endif %}
                     </a>
                 </li>
             {% endfor %}
             {% for job, num  in summary.data_management.dm_jobs %}
                 {% if num > 0 %}
-                    <li><i class="fa fa-cogs"></i> <a href="{{ summary.data_management.url }}">{{ num }}
+                    <li><i class="fa fa-cogs"></i><a href="{{summary.data_management.url}}#dmjobs_nav">{{ num }}
                         data {{ job }}</a></li>
                 {% endif %}
             {% endfor %}
+            {% if summary.data_management.dm_errors > 0 %}
+                <li><i class="fa fa-exclamation-triangle text-warning"></i> <a href="{{summary.data_management.url}}#dmcategory_nav">{{ summary.data_management.dm_errors }} errors</a></li>
+            {% endif %}
         </ul>
     </div>
 </div>

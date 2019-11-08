@@ -1,0 +1,210 @@
+{
+  "/api/v1/sampleset/create/":
+  {
+    "meta": {
+      "previous": null, 
+      "total_count": 2, 
+      "offset": 0, 
+      "limit": 20, 
+      "next": null
+    },
+    "objects": [
+      {
+        "description": "",
+        "displayedName": "Example Sample Set",
+        "dnabarcodeKit": "IonXpress",
+        "libraryPrepKitName": "",
+        "libraryPrepType": "",
+        "pcrPlateSerialNum": "",
+        "sampleGroupTypeName": "Self",
+        "samplesList": [
+          {
+              "biopsyDays": "",
+              "cancerType": "",
+              "cellNum": "",
+              "cellularityPct": "",
+              "controlType": "",
+              "coupleId": "",
+              "dnabarcode": "IonXpress_001",
+              "embryoId": "",
+              "gender": "",
+              "nucleotideType": "DNA",
+              "pcrPlateRow": "",
+              "relationshipGroup": 1,
+              "relationshipRole": "",
+              "sampleDescription": "Sample 1 description string",
+              "sampleName": "Sample 1",
+              "sampleExternalId": "Sample 1 id"
+          },
+          {
+              "biopsyDays": "",
+              "cancerType": "",
+              "cellNum": "",
+              "cellularityPct": "",
+              "controlType": "",
+              "coupleId": "",
+              "dnabarcode": "IonXpress_002",
+              "embryoId": "",
+              "gender": "",
+              "nucleotideType": "DNA",
+              "pcrPlateRow": "",
+              "relationshipGroup": 1,
+              "relationshipRole": "",
+              "sampleDescription": "Sample 2 description string",
+              "sampleName": "Sample 2",
+              "sampleExternalId": "Sample 2 id"
+          }
+        ]
+      },
+      {
+        "description": "",
+        "displayedName": "Example AmpliSeq Sample Set",
+        "dnabarcodeKit": "IonXpress",
+        "libraryPrepKitName": "Ion AmpliSeq Kit for Chef DL8",
+        "libraryPrepType": "AmpliSeq on Chef",
+        "pcrPlateSerialNum": "A040000467",
+        "sampleGroupTypeName": "Self",
+        "samplesList": [
+          {
+              "biopsyDays": "",
+              "cancerType": "",
+              "cellNum": "",
+              "cellularityPct": "",
+              "controlType": "",
+              "coupleId": "",
+              "dnabarcode": "IonXpress_001",
+              "embryoId": "",
+              "gender": "",
+              "nucleotideType": "DNA",
+              "pcrPlateRow": "A",
+              "relationshipGroup": 1,
+              "relationshipRole": "",
+              "sampleDescription": "Sample 1 description",
+              "sampleName": "Sample 1",
+              "sampleExternalId": "Sample 1 id"
+          },
+          {
+              "biopsyDays": "",
+              "cancerType": "",
+              "cellNum": "",
+              "cellularityPct": "",
+              "controlType": "",
+              "coupleId": "",
+              "dnabarcode": "IonXpress_002",
+              "embryoId": "",
+              "gender": "",
+              "nucleotideType": "DNA",
+              "pcrPlateRow": "B",
+              "relationshipGroup": 1,
+              "relationshipRole": "",
+              "sampleDescription": "Sample 2 description",
+              "sampleName": "Sample 2",
+              "sampleExternalId": "Sample 2 id"
+          }
+        ]
+      }
+    ]
+  },
+  "/api/v1/plannedexperiment/create/":
+  {
+    "meta": {
+      "previous": null,
+      "total_count": 2,
+      "offset": 0,
+      "limit": 20,
+      "next": null
+    },
+    "objects": [
+      {
+        "templateName": "System Generic Seq Template",
+        "planName": "Example Plan Non-barcoded",
+        "chipType": "318",
+        "sample": "Sample 1"
+      },
+      {
+        "templateName": "Oncomine Comprehensive v3 DNA",
+        "planName": "Example Plan Barcoded",
+        "samplesList":  [
+          {
+            "sampleName": "Sample 1",
+            "dnabarcode": "IonXpress_001",
+            "controlType": "",
+            "description": "Sample 1 description",
+            "externalId": "Sample 1 id",
+            "nucleotideType": "DNA",
+            "reference": "hg19",
+            "targetRegionBedFile": "/hg19/unmerged/detail/target.bed",
+            "hotSpotRegionBedFile": "/hg19/unmerged/detail/hotspot.bed"
+          },
+          {
+            "sampleName": "Sample 2",
+            "dnabarcode": "IonXpress_002",
+            "controlType": "",
+            "description": "Sample 2 description",
+            "externalId": "Sample 2 id",
+            "nucleotideType": "DNA",
+            "reference": "hg19",
+            "targetRegionBedFile": "/hg19/unmerged/detail/target.bed",
+            "hotSpotRegionBedFile": ""
+          }
+        ]
+      },
+      {
+        "templateName": "Oncomine Comprehensive v3 DNA",
+        "planName": "Example Plan from SampleSet",
+        "library": "hg19",
+        "bedfile": "/hg19/unmerged/detail/target.bed",
+        "regionfile": "",
+        "templatingKitName": "Ion Chef S540 V1",
+        "sampleSetName": "sample set 1"
+      },
+      {
+        "templateName": "Oncomine Comprehensive v3 DNA",
+        "planName": "Example Plan Barcoded with Changed Parameters",
+        "barcodeId": "IonXpress",
+        "base_recalibration_mode": "standard_recal",
+        "bedfile": "/hg19/unmerged/detail/target.bed",
+        "chipBarcode": "",
+        "chipType": "540",
+        "flows": 400,
+        "library": "hg19",
+        "libraryKey": "TCAG",
+        "librarykitname": "Ion AmpliSeq Library Kit Plus",
+        "notes": "",
+        "realign": "False",
+        "regionfile": "/hg19/unmerged/detail/hotspot.bed",
+        "runType": "AMPS",
+        "sampleGroupingName": "Self",
+        "samplePrepKitName": "",
+        "sampleTubeLabel": "",
+        "sequencekitname": "Ion S5 Sequencing Kit",
+        "templatingKitName": "Ion Chef S540 V1",
+        "tfKey": "ATCG",
+        "samplesList": [
+          {
+            "sampleName": "Sample 1",
+            "dnabarcode": "IonXpress_001",
+            "controlType": "",
+            "description": "Sample 1 description",
+            "externalId": "Sample 1 id",
+            "nucleotideType": "DNA",
+            "reference": "hg19",
+            "targetRegionBedFile": "/hg19/unmerged/detail/target.bed",
+            "hotSpotRegionBedFile": "/hg19/unmerged/detail/hotspot.bed"
+          },
+          {
+            "sampleName": "Sample 2",
+            "dnabarcode": "IonXpress_002",
+            "controlType": "",
+            "description": "Sample 2 description",
+            "externalId": "Sample 2 id",
+            "nucleotideType": "DNA",
+            "reference": "hg19",
+            "targetRegionBedFile": "/hg19/unmerged/detail/target.bed",
+            "hotSpotRegionBedFile": ""
+          }
+        ]
+      }
+    ]
+  }
+}

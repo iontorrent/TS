@@ -51,13 +51,13 @@ echo "Network Configuration:"
 echo
 interfaces=$(ls -1 /sys/class/net|grep -v 'lo')
 for i in ${interfaces[@]}; do
-    /sbin/ifconfig $i|grep 'inet addr'|sed -e 's/^[ ]*//'
+    /sbin/ifconfig $i|grep 'inet'|sed -e 's/^[ ]*//'
 done
 echo
 echo "=================================================================="
 echo "MAC Addresses:"
 for i in ${interfaces[@]}; do
-    echo "$i: " `/sbin/ifconfig $i|grep HWaddr|awk '{print $5}'`
+    echo "$i: " `/sbin/ip addr show $i|grep ether|awk '{print $2}'`
 done
 echo
 echo "=================================================================="

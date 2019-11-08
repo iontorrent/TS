@@ -3442,7 +3442,6 @@ void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, con
       std::cout << "DataCollect gain: reading per pixel gain from " << destFile << std::endl; 
       ImageTransformer::ReadDataCollectGainCorrection(destFile, img.GetRows(), img.GetCols());
     }
-
     GainCorrectImage(opts.doGainCorrect, img);
   }
   
@@ -3479,6 +3478,17 @@ void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, con
     }
   }
   //  CountReference("After BF t0", mFilteredWells);
+  if (opts.useDataCollectGainCorrect and not opts.exclusionMaskSet) {
+	  CountReference("Before filtering wells based on gains.", mFilteredWells);
+        int struct_size = 2;
+        ImageTransformer::GenerateExclusionMaskFromGain(&mask, img.GetRows(), img.GetCols(), struct_size);
+        for (size_t i = 0; i < numWells; i++) {
+              if ((mask[i] & mask_bad) != 0) {
+                mFilteredWells[i] = DifferentialSeparator::PinnedExcluded;
+              }
+            }
+        CountReference("After Filtering wells based on gains.", mFilteredWells);
+  }
   mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf t0.");
   std::vector<float> acq_ssq;
   CalcAcqT0(opts, t02,  acq_ssq, incorporationFlowBuff);

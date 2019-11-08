@@ -1,19 +1,19 @@
-
+{% load i18n %}
 <input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
 
 <div class="row-fluid">
     <div class="span12" style="margin-bottom: 15px;">
-        <b>Analysis Parameters:</b>
-        <label for="default_args" class="checkbox inline" rel="tooltip" title='Use ION default args'>
+        <b style="padding-right: 10px">{% trans "workflow.step.analysisparams.title" %}:</b>
+        <label style="padding-top: 0" for="default_args" class="radio inline" rel="tooltip" title='{% trans "workflow.step.analysisparams.fields.analysisParamsCustom.title.choice.false" %}'>
             <input type="radio" name="analysisParamsCustom" value="False"
-                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "False" %}checked{% endif %}>Default (Recommended)
+                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "False" %}checked{% endif %}>{% trans "workflow.step.analysisparams.fields.analysisParamsCustom.label.choice.false" %}
         </label>
-        <label for="custom_args" class="checkbox inline" rel="tooltip" title='Customized parameters'>
+        <label style="padding-top: 0" for="custom_args" class="radio inline" rel="tooltip" title='{% trans "workflow.step.analysisparams.fields.analysisParamsCustom.title.choice.true" %}'>
             <input type="radio" name="analysisParamsCustom" value="True"
-                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}checked{% endif %}>Custom
+                {% if helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}checked{% endif %}>{% trans "workflow.step.analysisparams.fields.analysisParamsCustom.label.choice.true" %}
         </label>
-        <a title="View/Change analysis parameters" class="btn btn-mini extra-analysis-params-inline" style="margin:10px 0 0 20px;">Details +</a>
+        <a title="{% trans "workflow.step.analysisparams.action.viewupdate.tooltip" %}" class="btn btn-mini extra-analysis-params-inline" style="margin:0 0 0 20px;">{% trans "workflow.step.analysisparams.action.viewupdate.label.expand" %}</a>
     </div>
 </div>
 
@@ -22,9 +22,9 @@
         <div class="span10 offset2">
             <select id="analysis_params_select" name="analysis_params" class="input-medium analysis_params" style="width: 440px;">                      
                 {% if helper.getStepDict.Analysis_params.prepopulatedFields.chipType %}
-                    <option value="">&lt;Current selection&gt;</option>
+                    <option value="">{% trans "workflow.step.analysisparams.fields.analysis_params.choice.currentselections" %}</option>
                 {% else %}
-                    <option value="">Please select Chip Type to view available Analysis Parameters</option>
+                    <option value="">{% trans "workflow.step.analysisparams.fields.analysis_params.choice.selectchiptype" %}</option>
                 {% endif %}
                  {% if  helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisParamsCustom == "True" %}
                     <option SELECTED value="{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}">{{helper.getStepDict.Analysis_params.getCurrentSavedObjectDict.analysisParamsEntrySelected.description}}</option>
@@ -49,42 +49,42 @@
             <table id="basic_analysis_params_table" class="table table-striped table-condensed">
                 <tbody>
                 <tr>
-                    <td>BeadFind:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.beadFindSelected.label" %}:</td>
                 </tr>                
                 <tr>
                     <td><textarea id="beadFindSelected" class="span12" style="height:80px;" value="" name="beadFindSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.beadFindSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                 <tr>
-                    <td>Analysis:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.analysisArgsSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td ><textarea id="analysisArgsSelected" class="span12" style="height:80px;"  value="" name="analysisArgsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.analysisArgsSelected | default_if_none:""}}</textarea></td>
                 <tr>
-                    <td>Pre-BaseCaller for calibration:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.preBaseCallerSelected.label" %}:</td>
                 </tr>                
                  <tr>
                     <td ><textarea id="preBaseCallerSelected" class="span12" style="height:80px;"  value="" name="preBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.preBaseCallerSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                  <tr>
-                    <td>Calibration:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.calibrateSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td ><textarea id="calibrateSelected" class="span12" style="height:80px;"  value="" name="calibrateSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.calibrateSelected | default_if_none:""}}</textarea></td>     
                 </tr>               
                 <tr>
-                    <td>BaseCaller:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.baseCallerSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td ><textarea id="baseCallerSelected" class="span12" style="height:80px;"  value="" name="baseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.baseCallerSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                 <tr>
-                    <td>Alignment:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.alignmentSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td ><textarea id="alignmentSelected" class="span12" style="height:80px;"  value="" name="alignmentSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.alignmentSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                 <tr>
-                    <td>IonStats:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.ionStatsSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td ><textarea id="ionStatsSelected" class="span12" style="height:80px;"  value="" name="ionStatsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.ionStatsSelected | default_if_none:""}}</textarea></td>     
@@ -96,43 +96,43 @@
             <table id="thumbnail_analysis_params_table" class="table table-striped table-condensed">
                 <tbody>
                 <tr>
-                    <td>Thumbnail BeadFind:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailBeadFindSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailBeadFindSelected" class="span12" style="height:80px;"  value="" name="thumbnailBeadFindSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailBeadFindSelected | default_if_none:""}}</textarea></td>       
                 </tr>
                 <tr>
-                    <td>Thumbnail Analysis:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailAnalysisArgsSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailAnalysisArgsSelected" class="span12" style="height:80px;"  value="" name="thumbnailAnalysisArgsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailAnalysisArgsSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                  <tr>
-                    <td>Thumbnail pre-BaseCaller for calibration:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailPreBaseCallerSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailPreBaseCallerSelected" class="span12" style="height:80px;"  value="" name="thumbnailPreBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailPreBaseCallerSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                  <tr>
-                    <td>Thumbnail Calibration:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailCalibrateSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailCalibrateSelected"  class="span12" style="height:80px;"  value="" name="thumbnailCalibrateSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailCalibrateSelected | default_if_none:""}}</textarea></td>     
                 </tr>                      
                 <tr>
-                    <td>Thumbnail BaseCaller:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailBaseCallerSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailBaseCallerSelected" class="span12" style="height:80px;"  value="" name="thumbnailBaseCallerSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailBaseCallerSelected | default_if_none:""}}</textarea></td>     
                 </tr>
                 <tr>
-                    <td>Thumbnail Alignment:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailAlignmentSelected.label" %}:</td>
                </tr>
                <tr>
                     <td><textarea id="thumbnailAlignmentSelected" class="span12" style="height:80px;"  value="" name="thumbnailAlignmentSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailAlignmentSelected | default_if_none:""}}</textarea></td>
                 </tr>
                 <tr>
-                    <td>Thumbnail IonStats:</td>
+                    <td>{% trans "workflow.step.analysisparams.fields.thumbnailIonStatsSelected.label" %}:</td>
                 </tr>
                 <tr>
                     <td><textarea id="thumbnailIonStatsSelected" class="span12" style="height:80px;"  value="" name="thumbnailIonStatsSelected">{{helper.getStepDict.Analysis_params.getCurrentSavedFieldDict.thumbnailIonStatsSelected | default_if_none:""}}</textarea></td>     

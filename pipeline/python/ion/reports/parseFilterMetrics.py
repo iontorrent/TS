@@ -17,7 +17,7 @@ def parseLog(logText):
     currentKey = None
     # Get Headings for Filter Params
     for line in logText:
-        if '=' in line:
+        if "=" in line:
             name = line.strip().split("=")
             key = name[0].strip()
             value = name[1].strip()
@@ -26,16 +26,18 @@ def parseLog(logText):
 
 
 def generateParams(filePath):
-    f = open(filePath, 'r')
+    f = open(filePath, "r")
     filterLines = f.readlines()
     f.close()
     data = parseLog(filterLines)
     return data
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     import sys
-    f = open(sys.argv[1], 'r')
+
+    f = open(sys.argv[1], "r")
     filterLines = f.readlines()
     f.close()
     data = parseLog(filterLines)
-    print data
+    print(data)

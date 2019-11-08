@@ -23,7 +23,7 @@ myhost=$1
 # Playbook to remove Ion and gridengine pkgs and unmount shared drives
 yellow;echo -e "\nN.B. If the node is unreachable, the deconfigure_compute playbook will show errors.\n";clrclr
 cd "$ANSIBLE_HOME"
-if ! ansible-playbook -i "$ANSIBLE_HOME"/"$MY_HOSTS" deconfigure_compute.yml --sudo --limit="$myhost"; then
+if ! ansible-playbook -i "$ANSIBLE_HOME"/"$MY_HOSTS" deconfigure_compute.yml --become --limit="$myhost"; then
     red;echo -e "\nNode is unreachable.  Cleanup will have to be manual.\n";clrclr
     echo -e "\t* Uninstall Torrent Suite software"
     echo -e "\t* Uninstall gridengine software"

@@ -2,7 +2,7 @@
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 # Plugin driver script that uses user input to generate html report with the help of django template
 
-__version__ = '1.0'
+__version__ = "1.0"
 
 import os, sys, logging
 from optparse import OptionParser
@@ -15,14 +15,14 @@ from distutils.sysconfig import get_python_lib
 
 
 def parseJsonFile(jsonFile):
-    with open(jsonFile, 'r') as f:
+    with open(jsonFile, "r") as f:
         content = f.read()
         result = json.loads(content)
     return result
 
 
 def generateHTML(template, context):
-        content = render_to_string(template, context)
-        output = os.path.join(opt.results_dir, template)
-        with open(output, "w") as f:
-            f.write(content)
+    content = render_to_string(template, context)
+    output = os.path.join(opt.results_dir, template)
+    with open(output, "w") as f:
+        f.write(content)

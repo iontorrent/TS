@@ -1,5 +1,7 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
+{% load i18n %}
+{% load pagetools %}
 {% block extra_head %}
     {{ block.super }}
     {% load static from staticfiles %}
@@ -31,7 +33,7 @@
 {% if helper.getStepDict.Save_template.getCurrentSavedFieldDict.templateName %}
     <div class="row-fluid">
         <div class="span7">
-            <label for="templateName" class="form-label">Template Name</label>
+            <label for="templateName" class="form-label">{% trans "workflow.step.saveplan.fields.templateName.label" %}</label>
             <div id="templateName">{{helper.getStepDict.Save_template.getCurrentSavedFieldDict.templateName|default_if_none:""}}</div>
             <br>
         </div>
@@ -56,43 +58,43 @@
 
         <input type="hidden" id="default_ref_section" name="default_ref_section" value={%if not helper.isPlanBySample%}"rundb/plan/page_plan/page_plan_reference_section.html"{%else%}""{%endif%}>
         
-        <label for="planName" class="form-label">Run Plan Name (required)</label>
+        <label for="planName" class="form-label">{% trans "workflow.step.saveplan.fields.planName.label" %}{% trans "global.field.label.required" %}</label>
         <input style="width: 420px;" id="planName" name="planName" type="text" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
         <div id="error" style="color:red; margin-top: 10px;"></div>
         {% for key, validationErrors in step.validationErrors.items %}
             <div class="row-fluid">
                 {% if key == "bad_sample_name" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, sample name should be 127 characters maximum, should only start with lettes and numbers and contain only numbers, letters, spaces, and the following: . - _ </h4>
-                    <h4 style="color: red;">Please Fix: {% for sample_name in step.validationErrors.bad_sample_name %}{{sample_name}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.bad_sample_name" %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for sample_name in step.validationErrors.bad_sample_name %}{{sample_name}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% elif key == "bad_sample_external_id" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, sample external id should be 127 characters maximum, should only start with lettes and numbers and contain only numbers, letters, spaces, and the following: . - _ </h4>
-                    <h4 style="color: red;">Please Fix: {% for invalid_item in step.validationErrors.bad_sample_external_id %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.bad_sample_external_id" %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for invalid_item in step.validationErrors.bad_sample_external_id %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% elif key == "bad_sample_description" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, sample description should be 1024 characters maximum and contain only numbers, letters, spaces, and the following: . - _ </h4>
-                    <h4 style="color: red;">Please Fix: {% for invalid_item in step.validationErrors.bad_sample_description %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.bad_sample_description" %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for invalid_item in step.validationErrors.bad_sample_description %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% elif key == "bad_tube_label" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, tube label length should be 512 characters maximum. </h4>
-                    <h4 style="color: red;">Please Fix: {% for tube_label in step.validationErrors.bad_tube_label %}{{tube_label}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.bad_tube_label" %} </h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for tube_label in step.validationErrors.bad_tube_label %}{{tube_label}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% elif key == "bad_chip_barcode" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, chip barcode can only contain letters and numbers. </h4>
-                    <h4 style="color: red;">Please Fix: {% for chip_barcode in step.validationErrors.bad_chip_barcode %}{{chip_barcode}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.bad_chip_barcode" %} </h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for chip_barcode in step.validationErrors.bad_chip_barcode %}{{chip_barcode}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% elif key == "badIrSetId" %}
                 <div class="span12">
-                    <h4 style="color: red;">Error, IR set id must be numeric.</h4>
-                    <h4 style="color: red;">Please Fix: {% for ir_set_id in step.validationErrors.badIrSetId %}{{ir_set_id}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.badIrSetId" %}</h4>
+                    <h4 style="color: red;">{% trans "workflow.step.saveplan.validation.error.please_fix" %} {% for ir_set_id in step.validationErrors.badIrSetId %}{{ir_set_id}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
                 </div>
                 {% else %}
-                <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+                <h4 style="color: red;">{{validationErrors|safe|linebreaks }}</h4>
                 {% endif %}
             </div>
         {% endfor %}
@@ -114,19 +116,19 @@
 <div id="noteerror" style="color:red;"></div>
 <div class="row-fluid" style="margin-top: 20px">
     <div class="span8 summary-section">
-        <label for="note" class="form-label">Add a note</label>
-        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <label for="note" class="form-label">{% trans "workflow.step.saveplan.fields.note.label" %}</label>
+        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="{% trans "workflow.step.saveplan.fields.note.placeholder" %}">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
         <br>
-        <label for="LIMS_meta" class="form-label">Add LIMS Meta Data</label>
-        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
+        <label for="LIMS_meta" class="form-label">{% trans "workflow.step.saveplan.fields.LIMS_meta.label" %}</label>
+        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="{% trans "workflow.step.saveplan.fields.LIMS_meta.placeholder" %}">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
         <br>
     </div>
-    <div class="span4 summary-section" style="margin-top: 25px">
-        <label for="qc" class="form-label">Monitoring Thresholds</label>
+    <div class="span4 summary-section" style="">
+        <label for="qc" class="form-label">{% trans "workflow.step.saveplan.fields.qcNames.label" %}</label>
         {% for key, value in step.getCurrentSavedFieldDict.items %}
             {% if key in step.qcNames %}
                 <div class="span12">
-                    <h4>{{key}}:</h4>
+                    <h4>{{step.ModelsQcTypeToLabelsQcTypeAsDict|bracket:key}}:</h4>
     
                     <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
                     <input data-input-name="{{key}}" name="{{key}}" style="width:35px;" value="{{value}}">
@@ -140,20 +142,20 @@
 
 {% block prevnext-buttons %}
     <div id="chipTypeWarning" class="alert alert-error hide"></div>
-    <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">&larr; Previous</a>
+    <a class="submitStepForm btn btn-100" href="{{step.prev_step_url}}">{% trans "workflow.action.previousstep" %}</a>
     {% if helper.isEditRun %}
         <a class="submitStepForm btn btn-primary btn-100 pull-right" style="margin-left:10px;" onclick="USERINPUT.validate=true;"
-        href='{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}'>Update Run & Reanalyze</a>
+        href='{% url "page_plan_save_and_reanalyze" exp_id=helper.experiment_id %}'>{% trans "plan.workflow.name.edit.action.submitAndReanalyze" %}</a>
     {% endif %}
     <a class="submitStepForm btn btn-primary btn-100 pull-right" href="{{step.next_step_url}}" onclick="USERINPUT.validate=true;">
         {% if helper.isCopy %}
-            Copy Plan
+            {% trans "plan.workflow.name.copy.action.submit" %}
         {% elif helper.isEdit %}
-            Update Plan
+            {% trans "plan.workflow.name.edit.action.submit" %}
         {% elif helper.isEditRun %}
-            Update Run
+            {% trans "plan.workflow.name.editrun.action.submit" %}
         {% else %}
-            Plan Run
+            {% trans "plan.workflow.name.createfrom.action.submit" %}
         {% endif %}
     </a>
 {% endblock prevnext-buttons %}

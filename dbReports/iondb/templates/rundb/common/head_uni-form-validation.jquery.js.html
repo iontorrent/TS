@@ -1,0 +1,43 @@
+{% load static from staticfiles %}
+{% load i18n %}
+<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js" %}"></script>
+<script type="text/javascript">
+jQuery.fn.uniform.language = jQuery.extend(jQuery.fn.uniform.language, {
+    required: '{% trans "uni-form-validation.language.required" %}',  //'%s is required',
+    required: '',
+    req_radio: '{% trans "uni-form-validation.language.req_radio" %}',  //'Please make a selection',
+    req_checkbox: '{% trans "uni-form-validation.language.req_checkbox" %}',  //'You must select this checkbox to continue',
+    minlength: '{% trans "uni-form-validation.language.minlength" %}',  //'%s should be at least %d characters long',
+    min: '{% trans "uni-form-validation.language.min" %}',  //'%s should be greater than or equal to %d',
+    maxlength: '{% trans "uni-form-validation.language.maxlength" %}',  //'%s should not be longer than %d characters',
+    max: '{% trans "uni-form-validation.language.max" %}',  //'%s should be less than or equal to %d',
+    same_as: '{% trans "uni-form-validation.language.same_as" %}',  //'%s is expected to be same as %s',
+    email: '{% trans "uni-form-validation.language.email" %}',  //'%s is not a valid email address',
+    url: '{% trans "uni-form-validation.language.url" %}',  //'%s is not a valid URL',
+    number: '{% trans "uni-form-validation.language.number" %}',  //'%s needs to be a number',
+    integer: '{% trans "uni-form-validation.language.integer" %}',  //'%s needs to be a whole number',
+    alpha: '{% trans "uni-form-validation.language.alpha" %}',  //'%s should contain only letters (without special characters or numbers)',
+    alphanum: '{% trans "uni-form-validation.language.alphanum" %}',  //'%s should contain only numbers and letters (without special characters)',
+    phrase: '{% trans "uni-form-validation.language.phrase" %}',  //'%s should contain only alphabetic characters, numbers, spaces, and the following: . - _ ',
+    phone: '{% trans "uni-form-validation.language.phone" %}',  //'%s should be a phone number',
+    date: '{% trans "uni-form-validation.language.date" %}',  //'%s should be a date (mm/dd/yyyy)',
+    callback: '{% trans "uni-form-validation.language.callback" %}',  //'Failed to validate %s field. Validator function (%s) is not defined!',
+    on_leave: '{% trans "uni-form-validation.language.on_leave" %}',  //'Are you sure you want to leave this page without saving this form?',
+    submit_msg: '{% trans "uni-form-validation.language.submit_msg" %}',  //'Sorry, this form needs corrections.',
+    submit_help: '{% trans "uni-form-validation.language.submit_help" %}',  //'Please see the items marked below.',
+    submit_success: '{% trans "uni-form-validation.language.submit_success" %}',  //'Thank you, this form has been sent.',
+    nuc: '{% trans "uni-form-validation.language.nuc" %}',  //'%s needs to be one of the following:  A, T, C, G',
+    annospace: '{% trans "uni-form-validation.language.annospace" %}',  //'%s should contain only numbers, letters, and the following: . - _ ',
+    anundernospace: '{% trans "uni-form-validation.language.anundernospace" %}',  //'%s should contain only numbers, letters or underscore.',
+    anunderplusdotdashnospace: '{% trans "uni-form-validation.language.anunderplusdotdashnospace" %}',  //'%s should contain only numbers, letters, plus, dot, dash or underscore(+.-_).',
+    uint: '{% trans "uni-form-validation.language.uint" %}',  //'%s needs to be a whole number greater than 0',
+    uniq: '{% trans "uni-form-validation.language.uniq" %}',  //'%s is already in use, please enter a different value. ',
+    url_http: '{% trans "uni-form-validation.language.url_http" %}',  //'%s is not a valid HTTP-based URL. Must begin with http:// or https://.',
+    filenameregex: '{% trans "uni-form-validation.language.filenameregex" %}',  //'%s is not a valid pattern.  Allowable characters include (comma-separated): A-Z,a-z,0-9,_,-,/,?.,!,*,.'
+});
+if (django && django.catalog) {
+    django.catalog["uni-form-validation.language.required"] = '{% trans "uni-form-validation.language.required" %}';  // ensures the JS messages catalog has the required msgid for JS based gettext resolution
+}
+//# sourceURL=templates/rundb/common/uni-form-validation.jquery.js.html
+</script>
+

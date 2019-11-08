@@ -244,7 +244,7 @@ public:
   };
   deque<VarInfo> calledVariants;
 
-  bool processRead(BamAlignment& alignment, vector<MergedTarget>::iterator& indel_target);
+  bool processRead(BamAlignment& alignment, vector<MergedTarget>::iterator& indel_target, bool useDuplicateReads);
   int getSoftEnd(BamAlignment& alignment);
   int getSoftStart(BamAlignment& alignment);
   void SetReferencePoint(BamAlignment& read);

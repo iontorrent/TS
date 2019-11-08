@@ -25,18 +25,19 @@ from django.core.urlresolvers import reverse
 from django import http, shortcuts
 from django.conf import settings
 from django.core import serializers
-from django.core.serializers.json import DjangoJSONEncoder
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 
 # local
-from iondb.rundb import models
-from iondb.anaserve import  client as anaclient
+from iondb.rundb.json_lazy import LazyDjangoJSONEncoder
 
-_http_re = re.compile(r'^HTTP/1\.\d\s+(\d{3}) [a-zA-Z0-9_ ]+$')
+from iondb.rundb import models
+from iondb.anaserve import client as anaclient
+
+_http_re = re.compile(r"^HTTP/1\.\d\s+(\d{3}) [a-zA-Z0-9_ ]+$")
 _http404 = http.HttpResponseNotFound
 
-_charset = 'utf-8'
+_charset = "utf-8"
 
 _API_METHODS = {}
 
@@ -52,14 +53,15 @@ def jsonapi(fn):
     ... def jsapi_strip(a): return render_to_json(a.strip())
     # jsapi_strip can now be called through the JSON API
     """
-    argnames = set(fn.func_code.co_varnames[:fn.func_code.co_argcount])
+    argnames = set(fn.func_code.co_varnames[: fn.func_code.co_argcount])
 
     def ret(js):
         for k in js:
             if k not in argnames:
                 raise ValueError("Invalid argument: %s" % k)
-        argd = dict((str(k), v) for k, v in js.iteritems())
+        argd = dict((str(k), v) for k, v in js.items())
         return fn(**argd)
+
     ret.func_name = fn.func_name
     _API_METHODS[ret.func_name] = ret
     return ret
@@ -67,14 +69,14 @@ def jsonapi(fn):
 
 def enc(s):
     """UTF-8 encode a string."""
-    return s.encode('utf-8')
+    return s.encode("utf-8")
 
 
 def render_to_json(data, is_json=False):
     """Create a JSON response from a data dictionary and return a
     Django response object."""
     if not is_json:
-        js = json.dumps(data, cls=DjangoJSONEncoder)
+        js = json.dumps(data, cls=LazyDjangoJSONEncoder)
     else:
         js = data
     mime = mimetype = "application/json;charset=utf-8"
@@ -82,7 +84,6 @@ def render_to_json(data, is_json=False):
     return response
 
 
-@login_required
 def analysis_liveness(request, pk):
     """Determine if an analysis has been successfully started.
     """
@@ -101,7 +102,7 @@ def analysis_liveness(request, pk):
     loc = result.server_and_location()
 
     web_path = result.web_path(loc)
-#    report = result.reportLink
+    #    report = result.reportLink
     report = "/report/%s" % pk
     save_path = result.web_root_path(loc)
 
@@ -114,16 +115,21 @@ def analysis_liveness(request, pk):
 
     ip = "127.0.0.1"
     if ip is None:
-        return http.HttpResponseNotFound("no job server found for %s"
-                                         % loc.name)
+        return http.HttpResponseNotFound("no job server found for %s" % loc.name)
     proxy = anaclient.connect(ip, 10000)
-    #if the job is finished, it will be shown as 'failed'
+    # if the job is finished, it will be shown as 'failed'
     success, status = proxy.status(save_path, result.pk)
-    return render_to_json({"success": success, "log": log, "report": report, "exists": report_exists,
-                           "status": status})
+    return render_to_json(
+        {
+            "success": success,
+            "log": log,
+            "report": report,
+            "exists": report_exists,
+            "status": status,
+        }
+    )
 
 
-@login_required
 def starRun(request, pk, set):
     """Allow user to 'star' a run thus making it magic"""
     try:
@@ -137,10 +143,9 @@ def starRun(request, pk, set):
     return http.HttpResponse()
 
 
-@login_required
 def change_library(request, pk):
     """changes the library for a run """
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             pk = int(pk)
         except (TypeError, ValueError):
@@ -149,7 +154,7 @@ def change_library(request, pk):
         exp = shortcuts.get_object_or_404(models.Experiment, pk=pk)
 
         log = exp.log
-        lib = request.POST.get('lib', "none")
+        lib = request.POST.get("lib", "none")
         log["library"] = str(lib)
         exp.log = log
         exp.library = lib
@@ -157,14 +162,13 @@ def change_library(request, pk):
 
         return http.HttpResponse()
 
-    elif request.method == 'GET':
+    elif request.method == "GET":
         return http.HttpResponse()
 
 
-@login_required
 def delete_barcode(request, pk):
     """delete a barcode"""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             pk = int(pk)
         except (TypeError, ValueError):
@@ -175,14 +179,13 @@ def delete_barcode(request, pk):
 
         return http.HttpResponse()
 
-    elif request.method == 'GET':
+    elif request.method == "GET":
         return http.HttpResponse()
 
 
-@login_required
 def delete_barcode_set(request, name):
     """delete a set of barcodes"""
-    if request.method == 'POST':
+    if request.method == "POST":
 
         barcode = shortcuts.get_list_or_404(models.dnaBarcode, name=name)
         for code in barcode:
@@ -190,15 +193,14 @@ def delete_barcode_set(request, name):
 
         return http.HttpResponse()
 
-    elif request.method == 'GET':
+    elif request.method == "GET":
         return http.HttpResponse()
 
 
 @never_cache
-@login_required
 def progress_bar(request, pk):
-    '''gets the current status from the current experiment table
-    based on the experiment pk and updates the ftpStatus progress bar'''
+    """gets the current status from the current experiment table
+    based on the experiment pk and updates the ftpStatus progress bar"""
     try:
         pk = int(pk)
     except (TypeError, ValueError):
@@ -215,11 +217,10 @@ def progress_bar(request, pk):
 
 
 @never_cache
-@login_required
 def progressbox(request, pk):
-    '''reads in the progress.txt file inside a running analysis
+    """reads in the progress.txt file inside a running analysis
     and returns the colors of the boxes for the faux progress bar
-    for the running analysis'''
+    for the running analysis"""
     try:
         pk = int(pk)
     except (TypeError, ValueError):
@@ -228,9 +229,9 @@ def progressbox(request, pk):
 
     prefix = res.get_report_path()
     prefix = path.split(prefix)[0]
-    prefix = path.join(prefix, 'progress.txt')
+    prefix = path.join(prefix, "progress.txt")
     try:
-        f = open(prefix, 'r')
+        f = open(prefix, "r")
         data = f.readlines()
         f.close()
     except IOError:
@@ -238,9 +239,8 @@ def progressbox(request, pk):
         return render_to_json({"value": {}, "status": res.status})
     ret = {}
 
-
     for line in data:
-        line = line.strip().split('=')
+        line = line.strip().split("=")
         key = line[0].strip()
         value = line[-1].strip()
         ret[key] = value
@@ -249,7 +249,6 @@ def progressbox(request, pk):
 
 
 # JSON API stuff
-@login_required
 def apibase(request):
     """Make a call to the JSON API.
 
@@ -301,8 +300,9 @@ def report_info(pk):
     ret.extend(report.tfmetrics_set.all())
     return render_to_json(serialize(ret), True)
 
-#@jsonapi
-#def locate_report(pk):
+
+# @jsonapi
+# def locate_report(pk):
 #    """Return the file path to the working directory of the ``models.Results``
 #   object denoted by ``pk``."""
 #   pk = int(pk)
@@ -317,8 +317,7 @@ def last_report():
     """Return the primary key of the ``models.Results`` object more recently
     created."""
     try:
-        ret = models.Results.objects.latest('timeStamp').pk
+        ret = models.Results.objects.latest("timeStamp").pk
     except models.Results.DoesNotExist:
         ret = None
     return render_to_json(ret)
-

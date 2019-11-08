@@ -51,7 +51,7 @@ void OverwriteGenotypeForOneSample(vcf::Variant & candidate_variant, const strin
 void NullFilterReason(vcf::Variant &candidate_variant, const string &sample_name);
 void AddFilterReason(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name);
 void AddFilterReason(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name, unsigned int alt_allele_index);
-void AddInfoReason(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name);
+void AddMiscellaneousInfo(vcf::Variant &candidate_variant, string &additional_reason, const string &sample_name);
 void DetectAndSetFilteredGenotype(vcf::Variant &candidate_variant, map<string, float>& variant_quality, const string &sampleName);
 
 // generic variant manipulation

@@ -551,9 +551,9 @@ def main():
             if genotype1_int is None or genotype2_int is None:
                 allele['call'] = 'No Call'
                 summary_json['variants_by_call']['no_call'] += 1
-            elif genotype1_int == 0 and genotype2_int == 0:	
+            elif genotype1_int == 0 and genotype2_int == 0:    
                 allele['call'] = 'Absent'
-                summary_json['variants_by_call']['absent'] += 1			
+                summary_json['variants_by_call']['absent'] += 1            
             elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
                 allele['call'] = 'Homozygous'
                 summary_json['variants_by_call']['homozygous'] += 1

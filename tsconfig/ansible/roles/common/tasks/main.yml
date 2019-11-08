@@ -4,55 +4,9 @@
 - name:
   include: '../../../globals.yml'
 
-#-----------------------------------------------------------------------------
-# Replace official ubuntu repo with Ion-sourced ubuntu repo
-#-----------------------------------------------------------------------------
-- name: Disable /etc/apt/sources.list
-  template: src=templates/sources.list.j2
-            dest=/etc/apt/sources.list{{ FUNKYEXT|default('') }}
-            owner=root group=root mode=644
-  when: "ansible_hostname == groups.headnode[0]"
+- name: update repo list
+  include: '../../../repos.yml'
 
-- name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
-  template: src=templates/iontorrent-ubuntu.j2
-            dest=/etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
-            owner=root group=root mode=644
-  when: "ansible_hostname == groups.headnode[0]"
-
-#-----------------------------------------------------------------------------
-# Adding offcycle plugin and instrument update repository
-#-----------------------------------------------------------------------------
-- name: Add /etc/apt/sources.list.d/iontorrent-offcycle.list
-  template: src=templates/iontorrent-offcycle.j2
-            dest=/etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
-            owner=root group=root mode=644
-  when: "ansible_hostname == groups.headnode[0]"
-
-#-----------------------------------------------------------------------------
-# Adding IonReporter plugin repository
-#-----------------------------------------------------------------------------
-- name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
-  template: src=templates/ionreporter-plugin.j2
-            dest=/etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
-            owner=root group=root mode=644
-  when: "ansible_hostname == groups.headnode[0]"
-
-
-#-----------------------------------------------------------------------------
-# On each compute node, we need to replicate the Ion Repository configured
-# on the head node.
-#-----------------------------------------------------------------------------
-- name: Purge compute node's /etc/apt/sources.list.d directory
-  shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
-  when: "ansible_hostname != groups.headnode[0]"
-- name: Replicating head node's /etc/apt/source.list.d/
-  copy: src={{ item }} dest=/etc/apt/sources.list.d/ mode=0644
-  when: "ansible_hostname != groups.headnode[0]"
-  with_fileglob:
-    - /etc/apt/sources.list.d/*
-
-- name:
-  apt: update_cache=yes
 
 #-----------------------------------------------------------------------------
 # On each compute node, replicate the headnode's /etc/hosts file
@@ -60,35 +14,20 @@
 - name: Copy /etc/hosts to /tmp/hosts
   when: enable_hosts_copy
   copy: src=/etc/hosts dest=/tmp/hosts
+
 - name: Edit /tmp/hosts - change loopback hostname
   when: enable_hosts_copy
-  lineinfile: state=present
-              dest=/tmp/hosts
-              regexp="^127.0.1.1.*"
-              line="127.0.1.1       {{ ansible_hostname }}"
-              backup=yes
+  lineinfile:
+    state: present
+    dest: /tmp/hosts
+    regexp: "^127.0.1.1.*"
+    line: "127.0.1.1       {{ ansible_hostname }}"
+    backup: yes
+
 - name: Copy /tmp/hosts to /etc/hosts
   when: enable_hosts_copy
   command: /bin/cp /tmp/hosts /etc/hosts
 
-
-#-----------------------------------------------------------------------------
-# Clean apt cache
-#-----------------------------------------------------------------------------
-- name: sudo apt-get autoclean
-  shell: apt-get autoclean
-
-#-----------------------------------------------------------------------------
-# Disable installation of recommended and suggested debian packages
-#-----------------------------------------------------------------------------
-- name: Disable apt installation of recommend and suggest packages
-  template: src=98recommends.j2 dest=/etc/apt/apt.conf.d/98recommends mode=0644
-
-#-----------------------------------------------------------------------------
-# Disable apt from autodeleting debian package files
-#-----------------------------------------------------------------------------
-- name: Disable apt from autodeleting debian package files
-  template: src=99torrentserver.j2 dest=/etc/apt/apt.conf.d/99torrentserver mode=0644
 
 #-----------------------------------------------------------------------------
 # Install system packages common to all servers
@@ -100,38 +39,66 @@
   script: "{{ ansible_env.PWD }}/files/grub-pc.preseed {{ GRUB_BOOT_DEVICE }}"
   when: GRUB_BOOT_DEVICE is defined and not docker_image
 
+# install grub-pc, which uses ucf for configuration,
+# so need to set 'force-confdef' to keep existing conf
+# https://askubuntu.com/a/147079
+- name: update grub-pc package but keeping configuration
+  apt:
+    name: grub-pc
+    state: present
+    force: yes
+    dpkg_options: 'force-confold,force-confdef'
+
+- name: set grub related packages to hold to prevent non-interactive updates
+  command: apt-mark hold {{ item }}
+  with_items:
+    - grub-pc
+    - grub-pc-bin
+    - grub-common
+    - grub2-common
+    - grub-gfxpayload-lists
+
+- name: show the packages that have been held back
+  command: apt-mark showhold
+  register: apthold
+
+- debug:
+    var: apthold.stdout_lines
+
 - name: Install system packages
-  apt: name={{ item }} state=installed force=yes
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
   with_items: "{{ common_syspkg_list }}"
 
 #=============================================================================
 # Install Perl modules
-# ion-tsconfig packages contains some perl module tarballs
 #=============================================================================
-- name: Create a temporary directory /tmp/perl
-  file: name=/tmp/perl state=directory
-
-- name: Copy Perl module files
-  copy: src={{ item }} dest=/tmp/perl/{{ item | basename }}
-  with_fileglob:
-    - /usr/share/ion-tsconfig/perl/*.tar.gz
-
-- name: Run script against each Perl module file to install that module
-  script: perl_installation.sh /tmp/perl/{{ item | basename }}
-  with_fileglob:
-    - /usr/share/ion-tsconfig/perl/*.tar.gz
-
-- name: Remove the temporary directory /tmp/perl
-  file: name=/tmp/perl state=absent
+# these modules are used by plugins (installed on headnode and compute nodes)
+# these packages have been available since 14.04
+- name: Install Perl modules used by plugins
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - libmodule-package-perl
+    - libjson-perl
+    - libio-all-perl
+    - liblist-moreutils-perl
+    - libreadonly-perl
+    - libstatistics-descriptive-perl
+    - libstatistics-linefit-perl
 
 #-----------------------------------------------------------------------------
 #    named_core_files
 #-----------------------------------------------------------------------------
 - name: Enable named core files
-  sysctl: name=kernel.core_pattern
-            reload=yes
-            state=present
-            value='core.%e.%p.%h.%t'
+  sysctl:
+    name: kernel.core_pattern
+    reload: yes
+    state: present
+    value: 'core.%e.%p.%h.%t'
   when: not docker_image
 
 #-----------------------------------------------------------------------------
@@ -139,46 +106,64 @@
 # https://brunomgalmeida.wordpress.com/tag/comm-postgres-tainted-g/
 #-----------------------------------------------------------------------------
 - name: Disable IPv6
-  sysctl: name=net.ipv6.conf.all.disable_ipv6
-            reload=yes
-            state=present
-            value='1'
+  sysctl:
+    name: net.ipv6.conf.all.disable_ipv6
+    reload: yes
+    state: present
+    value: '1'
 
 #-----------------------------------------------------------------------------
 # Ensure grub does not hang at the grub menu on reboot after an error
 #-----------------------------------------------------------------------------
+- name: check for "{{ grub_config_file }}"
+  stat:
+    path: "{{ grub_config_file }}"
+  register: grub_conf
+
 - name: Make grub rebootable after shutdown
-  lineinfile: dest=/etc/default/grub
-               insertafter=EOF
-               line='GRUB_RECORDFAIL_TIMEOUT=$GRUB_TIMEOUT'
-               regexp='GRUB_RECORDFAIL_TIMEOUT.*'
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    insertafter: EOF
+    line: 'GRUB_RECORDFAIL_TIMEOUT=$GRUB_TIMEOUT'
+    regexp: 'GRUB_RECORDFAIL_TIMEOUT.*'
   notify: "update grub"
-  when: not docker_image
+  when: grub_conf.stat.exists
   register: grub_update_needed
 
 #-----------------------------------------------------------------------------
 # TS-13492
 #-----------------------------------------------------------------------------
 - name: solves the falsely reported DBE from GPU driver
-  lineinfile: dest={{grub_config_file}}
-                line='GRUB_TERMINAL=console'
-                regexp='.*GRUB_TERMINAL=console'
-  when: ansible_product_name == "Precision WorkStation T7500"
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    line: 'GRUB_TERMINAL=console'
+    regexp: '.*GRUB_TERMINAL=console'
+  when: ansible_product_name == "Precision WorkStation T7500" and grub_conf.stat.exists
   notify: "update grub"
   register: grub_update_needed
 
 #-----------------------------------------------------------------------------
-#NOTE: required: ionian user be created prior to initial installation of ion-dbreports
 # initialize_system_users
-
 #-----------------------------------------------------------------------------
+
+# NOTE: ionian user required prior to initial installation of ion-dbreports
 # Initialize ionian group and user
 - name: Add group ionian
-  group: name=ionian gid=1100 state=present system=yes
+  group:
+    name: ionian
+    gid: 1100
+    state: present
+    system: yes
 
 # NOTE: non_unique was added as result of TS-11113
 - name: Initialize ionian user
-  user: name=ionian uid=1100 state=present system=yes group=ionian non_unique=yes
+  user:
+    name: ionian
+    uid: 1100
+    state: present
+    system: yes
+    group: ionian
+    non_unique: yes
 
 # Initialize ionadmin
 # This shell method is because of having to use this password creation method
@@ -191,86 +176,116 @@
   shell: /usr/sbin/useradd -m -s /bin/bash -p $(perl -e "print crypt(ionadmin, 'password')" $password) ionadmin;
 
 - name: Add ionadmin to ionian www-data groups
-  user: name=ionadmin append=yes groups=ionian,www-data
+  user:
+    name: ionadmin
+    append: yes
+    groups: ionian,www-data
 
 # Add www-data user to the ionian group
 - name: Add www-data user to the ionian group
-  user: name=www-data append=yes groups=ionian
+  user:
+    name: www-data
+    append: yes
+    groups: ionian
 
 #-----------------------------------------------------------------------------
 #    set_logfile_size_limit
 #-----------------------------------------------------------------------------
 - name: Set logfile size limit
-  lineinfile: dest=/etc/logrotate.conf
-                state=present
-                regexp='# Torrent Server maximum log file limit'
-                line='# Torrent Server maximum log file limit'
-                insertbefore=BOF
-                mode=0644
+  lineinfile:
+    dest: /etc/logrotate.conf
+    state: present
+    regexp: '# Torrent Server maximum log file limit'
+    line: '# Torrent Server maximum log file limit'
+    insertbefore: BOF
+    mode: 0644
 
 - name: Set logfile size limit
-  lineinfile: dest=/etc/logrotate.conf
-                state=present
-                regexp='^size.*'
-                line='size 100M'
-                insertafter='# Torrent Server maximum log file limit'
-                mode=0644
+  lineinfile:
+    dest: /etc/logrotate.conf
+    state: present
+    regexp: '^size.*'
+    line: 'size 100M'
+    insertafter: '# Torrent Server maximum log file limit'
+    mode: 0644
 
 #-----------------------------------------------------------------------------
-# Remove motd regarding available OS upgrade: do not want TS customers to do this.
+# Remove motd regarding available OS upgrade
 #-----------------------------------------------------------------------------
 - name: Remove message regarding available OS upgrade
-  file: dest=/etc/update-motd.d/91-release-upgrade state=absent
-  when: not docker_image
+  file:
+    dest: /etc/update-motd.d/{{ item }}
+    state: absent
+  with_items:
+    - 10-help-text
+    - 50-motd-news
+    - 80-esm
+    - 80-livepatch
+    - 91-release-upgrade
+  ignore_errors: yes
 
 #-----------------------------------------------------------------------------
-# Disable checking for updates
+# Disable checking for updates; do not want TS customers to do this.
 #-----------------------------------------------------------------------------
 - name: disable checking for updates
-  lineinfile: dest=/etc/update-manager/release-upgrades
-                state=present
-                regexp='^[Pp]rompt=.*'
-                line='prompt=never'
-  when: not docker_image
+  lineinfile:
+    dest: /etc/update-manager/release-upgrades
+    state: present
+    regexp: '^[Pp]rompt=.*'
+    line: 'prompt=never'
+  ignore_errors: yes
 
 #-----------------------------------------------------------------------------
 # Configure tmpreaper package to purge old files from /tmp directory
 #-----------------------------------------------------------------------------
 - name: tmpreaper disable showing warning
-  lineinfile: dest=/etc/tmpreaper.conf state=present
-                regexp='.*SHOWWARNING.*'
-                line='#SHOWWARNING=true'
+  lineinfile:
+    dest: /etc/tmpreaper.conf
+    state: present
+    regexp: '.*SHOWWARNING.*'
+    line: '#SHOWWARNING=true'
+
 - name: tmpreaper purge every 7 days
-  lineinfile: dest=/etc/tmpreaper.conf state=present
-                regexp='^.*TMPREAPER_TIME=.*'
-                line='TMPREAPER_TIME=7d'
+  lineinfile:
+    dest: /etc/tmpreaper.conf
+    state: present
+    regexp: '^.*TMPREAPER_TIME=.*'
+    line: 'TMPREAPER_TIME=7d'
 
 #-----------------------------------------------------------------------------
 # Configure maximum number of open file descriptors allowed
 #-----------------------------------------------------------------------------
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present
-                regexp='.*\*.*soft.*nofile.*$'
-                line="*                soft    nofile          {{ MAX_FILES_OPEN }}"
-                insertbefore='# End of file'
+  lineinfile:
+    dest: "{{ security_limits_file }}"
+    state: present
+    regexp: '.*\*.*soft.*nofile.*$'
+    line: "*                soft    nofile          {{ MAX_FILES_OPEN }}"
+    insertbefore: '# End of file'
 
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present
-                regexp='.*\*.*hard.*nofile.*$'
-                line='*                hard    nofile          {{ MAX_FILES_OPEN }}'
-                insertbefore='# End of file'
+  lineinfile:
+    dest: "{{ security_limits_file }}"
+    state: present
+    regexp: '.*\*.*hard.*nofile.*$'
+    line: '*                hard    nofile          {{ MAX_FILES_OPEN }}'
+    insertbefore: '# End of file'
 
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present
-                regexp='.*root.*soft.*nofile.*$'
-                line='root             soft    nofile          {{ MAX_FILES_OPEN }}'
-                insertbefore='# End of file'
+  lineinfile:
+    dest: "{{ security_limits_file }}"
+    state: present
+    regexp: '.*root.*soft.*nofile.*$'
+    line: 'root             soft    nofile          {{ MAX_FILES_OPEN }}'
+    insertbefore: '# End of file'
 
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present
-                regexp='.*root.*hard.*nofile.*$'
-                line='root             hard    nofile          {{ MAX_FILES_OPEN }}'
-                insertbefore='# End of file'
+  lineinfile:
+    dest: "{{ security_limits_file }}"
+    state: present
+    regexp: '.*root.*hard.*nofile.*$'
+    line: 'root             hard    nofile          {{ MAX_FILES_OPEN }}'
+    insertbefore: '# End of file'
 
 #-----------------------------------------------------------------------------
 # grub update based on changes in grub config

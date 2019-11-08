@@ -13,7 +13,7 @@ function commonKendoGrid(target, url, msg) {
                     return buildParameterMap(options);
                 }
             },
-            
+
             schema : {
                 data : "objects",
                 total : "meta.total_count",
@@ -34,7 +34,7 @@ function commonKendoGrid(target, url, msg) {
                         applicationCategoryDisplayedName : {
                             type : "string",
                             editable : false
-                        },                        
+                        },
                         barcodeKitName : {
                             type : "string",
                             editable : true
@@ -52,47 +52,47 @@ function commonKendoGrid(target, url, msg) {
                         },
                         isFavorite : {
                         	type : "boolean",
-                        	editable : false                        	
+                        	editable : false
                         },
                         isSystem : {
                         	type : "boolean",
                         	editable : false
-                        },                     
+                        },
                         runType : {
                         	type : "string",
-                        	editable : false                        	
+                        	editable : false
                         },
                         reference : {
                         	type : "string",
-                        	editable : false                           	
+                        	editable : false
                         },
                         targetRegionBedFile : {
                         	type : "string",
-                        	editable : false                           	
+                        	editable : false
                         },
                         hotSpotRegionBedFile : {
                         	type : "string",
-                        	editable : false                           	
-                        },                        
+                        	editable : false
+                        },
                         sequencingInstrumentType : {
                         	type : "string",
                         	editable : false
-                        },                     
+                        },
                         templatePrepInstrumentType : {
                         	type : "string",
-                        	editable : false                        	
+                        	editable : false
                         },
                         notes : {
                         	type : "string",
                         	editable : false
-                        },                          
+                        },
                         username : {
                         	type : "string",
                         	editable : false
-                        }                      
+                        }
                     }
                 }
-            },            
+            },
             serverFiltering: true,
             serverPaging : true,
             pageSize : 10,
@@ -103,74 +103,76 @@ function commonKendoGrid(target, url, msg) {
         scrollable : false,
         pageable : {
             messages: {
-                display: "{0} - {1} of {2} templates",
-                empty: "No templates to display"
+                display: gettext('template.pageable.messages.display'), //"{0} - {1} of {2} templates"
+                empty: gettext('template.pageable.messages.empty'), //"No templates to display"
             }
         },
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,
         columns : [{
             field : "planDisplayedName",
-            title : "Template Name",
+            title : gettext('template.fields.planDisplayedName.label'), //"Template Name"
             width : "20%",
             template : kendo.template($("#PlanDisplayedNameTemplate").html())
         }, {
         	field : "sequencingInstrumentType",
-        	title : "Instr",
+        	title : gettext('template.fields.sequencingInstrumentType.label'), //"Instr",
             width : "40px",
             sortable : false,
         	template : kendo.template($("#SeqInstrumentTemplate").html())
         }, {
         	field : "templatePrepInstrumentType",
-        	title : "Sample Prep",
+        	title : gettext('template.fields.templatePrepInstrumentType.label'), //"Sample Prep",
             width : "55px",
             sortable : false,
         	template : kendo.template($("#TemplatePrepInstrumentTemplate").html())
-         }, {        	
+         }, {
         	field : "runType",
-        	title: "Res App",
+        	title: gettext('template.fields.runType.label'), //"Res App",
             width : "37px",
             sortable : false,
-        	template : kendo.template($("#RunTypeColumnTemplate").html())         	
-        }, {        	
+        	template : kendo.template($("#RunTypeColumnTemplate").html())
+        }, {
         	field : "barcodeKitName",
-        	title: "Barcodes",
+        	title: gettext('template.fields.barcodeKitName.label'), //"Barcodes",
             width : "10%",
         	template : kendo.template($("#BarcodeKitNameTemplate").html())
         }, {
         	field : "reference",
-        	title : "Reference",
+        	title : gettext('template.fields.reference.label'), //"Reference",
             width : "15%",
         	template : kendo.template($("#ReferenceTemplate").html())
-        }, {    
+        }, {
             field : "projects",
-            title : "Project",
+            title : gettext('template.fields.projects.label'), //"Project",
             width: '10%',
             sortable : false,
             template : function(item){
-                            var data = { id: item.id, label: "Projects", values: item.projects.split(',') };
+                            var data = { id: item.id, label: gettext('template.fields.projects.label.plural'), values: item.projects.split(',') };
                             return kendo.template($("#PopoverColumnTemplate").html())(data);
                         }
         }, {
             field : "irAccountName",
-            title : "Ion Reporter Account",
+            title : gettext('template.fields.irAccountName.label'), //"Ion Reporter Account",
             sortable : false,
             width : "10%",
+            hidden: true,
         }, {
         	field : "irworkflow",
-        	title : "Ion Reporter Workflow",
-            width : "13%",           
+        	title : gettext('template.fields.irworkflow.label'), //"Ion Reporter Workflow",
+            width : "13%",
+            hidden: true,
         }, {
         	field : "date",
-        	title : "Date",
+        	title : gettext('template.fields.date.label'), //"Date",
         	width : "9%",
         	template : '#= kendo.toString(new Date(Date.parse(date)),"MMM d yyyy") #'
-        }, {        	
+        }, {
         	field : "isSystem",
-        	title : "Source",
+        	title : gettext('template.fields.isSystem.label'), //"Source",
             width : "55px",
-        	template : kendo.template($("#IsSystemTemplate").html())                 
-        }, {        	
+        	template : kendo.template($("#IsSystemTemplate").html())
+        }, {
             title : " ",
             width : "36px",
             sortable : false,
@@ -203,7 +205,7 @@ function getDisplayedBedFileValue(value) {
 }
 
 function onDataBinding(arg) {
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     $('body').prepend(busyDiv);
 
 }
@@ -212,10 +214,10 @@ function onDataBound(arg) {
     $('body').css("cursor", "default");
     $('.myBusyDiv').empty();
     $('body').remove('.myBusyDiv');
-    
+
     var source = "#tab_contents";
     bindActions(source);
-    
+
     $(source + ' span[rel="popover"]').each(function(i, elem) {
         $(elem).popover({
             content : $($(elem).data('select')).html()
@@ -223,13 +225,18 @@ function onDataBound(arg) {
     });
 }
 
+function onFailure(data) {
+    $('#error-messages').empty().show();
+    $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
+    console.log("error:", data);
+}
 
 function bindActions(source) {
     $(source + ' .review-plan').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -247,10 +254,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
 
@@ -264,7 +268,7 @@ function bindActions(source) {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -284,10 +288,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
@@ -301,7 +302,7 @@ function bindActions(source) {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -322,9 +323,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
@@ -337,7 +336,7 @@ function bindActions(source) {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -355,9 +354,7 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
@@ -370,7 +367,7 @@ function bindActions(source) {
     $(source + " .delete-plan").click(function(e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
-        
+
         url = $(this).attr('href');
         $('body #modal_confirm_delete').remove();
         $.get(url, function(data) {
@@ -381,9 +378,7 @@ function bindActions(source) {
         }).done(function(data) {
             console.log("success:", url);
         }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         });
     });
 
@@ -398,20 +393,17 @@ function bindActions(source) {
             $('#modal_batch_planning').modal("show");
             return false;
         }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         });
     });
-    
+
     $(source + ' .toggle-template-favorite').click(function(e) {
         e.preventDefault();
         var url = $(this).attr('href');
         $.get(url, function(data) {
             window.location.reload();
         }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            onFailure(data);
         });
     });
 }
@@ -419,12 +411,12 @@ function bindActions(source) {
 
 $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e) {
     var target = $(e.target).data('source');
-    
+
     //target is #tab_contents
     console.log("modal_confirm_delete_done modal_plan_wizard_done target=", target);
-    
+
     var selectedTab = window.location.hash.substring(1);
-    
+
     console.log("selectedTab=", selectedTab);
     var id = "#" + selectedTab;
     console.log("id=", id);
@@ -433,9 +425,9 @@ $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e)
 
 
 $(function () {
- function switch_tab() {
+ function switch_tab(kendo_customize_callback) {
     var selectedTab = window.location.hash.substring(1);
-    
+
     if (selectedTab == '')
     	selectedTab = 'favorites';
     $("#left_side_nav > li").removeClass("active");
@@ -443,12 +435,14 @@ $(function () {
     $("#tab_contents > div").hide();
     $("#"+selectedTab+"_tab").show();
 
-    var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatebasicinfo/";
-
+        var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatebasicinfo/";
     var $selectedNav = $("#"+selectedTab+"_nav")
     var grid = $("#"+selectedTab).kendoGrid( commonKendoGrid("#"+selectedTab,
                 basePlannedExperimentUrl + "?format=json" + $selectedNav.data('api_filter'),
                 "No" + $selectedNav.text() + "Templates") );
+    if (jQuery.isFunction(kendo_customize_callback)) {
+        kendo_customize_callback(grid);
+    }
     // start with all filters reset
     clear_filters();
     set_more_filters();
@@ -472,13 +466,13 @@ $(function () {
         }
 
         if (files.references.length > 0){
-            $warnings.append('References are not installed: ');
+            $warnings.append(gettext('templates.messages.references.notinstalled') + ':');
             $warnings.append(install_btn);
             $warnings.append("<ul><li>" + files.references.join('</li><li>') + '</li></ul></div>');
             $warnings.show();
         }
         if (files.bedfiles.length > 0){
-            $warnings.append("BED files are not installed:");
+            $warnings.append(gettext('templates.messages.bedfiles.notinstalled') + ':');
             if (files.references.length == 0) $warnings.append(install_btn);
             $warnings.append("<ul><li>" + files.bedfiles.join('</li><li>') + '</li></ul></div>');
             $warnings.show();
@@ -487,7 +481,7 @@ $(function () {
             e.preventDefault();
             if($(this).attr('disabled') == 'disabled')
                 return false;
-            
+
             $('#error-messages').hide().empty();
             $('body #modal_upload_and_install_files').remove();
             $.get(install_url, files, function(data){
@@ -498,12 +492,16 @@ $(function () {
         });
     });
   };
-  
-  window.onhashchange = function(e) { 
-	  switch_tab(); 
+
+  window.onhashchange = function(e) {
+	  switch_tab(kendo_customize_callback);
   };
-  
-  switch_tab();
+
+  if (typeof kendo_customize_callback == 'undefined' || !jQuery.isFunction(kendo_customize_callback)) {
+    kendo_customize_callback = function($grid) {};
+  }
+  switch_tab(kendo_customize_callback);
+
 });
 
 
@@ -513,7 +511,7 @@ $(document).ready(function() {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -534,10 +532,7 @@ $(document).ready(function() {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
@@ -552,7 +547,7 @@ $(document).ready(function() {
         e.preventDefault();
         $('#error-messages').hide().empty();
 
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -572,9 +567,7 @@ $(document).ready(function() {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
 
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
@@ -594,19 +587,17 @@ $(document).ready(function() {
             $('#modal_batch_planning_upload').modal("show");
             return false;
         }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
+            onFailure(data);
         });
     });
-    
+
     $('#upload_template').click(function(e) {
         e.preventDefault();
         $('#modal_load_template .alert-error').empty().hide();
 
         var filename = $('#modal_load_template :file').val();
         if (!filename){
-            $('#modal_load_template .alert-error').empty().append('Please select a CSV file').show();
+            $('#modal_load_template .alert-error').empty().append(gettext('import_plan_template.messages.validate.file.required')).show(); //Please select a CSV file
             return false;
         }
 
@@ -616,24 +607,13 @@ $(document).ready(function() {
             beforeSubmit: $.blockUI({baseZ: 2000}),
             success: function(data) {
                 if (data){
-                    var error = "<span>"+data.status_msg+"</span>";
-                    for (var key in data.msg) {
-                        error += "<br><ul class='unstyled'>";
-                        error += "<li><strong>" + key + " contained error(s):</strong> ";
-                        error += "<ul>";
-                        $.each(data.msg[key], function(i,msg){
-                            error += "<li>" + msg +"</li>";
-                        });
-                        error += "</ul>";
-                        error += "</li>";
-                        error += "</ul>";
-                    }
-                    if (data.status == 'failed'){
-                        $('#modal_load_template .alert-error').html(error).show();
+                    var _html = kendo.template($('#ImportPlanTemplateResponseTemplate').html())(data);
+                    if (data.status == 'failed') {
+                        $('#modal_load_template .alert-error').html(_html).show();
                     } else {
                         $('#modal_load_template .alert-success').show();
-                        $('#modal_load_template .alert-warning').html(error).show();
-                        $('#modal_load_template .btn').hide();
+                        $('#modal_load_template .alert-warning').html(_html).show();
+                        $('#modal_load_template .modal-footer .btn.btn-primary').hide();
                         $('#modal_load_template #close_on_success').show();
                     }
                 } else {
@@ -651,7 +631,9 @@ $(document).ready(function() {
         });
         return false;
     });
-
+    $('#modal_load_template_json_bundle').on('hide', function(){
+        $('#file_info').html('').hide();
+    });
     $('#modal_load_template').on('hide', function(){
         if ( $('#modal_load_template .alert-success').is(':visible')){
             // show new template
@@ -662,28 +644,17 @@ $(document).ready(function() {
         }
         $('#importTemplateForm')[0].reset();
         $('#modal_load_template .alert').hide();
-        $('#modal_load_template .btn').show();
+        $('#modal_load_template .modal-footer .btn.btn-primary').show();
         $('#modal_load_template #close_on_success').hide();
     });
 
-    var today = Date.parse('today');
-    $('[name=dateRange]').each(function(){ $(this).daterangepicker({
-            dateFormat: 'M d yy',
-            presetRanges: [
-                {text: 'Today', dateStart: today, dateEnd: today},
-                {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
-                {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
-                {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
-                {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
-            ],
-        }); 
-    });
+    $('[name=dateRange]').each(function(){ $(this).daterangepicker($.DateRangePickerSettings.get()); });
     $('.search_trigger').click(function (e) { filter(e); });
     $('[name=search_text]').keypress(function(e){ if (e.which == 13 || e.keyCode == 13) filter(e); });
     $('[name=dateRange], .selectpicker').change(function (e) { filter(e); });
     $('.clear_filters').click(function () { clear_filters(); });
     $('.toggle_more_filters').click(function () { set_more_filters(true); });
-    
+
     $('[name=plan_search_dropdown_menu] a').click(function(e) {
         var span = $(this).find('span');
         var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
@@ -698,8 +669,11 @@ $(document).ready(function() {
             }
         });
 
-        $(container + ' [name=search_subject_nav]').attr("title", "Search by " + this.text);
-        $(container + ' [name=search_text]').attr("placeholder", "Search by " + this.text);
+
+        var x = $(container + ' [name=search_subject_nav]');
+        x.attr("title", x.data('titlePrefix') + this.text);
+        var x = $(container + ' [name=search_text]');
+        x.attr("placeholder", x.data('placeholderPrefix') + this.text);
     });
 });
 
@@ -737,19 +711,19 @@ function _get_query_string(val){
     return val;
 }
 
+function _daterange_to_filter(val){
+    if (!val) return "";
+    var range = val.split('-');
+    var start = new Date(range[0]).toString('yyyy-MM-dd HH:mm');
+    var end = range.length > 1 ? new Date(range[1]).toString('yyyy-MM-dd HH:mm') : start;
+    return start + ',' + end.replace('00:00', '23:59');
+}
+
 function filter(e){
     e.preventDefault();
     e.stopPropagation();
 
     var container = '#' + (window.location.hash.substring(1) || 'favorites') + '_tab';
-    var date = "";
-    var daterange = $(container + " [name=dateRange]").data("daterange");
-    if (daterange) {
-        var start = daterange.start.toString('yyyy-MM-dd HH:mm');
-        var end = daterange.end.toString('yyyy-MM-dd HH:mm').replace('00:00', '23:59');
-        date = start + ',' + end;
-    }
-
     var filters = [
         {
             field: $(container + ' [name=search_text]').data('selected_filter'),
@@ -759,7 +733,7 @@ function filter(e){
         {
             field: "date",
             operator: "__range",
-            value: date
+            value: _daterange_to_filter($(container + " [name=dateRange]").val())
         },
         {
             field: "platform",

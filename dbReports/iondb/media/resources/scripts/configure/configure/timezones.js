@@ -1,6 +1,27 @@
 $(function() {//DOM ready handler
     $('#auto_detect').click(function (e) {
-        $("#auto_detect").html("Detecting...");
+
+        function change_timezone(data) {
+            function get_browser_timezone_country_city() {
+                var region1 = new Intl.DateTimeFormat('en-us');
+                var options1 = region1.resolvedOptions();
+                var result =  {
+                    'current_zone': options1.timeZone.split('/')[0]
+                    , 'current_city': options1.timeZone.split('/')[1]
+                }
+                $("#timezone_saved").html('');
+                $("#timezone_saved").append( "<h4>" + $("#timezone_saved").data('msgAutoDetectTimezoneSuccess') + "</h4>");//Auto detect is complete.
+                return result;
+            }
+
+            data = data || get_browser_timezone_country_city()
+            $('#zone_select').val(data['current_zone']);
+            $('#zone_select').trigger('change');
+            //wait until the change is done, and then change the city!
+            $('#city_select').val(data['current_city']);
+        }
+
+        $("#auto_detect").html($("#auto_detect").data('valueInprogress')); //"Detecting..."
         $("#timezone_saved").empty();
         e.preventDefault();
         e.stopPropagation();
@@ -12,18 +33,16 @@ $(function() {//DOM ready handler
             type : "POST",
         })
         .done(function(data){
-            console.log(data['current_zone'],data['current_city'])
-            $('#zone_select').val(data['current_zone']);
-            $('#zone_select').trigger('change');
-            //wait until the change is done, and then change the city!
-            $('#city_select').val(data['current_city']);
-            $("#auto_detect").html("Auto Detect Timezone");
-            $("#timezone_saved").append( "<h4>"+ "Auto detect is complete." +"</h4>");
+            console.log(data['current_zone'],data['current_city']);
+            change_timezone(data);
+            $("#auto_detect").html($("#auto_detect").data('value'));
+            $("#timezone_saved").append( "<h4>" + $("#timezone_saved").data('msgAutoDetectTimezoneSuccess') + "</h4>");//Auto detect is complete.
         })
         .fail(function(data){
             console.log("error")
-            $("#timezone_saved").append( "<h4>"+ "ERROR: Auto Detect failed." +"</h4>");
-            $("#auto_detect").html("Auto Detect Timezone");
+            $("#timezone_saved").append( "<h4>" + $("#timezone_saved").data('msgAutoDetectTimezoneFailed') + "</h4>");//Auto Detect failed.
+            change_timezone();
+            $("#auto_detect").html($("#auto_detect").data('value'));
         });
 
     });
@@ -54,7 +73,7 @@ $(function() {//DOM ready handler
     });
 
 	$('#timezone').submit(function(e) {
-        $("#submit_button").val("Submitting");
+        $("#submit_button").val($("#submit_button").data('valueInprogress'));//"Submitting"
         //prevents default form submission behavior
         e.preventDefault();
         $("#timezone_saved").empty();
@@ -71,12 +90,12 @@ $(function() {//DOM ready handler
             data : formdata
         })
         .done(function(data){
-           $("#timezone_saved").append( "<h4>"+ "Your timezone was set successfully" +"</h4>");
-           $("#submit_button").val("Save Time Zone");
+           $("#timezone_saved").append( "<h4>" + $("#timezone_saved").data('msgSuccess') + "</h4>");//"Your timezone was set successfully"
+           $("#submit_button").val($("#submit_button").data('value'));
         })
         .fail(function(data){
-            $("#timezone_saved").append( "<h4>"+ "ERROR: Timezone update failed" +"</h4>");
-            $("#submit_button").val("Save Time Zone");
+            $("#timezone_saved").append( "<h4>" + $("#timezone_saved").data('msgFailed') + "</h4>");//"Timezone update failed"
+            $("#submit_button").val($("#submit_button").data('value'));
         });
 
     });

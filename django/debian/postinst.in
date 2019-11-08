@@ -1,0 +1,12 @@
+#!/bin/bash
+# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+set -e
+
+case "$1" in
+    configure)
+        invoke-rc.d apache2 restart || true
+        invoke-rc.d celeryd restart || true
+        invoke-rc.d celerybeat restart || true
+        invoke-rc.d DjangoFTP restart || true
+    ;;
+esac

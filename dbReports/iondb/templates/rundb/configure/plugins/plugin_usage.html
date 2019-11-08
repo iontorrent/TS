@@ -1,6 +1,7 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head_styles %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
@@ -32,13 +33,13 @@ function precisionUnits(num, div) {
 
 {% endblock extra_head_js %}
 {% block tab-configure-plugins %}
-    <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    <li class="active"><a href="{% url "configure_plugins" %}">{% trans "global.nav.menu.configure.menu.plugins.label" %}</a></li>
 {% endblock tab-configure-plugins %}
 {% block content %}
 <div class="content">
     <h1>{{ plugin.name }}
         <small>v{{ plugin.version }}</small>
-        <small class="pull-right" style="font-size: 12px; line-height: 40px;">Script: {{ plugin.script }}</small>
+        <small class="pull-right" style="font-size: 12px; line-height: 40px;">{{ Plugin.script.verbose_name }}: {{ plugin.script }}</small>
     </h1>
 
         <p>{{ plugin.description }}</p>
@@ -51,13 +52,13 @@ function precisionUnits(num, div) {
 </div>
 <div class="content clearfix">
     <div class="clearfix">
-        <h2 class="pull-left">Recent Plugin Results</h2>
-        <a title="Refresh Plugin Usage" href="#" id="refreshUsage" class="pull-right">
+        <h2 class="pull-left">{% trans "entity.PluginResult.verbose_name_plural" %}</h2>
+        <a title="{% trans "entity.Plugin.actions.configure_plugins_plugin_usage.refresh" %}" href="#" id="refreshUsage" class="pull-right">
             <i class="icon-refresh"></i>
         </a>
     </div>
     {% if not pluginresults.count %}
-    <div class="alert alert-info">No instances of plugin results found.</div>
+    <div class="alert alert-info">{% trans "entity.PluginResult.messages.none" %}</div>
     {% endif %}
     <div id="grid"></div>
 </div>
@@ -69,7 +70,7 @@ function precisionUnits(num, div) {
     </div>
     <div class="modal-body"></div>
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Close</a>
+        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
     </div>
     <script>
         $('#modal_plugin_log').on('hidden', function() {
@@ -156,61 +157,65 @@ $(document).ready(function(){
         }
         , selectable: false
         , editable: { destroy: true, update: false
-            , confirmation: "Are you sure you want to remove this plugin result? All output files will be removed."
+                , confirmation: "{% trans "entity.PluginResult.messages.delete.confirmmsg" %}"
         }
         , sortable: true
-        , pageable: true
+        , pageable: {
+            messages : {
+                empty: "{% trans "entity.PluginResult.messages.none" %}"
+            }
+        }
         , columns: [
             {
                 field: "result"
-                ,title: "Result"
+                ,title: "{{ PluginResult.result.verbose_name }}"
                 ,template: kendo.template($("#ResultColumnTemplate").html())
             } , {
                 field: "starttime"
-                ,title: "Start"
+                ,title: "{{ PluginResult.starttime.verbose_name }}"
                 ,sortable: true
                 ,template: '#= kendo.toString(new Date(Date.parse(starttime)),"yyyy/MM/dd hh:mm tt") #'
             } , {
                 field: "endtime"
-                ,title: "End"
+                ,title: "{{ PluginResult.endtime.verbose_name }}"
                 ,sortable: true
                 ,template: kendo.template($("#EndTimeTemplate").html())
             } , {
                 field: "state"
-                ,title: "State"
+                ,title: "{{ PluginResult.state.verbose_name }}"
             } , {
                 field: "size"
-                ,title: "Output Size"
+                ,title: "{{ PluginResult.size.verbose_name }}"
                 ,sortable: true
                 ,template: kendo.template($("#SizeColumnTemplate").html())
             } , {
-                command: [ "destroy"
-                           ,{ name: "rescan" , text: "Rescan" , className:
+                command: [ { name:"destroy" , text: "{% trans "global.action.delete" %}" }
+                           ,{ name: "rescan" , text: "{% trans "entity.Plugin.actions.api_dispatch_rescan_plugin" %}" , className:
                                "rescanButton", click: refreshPluginResult } ]
                 , title: "&nbsp;"
             }
         ]
     });
 
-   $('#refreshUsage').click(function (e) {
+    $('#refreshUsage').click(function (e) {
         e.preventDefault();
         refreshKendoGrid("#grid");
     });
 
-   $('iframe.auto-height').iframeAutoHeight({minHeight: 400, heightOffset: 20});
+    $('iframe.auto-height').iframeAutoHeight({minHeight: 400, heightOffset: 20});
 
-});
-
-   function refreshPluginResult(e) {
+    function refreshPluginResult(e) {
         e.preventDefault();
         var pr = this.dataItem($(e.currentTarget).closest("tr"));
         console.log(JSON.stringify(pr));
         $.ajax({
-             url: "{% url "api_dispatch_rescan" resource_name="pluginresult" api_name="v1" pk="999999" %}".replace("999999", pr.id)
-             , contentType: 'application/json; charset=utf-8'
+            url: "{% url "api_dispatch_rescan" resource_name="pluginresult" api_name="v1" pk="999999" %}".replace("999999", pr.id)
+            , contentType: 'application/json; charset=utf-8'
         }).success(function () {
             refreshKendoGrid("#grid");
         });
-   }
+    }
+});
+
 </script>
 {% endblock content %}

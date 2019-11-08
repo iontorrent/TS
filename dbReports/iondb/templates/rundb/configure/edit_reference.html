@@ -3,16 +3,17 @@
 {% load pagetools %}
 {% load static from staticfiles %}
 {% load humanize %}
+{% load i18n %}
 {% block tab-configure-references %}
-    <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
 {% endblock tab-configure-references %}
 {% block extra_head %}
     <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
     <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
-    <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+    {% include "rundb/common/head_jqueryui_script.html" %}
     
-    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+    {% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
     <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
     <script src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
     <link rel="stylesheet" type="text/css"
@@ -87,25 +88,26 @@
           {{ error|linebreaks }}
         {% endfor %}
         <p>
+        {% if featureflags.HELP_ION_DOCS %}
           For additional information, check the online <a href="/ion-docs/Home.html">help</a>.
+        {% endif %}
         </p>
       {% elif "error" in status|lower or "failed" in status|lower %}
-        <h2> Status: {{status|capfirst}} </h2>
+        <h2> {% trans "entity.ReferenceGenome.fields.status.verbose_name" %}: {{status|capfirst}} </h2>
         <h3> {{ reference.verbose_error }} </h3>
-        <p> The Genome info text file for <strong>{{ name }}</strong> could not be opened from the filesystem.</p>
-        <p> Please contact your Torrent Server Administrator.</p>
+        <p> {% trans "entity.ReferenceGenome.messages.genome_info.unabletoopen" %} ({{ reference.info_text }})</p>
+        <p> {% trans "global.messages.error.contactsupport" %}</p>
       {% else %}
-        <h2> Genome Creation is in progress</h2>
-        <p> The Genome <strong>{{ name }}</strong> is still being created. This process may take a few hours.
-        </p>
+        <h2>{% trans "entity.ReferenceGenome.messages.status.inprogress" %}</h2>
+        <p>{% trans "entity.ReferenceGenome.messages.status.inprogress.details" %}</p>
       {% endif %}
 
       <div class="form-actions">
         <a href="{% url "configure_references" %}" class="btn btn-primary">Back</a>
-        <button class="btn pull-right" id="delete">Delete Genome</button>
+        <button class="btn pull-right" id="delete">{% trans "references_genome_edit.action.delete" %}</button>
         <div id="ask_delete_genome" style="display: none; margin-top:12px;">
-          <p>Are you sure you want to delete {{ name }}?  Once you delete this, it can not be recovered.</p>
-          <button class="btn" id="cancel_delete_genome">No, Keep It</button> <button class="btn btn-danger" id="confirm_delete_genome_with_dir">Yes, Delete It</button>
+          <p>{{ confirm_delete_message }}</p>
+          <button class="btn" id="cancel_delete_genome">{% trans "global.action.cancel_delete" %}</button> <button class="btn btn-danger" id="confirm_delete_genome_with_dir">{% trans "global.action.confirm_delete" %}</button>
         </div>
         <div id="status_delete_genome" style="margin-top:12px;">
         </div>
@@ -119,18 +121,12 @@
           <div id="sys_messages">
             <div id="rebuild_alert" class="alert alert-block">
               <a class="close" data-dismiss="alert">&times;</a>
-              Due to the upgrade of TMAP, the TMAP specific index files for
-              {{ name }} are stale, and need to be rebuilt by TMAP before this
-              reference can be used for alignments.  This may take a few hours
-              for larger genomes during which time use of the server is
-              unadvisable.
+              {{ stale_index.alert|safe }}
               <p>
-                We recommend you rebuild all indices as a group at the end of the work day:
-                You will find controls to do this on the 
-                <a href="{% url "configure_references" %}">Reference tab</a>.
+                {{ stale_index.alert2|safe }}
               </p>
               <p>
-                <button id="rebuild">Rebuild {{ name }} Now</button>
+                <button id="rebuild">{{ stale_index.alert_action }}</button>
               </p>
             </div>
           </div>
@@ -139,7 +135,7 @@
             $(function(){ $("#rebuild").click(function(){
               $.get("/configure/references/genome/rebuild/{{ key }}", function(){
                 $("#rebuild_alert").hide();
-                $("#sys_messages").append('<div class="alert alert-block alert-success"><a class="close" data-dismiss="alert">&times;</a>Now rebuilding {{ name }}!</div>').fadeIn('slow');
+                $("#sys_messages").append('<div class="alert alert-block alert-success"><a class="close" data-dismiss="alert">&times;</a>{{ stale_index.alert_action_success }}!</div>').fadeIn('slow');
               });
             });});
           </script>
@@ -176,7 +172,7 @@
 
             {% if genome_dict %}
               <tr>
-                <th>Genome Info</th>
+                <th>{% trans "entity.ReferenceGenome.fields.genome_info.verbose_name" %}</th>
                 <td>
                   <ul>
                     {% for key,val in genome_dict.items %}
@@ -192,9 +188,9 @@
             {% if genome_fasta %}
               <tr>
                 {% if fastaOrig %}
-                  <th>FASTA (auto corrected)</th>
+                  <th>{% trans "entity.ReferenceGenome.fields.genome_fasta.verbose_name" %} (auto corrected)</th>
                 {% else %}
-                  <th>FASTA</th>
+                  <th>{% trans "entity.ReferenceGenome.fields.genome_fasta.verbose_name" %}</th>
                 {% endif %}
 
                 <td>
@@ -210,7 +206,7 @@
 
             {% if fastaOrig %}
               <tr>
-                <th>Original FASTA</th>
+                <th>{% trans "entity.ReferenceGenome.fields.genome_fasta_orig.verbose_name" %}</th>
                 <td>
                   {% if enabled %}
                     <a href="/output/{{index_version}}/{{name}}/{{name}}.orig">{{ name }}.orig</a>
@@ -224,12 +220,12 @@
             <tr>
               <td colspan="2">
                 <div class="form-actions">
-                  <input class="btn btn-primary" type="submit" value="Save Changes" name="submit" />
-                  <a href="{% url "configure_references" %}" class="btn">Cancel</a>
-                  <button class="btn pull-right" id="delete">Delete Genome</button>
+                  <input class="btn btn-primary" type="submit" value="{% trans "global.action.save" %}" name="submit" />
+                  <a href="{% url "configure_references" %}" class="btn">{% trans "global.action.cancel" %}</a>
+                  <button class="btn pull-right" id="delete">{% trans "references_genome_edit.action.delete" %}</button>
                   <div id="ask_delete_genome" style="display: none; margin-top:12px;">
-                    <p>Are you sure you want to delete {{ name }}?  Once you delete this, it can not be recovered.</p>
-                    <button class="btn" id="cancel_delete_genome">No, Keep It</button> <button class="btn btn-danger" id="confirm_delete_genome">Yes, Delete It</button>
+                    <p>{{ confirm_delete_message }}</p>
+                    <button class="btn" id="cancel_delete_genome">{% trans "global.action.cancel_delete" %}</button> <button class="btn btn-danger" id="confirm_delete_genome">{% trans "global.action.confirm_delete" %}</button>
                   </div>
                   <div id="status_delete_genome" style="margin-top:12px;">
                   </div>
@@ -238,7 +234,7 @@
             </tr>
             <tr id="processingBedFiles" class="fileList">
               <th>
-                Processing BED Files </br>
+                <p>{% trans "references_genome_edit.related.processingBedFiles.label" %}</p>
               </th>
               <td>
                 <ul id="processingBedFileList">
@@ -247,9 +243,9 @@
                       {{ bedFile.path }}
                       <input class="deleteBed" type="button"
                              data-contentupload="{{bedFile.pk}}"
-                             value="delete"/>
+                             value="{% trans "global.action.delete" %}"/>
                       <p>
-                        <a href="/rundb/uploadstatus/{{bedFile.pk}}/">Details
+                        <a href="/rundb/uploadstatus/{{bedFile.pk}}/">{% trans "references_genome_edit.relateddetails.label" %}
                         </a>
                         - {{ bedFile.status }}</p>
                     </li>
@@ -259,27 +255,49 @@
             </tr>
             <tr id="availableBedFiles" class="fileList">
               <th>
-                <p>Available Target Regions and Hotspot Files</p>
+                <p>{% trans "references_genome_edit.related.availableBedFiles.label" %}</p>
+{#                <a class="btn" href="{% url "content_add_hotspots" %}?reference={{ reference.short_name }}">Add Hotspots</a>#}
+{#                <a class="btn" href="{% url "content_add_targetregions" %}?reference={{ reference.short_name }}">Add Target Regions</a>#}
                 <button class="btn" id="bedUpload"
-                       type="button">Upload new files</button>
+                       type="button">{% trans "references_genome_edit.action.uploadbed" %}</button>
               </th>
               <td>
-                <div id="bedPublish">
-                  <h3>Upload new Target Regions file (BED) or Hotspot file (BED or VCF) for {{name}}: </h3>
-                  <div style="margin: 10px 0;">
-                    <span id="file_info">No file selected.</span>
-                    <span id="file_progress"></span>
-                  </div>
-                  <div class="buttonHolder form-inline">
-                    <button class="btn" id="pickfiles">Select a new BED/VCF File</button>
-                    <label  style="margin-left: 10px" for="hotspot" >Hotspot </label>
-                    <input type="checkbox" id="hotspot" name="hotspot"/>
-                    <a href="#" id="hotspot_help_button">?</a>
-                    <p id="hotspot_help_text">A "HotSpot" type BED or VCF file defines regions and individual bases where variants are expected to occur.</p>
-                    <div style="margin: 10px 0;">
-                      <button class="btn" id="upload_button">Upload</button>
+                <div id="bedPublish" class="">
+                    <h3>{% trans "publisher_upload.title" %}</h3>
+                    <div id="file_info" class="alert alert-block" style="display:none;"
+                            data-Error="{% trans "global.messages.upload.error" %}"
+                            data-File-Uploaded="{% trans "publisher_upload.messages.upload.fileuploaded" %}">
+
                     </div>
-                  </div>
+                    <div class="form-inline well">
+                        <div>
+                            <label class="form-label">{% trans "publisher_upload.fields.reference.label" %}</label>
+                            <span class="input-xlarge uneditable-input" placeholder="">{{name}}</span>
+                        </div>
+                        <div>
+                            <label class="form-label">{% trans "publisher_upload.fields.pickedfiles.label" %}</label>
+                            <div class="input-append">
+                                    <span class="input-xxlarge uneditable-input" id="file_name_info" placeholder="{% trans "publisher_upload.fields.pickedfiles.placeholder" %}">{% trans "publisher_upload.fields.pickedfiles.placeholder" %}</span>
+                                <button class="btn" id="pickfiles">{% trans "publisher_upload.fields.pickedfiles.select" %}</button>
+                            </div>
+                            <div id="file_progress" class="help-block" style="display: none;">
+                                <div class="progress">
+                                    <div class="bar" style="width: 60%;"></div>
+                                </div>
+                            </div>
+                            <div class="help-block">{% trans "publisher_upload.fields.pickedfiles.helptext" %}</div>
+                        </div>
+                        <div>
+                            <label class="form-label" for="hotspot" >{% trans "publisher_upload.fields.hotspot.label" %} </label>
+                            <input type="checkbox" id="hotspot" name="hotspot"/>
+                            <div class="help-block">{% trans "publisher_upload.fields.hotspot.helptext" %}</div>
+                        </div>
+                        <div>
+                            <a id="upload_cancel_button" class="btn" >{% trans "global.action.cancel" %}</a>
+                            <a id="upload_button" class="btn btn-primary" >{% trans "publisher_upload.action.submit" %}</a>
+                        </div>
+                    </div>
+
                   <script type="text/javascript">
                     $(function() {
                       uploader = new plupload.Uploader({
@@ -295,13 +313,6 @@
                         multipart_params: {meta: '{}'},
                         silverlight_xap_url: '{% static "resources/plupload/js/Moxie.xap"%}',
                         flash_swf_url: '{% static "resources/plupload/js/Moxie.swf"%}'
-                      });
-
-                      $("#bedUpload").click(function(){
-                            $("#bedPublish").toggle(0, function(){
-                              uploader.refresh();
-                            });
-                            return false;
                       });
 
                       uploader.bind('Init', function(up, params) {
@@ -325,33 +336,57 @@
                           up.removeFile(up.files[0]);
                         }
                         console.log(up.files);
-                        $('#file_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
-                        $('#file_progress').html('');
+                        $('#file_name_info').html(file.name + ' (' + plupload.formatSize(file.size) + ')');
+                        $('#file_info').html('').hide();
+                        $('#file_progress').find('.bar').css('width', "0%");
                         up.refresh(); // Reposition Flash/Silverlight
                       });
 
                       uploader.bind('UploadProgress', function(up, file) {
-                        $('#file_progress').html(file.percent + "%");
+                        $('#file_progress').show().find('.bar').css('width', file.percent + "%");
                       });
 
                       uploader.bind('Error', function(up, err) {
-                        var msg = 'There was an error during your upload';
+                        var msg = $('#file_info').data('error');
                         if (err.response && !err.response.startsWith('<!')){
                           msg = err.response;
                         }
                         $('#file_info').append("<div class='alert alert-error'>"+msg+"</div>");
+                        $('#file_info').show();
                       });
 
                       uploader.bind('FileUploaded', function(up, file) {
-                        $('#file_progress').html("100%");
+                        $('#file_progress').find('.bar').css('width', file.percent + "%")
+                            .delay(500)
+                            .css('width', 0 + "%").parents('#file_progress').hide();
+                        $("#file_info").html($('#file_info').data('fileUploaded')).show();
+                        uploader.removeFile(file);
+                        $('#file_name_info').html($('#file_name_info').attr('placeholder'));
                         refresh_uploads();
                       });
-                      $('#hotspot_help_text').hide();
-                      $('#hotspot_help_button').click(function(){
-                        $('#hotspot_help_text').slideToggle(300);
+
+                      $("#bedUpload").click(function(){
+                        $("#bedPublish").toggle(0, function(){
+                          uploader.refresh();
+                        });
                         return false;
                       });
+                      $("#upload_cancel_button").click(function() {
+                        $("#bedPublish").toggle(0, function(){
+                            if (uploader.files.length) {
+                                uploader.removeFile(uploader.files[0])
+                            }
+                            uploader.refresh();
+                            $('#file_name_info').html('');
+                            $('#file_info').html('').hide();
+                            $('#file_progress').find('.bar').css('width', "0%");
+                        });
+                        return false;
+                      });
+
+
                     });
+                    //# sourceURL=templates/rundb/configure/edit_reference_uploadbed.html
                   </script>
                 </div>
                 <ul id="availableBedFileList">
@@ -360,9 +395,9 @@
                       {{ bedFile.path }}
                       <input class="btn deleteBed" type="button"
                              data-contentupload="{{bedFile.pk}}"
-                             value="delete"/>
+                             value="{% trans "global.action.delete" %}"/>
                       <p>
-                        <a href="/rundb/uploadstatus/{{bedFile.pk}}/">Details
+                        <a href="/rundb/uploadstatus/{{bedFile.pk}}/">{% trans "references_genome_edit.relateddetails.label" %}
                         </a>
                       </p>
                     </li>
@@ -372,7 +407,7 @@
             </tr>
             <tr id="availableRefAnnotFiles" class="fileList">
               <th>
-                <p>Available Reference Annotation Files</p>
+                <p>{% trans "references_genome_edit.related.availableRefAnnotFiles.label" %}</p>
                 <!--Place holder for Future Enhancement : Upload/Delete Annotation-->
                 <!--<button class="btn" id="bedUpload"
                        type="button">Upload new files</button>-->
@@ -384,9 +419,9 @@
                       {{ refAnnot.path }}
                       <input class="btn deleteBed" type="button"
                              data-contentupload="{{refAnnot.pk}}"
-                             value="delete"/>
+                             value="{% trans "global.action.delete" %}"/>
                       <p>
-                        <a href="/rundb/uploadstatus/{{refAnnot.pk}}/">Details
+                        <a href="/rundb/uploadstatus/{{refAnnot.pk}}/">{% trans "references_genome_edit.relateddetails.label" %}
                         </a>
                       </p>
                     </li>
@@ -407,9 +442,7 @@
   function delete_bed() {
     deleteURL = "/rundb/api/v1/contentupload/" + $(this).data("contentupload") + "/";
     bedLine = $(this).parent("li");
-    var filemonitorURL = "/rundb/api/v1/filemonitor/";
-    var filemonitorObj = filemonitorURL + "?url=" + $(this).data("source");
-    apprise('Are you sure you would like to remove this BED file?', {'verify': true}, function (r) {
+    apprise('{% trans "references_genome_edit.messages.deletebed.confirmmsg" %}', {'verify': true, 'textYes' : '{% trans "global.choice.yes" %}', 'textNo' : '{% trans "global.choice.no" %}'}, function (r) {
       if (r) {
         //delete using the API
         $.ajax({
@@ -460,7 +493,7 @@
     var li = $('<li>' + name + '</li>');
 
     if ((data.pub == "refAnnot") || (data.pub == "BED")) {
-    	var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '" data-source="' + data.source + '">Delete</button>');
+    	var button = $('<button class="btn btn-small deleteBed" data-contentupload="' + data.id + '" data-source="' + data.source + '">{% trans "global.action.delete" %}</button>');
         button.click(delete_bed);
 	    button.hover(
 	            function () {
@@ -474,14 +507,14 @@
     }
     if (data.status == "Successfully Completed") {
       if (data.pub == "refAnnot") {
-         li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
+         li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">{% trans "references_genome_edit.relateddetails.label" %}</a></p>');
          $("#availableRefAnnotFileList").append(li);
       } else {
-      	 li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a></p>');
+      	 li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">{% trans "references_genome_edit.relateddetails.label" %}</a></p>');
          $("#availableBedFileList").append(li);
       }
     } else {
-      li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">Details</a> - ' + data.status + ' </p>');
+      li.append('<p><a href="/rundb/uploadstatus/' + data.id + '/">{% trans "references_genome_edit.relateddetails.label" %}</a> - ' + data.status + ' </p>');
       $("#processingBedFileList").append(li);
     }
   }
@@ -584,5 +617,6 @@
       $("#processingBedFiles").hide();
     }
   });
+  //# sourceURL=templates/rundb/configure/edit_reference.html
 </script>
 {% endblock content %}  

@@ -1,6 +1,7 @@
 {% extends "rundb/common/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block monitor_menu %}active{% endblock %}
 {% block sub-nav %}
-<li class=""><a href="{% url "monitor" %}">Runs in Progress</a></li>
+<li class=""><a href="{% url "monitor" %}">{% trans "global.nav.menu.monitor.menu.monitor.label" %}</a></li>
 {% endblock sub-nav %}

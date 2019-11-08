@@ -4,6 +4,7 @@ ipaddress:{{ansible_default_ipv4.address|default("")}}
 serialnumber:{{ansible_product_serial}}
 version:{{tsconfig_version.stdout}}
 hardwarename:{{ansible_product_name}}
+biosversion:{{ansible_bios_version}}
 {% if ansible_hostname == groups.headnode[0] %}
 mode:master
 {% else %}

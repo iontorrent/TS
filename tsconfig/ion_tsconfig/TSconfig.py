@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-'''
+"""
     TSconfig.py works with the GUI updates page to check if new version is available and update TS
     In TS version < 5.4 update tasks instantiate TSConfig class directly, in order for this to work
         all class functions listed as called by dbReports must remain intact
     Starting with TS 5.4 GUI update tasks call functions via the script's CLI
-'''
+"""
 
 import os
 import sys
@@ -40,7 +40,7 @@ class PickleLogger(object):
 
     def __getstate__(self):
         obj_dict = self.__dict__.copy()
-        obj_dict['_logger'] = None
+        obj_dict["_logger"] = None
         return obj_dict
 
     def __setstate__(self, obj_dict):
@@ -67,13 +67,16 @@ class PickleLogger(object):
             logger.setLevel(logging.DEBUG)
             hand = logging.handlers.RotatingFileHandler(logfile, backupCount=5)
             logger.addHandler(hand)
-            format = logging.Formatter("%(asctime)s\t%(levelname)s\t%(funcName)s\t%(message)s")
+            format = logging.Formatter(
+                "%(asctime)s\t%(levelname)s\t%(funcName)s\t%(message)s"
+            )
             hand.setFormatter(format)
             # we handle the rollover manually in order to ensure that the records of a
             # single upgrade reside in a single log file.
         if rollover and os.stat(logfile).st_size > 1024 * 1024:
             hand.doRollover()
         return logger
+
 
 logger = PickleLogger()
 
@@ -82,18 +85,19 @@ def manual_is_upgradable(pkg):
     """This method is used to get around a current bug in aptitude where some versions are being marked as upgradable incorrectly"""
     return LooseVersion(pkg.candidate.version) > LooseVersion(pkg.installed.version)
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 #
 # Utility functions
 #
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 # TODO: this is available in ts_params
 CONF_FILE = "/etc/torrentserver/tsconf.conf"
 
 
 def host_is_master():
-    '''Returns true if current host is configured as master node'''
+    """Returns true if current host is configured as master node"""
     if os.path.isfile(CONF_FILE):
         try:
             for line in open(CONF_FILE):
@@ -108,7 +112,9 @@ def host_is_master():
         except IOError as err:
             logger.error(err.message)
 
-    if os.path.isfile("/opt/ion/.masternode") and not os.path.isfile("/opt/ion/.computenode"):
+    if os.path.isfile("/opt/ion/.masternode") and not os.path.isfile(
+        "/opt/ion/.computenode"
+    ):
         logger.debug("Using flag files to determine masterhost status")
         return True
 
@@ -121,15 +127,15 @@ def get_apt_cache_dir():
         _dir = os.path.join(
             apt_pkg.config.get("dir"),
             apt_pkg.config.get("dir::cache"),
-            apt_pkg.config.get("dir::cache::archives")
+            apt_pkg.config.get("dir::cache::archives"),
         )
-    except:
-        _dir = "/var/cache/apt/archives"    # default setting
+    except Exception:
+        _dir = "/var/cache/apt/archives"  # default setting
     return _dir
 
 
 def freespace(directory):
-    '''Returns free disk space for given directory in megabytes'''
+    """Returns free disk space for given directory in megabytes"""
     try:
         s = os.statvfs(directory)
     except:
@@ -140,34 +146,37 @@ def freespace(directory):
 
     return mbytes
 
+
 # This tells apt-get not to expect access to standard in.
-os.environ['DEBIAN_FRONTEND'] = 'noninteractive'
+os.environ["DEBIAN_FRONTEND"] = "noninteractive"
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #
-#Ion database access
-#Only head nodes will have dbase access
+# Ion database access
+# Only head nodes will have dbase access
 #
-#-------------------------------------------------------------------------------
-sys.path.append('/opt/ion/')
+# -------------------------------------------------------------------------------
+sys.path.append("/opt/ion/")
 if host_is_master():
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
+    os.environ["DJANGO_SETTINGS_MODULE"] = "iondb.settings"
     from iondb.rundb import models
+
     logger.disabled = False
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #
 # python-apt
 #
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 class GetAcquireProgress(apt.progress.base.AcquireProgress):
 
-    '''
+    """
     Handle the package download process for apt_pkg.Acquire
-    '''
+    """
 
     def __init__(self, tsconfig):
         apt.progress.base.AcquireProgress.__init__(self)
@@ -185,18 +194,27 @@ class GetAcquireProgress(apt.progress.base.AcquireProgress):
     def pulse(self, acquire):
 
         tsc = self.tsconfig
-        progress = "Downloading %.1fMB/%.1fMB" % (self.current_bytes/(1024 * 1024), self.total_bytes/(1024 * 1024))
+        progress = "Downloading %.1fMB/%.1fMB" % (
+            self.current_bytes / (1024 * 1024),
+            self.total_bytes / (1024 * 1024),
+        )
         tsc.update_progress(progress)
 
         item_idx = self.current_items
         if item_idx == self.total_items:
             item_idx -= 1
         destfile = acquire.items[item_idx].destfile
-        destfile = destfile.split('/')[-1]
-        debug_string = "[GetAcquireProgress] %s; CPS: %s/s; Bytes: %s/%s; Item: %s/%s" % (
-            destfile,
-            self.current_cps, self.current_bytes, self.total_bytes,
-            item_idx+1, self.total_items
+        destfile = destfile.split("/")[-1]
+        debug_string = (
+            "[GetAcquireProgress] %s; CPS: %s/s; Bytes: %s/%s; Item: %s/%s"
+            % (
+                destfile,
+                self.current_cps,
+                self.current_bytes,
+                self.total_bytes,
+                item_idx + 1,
+                self.total_items,
+            )
         )
         tsc.logger.debug(debug_string)
 
@@ -205,9 +223,9 @@ class GetAcquireProgress(apt.progress.base.AcquireProgress):
 
 class GetInstallProgress(apt.progress.base.InstallProgress):
 
-    '''
+    """
     Handle the package install process for apt.Cache
-    '''
+    """
 
     def __init__(self, tsconfig):
         apt.progress.base.InstallProgress.__init__(self)
@@ -226,7 +244,9 @@ class GetInstallProgress(apt.progress.base.InstallProgress):
         progress = "%s %d%%" % (status, percent)
         tsc.update_progress(progress)
 
-        self.tsconfig.logger.debug("[GetInstallProgress] %s [%s/100]" % (status, percent))
+        self.tsconfig.logger.debug(
+            "[GetInstallProgress] %s [%s/100]" % (status, percent)
+        )
 
     def error(self, pkg, errormsg):
         tsc = self.tsconfig
@@ -244,38 +264,37 @@ class GetInstallProgress(apt.progress.base.InstallProgress):
         self.tsconfig.logger.debug("status_change: %s %s" % (pkg, stage))
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #
 # List of packages used by GUI updates webpage to check if a TS update is Available
 # This is NOT the complete list of packages that are installed by TSconfig
 #
 # Note: this list is duplicated in pipeline/python/ion/utils/TSVersion.py
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 ION_PACKAGES = [
-    'ion-analysis',
-    'ion-dbreports',
-    'ion-docs',
-    'ion-gpu',
-    'ion-pipeline',
-    'ion-publishers',
-    'ion-referencelibrary',
-    'ion-rsmts',
-    'ion-sampledata',
-    'ion-torrentpy',
-    'ion-torrentr',
-    'ion-tsconfig',
+    "ion-analysis",
+    "ion-dbreports",
+    "ion-docs",
+    "ion-gpu",
+    "ion-pipeline",
+    "ion-publishers",
+    "ion-referencelibrary",
+    "ion-rsmts",
+    "ion-sampledata",
+    "ion-torrentpy",
+    "ion-torrentr",
+    "ion-tsconfig",
 ]
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #
 # Class Definition: TSconfig
 #   handles download of ion packages and installation of ion-tsconfig
 #   launches Ansible script to update software
 #
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 class TSconfig(object):
-
     def __init__(self):
         self.logger = logger
         self.ION_PKG_LIST = []
@@ -283,8 +302,8 @@ class TSconfig(object):
         self.aptcachedir = get_apt_cache_dir()
 
     def updatePkgDatabase(self):
-        '''Update apt cache '''
-        retry = 5   # try five times
+        """Update apt cache """
+        retry = 5  # try five times
         sleepy = 2  # wait a couple seconds
 
         while retry:
@@ -303,30 +322,37 @@ class TSconfig(object):
 
     def TSpurge_pkgs(self):
         try:
-            cmd = ['sudo', 'apt-get', 'autoclean']
+            cmd = ["sudo", "apt-get", "autoclean"]
             p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout, stderr = p1.communicate()
             if p1.returncode == 0:
                 self.logger.info("autocleaned apt cache directory")
             else:
                 self.logger.info("Error during autoclean: %s" % stderr)
-        except:
+        except Exception:
             self.logger.error(traceback.format_exc())
 
     def update_progress(self, status):
         try:
             models.GlobalConfig.objects.update(ts_update_status=status)
-        except:
+        except Exception:
             from django.db import connection
+
             connection.close()  # Force a new connection on next transaction
             try:
                 models.GlobalConfig.objects.update(ts_update_status=status)
-            except:
+            except Exception:
                 self.logger.error("Unable to update database with progress")
                 connection.close()  # Force a new connection on next transaction
 
     def updatePackageLists(self):
-        self.ION_PKG_LIST = sorted([pkg for pkg in ION_PACKAGES if self.apt_cache.has_key(pkg) and self.apt_cache[pkg].is_installed])
+        self.ION_PKG_LIST = sorted(
+            [
+                pkg
+                for pkg in ION_PACKAGES
+                if self.apt_cache.has_key(pkg) and self.apt_cache[pkg].is_installed
+            ]
+        )
 
     def buildUpdateList(self, pkgnames):
         pkglist = []
@@ -334,33 +360,38 @@ class TSconfig(object):
             pkg = self.apt_cache[pkg_name]
             if manual_is_upgradable(pkg):
                 pkglist.append(pkg_name)
-                self.logger.debug("%s %s upgradable to %s" % (pkg.name, pkg.installed.version, pkg.candidate.version))
+                self.logger.debug(
+                    "%s %s upgradable to %s"
+                    % (pkg.name, pkg.installed.version, pkg.candidate.version)
+                )
             else:
                 self.logger.debug("%s %s" % (pkg.name, pkg.installed.version))
 
-        self.logger.debug("Checked %s packages, found %s upgradable" % (len(pkgnames), len(pkglist)))
+        self.logger.debug(
+            "Checked %s packages, found %s upgradable" % (len(pkgnames), len(pkglist))
+        )
 
         return pkglist
 
-    #-------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------
     #
     #   Functions called from dbReports
     #
-    #-------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------
 
     def TSpoll_pkgs(self):
-        '''Checks the Ion Torrent Suite software and returns list of packages to update '''
-        self.update_progress('Checking for updates')
+        """Checks the Ion Torrent Suite software and returns list of packages to update """
+        self.update_progress("Checking for updates")
 
         ionpkglist = []
         if not self.updatePkgDatabase():
             self.logger.error("Could not update apt package database")
-            self.update_progress('Failed checking for updates')
+            self.update_progress("Failed checking for updates")
         else:
             self.updatePackageLists()
             ionpkglist = self.buildUpdateList(self.ION_PKG_LIST)
             if len(ionpkglist) > 0:
-                self.update_progress('Available')
+                self.update_progress("Available")
                 self.logger.info("There are %d ion package updates!" % len(ionpkglist))
 
                 # check available disk space
@@ -369,14 +400,17 @@ class TSconfig(object):
                 self.apt_cache.upgrade()
                 required = self.apt_cache.required_download / (1024 * 1024)
                 self.apt_cache.clear()
-                self.logger.info("%.1fMB required download space, %.1fMB available in %s." % (required, available, self.aptcachedir))
+                self.logger.info(
+                    "%.1fMB required download space, %.1fMB available in %s."
+                    % (required, available, self.aptcachedir)
+                )
 
                 if available < required:
                     msg = "WARNING: insufficient disk space for update"
                     self.update_progress(msg)
                     self.logger.debug(msg)
             else:
-                self.update_progress('No updates')
+                self.update_progress("No updates")
 
         return ionpkglist
 
@@ -387,11 +421,14 @@ class TSconfig(object):
             self.logger.error("Could not update apt package database")
         else:
             self.TSpurge_pkgs()
-            self.update_progress('Downloading')
+            self.update_progress("Downloading")
             self.apt_cache.upgrade()
             required = self.apt_cache.required_download / (1024 * 1024)
             downloaded = [pkg.name for pkg in self.apt_cache.get_changes()]
-            self.logger.debug('%d upgradable packages, %.1fMB required download space' % (len(downloaded), required))
+            self.logger.debug(
+                "%d upgradable packages, %.1fMB required download space"
+                % (len(downloaded), required)
+            )
 
             # Download packages
             pm = apt_pkg.PackageManager(self.apt_cache._depcache)
@@ -399,14 +436,14 @@ class TSconfig(object):
             try:
                 self.apt_cache._fetch_archives(fetcher, pm)
                 success = True
-            except:
+            except Exception:
                 self.logger.error(traceback.format_exc())
 
         if success:
-            self.update_progress('Ready to install')
+            self.update_progress("Ready to install")
             self.logger.info("Successfully downloaded %s packages" % len(downloaded))
         else:
-            self.update_progress('Download failure')
+            self.update_progress("Download failure")
             self.logger.error("Failed downloading packages!")
 
         return downloaded
@@ -417,29 +454,31 @@ class TSconfig(object):
             return False
 
         try:
-            pkg = self.apt_cache['ion-tsconfig']
+            pkg = self.apt_cache["ion-tsconfig"]
             if manual_is_upgradable(pkg):
-                self.update_progress('Installing ion-tsconfig')
+                self.update_progress("Installing ion-tsconfig")
                 self.apt_cache.clear()
                 pkg.mark_upgrade()
-                self.apt_cache.commit(GetAcquireProgress(self), GetInstallProgress(self))
+                self.apt_cache.commit(
+                    GetAcquireProgress(self), GetInstallProgress(self)
+                )
                 self.logger.info("Installed ion-tsconfig")
                 return True
-        except:
+        except Exception:
             self.logger.warning("Could not install ion-tsconfig!")
             self.logger.error(traceback.format_exc())
         return False
 
     def TSexec_update(self):
         self.logger.info("Starting update via ansible")
-        self.update_progress('Installing')
+        self.update_progress("Installing")
         os.environ["TS_EULA_ACCEPTED"] = "1"
         # First step is to update software packages
         try:
             cmd = ["/usr/sbin/TSconfig", "-s", "--force"]
             p1 = subprocess.call(cmd)
             success = p1 == 0
-        except:
+        except Exception:
             success = False
             self.logger.error(traceback.format_exc())
 
@@ -449,10 +488,15 @@ class TSconfig(object):
 
             try:
                 self.logger.debug("Starting configuration")
-                cmd = ["/usr/sbin/TSconfig", "--configure-server", "--force", "--noninteractive"]
+                cmd = [
+                    "/usr/sbin/TSconfig",
+                    "--configure-server",
+                    "--force",
+                    "--noninteractive",
+                ]
                 p1 = subprocess.call(cmd)
                 success = p1 == 0
-            except:
+            except Exception:
                 success = False
                 self.logger.error(traceback.format_exc())
 
@@ -469,9 +513,9 @@ class TSconfig(object):
 
         # This will start celery if it is not running for any reason after upgrade
         try:
-            subprocess.call(['service', 'celeryd', 'start'])
-            subprocess.call(['service', 'celerybeat', 'start'])
-        except:
+            subprocess.call(["service", "celeryd", "start"])
+            subprocess.call(["service", "celerybeat", "start"])
+        except Exception:
             pass
 
         return success
@@ -480,23 +524,54 @@ class TSconfig(object):
         # legacy function, leave it to be able to upgrade from TS < 5.4
         pass
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 #
 # End Class Definition: TSconfig
 #
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="TSconfig.py check for and install new TS software updates")
-    parser.add_argument('-p', '--poll', dest='poll', action='store_true', default=False, help='check for new ion packages')
-    parser.add_argument('-d', '--download', dest='download', action='store_true', default=False, help='download all available packages')
-    parser.add_argument('-r', '--refresh', dest='refresh', action='store_true', default=False, help='update ion-tsconfig to latest version')
-    parser.add_argument('-s', '--upgrade', dest='upgrade', action='store_true', default=False, help='starts software update via ansible')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="TSconfig.py check for and install new TS software updates"
+    )
+    parser.add_argument(
+        "-p",
+        "--poll",
+        dest="poll",
+        action="store_true",
+        default=False,
+        help="check for new ion packages",
+    )
+    parser.add_argument(
+        "-d",
+        "--download",
+        dest="download",
+        action="store_true",
+        default=False,
+        help="download all available packages",
+    )
+    parser.add_argument(
+        "-r",
+        "--refresh",
+        dest="refresh",
+        action="store_true",
+        default=False,
+        help="update ion-tsconfig to latest version",
+    )
+    parser.add_argument(
+        "-s",
+        "--upgrade",
+        dest="upgrade",
+        action="store_true",
+        default=False,
+        help="starts software update via ansible",
+    )
 
     args = parser.parse_args()
     if not any(vars(args).values()):
-        parser.error('no option specified')
+        parser.error("no option specified")
         sys.exit(2)
 
     tsconfig = TSconfig()
@@ -516,7 +591,7 @@ if __name__ == '__main__':
         except Exception as err:
             logger.error(traceback.format_exc())
             sys.exit("Download failure")
-    
+
     if args.refresh:
         try:
             is_new = tsconfig.TSexec_update_tsconfig()

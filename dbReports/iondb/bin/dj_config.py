@@ -20,8 +20,10 @@ import requests
 def call(*cmd):
     # Root user at boot requires this addition to its path variable to locate tmap
     env = dict(os.environ)
-    env['PATH'] = '/usr/local/bin:' + env['PATH']
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    env["PATH"] = "/usr/local/bin:" + env["PATH"]
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+    )
     stdout, stderr = proc.communicate()
     if proc.returncode == 0:
         # the call returned successfully
@@ -40,15 +42,18 @@ def is_s5_tsvm():
     # I am not super excited to use the existance of such a file as there could be a point
     # in time in the future where the 1:1 correlation may change between the existance of
     # this file and this TS being a S5 tsvm instance
-    return os.path.exists('/etc/init.d/mountExternal')
+    return os.path.exists("/etc/init.d/mountExternal")
 
 
 def get_s5_ip_addr():
     """get the S5 IP address"""
     try:
-        resp = requests.get('http://192.168.122.1/instrument/software/www/config/DataCollect.config', timeout=2.0)
-        for line in resp.text.split('\n'):
-            if 'IP Address Str' in line:
+        resp = requests.get(
+            "http://192.168.122.1/instrument/software/www/config/DataCollect.config",
+            timeout=2.0,
+        )
+        for line in resp.text.split("\n"):
+            if "IP Address Str" in line:
                 return line[15:]
     except requests.ConnectionError:
         # we don't really need to do anything here asides from assume this is not an S5 and move on

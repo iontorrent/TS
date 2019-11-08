@@ -1,6 +1,7 @@
 {% extends "rundb/sample/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 
 
@@ -25,8 +26,7 @@
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap-dropdown.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
-<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+{% include "rundb/common/head_kendo_script.html" %}
 <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
 
@@ -34,10 +34,30 @@
 
 <script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
 
-<script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
-<link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
-
 <style>
+.search-field {
+    {#display: inline-block;#}
+    {#zoom: 1;#}
+    {#*display: inline;#}
+    {#height: 30px;#}
+    float: left;
+    margin: 10px 10px 5px 0;
+}
+
+.search-field.order-by {
+  float: right;
+  margin-right: 0;
+}
+
+.search-field select {
+    width: 200px;
+}
+
+.search-field > .btn,
+.search-field > input,
+.search-field > .btn-group > .btn {
+    font-size: 11px;
+}
 
 #sampleset_grid .k-grid-content {
 	height: 350px;
@@ -52,7 +72,7 @@ border-bottom:none;
 .k-grid .k-grid-header .k-header .k-link {
 height:24px;
 padding-top:16px;
-font-size:13px;
+font-size:12px;
 color: #333;
 }
 .k-header:first-child{
@@ -88,7 +108,7 @@ background: #dbdbdb;
 </style>
 <script type="text/x-kendo-template" id="template">
 	<div class="">
-	<div class="samples"></div>
+	<div class="samples" data-url-detail="{% url 'api_dispatch_list' resource_name='samplesetiteminfo' api_name='v1' %}?sampleSet=#= data.id#&order_by=sample__displayedName"></div>
 	</div>
 </script>
 
@@ -98,19 +118,19 @@ background: #dbdbdb;
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "edit_sampleset" 999999 %}'.replace('999999',_id)#" class="edit_sampleset" data-toggle="modal">Edit Set</a>
+			<a href="#= '{% url "edit_sampleset" 999999 %}'.replace('999999',_id)#" class="edit_sampleset">{% trans "samplesets.action.edit_sampleset.label" %}</a>
 		</li>
         # if (readyForPlanning) { #
             <li>
-                <a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run" data-toggle="modal">Plan Run</a>
+                <a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run">{% trans "samplesets.action.sampleset_plan_run.label" %}</a>
             </li>
         # } #
 		<li>
-			<a href="#= '{% url "library_prep_summary" 999999 %}'.replace('999999',_id)#" class="libprep_summary" data-toggle="modal">Library Prep Summary</a>
+			<a href="#= '{% url "library_prep_summary" 999999 %}'.replace('999999',_id)#" class="libprep_summary">{% trans "samplesets.action.library_prep_summary.label" %}</a>
 		</li>
 		<li class="divider"></li>		
 		<li>
-			<a href="#= '{% url "delete_sampleset" 999999 %}'.replace('999999',_id)#"  class="delete_set">Delete Set</a>
+			<a href="#= '{% url "delete_sampleset" 999999 %}'.replace('999999',_id)#"  class="delete_set">{% trans "samplesets.action.delete_sampleset.label" %}</a>
 		</li>		
 	</ul>
 </div>	
@@ -122,11 +142,11 @@ background: #dbdbdb;
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "edit_samplesetitem" 999999 %}'.replace('999999',_id)#" class="edit_sample_in_sampleset" data-toggle="modal">Edit Sample in Set</a>
+			<a href="#= '{% url "edit_samplesetitem" 999999 %}'.replace('999999',_id)#" class="edit_sample_in_sampleset">{% trans "samplesets.action.edit_samplesetitem.label" %}</a>
 		</li>
 		<li class="divider"></li>		
 		<li>
-			<a href="#= '{% url "remove_samplesetitem" 999999 %}'.replace('999999',_id)#" class="remove_sample_from_set"  data-toggle="modal">Remove Sample from Set</a>
+			<a href="#= '{% url "remove_samplesetitem" 999999 %}'.replace('999999',_id)#" class="remove_sample_from_set">{% trans "samplesets.action.remove_samplesetitem.label" %}</a>
 		</li>
 	</ul>
 </div>	
@@ -153,185 +173,61 @@ background: #dbdbdb;
     # } #
     </span>
 </script>
-
-<!--20130712-TODO: NEED TO BE GENERALIZED #= data.attr_value_{{attribute.displayedName}}# -->
-
-<script id="CustomSampleAttributeTemplate" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[customAttributes_index]; #
-	#= data.attribute_dict[attribute] + " at index=" + customAttributes_index + " json=" + customAttributes_json[customAttributes_index] #
-</script>
-	
-<script id="CustomSampleAttributeTemplate_0" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[0]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_1" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[1]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_2" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[2]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_3" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[3]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_4" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[4]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_5" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[5]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_6" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[6]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_7" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[7]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_8" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[8]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_9" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[9]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_10" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[10]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_11" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[11]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_12" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[12]; #
-	#= data.attribute_dict[attribute] #
-</script>
-	<script id="CustomSampleAttributeTemplate_13" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[13]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_14" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[14]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_15" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[15]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_16" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[16]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_17" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[17]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_18" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[18]; #
-	#= data.attribute_dict[attribute] #
-</script>
-<script id="CustomSampleAttributeTemplate_19" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[19]; #
-	#= data.attribute_dict[attribute] #
-</script>	
-	
-	
-	
-<!-- 20130711-test "My_sample_attribute"-->
-<script id="CustomSampleAttributeTemplate_fake" type="text/x-kendo-template">
-	# var attribute = customAttributes_json[customAttributes_index]; #
-	#= data.attribute_dict["My_sample_attribute"] #
-</script>
-
-<!-- 20130710-donotwork -->
-<script id="CustomSampleAttributeTemplate_old2" type="text/x-kendo-template">
-	#= data.attr_value_{{custom_sample_column_objs.displayedName}}#
-</script>
-	
-<!--20130711-donotwork-->
-<script type="text/javascript">
-function CustomSampleAttributeTemplate_old2(sampleAttribute) {
-	console.log("at samplesets.html CustomSampleAttributeTemplate... sampleAttribute=", sampleAttribute);
-	
-	//return data.attr_value_{{sampleAttribute}};
-	//return data.attr_value_My_sample_attribute;
-	return data.attribute_dict[sampleAttribute];
-}
-</script>
-
-<!--20130711-donotwork-->
-<script type="text/javascript">
-function CustomSampleAttributeTemplate_old(index) {
-	console.log("at samplesets.html CustomSampleAttributeTemplate... index=", index);
-	return data.attr_value_{{sampleAttribute}};
-}
-</script>
-
 		<div class="content group clearfix">
 			<div class="row-fluid">
 				<div class="span12">
 					<div class="pull-left">
-						<h1 style="margin-bottom:5px;">Sample Sets</h1>
+						<h1 style="margin-bottom:5px;">{% trans "samplesets.title" %}</h1>
 					</div>
 					<div class="pull-right">
-		            	<a id="import_samples" href="{% url "import_samples" %}" class="btn btn-primary">Import Samples from File</a>
-						<a id="input_samples" href="{% url "input_samples" %}" class="btn">Enter Samples Manually</a>
+		            	<a id="import_samples" href="{% url "import_samples" %}" class="btn btn-primary">{% trans "samplesets.action.import_samples.label" %}</a>
+						<a id="input_samples" href="{% url "input_samples" %}" class="btn">Add or Update Sample Set / Samples</a>
 						<div class="btn-group">
 							<a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-								Sample Attributes <span class="caret"></span>
+								{% trans "samplesets.action.sampleattributes.label" %} <span class="caret"></span>
 							</a>
 							<ul class="dropdown-menu">								
-								<li><a href="#" class="modal_add_sample_attribute" data-toggle="modal">Add</a></li>							
-								<!--li><a href="#modal_import" data-toggle="modal">Import</a></li -->
-								<li><a id="manage_sample_attributes" href="{% url "sample_attributes" %}" >Manage</a></li>								
+								<li><a href="{% url "add_sample_attribute" %}" class="modal_add_sample_attribute">{% trans "samplesets.action.sampleattributes.menu.add_sample_attribute.label" %}</a></li>
+								<li><a id="manage_sample_attributes" href="{% url "sample_attributes" %}" >{% trans "samplesets.action.sampleattributes.menu.sampleattributes.label" %}</a></li>
 							</ul>
 						</div>
 					</div>
 				</div>
             </div>
 
-			<div class="row-fluid">
-			     <div class="span12">
-                    <div class="input-append search-field" style="width: 450px; display:inline-block;">
-                        <label for="searchText" class=" hide">Search</label>                                   
-                        <input id="search_text" type="text" placeholder="Search name or label" style="width: 200px;" />
-            
-                        <div class="btn-group" style="width: 150px;" id="sampleSet_search_options">
-                            <label for="searchSubject" id="search_subject" class=" hide">sampleSetName</label> 
-                            
-                            <a id="search_subject_nav" class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
-            
+            <div class="row-fluid">
+                <div class="form-inline">
+                    <fieldset>
+                    <div class="input-append search-field">
+                        <label for="searchText" class=" hide">{% trans "samplesets.search_bar.fields.search_text.label" %}</label>
+                        <input id="search_text" type="text" placeholder="{% trans "samplesets.search_bar.fields.search_text.placeholder" %}" />
+                        <div class="btn-group" id="sampleSet_search_options">
+                            <label for="searchSubject" id="search_subject" class=" hide">sampleSetName</label>
+                            <a id="search_subject_nav" class="btn dropdown-toggle" data-toggle="dropdown" href="\\#" style="border-radius: 0px;"><i class="icon-search" border="0"></i><span class="caret"></span></a>
                             <ul id="sampleset_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
-                                <li><a href="#" class="search_sampleSetName"><span class="search_sampleSetName_selected icon-check"></span>Sample set name</a></li>
-                                <li><a href="#" class="search_combinedTubeLabel"><span class="search_combinedTubeLabel_selected icon-white"></span>Combined library tube label</a></li>
+                                <li><a href="#" class="search_sampleSetName"><span class="search_sampleSetName_selected icon-check"></span>{% trans "samplesets.search_bar.fields.search_text.choice.sampleSetName" %}</a></li>
+                                <li><a href="#" class="search_combinedTubeLabel"><span class="search_combinedTubeLabel_selected icon-white"></span>{% trans "samplesets.search_bar.fields.search_text.choice.combinedTubeLabel" %}</a></li>
                             </ul>
-                            
-                            <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">Go</button>
-                            <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
+                            <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">{% trans "samplesets.search_bar.fields.search_text.action.submit" %}</button>
                         </div>
                     </div>
-                    <div style="display:inline-block;float: right;">
-                            <span rel="tooltip" data-original-title="Select at least one sampleSet to Plan Run">
-                                    <a id="plan_from_selected" href="{% url "sampleset_plan_run" 999999 %}" class="btn" disabled>Plan Run</a>
-                            </span>
+                    <div class="search-field">
+                        <button id="clear_filters" class="btn clear_filters" type="button">{% trans "samplesets.search_bar.action.clear_filters.label" %}</button>
                     </div>
+                    <div class="search-field order-by">
+                        <span rel="tooltip" data-original-title="{% trans "samplesets.action.sampleset_plan_run.tooltip" %}">
+                            <a id="plan_from_selected" href="{% url "sampleset_plan_run" 999999 %}" class="btn" disabled>{% trans "samplesets.action.sampleset_plan_run.label" %}</a>
+                        </span>
+                    </div>
+                    </fieldset>
                 </div>				
 			</div>
 
 			<div class="row-fluid">
 				<div class="span12">
-					<div id="sampleset_grid"></div>
-					<!--20130711-TODO-cleanup -->
-					<!--input value="{{custom_sample_column_list}}" id="customAttributes" name="customAttributes" type="hidden" /-->
-					<input value="" id="customAttribute" name="customAttribute" type="hidden" /-->
-					<!--input value="{{custom_sample_column_objs|safe}}" id="customAttributeObjs" name="customAttributeObjs" type="hidden" / -->
+					<div id="sampleset_grid"
+                         data-url-read="{% url "api_dispatch_list" resource_name="sampleset" api_name='v1' %}?order_by=-lastModifiedDate&status__in=created,planned,libPrep_pending,libPrep_reserved,libPrep_done,run,,"
+                         data-url-update="{% url "api_dispatch_list" resource_name="sampleset" api_name='v1' %}?order_by=-lastModifiedDate"></div>
 				</div>
 			</div>
 		</div>

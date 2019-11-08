@@ -1,0 +1,119 @@
+---
+# file: repos.yml
+# like globals.yml, this playbook is used by meant for to 'include' as tasks
+# rather than standalone ones.
+
+#-----------------------------------------------------------------------------
+# Replace official ubuntu repo with Ion-sourced ubuntu repo
+#-----------------------------------------------------------------------------
+- name: Disable /etc/apt/sources.list
+  template:
+    src: templates/sources.list.j2
+    dest: /etc/apt/sources.list{{ FUNKYEXT|default('') }}
+    owner: root
+    group: root
+    mode: 644
+
+- name: Add /etc/apt/sources.list.d/iontorrent-ubuntu.list
+  template:
+    src: templates/iontorrent-ubuntu.j2
+    dest: /etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
+    owner: root
+    group: root
+    mode: 644
+  when: "ansible_hostname == groups.headnode[0]"
+
+#-----------------------------------------------------------------------------
+# Adding offcycle plugin and instrument update repository
+#-----------------------------------------------------------------------------
+- name: Add /etc/apt/sources.list.d/iontorrent-offcycle.list
+  template:
+    src: templates/iontorrent-offcycle.j2
+    dest: /etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
+    owner: root
+    group: root
+    mode: 644
+  when: "ansible_hostname == groups.headnode[0]"
+
+#-----------------------------------------------------------------------------
+# Adding IonReporter plugin repository
+#-----------------------------------------------------------------------------
+- name: Add /etc/apt/sources.list.d/ionreporter-plugin.list
+  template:
+    src: templates/ionreporter-plugin.j2
+    dest: /etc/apt/sources.list.d/ionreporter-plugin.list{{ FUNKYEXT|default('') }}
+    owner: root
+    group: root
+    mode: 644
+  when: "ansible_hostname == groups.headnode[0]"
+
+
+#-----------------------------------------------------------------------------
+# removing ionupdates.com specific repo when it is OEM build
+#-----------------------------------------------------------------------------
+- name: remove /etc/apt/sources.list.d/iontorrent-ubuntu.list
+  file:
+    path: /etc/apt/sources.list.d/iontorrent-ubuntu.list{{ FUNKYEXT|default('') }}
+    state: absent
+  when: is_oem
+
+- name: remove /etc/apt/sources.list.d/iontorrent-offcycle.list
+  file:
+    path: /etc/apt/sources.list.d/iontorrent-offcycle.list{{ FUNKYEXT|default('') }}
+    state: absent
+  when: is_oem
+
+
+#-----------------------------------------------------------------------------
+# On each compute node, we need to replicate the Ion Repository configured
+# on the head node.
+#-----------------------------------------------------------------------------
+- name: Purge compute node's /etc/apt/sources.list.d directory
+  shell: bash -lc "rm -f /etc/apt/sources.list.d/*"
+  when: "ansible_hostname != groups.headnode[0]"
+
+- name: Replicating head node's /etc/apt/source.list.d/
+  copy:
+    src: "{{ item }}"
+    dest: /etc/apt/sources.list.d/
+    mode: 0644
+  when: "ansible_hostname != groups.headnode[0]"
+  with_fileglob:
+    - /etc/apt/sources.list.d/*
+
+#-----------------------------------------------------------------------------
+# Refresh cache and then clean stale cache
+#-----------------------------------------------------------------------------
+- name:
+  apt: update_cache=yes
+
+# TS-17303: autoclean is added in 2.4
+- name: sudo apt-get autoclean
+  shell: apt-get autoclean
+
+#-----------------------------------------------------------------------------
+# Allow unauthenticated, insecure and amd64 only for Ion repo
+#-----------------------------------------------------------------------------
+- name: allow unauthenticated and insecure repositories
+  template:
+    src: templates/97ionrepo.j2
+    dest: /etc/apt/apt.conf.d/97ionrepo
+    mode: 0644
+
+#-----------------------------------------------------------------------------
+# Disable installation of recommended and suggested debian packages
+#-----------------------------------------------------------------------------
+- name: Disable apt installation of recommend and suggest packages
+  template:
+    src: templates/98recommends.j2
+    dest: /etc/apt/apt.conf.d/98recommends
+    mode: 0644
+
+#-----------------------------------------------------------------------------
+# Disable apt from autodeleting debian package files
+#-----------------------------------------------------------------------------
+- name: Disable apt from autodeleting debian package files
+  template:
+    src: templates/99torrentserver.j2
+    dest: /etc/apt/apt.conf.d/99torrentserver
+    mode: 0644

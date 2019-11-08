@@ -12,7 +12,7 @@ TB.configure.reportdatamgmt.modal_add_prunegroup.init = function() {
             $('body #modal_configure_report_data_mgmt_add_prune_group').remove();
         });
 
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = gettext('uni-form-validation.language.required');
         $('#modal_configure_report_data_mgmt_add_prune_group_form').uniform({
             holder_class : 'control-group',
             msg_selector : 'div.help-block.error',

@@ -202,6 +202,10 @@ typedef struct __tmap_map_opt_t {
     char *fn_sam; /*!< the output file name (-s,--fn-sam) */
     int64_t bam_start_vfo; /*!< starting virtual file offset (--bam-start-vfo) */
     int64_t bam_end_vfo; /*!< ending virtual file offset (--bam-end-vfo) */
+    int32_t use_param_ovr; /*!< use parameters overwrite if given in BED file */
+    int32_t use_bed_in_end_repair; /*!< use coordinates of amplicon edges in end repair */
+    int32_t use_bed_in_mapq; /*!< use coordinates of amplicons mapq computing */
+    int32_t use_bed_read_ends_stat; /*use read ends statisitcs from BED if provided */
     int32_t score_match;  /*!< the match score (-A,--score-match) */
     int32_t pen_mm;  /*!< the mismatch penalty (-M,--pen-mismatch) */
     int32_t pen_gapo;  /*!< the indel open penalty (-O,--pen-gap-open) */
@@ -260,14 +264,14 @@ typedef struct __tmap_map_opt_t {
     double context_gip_score; /*!< context realignment gap opening score */
     double context_gep_score; /*!< context realignment gap extension score */
     int32_t context_extra_bandwidth; /*!< context realignment DP matrix extra band width */
-    int32_t context_debug_log; /*!< output detailed log of context alignment (scoring matrix) into a log file (designated by realign_log)*/
+    int32_t debug_log; /*!< output detailed log of match post-processing into a log file (designated by realign_log)*/
 
     // DVK: tandem repeat end-clipping
     int32_t do_repeat_clip; /*!< clip tandem repeats at the alignment ends */
-    // int32_t repclip_overlap; /*! repeat clipping is not performed if read overlaps amplicon end by this number of bases (or more) */
-    int32_t repclip_continuation; /*! repeat clipping performed only if repeat continues past the end of the read into the reference by at least 1 period */
+    // int32_t repclip_overlap; /*!< repeat clipping is not performed if read overlaps amplicon end by this number of bases (or more) */
+    int32_t repclip_continuation; /*!< repeat clipping performed only if repeat continues past the end of the read into the reference by at least 1 period */
 
-    int32_t cigar_sanity_check;
+    int32_t cigar_sanity_check; /*!< check cigar conformity (detail levels 0(default) to 9(all checks)*/
 
     // DVK: alignment length filtering
     int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */
@@ -277,7 +281,7 @@ typedef struct __tmap_map_opt_t {
     // stats output control
     int32_t report_stats;
     char* realign_log;
-    int32_t log_text_als;
+    // int32_t log_text_als;
 
     // flowspace tags
     int32_t fscore;  /*!< the flow score penalty (-X,--pen-flow-error) */

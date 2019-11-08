@@ -120,9 +120,9 @@ def get_required_parameters(lib_type = None):
                                                              'hotspot_min_var_coverage',
                                                              'fd_nonsnp_min_var_cov',
                                                              'tag_sim_max_cov',
-#                                                             'use_lod_filter',
-#                                                             'lod_multiplier',
                                                              'try_few_restart_freq',
+                                                             'min_callable_prob',
+                                                             'suppress_called_allele_lod'
                                                              ])
     my_required_parameters['freebayes'].update(['read_mismatch_limit',
                                                 'min_cov_fraction',

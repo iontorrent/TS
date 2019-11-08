@@ -9,21 +9,21 @@ from django.core.urlresolvers import reverse
 from iondb.rundb.models import Message, Results
 from iondb.rundb.data.dm_utils import slugify
 
-logger = get_task_logger('data_management')
-d = {'logid': "%s" % ('proj_msg_banner')}
+logger = get_task_logger("data_management")
+d = {"logid": "%s" % ("proj_msg_banner")}
 
 
 def project_msg_banner(user, project_msg, action):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=d)
     try:
-        msg = ''
-        thistag = ''
-        grpstatus = ''
+        msg = ""
+        thistag = ""
+        grpstatus = ""
         logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra=d)
-        for pk, status_list in project_msg.iteritems():
+        for pk, status_list in project_msg.items():
             report = Results.objects.get(id=pk)
             msg += "(%s) %s " % (report.resultsName, action.title())
-            for category, status in status_list.iteritems():
+            for category, status in status_list.items():
                 msg += " %s, " % str(category)
                 msg += status
                 grpstatus = status
@@ -31,10 +31,12 @@ def project_msg_banner(user, project_msg, action):
             try:
                 # urlresolvers is currently throwing an exception, unknown why.  TS-
                 # url = reverse('dm_log', args=(pk,))
-                url = '/data/datamanagement/log/%s/' % pk
-                msg += " <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>View Report Log</a></br>" % (
-                    url)
-            except:
+                url = "/data/datamanagement/log/%s/" % pk
+                msg += (
+                    " <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>%s</a></br>"
+                    % (url, "View Report Log")
+                )  # TODO: i18n - Can we change text since it's persisted into DB?
+            except Exception:
                 logger.error(traceback.format_exc(), extra=d)
             logger.debug("MESSAGE: %s" % msg, extra=d)
 
@@ -42,15 +44,15 @@ def project_msg_banner(user, project_msg, action):
         Message.objects.filter(tags=thistag).delete()
 
         if len(project_msg) > 1:
-            thistag = "%s_%s_%s" % ('project', action, slugify(category))
+            thistag = "%s_%s_%s" % ("project", action, slugify(category))
 
-        if grpstatus.lower() == 'scheduled':
+        if grpstatus.lower() == "scheduled":
             func = Message.info
-        elif grpstatus.lower() == 'success':
+        elif grpstatus.lower() == "success":
             func = Message.success
         else:
             func = Message.error
-    except:
+    except Exception:
         func = Message.error
         logger.error(traceback.format_exc(), extra=d)
     return func(msg, route=user, tags=thistag)

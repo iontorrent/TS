@@ -1,6 +1,7 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 
 {% block extra_head_styles %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
@@ -39,50 +40,56 @@
 
 <script type="text/javascript" src="{% static "resources/jquery/jquery-iframe-auto-height.min.js"%}"></script>
 
-<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+{% include "rundb/common/head_uni-form-validation.jquery.js.html" %} <!-- Using updated uni-form JS -->
 {% endblock extra_head_js %}
 
 {% block tab-configure-plugins %}
-    <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    <li class="active"><a href="{% url "configure_plugins" %}">{% trans "global.nav.menu.configure.menu.plugins.label" %}</a></li>
 {% endblock tab-configure-plugins %}
 
 {% block content %}
     <div class="content clearfix">
         <div class="clearfix">
-            <h1 class="pull-left">Plugins</h1>
+            <h1 class="pull-left">{{ Plugin.verbose_name_plural }}</h1>
             <div class="pull-right btn-group">
-                <a href="{% url "configure_plugins_plugin_install" %}" class="btn install_plugin_or_publisher" style="margin-right: 5px;">Install or Upgrade Plugin</a>
-                <a id="rescan_button" class="btn" onclick="rescan()">Rescan Plugins for Changes</a>
+{% if plugin_perms.install_plugin %}
+                <a href="{% url "configure_plugins_plugin_install" %}" class="btn install_plugin_or_publisher" style="margin-right: 5px;">{% trans "entity.Plugin.actions.configure_plugins_plugin_install" %}</a>
+{% endif %}
+{% if plugin_perms.rescan_plugins %}
+                <a id="rescan_button" class="btn" onclick="rescan()">{% trans "entity.Plugin.actions.api_dispatch_rescan" %}</a>
+{% endif %}
             </div>
         </div>
         <form class="well well-small clearfix">
             <div class="filter-item">
                 <div id="id_selected" class="btn-group filter-btn-group" data-toggle="buttons-radio">
-                    <a class="btn" data-value="True">Enabled</a>
-                    <a class="btn" data-value="False">Disabled</a>
-                    <a class="btn active" data-toggle="button">Either</a>
+                    <a class="btn" data-value="True">{% trans "entity.Plugin.fields.selected.choice.true" %}</a>
+                    <a class="btn" data-value="False">{% trans "entity.Plugin.fields.selected.choice.false" %}</a>
+                    <a class="btn active" data-toggle="button">{% trans "entity.Plugin.fields.selected.choice.trueorfalse" %}</a>
                 </div>
             </div>
             <div class="filter-item">
-                <a id="clear_filters" class="btn search-submit pull-left">Clear</a>
+                <a id="clear_filters" class="btn search-submit pull-left">{% trans "configure_plugins.search_bar.action.clear_filters.label" %}</a>
             </div>
         </form>
         <div id="grid"></div>
     </div>
     <div class="content">
         <div class="clearfix">
-            <h1 class="pull-left">Publishers</h1>
-            <a href="{% url "configure_publisher_install" %}" class="btn pull-right install_plugin_or_publisher">Install or Upgrade Publisher</a>
+            <h1 class="pull-left">{{ Publisher.verbose_name_plural }}</h1>
+            <a href="{% url "configure_publisher_install" %}" class="btn pull-right install_plugin_or_publisher">{% trans "entity.Publisher.actions.configure_publisher_install" %}</a>
         </div>
         {% if publishers %}
         <table id="publishers" class="data-table">
             <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Version</th>
-                  <th>Path</th>
-                  <th>Date</th>
-                  <th>Action</th>
+                  <th data-field="name">{{ Publisher.name.verbose_name }}</th>
+                  <th data-field="version">{{ Publisher.version.verbose_name }}</th>
+                  <th data-field="path">{{ Publisher.path.verbose_name }}</th>
+                  <th data-field="date">{{ Publisher.date.verbose_name }}</th>
+                    {% if featureflags.PUBLISHERS_ACTIONS %}
+                  <th data-field="action">{% trans 'global.column.action' %}</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -92,27 +99,29 @@
                     <td>{{p.version}}</td>
                     <td>{{p.path}}</td>
                     <td>{{p.date|date:"M d Y"}}</td>
+                    {% if featureflags.PUBLISHERS_ACTIONS %}
                     <td>
                         <div class="btn-group">
                             <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
                             <ul class="dropdown-menu pull-right">
                               {% if p.uploadLink %}
                                 <li>
-                                    <a href="/rundb/publish/{{p.name}}" class="publisher_upload">Upload</a>
+                                    <a href="/rundb/publish/{{p.name}}" class="publisher_upload">{% trans 'entity.Publisher.actions.publisher_upload' %}</a>
                                 </li>
                               {% endif %}
                                 <li>
-                                    <a href="/rundb/published/?from={{p.name}}">History</a>
+                                    <a href="/rundb/published/?from={{p.name}}">{% trans 'entity.Publisher.actions.publisher_history' %}</a>
                                 </li>
                             </ul>
                         </div>
                     </td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-            <div class="centered_message">No Publishers are installed.</div>
+            <div class="centered_message">{% trans 'entity.Publisher.messages.noneinstalled' %}</div>
         {% endif %}
     </div>
 
@@ -145,7 +154,7 @@
 <div class="modal container hide" id="modal-window" data-modal-Overflow="true">
     <div class="modal-header">
         <button data-dismiss="modal" class="close" type="button">&times;</button>
-        <h3>Configure Plugin</h3>
+        <h3></h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
@@ -153,80 +162,115 @@
     </div>
     <div class="modal-footer">
         <!-- <a onclick="$(this).iframeAutoHeight({minHeight: 200, heightOffset: 20});" href="#" class="btn">Resize Modal</a> -->
-        <a data-dismiss="modal" href="#" class="btn">Close</a>
+        <a data-dismiss="modal" href="#" class="btn">{% trans "global.action.modal.close" %}</a>
     </div>
 </div>
+
 <script id="EnabledTemplate" type="text/x-kendo-template">
+{% if featureflags.PLUGINS_PLUGIN_EDIT_SELECTED %}
     <input id='enablePlugin-#=id#' name='selected' type='checkbox' class="enablePlugin" data-pk="#=id#"
     # if (data.selected) { #
         checked="checked"
     # } #
     >
+{% else %}
+    # if (data.selected) { #
+        {% trans "global.choice.yes" %}
+    # } else { #
+        {% trans "global.choice.no" %}
+    # } #
+{% endif %}
 </script>
+{% if featureflags.PLUGINS_PLUGIN_DISPLAY_ISSUPPORTED %}
 <script id="IsSupportedColumnTemplate" type="text/x-kendo-template">
     <span>
     # if (data.isSupported) { #
-        Yes
+        {% trans "global.choice.yes" %}
     # } else { #
-        No
+        {% trans "global.choice.no" %}
     # } #
     </span>
 </script>
+{% endif %}
 <script id="DefaultSelectedTemplate" type="text/x-kendo-template">
+{% if featureflags.PLUGINS_PLUGIN_EDIT_DEFAULTSELECTED %}
     <input id='defaultSelectedPlugin-#=id#' name='defaultSelected' type='checkbox' class="defaultSelectedPlugin" data-pk="#=id#"
     # if (data.defaultSelected) { #
         checked="checked"
     # } #
      />
+{% else %}
+    # if (data.defaultSelected) { #
+        {% trans "global.choice.yes" %}
+    # } else { #
+        {% trans "global.choice.no" %}
+    # } #
+{% endif %}
 </script>
+
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
     <div class="btn-group">
-        # var _id = id;#
+# var _id = id;#
         <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#">
             <img src="{% static "resources/img/gear-active.png"%}" border="0" />
             <span class="caret" />
         </a>
         <ul class="dropdown-menu pull-right">
+{% if plugin_perms.usage_plugin %}
             <li>
-                <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
+                <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">{% trans "entity.Plugin.actions.configure_plugins_plugin_usage" %}</a>
             </li>
+{% endif %}
+{% if plugin_perms.rescan_plugin %}
             <li>
-                <a onclick="#='rescan(999999)'.replace('999999', _id)#" style="font-size: 12px" class="usage-plugin">Rescan</a>
+                <a onclick="#='rescan(999999)'.replace('999999', _id)#" style="font-size: 12px" class="usage-plugin">{% trans "entity.Plugin.actions.api_dispatch_rescan_plugin" %}</a>
             </li>
-            # if (data.isConfig) { #
+{% endif %}
+# if (data.isConfig) { #
+{% if plugin_perms.configure_plugin %}
             <li>
-                <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
+                <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">{% trans "entity.Plugin.actions.configure_plugins_plugin_configure-config" %}</a>
             </li>
-            # } #
+{% endif %}
+# } #
             {% if can_upgrade %}
-                # if (data.isSupported) { #
-                    # if (data.isUpgradable) { #
+# if (data.isSupported) { #
+    # if (data.isUpgradable) { #
+{% if plugin_perms.upgrade_plugin %}
             <li>
-                <a href="#= '{% url "configure_plugins_plugin_upgrade" 999999 %}'.replace('999999',_id)#" class="upgrade-plugin">Upgrade to Latest</a>
+                <a href="#= '{% url "configure_plugins_plugin_upgrade" 999999 %}'.replace('999999',_id)#" class="upgrade-plugin">{% trans "entity.Plugin.actions.configure_plugins_plugin_upgrade" %}</a>
             </li>
-                    # } #
-                    #for (index = 0; index < data.availableVersions.length; ++index) { #
-                        # if (data.availableVersions[index] != data.CurrentVersion) { #
-                            # var _version = data.availableVersions[index] #
+{% endif %}
+    # } #
+    #for (index = 0; index < data.availableVersions.length; ++index) { #
+        # if (data.availableVersions[index] != data.CurrentVersion) { #
+            # var _version = data.availableVersions[index] #
+            # var _install_version = interpolate('{% trans "entity.Plugin.actions.configure_plugins_plugin_install_to_version" %}', {version: _version}, true) #
+{% if plugin_perms.install_to_version_plugin %}
             <li>
-                <a href="#= '{% url "configure_plugins_plugin_install_to_version" 999999 888888 %}'.replace('999999',_id).replace('888888',_version)#" class="install-to-version-plugin">Install #= _version#</a>
+                <a href="#= '{% url "configure_plugins_plugin_install_to_version" 999999 888888 %}'.replace('999999',_id).replace('888888',_version)#" class="install-to-version-plugin">#= _install_version#</a>
             </li>
-                        # } #
-                    # } #
-                # } #
-                #if (data.CurrentVersion != 'None'){ #
-            <li>
-                <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
-            </li>
-                # } #
+{% endif %}
+    # } #
 
-            # if (data.hasAbout) { #
+    # } #
+# } #
+#if (data.CurrentVersion != 'None'){ #
+{% if plugin_perms.uninstall_plugin %}
             <li>
-                <a class='about-plugin' data-name="#= data.name #" href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#">About</a>
+                <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">{% trans "entity.Plugin.actions.configure_plugins_plugin_uninstall" %}</a>
             </li>
-            # } #
-
+{% endif %}
+# } #
             {% endif %}
+# if (data.hasAbout) { #
+{% if plugin_perms.about_plugin %}
+            <li>
+                <a class='about-plugin' data-name="#= data.name #" href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#">{% trans "entity.Plugin.actions.configure_plugins_plugin_configure-about" %}</a>
+            </li>
+{% endif %}
+# } #
+
         </ul>
     </div>
 </script>
@@ -234,7 +278,9 @@
 <script id="NameColumnTemplate" type="text/x-kendo-template">
     #= data.name #
     # if(data.isUpgradable){ #
-        <span style="color:green">&nbsp;Updates Available!</span>
+        <span style="color: green">&nbsp;{% trans "entity.Plugin.fields.isUpgradable.true" %}</span>
+    # } else { #
+        <span style="display: none;" >&nbsp;({% trans "entity.Plugin.fields.isUpgradable.false" %})</span>
     # } #
 </script>
 
@@ -315,12 +361,12 @@ $(document).ready(function(){
         , columns: [
             {
                 field: "selected",
-                title: "Enabled",
+                title: "{{ Plugin.selected.verbose_name }}",
                 width: "90px",
                 template: kendo.template($("#EnabledTemplate").html())
             } , {
                 field: "name",
-                title: "Name",
+                title: "{{ Plugin.name.verbose_name }}",
                 sortable: true,
                 width: '60%',
                 template: kendo.template($("#NameColumnTemplate").html())
@@ -331,32 +377,29 @@ $(document).ready(function(){
                 template: kendo.template($("#DefaultSelectedTemplate").html()),
                 headerTemplate: // Use Bootstrap's tooltip: TS-12264
                     '<span data-toggle="tooltip" data-placement="top"'
-                    + 'data-container="body" data-original-title="Checked '
-                    + 'plugins shall be automatically selected to run when a '
-                    + 'new run plan is created and executed. You may uncheck '
-                    + 'one or more of these in the plugins chevron of the run '
-                    + 'plan wizard before executing">Selected by Default</span>'
+                    + 'data-container="body" data-original-title="{% trans "entity.Plugin.fields.defaultSelected.helptext" %}">{{ Plugin.defaultSelected.verbose_name }}</span>'
             } , {
                 field: "CurrentVersion",
-                title: "Version",
+                title: "{{ Plugin.version.verbose_name }}",
                 width: '20%',
                 sortable: true
             } , {
                 field: "date",
-                title: "Installed Date",
+                title: "{{ Plugin.date.verbose_name }}",
                 width: '20%',
-                template: '#= date === null ? "" : kendo.toString(kendo.parseDate(date),"MMM d yyyy") #',
-                parse: function(e){
-                    return Date.parse(date);
-                }
-            } , {
+                template: '#= date != "NA" ? kendo.toString(new Date(Date.parse(date)),"MMM d yyyy") : "NA" #'
+            }
+{% if featureflags.PLUGINS_PLUGIN_DISPLAY_ISSUPPORTED %}
+            , {
                 field: "isSupported",
-                title: "Ion Supported",
+                title: "{{ Plugin.isSupported.verbose_name }}",
                 width: '120px',
                 sortable: true,
                 template: kendo.template($("#IsSupportedColumnTemplate").html())
-            }, {
-                title: "Manage",
+            }
+{% endif %}
+            , {
+                title: "{% trans "global.column.manage" %}",
                 width: '90px',
                 sortable: false,
                 template: kendo.template($("#ActionColumnTemplate").html())
@@ -388,7 +431,7 @@ $(document).ready(function(){
             });
             $(source + ' .configure-plugin').click(function(e){
                 e.preventDefault();
-                openModal(this, "Configure Plugin");
+                openModal(this, "{% trans "configure_plugins_plugin_configure-config.title" %}");
             });
 
             $(source + " .install-to-version-plugin").click(function (e) {
@@ -404,7 +447,7 @@ $(document).ready(function(){
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
-                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
             });
@@ -422,7 +465,7 @@ $(document).ready(function(){
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
-                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
             });
@@ -440,7 +483,7 @@ $(document).ready(function(){
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
-                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
             });
@@ -457,17 +500,30 @@ $(document).ready(function(){
                 })
                 .fail(function(data) {
                     $('#error-messages').empty().show();
-                    $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                    $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>');
                     console.log("error:", data);
                 })
             });
 
             $(source + ' .about-plugin').click(function(e) {
                 e.preventDefault();
-                openModal(this, "About " + $(this).attr("data-name") + " Plugin");
+                openModal(this, interpolate('{% trans "configure_plugins_plugin_configure-about.title" %}', {name:$(this).attr("data-name")}, true));  //"About " + $(this).attr("data-name") + " Plugin"
             });
         }
     });
+
+
+    function resizeiFrames() {
+        //Resize the iframe blocks
+        $("iframe").each(function () {
+            var height = $(this).contents().height(),
+                width = $(this).parent().css("width");
+            if ($(this).height() != height) $(this).height(height);
+            if ($(this).width() != width) $(this).width(width);
+        });
+    }
+
+    window.setInterval(resizeiFrames, 500);
 
     function openModal(link, title) {
         var url = $(link).attr('href');
@@ -482,7 +538,6 @@ $(document).ready(function(){
             }
         };
         content.ready(function() {
-            $('iframe.auto-height').css("height", 0).iframeAutoHeight({minHeight: 400, heightOffset: 20});
             modal.modal("show");
         });
     }
@@ -496,7 +551,7 @@ $(document).ready(function(){
             $('body').append(data);
             $('#modal_plugin_or_publisher_install').modal('show');
         }).fail(function(data) {
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+            $('#error-messages').append('<p class="error">{% trans "global.messages.error.label" %}: ' + data.responseText + '</p>').show();
             console.log("error:", data);
         });
     });
@@ -515,5 +570,6 @@ $(document).ready(function(){
     $('[data-toggle="tooltip"]').tooltip()
 
 });
+//# sourceURL=templates/rundb/configure/plugins.html.js
 </script>
 {% endblock content %}

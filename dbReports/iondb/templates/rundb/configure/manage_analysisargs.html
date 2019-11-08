@@ -1,8 +1,9 @@
 {% extends "rundb/configure/base.html" %}
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-analysisargs %}
-    <li class="active"><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
+    <li class="active"><a href="{% url "configure_analysisargs" %}">{% trans "global.nav.menu.configure.menu.analysisargs.label" %}</a></li>
 {% endblock tab-configure-analysisargs %}
 {% block content %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
@@ -44,7 +45,7 @@
 </div>
 
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
 <script src="{% static "resources/bootstrap-select/bootstrap-select.js"%}"></script>
 

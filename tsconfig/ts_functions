@@ -2713,16 +2713,16 @@ function valid_port ()
 function getnetworkIP ()
 {
     if [ -z $1 ]; then exit 1; fi
-    echo `/sbin/ifconfig $1|grep "inet addr"|awk '{print $2}'|cut -d: -f2`
+    echo `/sbin/ifconfig $1|grep "inet "|awk '{print $2}'|cut -d: -f2`
 }
 function getsubnetmask ()
 {
     if [ -z $1 ]; then exit 1; fi
-    echo `/sbin/ifconfig $1|grep "inet addr"|awk '{print $4}'|cut -d: -f2`
+    echo `/sbin/ifconfig $1|grep "inet "|awk '{print $4}'|cut -d: -f2`
 }
 function getgateway ()
 {
-    echo `/sbin/route -n | grep "^0.0.0.0"|awk '{print $2}'`
+    echo `/sbin/route -n | grep "^0.0.0.0"|awk '{print $2;exit}'`
 }
 
 function config_PGM_interface()
@@ -3600,8 +3600,8 @@ function config_apt_cache() {
 
 function install_prerequisites()
 {
-    # Install ansible and customize ansible configuration
-    apt-get install -y --allow-unauthenticated ansible
+    # Install ansible and customize ansible configuration and keep existing configuration
+    apt-get install -o Dpkg::Options::="--force-confold" -y --allow-unauthenticated ansible
 
     # Add hostname to ansible hosts definition file
     sed -i "s/LOCALHEADNODE.*/$HOSTNAME ansible_connection=local/g" /usr/share/ion-tsconfig/ansible/torrentsuite_hosts
@@ -3640,7 +3640,7 @@ function install_prerequisites()
 
 function outbound_net_port()
 {
-    port=$(/sbin/route | awk '/default/{print $8}')
+    port=$(/sbin/route | awk '/default/{print $8;exit}')
     if [[ ! -z $port ]]; then
         echo $port
     fi

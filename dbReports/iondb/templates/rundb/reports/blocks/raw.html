@@ -1,21 +1,22 @@
+{% load i18n %}
 <div id="rawAligned" class="span4 well centered">
-    <div rel='tooltip' title="Average raw (1x) accuracy across each individual base position in a read" class="number-chunk">
+    <div rel='tooltip' title="{% trans "report.section.aligned.raw.raw_accuracy.tooltip" %}" class="number-chunk">
         <h2>{{raw_accuracy}}%</h2>
-        <small>Mean Raw Accuracy 1x</small>
+        <small>{% trans "report.section.aligned.raw.raw_accuracy.label" %}</small>
     </div>
     <a data-toggle="modal" class="report-metric-visual showImg" href="#rawAccuracyModal">
-        <img class="showImg" src="{{report.reportWebLink}}/base_error_plot.png"> <i class="icon-zoom-in"></i>
+        {% trans "report.section.aligned.raw.title" %}<img class="showImg" src="{{report.reportWebLink}}/base_error_plot.png"> <i class="icon-zoom-in"></i>
     </a>
     <div class="modal hide" id="rawAccuracyModal">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Raw Accuracy Detail</h3>
+            <h3>{% trans "report.section.aligned.raw.title.details" %}</h3>
         </div>
         <div class="modal-body" id="rawaccuracy_body">
             <img style="width: 400px;" src="{{report.reportWebLink}}/base_error_plot.png">
         </div>
         <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
         </div>
     </div>
 </div>

@@ -1,6 +1,7 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% load pagetools %}
+{% load i18n %}
 <style type="text/css">
 	.summary-section {
 		margin-bottom: 9px;
@@ -8,13 +9,22 @@
 	.openclose{
 		opacity: .4;
 	}
+    .scrollable-x {
+        overflow-x: scroll;
+    }
+    .scrollable-y {
+        overflow-y: scroll;
+    }
 </style>
 <div id="modal_review_plan" title="" class="modal modal-800">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">&times;</button>
 		<h3>
-			Review {{state}}: {{plan.planDisplayedName}}
-			{% if extra_head %}<br/>&nbsp;&nbsp;{{ extra_head }}{% endif %}
+            {% ifequal state 'Template' %}{% trans "reviewplan.title.template" %}:{% endifequal %}
+            {% ifequal state 'Plan' %}{% trans "reviewplan.title.plan" %}:{% endifequal %}
+            {% ifequal state 'Planned Run' %}{% trans "reviewplan.title.plannedrun" %}:{% endifequal %}
+			{{plan.planDisplayedName}}
+			{% if result %}<br/>&nbsp;&nbsp;{% trans "reviewplan.fields.result.resultsName" %}: {{ result.resultsName }}{% endif %}
 		</h3>
 	</div>
 	<div class="modal-body">
@@ -22,33 +32,33 @@
 			<div class="span6">
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#application"><i class="openclose icon-minus"></i></a>Application
+						<a class='pull-right' data-toggle="collapse" href="#application"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.application.label" %}
 					</h3>
 					<div class="collapse in" id="application">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>Research Application:</b></td>
+								<td><b>{% trans "reviewplan.fields.plan.applicationGroup.label" %}:</b></td>
 								<td>{{ plan.applicationGroup.description }}</td>
 							</tr>
 							<tr>
-								<td><b>Research Category:</b></td>
+								<td><b>{% trans "reviewplan.fields.applicationCategoryDisplayedName.label" %}:</b></td>
 								<td>{{ applicationCategoryDisplayedName }}</td>
 							</tr>
 							<tr>
-								<td><b>Sample Grouping:</b></td>
+								<td><b>{% trans "reviewplan.fields.sampleGrouping.label" %}:</b></td>
 								<td>{{ plan.sampleGrouping.displayedName }}</td>
 							</tr>
 							<tr>
-								<td><b>Target Technique:</b></td>
+								<td><b>{% trans "reviewplan.fields.runType.label" %}:</b></td>
 								<td>{{ runType.0.description }}</td>
 							</tr>
 							<tr>
-								<td><b>Sample Set:</b></td>
+								<td><b>{% trans "reviewplan.fields.sampleSets.label" %}:</b></td>
 								<td>{{ plan.sampleSets.all|join:", " }}</td>
 							</tr>
 							{% if ampsOnChef_sampleSets %}
                                 <tr>
-                                    <td><b>Combined Library Tube Label:</b></td>
+                                    <td><b>{% trans "reviewplan.fields.ampsOnChef_sampleSets.label" %}:</b></td>
                                     <td>{% for set in ampsOnChef_sampleSets %}{{set.combinedLibraryTubeLabel}} {% endfor %}</td>
                                 </tr>
                             {% endif %}
@@ -57,78 +67,83 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#kits"><i class="openclose icon-minus"></i></a>Kits
+						<a class='pull-right' data-toggle="collapse" href="#kits"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.kits.label" %}
 					</h3>
 					<div class="collapse in" id="kits">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>Sample Preparation Kit:</b></td>
+								<td><b>{% trans "reviewplan.fields.samplePrepKit.label" %}:</b></td>
 								<td>{{ samplePrepKit.0.description }}</td>
 							</tr>
 							<tr>
-								<td><b>Library Kit:</b></td>
+								<td><b>{% trans "reviewplan.fields.libraryKit.label" %}:</b></td>
 								<td>{{ libraryKit.0.description }}</td>
 							</tr>
 							<tr>
-								<td><b>Library Key:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.libraryKey.label" %}:</b></td>
 								<td>{{ eas.libraryKey }}</td>
 							</tr>
 							<tr>
-								<td><b>3' Adapter:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.threePrimeAdapter.label" %}:</b></td>
 								<td class="word-break-all"><small>{{ eas.threePrimeAdapter }}</small></td>
 							</tr>
                             <tr>
-                                <td><b>Flow Order:</b></td>
+                                <td><b>{% trans "reviewplan.fields.plan.experiment.flowsInOrder.label" %}:</b></td>
                                 <td class="word-break-all"><small>{% if plan.experiment.flowsInOrder %}{{ plan.experiment.flowsInOrder }}{%else%}(use instrument settings){%endif%}</small></td>
                             </tr>							
 							<tr>
-								<td><b>Template Kit:</b></td>
+								<td><b>{% trans "reviewplan.fields.templatingKit.label" %}:</b></td>
 								<td>{{ templatingKit.0.description }}</td>
 							</tr>
                             <tr>
-                                <td><b>Templating Protocol:</b></td>
+                                <td><b>{% trans "reviewplan.fields.samplePrepProtocol.label" %}:</b></td>
                                 <td><small>{% if plan.samplePrepProtocol %}{{ samplePrepProtocol.0.displayedValue }}{%else%}(use instrument default){%endif%}</small></td>
                             </tr>                            							
 							<tr>
-								<td><b>Sequencing Kit:</b></td>
+								<td><b>{% trans "reviewplan.fields.sequenceKit.label" %}:</b></td>
 								<td>{{ sequenceKit.0.description }}</td>
 							</tr>
 							<tr>
-								<td><b>Control Sequence:</b></td>
+								<td><b>{% trans "reviewplan.fields.controlSequencekit.label" %}:</b></td>
 								<td>{{ controlSequencekit.0.description }}</td>
 							</tr>
                             <tr>
-                                <td><b>Library Read Length:</b></td>
+                                <td><b>{% trans "reviewplan.fields.plan.libraryReadLength.label" %}:</b></td>
                                 <td>{% if plan.libraryReadLength > 0 %}{{ plan.libraryReadLength }}{%else%}--{%endif%}</td>
                             </tr>							
 							<tr>
-								<td><b>Flows:</b></td>
+								<td><b>{% trans "reviewplan.fields.plan.experiment.flows.label" %}:</b></td>
 								<td>{{ plan.experiment.flows }}</td>
 							</tr>
 							<tr>
-								<td><b>Chip Type:</b></td>
-								<td>{% if chipTypePrefix %}Ion {{ chipTypePrefix }}&trade;{{ chipTypeSecondaryPrefix}} Chip {{ chipTypeVersion }}{% endif %}</td>
+								<td><b>{% trans "reviewplan.fields.plan.experiment.chipType.label" %}:</b></td>
+								<td>{% if chipType %}
+                                    {{ chipType.getI18NDisplayedName|safe }}
+                                    {%else%}
+                                    {% if chipTypePrefix %}Ion {{ chipTypePrefix }}&trade;{{ chipTypeSecondaryPrefix}} Chip {{ chipTypeVersion }}{% endif %}
+								    {%endif%}
+                                </td>
 							</tr>
 							<tr>
-								<td><b>Barcode Set:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.barcodeKitName.label" %}:</b></td>
 								<td>{{ eas.barcodeKitName }}</td>
 							</tr>
 							{% if eas.barcodeKitName and eas.endBarcodeKitName %}
 							<tr>
-								<td><b>End Barcode Set:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.endBarcodeKitName.label" %}:</b></td>
 								<td>{{ eas.endBarcodeKitName }}</td>
 							</tr>
 							{% endif %}
 							<tr>
-								<td><b>Mark as PCR Duplicates:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.isDuplicateReads.label" %}:</b></td>
 								<td>{{ eas.isDuplicateReads }}</td>
 							</tr>
                             <tr>
-                                <td><b>Base Calibration Mode:</b></td>
+                                <td><b>{% trans "reviewplan.fields.eas.get_base_recalibration_mode_for_display.label" %}:</b></td>
                                 <td>{{ eas.get_base_recalibration_mode_for_display }}</td>
                             </tr>							
 							<tr>
-								<td><b>Enable Realignment:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.realign.label" %}:</b></td>
 								<td>{{ eas.realign }}</td>
 							</tr>
 						</table>
@@ -138,15 +153,15 @@
 			<div class="span6">
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#monitor"><i class="openclose icon-minus"></i></a>Monitoring
+						<a class='pull-right' data-toggle="collapse" href="#monitor"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.monitor.label" %}
 					</h3>
 					<div class="collapse in" id="monitor">
 						<table class="table table-striped table-condensed">
-							{% for qcType, threshold in qcValues %}
+							{% for qcTypeLabelThreshhold in qcValues %}
 							<tr>
-								<td><b>{{ qcType }}</b></td>
+								<td data-qcName="{{ qcTypeLabelThreshhold.qcName }}"><b>{{ qcTypeLabelThreshhold.label }}</b></td>
 								<td><b>&le;</b></td>
-								<td>{{ threshold }}</td>
+								<td>{{ qcTypeLabelThreshhold.threshold }}</td>
 							</tr>
 							{% endfor %}
 						</table>
@@ -154,29 +169,29 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#reference"><i class="openclose openclose icon-minus"></i></a>Reference
+						<a class='pull-right' data-toggle="collapse" href="#reference"><i class="openclose openclose icon-minus"></i></a>{% trans "reviewplan.section.reference.label" %}
 					</h3>
 					<div class="collapse in" id="reference">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>Reference Library:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.reference.label" %}:</b></td>
 								<td>{{ eas.reference }}</td>
 							</tr>
 							<tr>
-								<td><b>Target Regions:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.targetRegionBedFile.label" %}:</b></td>
 								<td class="word-break-all">{{ eas.targetRegionBedFile|default:''|basename }}</td>
 							</tr>
 							<tr>
-								<td><b>Hotspot Regions:</b></td>
+								<td><b>{% trans "reviewplan.fields.eas.hotSpotRegionBedFile.label" %}:</b></td>
 								<td class="word-break-all">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
 							</tr>
 							{% if runType.0.runType == "AMPS_DNA_RNA" or runType.0.runType == "MIXED" %}
 							<tr>
-								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}Fusions{% else %}RNA{% endif%} Reference Library:</b></td>
+								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label.AMPS_DNA_RNA" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label" %}{% endif%} :</b></td>
 								<td>{{ eas.mixedTypeRNA_reference }}</td>
 							</tr>
 							<tr>
-								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}Fusions{% else %}RNA{% endif%} Target Regions:</b></td>
+								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label.AMPS_DNA_RNA" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label" %}{% endif%}:</b></td>
 								<td class="word-break-all">{{ eas.mixedTypeRNA_targetRegionBedFile|default:''|basename }}</td>
 							</tr>
 							{% endif %}					
@@ -185,12 +200,12 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#plugins_projects"><i class="openclose icon-minus"></i></a>Plugins & Output
+						<a class='pull-right' data-toggle="collapse" href="#plugins_projects"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.plugins_output.label" %}
 					</h3>
 					<div class="collapse in" id="plugins_projects">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>Plugins:</b></td>
+								<td><b>{% trans "reviewplan.fields.plugins.label" %}:</b></td>
 								<td>
                                     {% for plugin in plugins %}
                                         <span class="plugin_config">
@@ -208,11 +223,11 @@
 								</td>
 							</tr>
 							<tr>
-								<td><b>Projects:</b></td>
+								<td><b>{% trans "reviewplan.fields.projects.label" %}:</b></td>
 								<td>{{ projects }}</td>
 							</tr>
 							<tr>
-								<td><b>Uploaders:</b></td>
+								<td><b>{% trans "reviewplan.fields.uploaders.label" %}:</b></td>
 								<td>
 									{% for uploader in uploaders %}
 										{{ uploader.name }}
@@ -227,7 +242,7 @@
 				</div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#notes"><i class="openclose icon-minus"></i></a>Notes
+						<a class='pull-right' data-toggle="collapse" href="#notes"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.notes.label" %}
 					</h3>
 					<div class="collapse in" id="notes">
 						<table>
@@ -239,7 +254,7 @@
 				</div>
 				<div class="summary-section">
                     <h3>
-                        <a class='pull-right' data-toggle="collapse" href="#LIMS_meta"><i class="openclose icon-minus"></i></a>LIMS Meta Data
+                        <a class='pull-right' data-toggle="collapse" href="#LIMS_meta"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.LIMS_meta.label" %}
                     </h3>
                     <div class="collapse in" id="LIMS_meta">
                         <table>
@@ -251,18 +266,18 @@
                 </div>
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#tsVersion"><i class="openclose icon-minus"></i></a>Plan Meta Data:
+						<a class='pull-right' data-toggle="collapse" href="#tsVersion"><i class="openclose icon-minus"></i></a>{% trans "reviewplan.section.tsVersion.label" %}:
 					</h3>
 					<div class="collapse in" id="tsVersion">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>TS version when created:</b></td>
+								<td><b>{% trans "reviewplan.fields.tsVersion.label" %}:</b></td>
 								<td>
 									{{tsVersion}}
 								</td>
 							</tr>
 							<tr>
-								<td><b>Plan created via:</b></td>
+								<td><b>{% trans "reviewplan.fields.origin.label" %}:</b></td>
 								<td>
 									{{origin}}
 								</td>
@@ -278,67 +293,69 @@
 				<div class="summary-section">
 					<h3>
 						<a class='pull-right' data-toggle="collapse" href="#samples"><i class="openclose icon-minus"></i></a>
-						{% if eas.barcodeKitName %} Barcodes & Samples {% else %} Sample {% endif %}
+						{% if eas.barcodeKitName %}{% trans "reviewplan.section.barcodesandsamples.label" %}{% else %}{% trans "reviewplan.section.samples.label" %}{% endif %}
 					</h3>
 					<div class="collapse in" id="samples">
 						{% if not eas.barcodeKitName %}
-							<div class="span6">
+
 							<table class="table table-striped table-condensed">
 							<tr>
-								<td><b>Sample Tube Label:</b></td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.sampleTubeLabel.label" %}:</b></td>
 								<td>{{ plan.sampleTubeLabel }}</td>
 							</tr>
 							<tr>
-								<td><b>Chip Barcode:</b></td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.experiment.chipBarcode.label" %}:</b></td>
 								<td>{{ plan.experiment.chipBarcode }}</td>
 							</tr>
 							<tr>
-								<td><b>Sample Name:</b></td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.get_sampleDisplayedName.label" %}:</b></td>
 								<td>{{ plan.get_sampleDisplayedName }}</td>
 							</tr>
 							<tr>
-								<td><b>Sample ID:</b></td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.get_sample_external_id.label" %}:</b></td>
 								<td>{{ plan.get_sample_external_id }}</td>
 							</tr>
 							<tr>
-								<td><b>Sample Description:</b></td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.get_sample_description.label" %}:</b></td>
 								<td>{{ plan.get_sample_description }}</td>
 							</tr>
 							</table>
-							</div>
+
 							{% if iru_config %}
-								<div class="span6">
-								<table class="table table-striped table-condensed">
-								{% for key in iru_columns %}
-									<tr>
-										<td><b>{{key}}:</b></td>
-										<td>{{iru_config.nobarcode|bracket:key|default:''}}</td>
-									</tr>
-								{% endfor %}
-								</table>
-								</div>
+
+                                <table class="t able table-striped table-condensed">
+                                {% for key in iru_columns %}
+                                    <tr>
+                                        <td class="span4"><b>{{key}}:</b></td>{# TODO: i18n #}
+                                        <td>{{iru_config.nobarcode|bracket:key|default:''}}</td>
+                                    </tr>
+                                {% endfor %}
+                                </table>
+
 							{% endif %}
 						{% else %}
-						<div style="overflow: auto;max-height:250px;padding:5px;">
+						<div class="scrollable-x scrollable-y" style="max-height:250px;padding:5px;">
 							<table class="table table-striped table-condensed">
 							<tr>
-								<td colspan=2><b>Sample Tube Label:</b></td>
-								<td colspan=3>{{ plan.sampleTubeLabel }}</td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.sampleTubeLabel.label" %}:</b></td>
+								<td>{{ plan.sampleTubeLabel }}</td>
 							</tr>
 							<tr>
-								<td colspan=2><b>Chip Barcode:</b></td>
-								<td colspan=3>{{ plan.experiment.chipBarcode }}</td>
+								<td class="span4"><b>{% trans "reviewplan.fields.plan.experiment.chipBarcode.label" %}:</b></td>
+								<td>{{ plan.experiment.chipBarcode }}</td>
 							</tr>
-							<tr><td colspan=5></td></tr>
+                            </table>
+                            <hr/>
+                            <table class="table table-striped table-condensed">
 							<tr>
-								<th>Barcode</th>
-								<th>Sample Name</th>
+								<th>{% trans "reviewplan.fields.barcodes.label" %}</th>
+								<th>{% trans "reviewplan.fields.barcodedSamples.barcode.sample.label" %}</th>
 								{% for key in bcsamples_columns %}
-									<th>{{key}}</th>
+									<th>{{key}}</th>{# TODO: i18n #}
 								{% endfor %}
 								{% if iru_config %}
 									{% for key in iru_columns %}
-										<th>{{key}}</th>
+										<th>{{key}}</th>{# TODO: i18n #}
 									{% endfor %}
 								{% endif %}
 							</tr>
@@ -356,7 +373,7 @@
 									{% endif %}
 								</tr>
 							{% empty %}
-								<tr><td colspan=5>No samples are defined</td></tr>
+								<tr><td colspan=5>{% trans "reviewplan.fields.barcodes.messages.empty" %}</td></tr>
 							{% endfor %}
 							</table>
 						</div>
@@ -367,67 +384,67 @@
 				<div class="summary-section">
 					<h3>
 						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>
-						Analysis Parameters {% if from_report  %}Used{%endif%} ({{eas.custom_args|yesno:"Custom,Default"}})
-					</h3>
-					<div class="collapse" id="args">
+                        {% if from_report %}{% trans "reviewplan.section.analysisparams.label.used" %}{% else %}{% trans "reviewplan.section.analysisparams.label" %}{%endif%}&nbsp;({% if eas.custom_args %}{% trans "reviewplan.fields.eas.custom_args.label.choice.true" %}{% else %}{% trans "reviewplan.fields.eas.custom_args.label.choice.false" %}{% endif %})
+                    </h3>
+                    <div class="collapse" id="args">
 						<table class="table table-striped table-condensed">
 							{% if not thumbnail %}
 							<tr>
-								<td><b>BeadFind Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.beadfindargs.label" %}:</b></td>
 								<td>{{ args.beadfindargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Analysis Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.analysisargs.label" %}:</b></td>
 								<td>{{ args.analysisargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Pre-BaseCaller Args for calibration:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.prebasecallerargs.label" %}:</b></td>
 								<td>{{ args.prebasecallerargs }}</td>
 							</tr>
 							<tr>
-							    <td><b>Calibration Args:</b></td>
+							    <td><b>{% trans "reviewplan.fields.args.calibrateargs.label" %}:</b></td>
 							    <td>{{ args.calibrateargs }}</td>
 							</tr>
 							<tr>
-								<td><b>BaseCaller Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.basecallerargs.label" %}:</b></td>
 								<td>{{ args.basecallerargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Alignment Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.alignmentargs.label" %}:</b></td>
 								<td>{{ args.alignmentargs }}</td>
 							</tr>
 							<tr>
-								<td><b>IonStats Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.ionstatsargs.label" %}:</b></td>
 								<td>{{ args.ionstatsargs }}</td>
 							</tr>
 							{% endif %}
 							{% if thumbnail or show_thumbnail %}
 							<tr>
-								<td><b>Thumbnail BeadFind Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.thumbnailbeadfindargs.label" %}:</b></td>
 								<td>{{ args.thumbnailbeadfindargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail Analysis Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.thumbnailanalysisargs.label" %}:</b></td>
 								<td>{{ args.thumbnailanalysisargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail pre-BaseCaller Args for calibration:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.prethumbnailbasecallerargs.label" %}:</b></td>
 								<td>{{ args.prethumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
-							    <td><b>Thumbnail Calibration Args:</b></td>
+							    <td><b>{% trans "reviewplan.fields.args.thumbnailcalibrateargs.label" %}:</b></td>
 							    <td>{{ args.thumbnailcalibrateargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail BaseCaller Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.thumbnailbasecallerargs.label" %}:</b></td>
 								<td>{{ args.thumbnailbasecallerargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail Alignment Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.thumbnailalignmentargs.label" %}:</b></td>
 								<td>{{ args.thumbnailalignmentargs }}</td>
 							</tr>
 							<tr>
-								<td><b>Thumbnail IonStats Args:</b></td>
+								<td><b>{% trans "reviewplan.fields.args.thumbnailionstatsargs.label" %}:</b></td>
 								<td>{{ args.thumbnailionstatsargs }}</td>
 							</tr>
 							{% endif %}
@@ -437,14 +454,14 @@
 				{% if event_log %}
 				<div class="summary-section">
 					<h3>
-						<a class='pull-right' data-toggle="collapse" href="#log"><i class="openclose icon-plus"></i></a>History
+						<a class='pull-right' data-toggle="collapse" href="#log"><i class="openclose icon-plus"></i></a>{% trans "reviewplan.section.history.label" %}
 					</h3>
-					<div class="collapse" id="log">
+					<div class="collapse scrollable-x" id="log">
 						<table class="table table-striped table-condensed">
 							<tr>
-								<th>Date</th>
-								<th>User</th>
-								<th>Log</th>
+								<th>{% trans "reviewplan.fields.event_log.created.label" %}</th>
+								<th>{% trans "reviewplan.fields.event_log.username.label" %}</th>
+								<th>{% trans "reviewplan.fields.event_log.text.label" %}</th>
 							</tr>
 							{% for log in event_log %}
 							<tr>
@@ -454,9 +471,9 @@
 								{% if log.json_log %}
 									<table class="table table-condensed">
 									<tr>
-										<th>Parameter</th>
-										<th>Old Value</th>
-										<th>New Value</th>
+										<th>{% trans "reviewplan.fields.event_log.json_log.key.label" %}</th>
+										<th>{% trans "reviewplan.fields.event_log.json_log.values.0.label" %}</th>
+										<th>{% trans "reviewplan.fields.event_log.json_log.values.1.label" %}</th>
 									</tr>
 									{% for key, values in log.json_log.items %}
 									<tr>
@@ -480,7 +497,7 @@
 		</div>
 	</div>
 	<div class="modal-footer">
-		<a href="#" class="btn" data-dismiss="modal">Close</a>
+		<a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
 	</div>
 	<script type="text/javascript" src="{% static "resources/scripts/planplugins_common.js"%}"></script>
 	<script type="text/javascript">

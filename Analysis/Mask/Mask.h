@@ -105,6 +105,8 @@ class Mask
 
 
     void    Set ( int x, int y, MaskType type );
+    void    SetOneWell ( int x, int y, MaskType type );
+    void    SetAllExclude();
     void    SetAll(MaskType type );
     void    SetBarcodeId ( int x, int y, uint16_t barcodeId );
     void AddThese ( Mask *fromMask, MaskType these );

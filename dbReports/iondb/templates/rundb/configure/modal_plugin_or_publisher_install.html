@@ -1,25 +1,22 @@
 {% load static from staticfiles %}
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
 
 <div id="modal_plugin_or_publisher_install" title="" class="modal hide" data-width="800">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        {% if what == "Install Updates"%}
-                <h3>{{what|capfirst}}</h3>
-        {% else %}
-                <h3>Install or Upgrade {{what|capfirst}}</h3>
-        {% endif %}
+        <h3>{{i18n.title}}</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <form class="form-horizontal" id="modal_plugin_or_publisher_install_form" method="POST">
             <div id="upload_file" class="control-group">
-                <label for="pickfile" class="control-label">Upload {{pick_label|default:"a File"}}</label>
+                <label for="pickfile" class="control-label">{{ i18n.fields.pickfile.label }}</label>
                 <div class="controls">
-                    <a id="pickfile" name="pickfile" class="btn">Select File</a><br />
+                    <a id="pickfile" name="pickfile" class="btn">{{ i18n.fields.pickfile.select }}</a><br />
                     <span id="filelist">------</span>
                     <div id="upload-help" class="help-block" >
-                        In order to provide a better uploading experience an HTML5 compatible browser are required for file uploading.
-                        You may need to contact your local system administrator for assistance.
+                        {{ i18n.fields.pickfile.helptext }}
                     </div>
                     <div id="msg" class="alert hide"></div>
                 </div>
@@ -40,8 +37,8 @@
     </div>
     </div>
     <div class="modal-footer">
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a id="uploadfile" class="btn btn-primary" href="#">Upload and Install</a>
+        <a class="btn" href="#" data-dismiss="modal">{{ i18n.cancel }}</a>
+        <a id="uploadfile" class="btn btn-primary" href="#">{{ i18n.submit }}</a>
     </div>
 
 <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.min.js"%}"></script>
@@ -60,7 +57,7 @@ function install_products_manual() {
                 window.location.reload(true);
             },
             error: function(jqXHR, textStatus, errorThrown) {
-                $('#manualOffcycle').addClass('alert alert-error').append('<p>Error: ' + jqXHR.responseText + '</p>').show();
+                $('#manualOffcycle').addClass('alert alert-error').append('<p>{% trans "global.messages.error.label" %}: ' + jqXHR.responseText + '</p>').show();
                 $.unblockUI();
             }
     });
@@ -112,15 +109,14 @@ $(function(){
         file_name = file_name.split(' ').join('');
         $("#target_file").val(file_name);
 
-        $("#msg").addClass('alert-info').html("Attempting to install ...");
+        $("#msg").addClass('alert-info').html("{{ i18n.submitmsg }}");
         $("#msg").show();
         inputData = {"file": file_name};
         if ("{{what}}" == "Install Updates") {
             inputData["actualFileName"] = uploader.files[0].name;
-            $("#msg").addClass('alert-info').html("The install process may take a few minutes to complete...");
             setTimeout(function() { $('#modal_plugin_or_publisher_install').modal('hide'); }, 4000);
             $.blockUI();
-            $('.blockMsg').prepend('<h1>Installing, please wait ...</h1>');
+            $('.blockMsg').prepend('<h1>{{ i18n.submitprocessingmsg }}</h1>');
         }
         $.ajax({
             type: 'POST',
@@ -128,8 +124,11 @@ $(function(){
             contentType: "application/json; charset=utf-8",
             data: JSON.stringify(inputData),
             dataType: "json",
+            headers: {
+                            'Accept-Language': '{{ lang.code }}'  // Set language to override the default SDK language for UI
+                        },
             success: function () {
-                $("#msg").removeClass('alert-info alert-error').addClass('alert-success').html("Started {{what}} install");
+                $("#msg").removeClass('alert-info alert-error').addClass('alert-success').html("{{ i18n.submitsuccessmsg|safe }}");
 
                 setTimeout(function () {
                     if ("{{what}}" == "publisher") {
@@ -156,7 +155,7 @@ $(function(){
                     $('#modal_plugin_or_publisher_install').modal('hide');
                     $.unblockUI();
                     //console.log(jqXHR.responseText);
-                    $('#manualOffcycle').addClass('alert alert-error').append('<p>Error: ' + jqXHR.responseText + '</p>').show();
+                    $('#manualOffcycle').addClass('alert alert-error').append('<p>{% trans "global.messages.error.label" %}: ' + jqXHR.responseText + '</p>').show();
                 }
                 else {
                     $("#msg").removeClass('alert-info alert-success').addClass('alert-error').html(jqXHR.responseText);
@@ -186,5 +185,6 @@ $(function(){
         }, 500);
     });
 });
+//# sourceURL=templates/rundb/configure/modal_confirm_plugin_install_to_version.html.js
 </script>
 </div>

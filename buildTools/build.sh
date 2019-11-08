@@ -12,17 +12,22 @@ MODULES=${MODULES-"
   torrentR
   torrentPy
   dbReports
+  django
   pipeline
   publishers
   tsconfig
 "}
 
-BUILD_ROOT=`pwd`
+PROJECT_ROOT=`pwd`
 
-for M in $MODULES; do
+if [ -z ${BUILD_DIR} ]; then
+    BUILD_DIR=`pwd`/build
+fi
+
+for M in ${MODULES}; do
   if [ ! -d "$M" ]; then
     echo "Must run $0 from the root folder which has the following folders:"
-    for MM in $MODULES; do
+    for MM in ${MODULES}; do
       if [ -d "$MM" ]; then
         echo " - $MM"
       else
@@ -44,21 +49,38 @@ fi
 
 # only limit to the original number
 if [[ $num_jobs -gt $DEFAULT_JOB_NUM ]]; then
-    num_jobs=13
+    num_jobs=$DEFAULT_JOB_NUM
+fi
+
+# == DX Settings ==
+# ANALYSIS_DIR='/server/share/common/analysis'
+
+cmake_opts="-DION_AVX:BOOL=FALSE"
+ANALYSIS_DIR=${ANALYSIS_DIR-""}
+if [ ! -z $ANALYSIS_DIR ]; then
+  cmake_opts+=" -DCMAKE_INSTALL_PREFIX=${ANALYSIS_DIR}"
+  cmake_opts+=" -DION_INSTALL_PREFIX=${ANALYSIS_DIR}"
+  cmake_opts+=" -DION_PICARD_PREFIX=${ANALYSIS_DIR}/picard"
+  cmake_opts+=" -DION_HTML_PREFIX=${ANALYSIS_DIR}/var/www"  
 fi
 
 ERR=0
 ERRMSG=""
-for MODULE in $MODULES; do
+for MODULE in ${MODULES}; do
+  MODULE_SRC_PATH=${PROJECT_ROOT}/${MODULE}
+  MODULE_BUILD_PATH=${BUILD_DIR}/${MODULE}
   echo "=================================================="
-  echo " Building module $MODULE"
+  echo " Building module $MODULE_BUILD_PATH"
   echo "=================================================="
-  mkdir -p build/$MODULE
+  mkdir -p ${MODULE_BUILD_PATH}
   (
     LOCALERR=0
-    find build/$MODULE -name \*.deb | xargs rm -f
-    cd build/$MODULE
-    cmake $@ -G 'Unix Makefiles' $BUILD_ROOT/$MODULE -DION_AVX:BOOL=FALSE
+    find ${MODULE_BUILD_PATH} -name \*.deb | xargs rm -f
+    cd ${MODULE_BUILD_PATH}
+    cmake_cmd="cmake $@ -G 'Unix Makefiles' ${MODULE_SRC_PATH} ${cmake_opts}"
+    echo $cmake_cmd
+    eval $cmake_cmd
+  
     if [ "$?" != 0 ]; then LOCALERR=1; fi
       if [ "$MODULE" = "rndplugins" ]; then
         make
@@ -89,24 +111,23 @@ for MODULE in $MODULES; do
   fi
   echo "=================================================="
   echo
-  if [ $MODULE = "plugin" -o $MODULE = "rndplugins" ]; then
-    $BUILD_ROOT/buildTools/removeAboutFile.sh $BUILD_ROOT/$MODULE
+  if [ ${MODULE} = "plugin" -o ${MODULE} = "rndplugins" ]; then
+    ${PROJECT_ROOT}/buildTools/removeAboutFile.sh ${PROJECT_ROOT}/${MODULE}
   fi
 done;
 
 # if the environmental variable is set to create a repository, we will move all of the packages into that repository and
 # index them so aptitude can read them in as a repository
 if [ ! -z ${MAKE_REPO_DIRECTORY} ]; then
-  mkdir -p ${BUILD_ROOT}/build/repo
-  find ${BUILD_ROOT}/build -type f -iname "*.deb" ! -path "$BUILD_ROOT/build/*" -exec mv {} ${BUILD_ROOT}/build/repo \;
-  cd ${BUILD_ROOT}/build/repo && dpkg-scanpackages -m ./ > ${BUILD_ROOT}/build/repo/Packages
+  mkdir -p ${BUILD_DIR}/repo
+  find ${BUILD_DIR} -type f -iname "*.deb" ! -path "$BUILD_DIR/repo/*" -exec mv {} ${BUILD_DIR}/repo \;
+  cd ${BUILD_DIR}/repo && dpkg-scanpackages -m ./ > ${BUILD_DIR}/repo/Packages
 fi
 
-if [ $ERR != 0 ]; then
-  echo -e $ERRMSG
+if [ ${ERR} != 0 ]; then
+  echo -e ${ERRMSG}
   echo "FAILURES: $ERR modules failed to build."
-  exit $ERR
-else
-  echo "SUCCESS: All modules built."
+  exit ${ERR}
 fi
+echo "SUCCESS: All modules built."
 

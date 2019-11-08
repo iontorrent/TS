@@ -162,14 +162,14 @@ vsw16_sse2_forward(vsw16_query_t *query, const uint8_t *target, int32_t tlen,
   uint16_t cmp;
   vsw16_int_t gmax, best;
   vsw16_int_t zero, imin = 0, imax = 0;
-  __m128i zero_mm, zero_start_mm, negative_infinity_mm, positive_infinity_mm, reduce_mm;
+  __m128i zero_mm, zero_start_mm, negative_infinity_mm, /* positive_infinity_mm, */ reduce_mm;
   __m128i pen_gapoe, pen_gape, *H0, *H1, *E;
 
   // initialization
   // normalize these
   zero = query->zero_aln_score; // where the normalized zero alignment score occurs
   negative_infinity_mm = __vsw16_mm_set1_epi16(query->min_aln_score); // the minimum possible value
-  positive_infinity_mm = __vsw16_mm_set1_epi16(query->max_aln_score); // the minimum possible value
+  // positive_infinity_mm = __vsw16_mm_set1_epi16(query->max_aln_score); // the minimum possible value
   score_thr += zero; // for the scoring threshold
   // these are not normalized
   pen_gapoe = __vsw16_mm_set1_epi16(opt->pen_gapo + opt->pen_gape); // gap open penalty

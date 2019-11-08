@@ -44,6 +44,7 @@ AlleleParser::AlleleParser(const ExtendParameters& parameters, const ReferenceRe
   min_alt_count_ = parameters.minAltCount;
   min_alt_total_ = parameters.minAltTotal;
   min_coverage_ = parameters.minCoverage;
+  coverage_above_minC_ = false;
   my_examiner_ = NULL;
   new_hotspot_grouping = true;
   only_use_input_alleles_ = parameters.onlyUseInputAlleles;
@@ -86,7 +87,11 @@ AlleleParser::AlleleParser(const ExtendParameters& parameters, const ReferenceRe
   merge_lookahead_ = parameters.mergeLookAhead;
   output_cigar_ = parameters.output_allele_cigar;
   nblackpos = 0;
-
+  const ControlCallAndFilters& mc = parameters.my_controls;
+  min_fake_hotspot_fr_ = min(min_alt_fraction_, min_indel_alt_fraction_);
+  long double x = min(min(mc.filter_snp.min_allele_freq, mc.filter_mnp.min_allele_freq), min(mc.filter_hp_indel.min_allele_freq, mc.filter_hotspot.min_allele_freq));
+  min_fake_hotspot_fr_ = min(min_fake_hotspot_fr_, x);
+  cerr << "fake hotspot fre" << min_fake_hotspot_fr_ << endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -401,7 +406,7 @@ void AlleleParser::MakeAllele(deque<Allele>& alleles, AlleleType type, long int 
 
 // -----------------------------------------------------------------------------
 
-void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov)
+void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov, int total_f_cov, bool decom)
 {
   // walk through positions to check hints
   if (hotspot_reader_->hint_empty())
@@ -432,7 +437,7 @@ void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov)
   if (hotspot_reader_->hint_more()) {
     int hint_chr_index = hotspot_reader_->hint_chr_index();
     long int hint_position = hotspot_reader_->hint_position();
-
+    hotspot_reader_->hint_store_checkpt();
     //cout << "Test hotspot at " << hotspot_reader_->hint_position() << ", allele pos " << real_var_pos << endl;
     while  ((hint_chr_index == allele.chr) && (hint_position == real_var_pos)) {
       // filter according to the hint
@@ -453,6 +458,7 @@ void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov)
 	    if (match) {
 		double af, sd;
 		if (hotspot_reader_->hint_getAF(af,sd) and allele.coverage > (af+4.0*sd)*(total_cov)){ match= false; break;}
+		if (hotspot_reader_->hint_AF_good_allele(allele.coverage_fwd, allele.coverage_rev, total_f_cov, total_cov-total_f_cov)) { match=false; break;}
 	    }
 	} 
 	if (match)  {
@@ -469,6 +475,7 @@ void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov)
 	    }
 	    break;
 	   case BOTH_BAD_HINT:
+	   case SPEC_BAD_HINT:
 	    allele.is_black_listed = 'B'; allele.filtered = true;
 	    break;
 	   default:
@@ -486,11 +493,187 @@ void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov)
   }
 }
 
+AlleleDetails *AlleleParser::find_same_allele(AlleleDetails *a)
+{
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+        AlleleDetails *ap = &(I->second);
+	if (ap == a or ap->filtered) continue;
+	if (a->alt_sequence == ap->alt_sequence) return ap;
+    }
+    return NULL;
+}
+
+bool AlleleParser::decompose_allele(AlleleDetails &allele, long hp, long rlen, int &ab, int &ae, int &alb, int &ale)
+{
+    if (allele.raw_cigar.size() == 0) return false;
+    ab = 0; alb = 0;
+    long pos = allele.position;
+    char last = '.';
+    while (pos < hp) {
+	if (alb >= (int (allele.raw_cigar.size()))) return false;
+	char x = allele.raw_cigar[alb];
+	if (x == 'M') {
+	    ab++; pos++;
+	} else if (x == 'D') {
+	    pos++;
+	} else if (x == 'I') {
+	    ab++;
+	}
+	last = x;
+	alb++;
+    }
+    ae = allele.alt_sequence.size()-1; ale = allele.raw_cigar.size()-1;
+    pos = allele.position+allele.ref_length-1;
+    while (pos >hp+rlen-1) {
+	if (ale < 0) return false;
+	char x = allele.raw_cigar[ale];
+        if (x == 'M') {
+            ae--; pos--;
+        } else if (x == 'D') {
+            pos--;
+        } else if (x == 'I') {
+            ae--;
+        }
+	ale--;
+    }
+    if (ab > ae or alb > ale) return false; 
+    if (last == 'D' and allele.raw_cigar[alb] == 'D') return false; // a deletion is broken in the middle, not a decomposition
+    return true;
+}
+
+string AlleleParser::get_alt(AlleleDetails &allele, long hp, long rlen)
+{
+    int ab, ae, alb, ale;
+    string s;
+    s.clear();
+    if (not decompose_allele(allele, hp, rlen, ab, ae, alb, ale)) return s;
+    if (hp+rlen > allele.position+allele.ref_length) {
+	string extra = ref_reader_->substr(allele.chr, allele.position+allele.ref_length, hp+rlen-(allele.position+allele.ref_length));
+	return allele.alt_sequence.substr(ab)+extra;
+    }
+    return allele.alt_sequence.substr(ab, ae-ab+1);
+}
+
+bool AlleleParser::to_ref(AlleleDetails &allele, long hp, long rlen)
+{
+    int ab, ae, alb, ale;
+    if (not decompose_allele(allele, hp, rlen, ab, ae, alb, ale)) return false;
+    string ref = ref_reader_->substr(allele.chr, hp, rlen);
+    string cig;
+    cig.assign(ref.size(), 'M');
+    if (hp+rlen >= allele.position+allele.ref_length) {
+	int lz = ref.size()-(hp+rlen-(allele.position+allele.ref_length));
+        allele.alt_sequence = allele.alt_sequence.substr(0, ab)+ref.substr(0, lz);
+	allele.raw_cigar = allele.raw_cigar.substr(0, alb)+cig.substr(0, lz);
+    } else {
+	allele.alt_sequence = allele.alt_sequence.substr(0, ab)+ref+allele.alt_sequence.substr(ae+1);
+	allele.raw_cigar = allele.raw_cigar.substr(0, alb)+cig+allele.raw_cigar.substr(ale+1);
+    }
+    return true;
+}
+
+void AlleleParser::SegmentBlacklist(int pos, int chr, int total_cov, int total_f_cov)
+{
+  hotspot_reader_->hint_start();
+  while (hotspot_reader_->hint_more() &&
+         (hotspot_reader_->hint_chr_index() == chr) &&
+         (hotspot_reader_->hint_position() < pos)) {
+    //cout << "Catch up hotspot at " << hotspot_reader_->hint_position() << ", allele pos " << allele.position << endl;
+    hotspot_reader_->hint_next();
+  }
+
+  while (hotspot_reader_->hint_more()) {
+    int hint_chr_index = hotspot_reader_->hint_chr_index();
+    long int hint_position = hotspot_reader_->hint_position();
+    long int rlen = hotspot_reader_->hint_rlen();
+    string alt = hotspot_reader_->hint_alt();
+    if (hint_chr_index != chr) break;
+
+    if (alt.size() > 0) {
+      bool need_cont = false;
+      int tfc= 0, trc=0, tc=0;
+      vector<AlleleDetails*> alist;
+      for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+        AlleleDetails& allele = I->second;
+	int arlen = allele.ref_length;
+	if (allele.filtered) continue;
+	if (hint_chr_index == chr and hint_position < allele.position+ arlen) {
+	    need_cont = true;
+	    if (hint_position >= allele.position) {
+		string a = get_alt(allele, hint_position, rlen);
+	    	if (a == alt) {
+		    tc += allele.coverage; tfc += allele.coverage_fwd; trc += allele.coverage_rev;
+		    alist.push_back(&allele);
+		}
+	    }
+	}
+      }
+      if (not alist.empty()) {
+	double af, sd;
+	if ((hotspot_reader_->hint_getAF(af,sd) and tc > (af+4.0*sd)*(total_cov)) or 
+         	(hotspot_reader_->hint_AF_good_allele(tfc, trc, total_f_cov, total_cov-total_f_cov))) { 
+	    alist.clear();
+	} else {
+	  char b = '.';
+          switch ( hotspot_reader_->hint_value() )
+          {
+           case FWD_BAD_HINT:
+            if( ((float)tfc ) / ((float) tc) > .7) b = 'F';
+            break;
+           case REV_BAD_HINT:
+	    if( ((float)trc ) / ((float) tc) > .7) b = 'R';
+            break;
+           case BOTH_BAD_HINT:
+           case SPEC_BAD_HINT:
+	    b = 'B';
+            break;
+           default:
+            break;
+          }
+	  if (b != '.') {
+	     for (unsigned i = 0; i < alist.size(); i++) {
+		string c_alt = alist[i]->alt_sequence, c_cig =  alist[i]->raw_cigar;	
+		if (to_ref(*(alist[i]), hint_position, rlen)) { // change the blacked part to reference
+		  AlleleDetails *fp = find_same_allele(alist[i]);
+		  if (fp) {
+		    alist[i]->alt_sequence = c_alt; alist[i]->raw_cigar = c_cig;
+                    alist[i]->filtered= true;
+                    alist[i]->is_black_listed = b;
+		    fp->coverage += alist[i]->coverage;
+		    fp->coverage_fwd += alist[i]->coverage_fwd;
+		    fp->coverage_rev += alist[i]->coverage_rev;
+		  } else {
+		    string ref = ref_reader_->substr(alist[i]->chr, alist[i]->position, alist[i]->ref_length); // ref
+		    if (ref == alist[i]->alt_sequence) {
+			alist[i]->alt_sequence = c_alt; alist[i]->raw_cigar = c_cig;
+			alist[i]->filtered= true;
+			alist[i]->is_black_listed = b;
+		    } else { // modified allele, need to recheck the prefix and suffix and type
+			InferAlleleTypeAndLength(*(alist[i]));
+		    }
+		  }
+		} else {
+                    alist[i]->filtered= true;
+                    alist[i]->is_black_listed = b;
+		}
+	     } 
+	  }
+	}
+      }
+
+      if (not need_cont) break;
+    }
+    hotspot_reader_->hint_next();
+  }
+}
+    
+
 // -------------------------------------------------------------------
 
 void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length, bool scan_haplotype,
     list<PositionInProgress>::iterator& position_ticket, int hotspot_window)
 {
+  coverage_above_minC_ = false;
   int max_length = position_ticket->target_end-position_ticket->pos;
   if (max_length > 1000) max_length = 1000; 
   allele_pileup_.clear();
@@ -665,15 +848,17 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
 
   coverage_by_sample_.resize(num_samples_);
   int total_cov = ref_pileup_.coverage;
+  int total_f_cov = ref_pileup_.coverage_fwd;
   for (int sample = 0; sample < num_samples_; ++sample)
     coverage_by_sample_[sample] = ref_pileup_.samples.at(sample).coverage;
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& genotype = I->second;
     total_cov += genotype.coverage;
+    total_f_cov += genotype.coverage_fwd;
     for (int sample = 0; sample < num_samples_; ++sample)
       coverage_by_sample_[sample] += genotype.samples.at(sample).coverage;
   }
-
+  coverage_above_minC_ = (total_cov > min_coverage_);
 
   //
   // Add hotspots. Identify if there is a indel, mnp, or complex allele
@@ -792,11 +977,16 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
   // ZZ: This check can be done at one level up. It is safer to do it here. No black listed allele will escape to outside this routine.
   //     On the other hand, if a part of repeat region is black listed, the 2-while-loop may not be able to expand to the whole repeat region?
   // After test, this is still the safer place, it will miss allele if we filter on the other place. HERE IS CALLED PLACE_1.
+    bool decom = false;
+    if ((allowed_allele_types & ALLELE_COMPLEX) and (not scan_haplotype)) decom = true;
     for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
       AlleleDetails& allele = I->second;
 
       //cout << "Blacklist " << allele.alt_sequence << " at " << allele.position+ allele.minimized_prefix << endl;
-      BlacklistAlleleIfNeeded(allele, total_cov);
+      BlacklistAlleleIfNeeded(allele, total_cov, total_f_cov, decom);
+    }
+    if (decom) {
+	SegmentBlacklist(position_ticket->pos, position_ticket->chr,  total_cov, total_f_cov);
     }
   //}
   // end reversion to 4.2
@@ -876,11 +1066,12 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
 bool AlleleParser::filtered_by_coverage_novel_allele(AlleleDetails& allele)
 {
 
-
+      if (not coverage_above_minC_) return true;
       if (allele.coverage < min_alt_total_) return true;
 
       long double min_fraction = (allele.type & (ALLELE_DELETION | ALLELE_INSERTION))
           ? min_indel_alt_fraction_ : min_alt_fraction_;
+      if (min_fraction == 1.0) return true;
       if (allele.ref_length > 20) min_fraction /= 2.0;
       // special somatic filter
      /* if (allele.type & (ALLELE_DELETION | ALLELE_INSERTION)){
@@ -893,14 +1084,14 @@ bool AlleleParser::filtered_by_coverage_novel_allele(AlleleDetails& allele)
       }*/
       bool reject = true;
       bool print = false;
-      //if (allele.position == 48591864 && allele.type == ALLELE_SNP) print = true;
+      if (allele.position >= 55242460 and  allele.position <= 55242467) { print = true; cerr << allele.position << endl; }
 
       for (int sample_idx = 0; sample_idx < num_samples_; ++sample_idx) {
-//        if (print) cout << "sample_id" << sample_idx << "cov" << allele.samples.at(sample_idx).coverage << "min_co" << min_alt_count_ << endl;
+        //if (print) cerr << "sample_id" << sample_idx << "cov" << allele.samples.at(sample_idx).coverage << "min_co" << min_alt_count_ << endl;
         if (allele.samples.at(sample_idx).coverage < (long int)min_alt_count_)
           continue;
         // make sure zero coverage gets rejected
-//       if (print) cout << "fraction=" << min_fraction << "cutoff=" << (long int)(min_fraction * (long double)coverage_by_sample_.at(sample_idx)) << endl;
+       if (print) cerr << "cov" << allele.samples.at(sample_idx).coverage << "fraction=" << min_fraction << "cutoff=" << (long int)(min_fraction * (long double)coverage_by_sample_.at(sample_idx)) << endl;
         if ( allele.samples.at(sample_idx).coverage <= (long int)(min_fraction * (long double)coverage_by_sample_.at(sample_idx)) )
           continue;
         reject = false;
@@ -908,6 +1099,18 @@ bool AlleleParser::filtered_by_coverage_novel_allele(AlleleDetails& allele)
       }
       if (reject) return true;
       return false;
+}
+
+bool AlleleParser::is_fake_hotspot(AlleleDetails& allele)
+{
+          if (allele.position >= 55242460 and  allele.position <= 55242467) cerr << "fake" << endl;
+    long double s1 = min_indel_alt_fraction_, s2 = min_alt_fraction_;
+    min_indel_alt_fraction_ = min_alt_fraction_ = min_fake_hotspot_fr_;
+
+    bool r_v = filtered_by_coverage_novel_allele(allele);
+    // return to original val
+    min_indel_alt_fraction_ = s1; min_alt_fraction_ = s2;
+    return r_v;
 }
 
 // -------------------------------------------------------------------------
@@ -978,6 +1181,11 @@ void AlleleParser::InferAlleleTypeAndLength(AlleleDetails& allele) const
     return;
   }
   allele.type = ALLELE_COMPLEX;
+  // complex must start with 'M' operation, if it is mismatch, need remove back the padding
+  if (allele.minimized_prefix > 0 and allele.alt_sequence[allele.minimized_prefix] != ref_sequence[allele.minimized_prefix]) {
+    allele.minimized_prefix--;
+    ref_length++; alt_length++;
+  }
   allele.length = max(ref_length, alt_length);
 
 }
@@ -1185,23 +1393,22 @@ void AlleleParser::set_subset(VariantCandidate &v1, VariantCandidate &v, list<in
     int ind = *it;
     int i = 0;
     for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); I++) {
-	if (I->second.filtered) continue;
-	if (i < ind) {
-	    I->second.filtered = true;
-	    i++; continue;
-	}
-	v1.variant.isAltHotspot.push_back(v.variant.isAltHotspot[ind]);
-	v1.variant.isAltFakeHotspot.push_back(v.variant.isAltFakeHotspot[ind]);
+        if (I->second.filtered) continue;
+        if (i < ind) {
+            I->second.filtered = true;
+            i++; continue;
+        }
+        v1.variant.isAltHotspot.push_back(v.variant.isAltHotspot[ind]);
+        v1.variant.isAltFakeHotspot.push_back(v.variant.isAltFakeHotspot[ind]);
         v1.variant_specific_params.push_back(v.variant_specific_params[ind]);
         v1.variant.alt.push_back(v.variant.alt[ind]);
         v1.variant.alt_orig_padding.push_back(v.variant.alt_orig_padding[ind]);
-	it++;
-	i++;
-	if (it == co.end()) ind = 10000000;
-	else ind = *it;
+        it++;
+        i++;
+        if (it == co.end()) ind = 10000000;
+        else ind = *it;
     }
 }
-
 
 // -------------------------------------------------------------------------
 
@@ -1311,7 +1518,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
             		AlleleDetails& allele = I->second;
 			//cout << "allele " << allele.position << " "  << allele.ref_length << " filtered " << allele.filtered << " is_hot " << allele.is_hotspot << endl;
             		if (not allele.filtered) {
-			    if (allele.is_hotspot and filtered_by_coverage_novel_allele(allele)) continue; //does not extend the look up window for fake HS.
+			    if (allele.is_hotspot and is_fake_hotspot(allele)) continue; //does not extend the look up window for fake HS.
               		    long int hapend = max((long int) (allele.position + allele.ref_length), allele.repeat_boundary);
               		    current_look_up_window = max(current_look_up_window, hapend - position_ticket->pos);
             		}
@@ -1381,20 +1588,20 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 			list<int> co;
 			for (unsigned int i = 0; i < alleles_on_hold.size(); i++) co.push_back(alleles_on_hold[i]);
 			if (co.size() > 0) { 
-			    if (co.size() < 20) 
-				//cerr << "place 6" << endl;
-				MakeVariant(variant_candidates, position_ticket, new_prefix, &co);
-			    else {
-                		VariantCandidate v1(vcf_writer_->VariantInitializer());
-				set_subset(v1, v, co);
-                		//bool exist_allele = FillVariantFlowDisCheck(v, refstring, position_ticket, hotspot_present, current_look_up_window, co);
-                		my_examiner_->SetupVariantCandidate(v1);
-          			list<list<int> > allele_groups;
-          			my_examiner_->SplitCandidateVariant(allele_groups);
-          			for (list<list<int> >::iterator it = allele_groups.begin(); it != allele_groups.end(); it++) {
-            			    MakeVariant(variant_candidates, position_ticket, new_prefix, &(*it));
-          			}
-			    }
+                            if (co.size() < 20)
+                                //cerr << "place 6" << endl;
+                                MakeVariant(variant_candidates, position_ticket, new_prefix, &co);
+                            else {
+                                VariantCandidate v1(vcf_writer_->VariantInitializer());
+                                set_subset(v1, v, co);
+                                //bool exist_allele = FillVariantFlowDisCheck(v, refstring, position_ticket, hotspot_present, current_look_up_window, co);
+                                my_examiner_->SetupVariantCandidate(v1);
+                                list<list<int> > allele_groups;
+                                my_examiner_->SplitCandidateVariant(allele_groups);
+                                for (list<list<int> >::iterator it = allele_groups.begin(); it != allele_groups.end(); it++) {
+                                    MakeVariant(variant_candidates, position_ticket, new_prefix, &(*it));
+                                }
+                            }
 			}
 			return;
 		    }
@@ -1411,8 +1618,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		    return;
 		}
 		lkbase = look_ahead_sliding_win_end - position_ticket->pos-haplotype_length;
-		//if (lkbase < 1) lkbase = 1; // advance at least one base
-		if (lkbase < 0) lkbase = 0;
+		if (lkbase < 0) lkbase = 0; //Look ahead window behind current candidate window, we advance it to that. 
 		current_look_up_window = min(max_length, haplotype_length+lkbase);
 		scan_length = current_look_up_window;
 		PileUpAlleles(allowed_allele_types_, current_look_up_window, true, position_ticket, new_prefix);
@@ -1589,6 +1795,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	        alt += ref_reader_->substr(position_ticket->chr, pos+ref_length, haplotype_length-ref_length);
 	        ref_length = haplotype_length;
             } else if (ref_length > haplotype_length) {
+		continue; // padding need to be kept.
 		string ref = ref_reader_->substr(position_ticket->chr, pos, ref_length);
 		int x = alt.size()-1;
 		while (ref_length >  haplotype_length) {
@@ -1600,7 +1807,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	    // use the map to find duplicate, maybe we can get the coverage as well for AO. ZZ 6/29/15
 	    pileup::iterator x = allele_pileup_.find(Allele(allele.type,pos,ref_length,alt.size(),alt.c_str()));
 	    if (x == allele_pileup_.end()) continue;
-	    if (x->second.filtered) continue;
+	    if (x->second.filtered or x->second.is_hotspot) continue;
 	    /*
 	    if (x->second.is_hotspot) continue; // two hotspot are effective same, do nothing now.
 	    x->second.filtered = true;
@@ -1772,7 +1979,7 @@ bool AlleleParser::FillVariantFlowDisCheck(VariantCandidate &v, string &refstrin
                         //common_ref_len = max(common_ref_len, allele.ref_length);
                         //v.variant.alt.push_back(allele.alt_sequence);
                         v.variant.isAltHotspot.push_back(allele.is_hotspot); // Indicates the alt "allele" is HS or de novo?
-                        if (allele.is_hotspot and filtered_by_coverage_novel_allele(allele)) v.variant.isAltFakeHotspot.push_back(true);
+                        if (allele.is_hotspot and is_fake_hotspot(allele)) v.variant.isAltFakeHotspot.push_back(true);
 			else v.variant.isAltFakeHotspot.push_back(false);
 			//cout << (v.variant.isAltFakeHotspot.back()? "true ":"false ") << allele.position << " " << position_ticket->pos;
                         if (allele.is_hotspot and allele.hotspot_params)
@@ -1900,7 +2107,7 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
       ++current_end_match;
     }
     int delta = current_end_pos_ref-current_end_pos_alt;
-    while (current_start_pos < current_end_pos_ref-1 and current_start_pos < current_end_pos_alt-1) {
+    while (current_start_pos < current_end_pos_ref-1 and current_start_pos < current_end_pos_alt-1 and current_start_pos < allele.minimized_prefix) {
       if (*start_pos_ref != allele.alt_sequence[current_start_pos] or (allele.raw_cigar.size() > 0 and (allele.raw_cigar[current_start_pos] != 'M' or allele.raw_cigar[current_start_pos+1] != 'M')))
         break;
       // check left align repeat ZZ.
@@ -1998,11 +2205,13 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   }
 
   int total_cov = ref_pileup_.coverage;
+  for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+    total_cov += I->second.coverage;
+  }
   init_al(i, it, alist);
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
 
-    total_cov += allele.coverage;
     if (not check_allele_filter(allele, i, it, alist))
       continue;
 
@@ -2012,8 +2221,10 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
       candidate.variant.alt.push_back(allele.alt_sequence);
     candidate.variant.alt_orig_padding.push_back(make_pair(0,0));
     candidate.variant.isAltHotspot.push_back(allele.is_hotspot); // Indicates the alt "allele" is HS or de novo?
-    if (allele.is_hotspot and filtered_by_coverage_novel_allele(allele) ) candidate.variant.isAltFakeHotspot.push_back(true);
+    if (allele.is_hotspot and is_fake_hotspot(allele) ) candidate.variant.isAltFakeHotspot.push_back(true);
     else candidate.variant.isAltFakeHotspot.push_back(false);
+    candidate.variant.info["PPD"].push_back(convertToString(allele.minimized_prefix-common_prefix));
+    candidate.variant.info["SPD"].push_back(convertToString(allele.minimized_suffix>common_suffix? allele.minimized_suffix-common_suffix: 0));
 
     if (allele.raw_cigar.size() > 0) {
 	if (allele.raw_cigar.size() <= (unsigned int) (common_prefix+common_suffix)) {

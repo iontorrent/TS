@@ -8,21 +8,24 @@ from iondb.rundb.models import PlanSession
 
 import datetime
 import logging
+
 logger = logging.getLogger(__name__)
 
 
-@app.task(queue="periodic", ignore_result = True)
+@app.task(queue="periodic", ignore_result=True)
 def cleanup():
     engine = import_module(settings.SESSION_ENGINE)
     SessionStore = engine.SessionStore
 
     expired_sessions = Session.objects.filter(expire_date__lte=datetime.datetime.now())
 
-    logger.info('cleaning up %s expired sessions' % len(expired_sessions))
+    logger.info("cleaning up %s expired sessions" % len(expired_sessions))
     for session in expired_sessions:
         store = SessionStore(session.session_key)
         store.delete()
 
-    expired_plan_sessions = PlanSession.objects.filter(expire_date__lte=datetime.datetime.now())
-    logger.info('cleaning up %s expired plan sessions' % expired_plan_sessions.count())
+    expired_plan_sessions = PlanSession.objects.filter(
+        expire_date__lte=datetime.datetime.now()
+    )
+    logger.info("cleaning up %s expired plan sessions" % expired_plan_sessions.count())
     expired_plan_sessions.delete()

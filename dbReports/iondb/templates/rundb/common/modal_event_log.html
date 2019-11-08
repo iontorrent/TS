@@ -1,5 +1,6 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_event_log" title="" class="modal modal-800 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">x</button>
@@ -11,20 +12,20 @@
             <div id="hide_log">
             <table id="log_grid">
                 <thead>
-                    <th data-field="date">Date</th>
-                    <th data-field="user">User</th>
-                    <th data-field="text">Comment</th>
+                    <th data-field="date">{% trans "eventlog.field.created.label" %}</th>
+                    <th data-field="user">{% trans "eventlog.field.username.label" %}</th>
+                    <th data-field="text">{% trans "eventlog.field.text.label" %}</th>
                 </thead>
             </table>
             </div>
             <div id="no_log_msg" style="display:none;">
-                <h2> No logs found for {{ title }}.</h2>
+                <h2>{{ eventlog_messages_empty }}</h2>
             </div>
         </form>
     </div>
 
     <div class="modal-footer">
-        <a href="#" class="btn" data-dismiss="modal">Close</a>
+        <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
     </div>
 
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
@@ -86,16 +87,16 @@ $(document).ready(function(){
         pageable: false,
         columns: [ {
                 field: "created",
-                title: "Date",
+                title: "{% trans "eventlog.field.created.label" %}",
                 width: '18%',
                 template: '#= kendo.toString(new Date(Date._parse(created)),"yyyy/MM/dd hh:mm tt") #'
             } , {
                 field: "username",
-                title: "User",
+                title: "{% trans "eventlog.field.username.label" %}",
                 width: '12%'
             } , {
                 field: "text",
-                title: "Comment",
+                title: "{% trans "eventlog.field.text.label" %}",
                 width: '70%',
                 template: "#= text #"
             }

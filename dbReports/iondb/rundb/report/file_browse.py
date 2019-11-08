@@ -13,20 +13,19 @@ from cStringIO import StringIO
 
 logger = logging.getLogger(__name__)
 
-suffixes = ('k', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y')
+suffixes = ("k", "M", "G", "T", "P", "E", "Z", "Y")
 
 
 def format_units(quantity, unit="B", base=1000):
     if quantity < base:
-        return '%d  %s' % (quantity, unit)
+        return "%d  %s" % (quantity, unit)
 
     for i, suffix in enumerate(suffixes):
         magnitude = base ** (i + 2)
         if quantity < magnitude:
-            return '%.1f %s%s' % ((base * quantity / float(magnitude)),
-                                  suffix, unit)
+            return "%.1f %s%s" % ((base * quantity / float(magnitude)), suffix, unit)
 
-    return '%.1f %s%s' % ((base * quantity / float(magnitude)), suffix, unit)
+    return "%.1f %s%s" % ((base * quantity / float(magnitude)), suffix, unit)
 
 
 def dir_size(path):
@@ -55,7 +54,7 @@ def list_directory(path):
 
 
 def bread_crumb_path(path):
-    path = path.strip('/')
+    path = path.strip("/")
     crumbs = []
     while path:
         head, tail = os.path.split(path)
@@ -64,7 +63,7 @@ def bread_crumb_path(path):
     return crumbs
 
 
-def get_size(start_path='.'):
+def get_size(start_path="."):
     """Return the total size of a folder's contents"""
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(start_path):
@@ -87,8 +86,11 @@ def ellipsize_file(fname, chunk_size=1000000):
         handler = StringIO()
         with open(fname) as file:
             handler.write(file.read(chunk_size))
-            handler.write("\n... File truncated to first and last %s ...\n\n" % format_units(chunk_size))
-            file.seek(size-chunk_size)
+            handler.write(
+                "\n... File truncated to first and last %s ...\n\n"
+                % format_units(chunk_size)
+            )
+            file.seek(size - chunk_size)
             handler.write(file.read(chunk_size))
         handler.seek(0)
     return handler

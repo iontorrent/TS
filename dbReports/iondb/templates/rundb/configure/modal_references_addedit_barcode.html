@@ -1,29 +1,30 @@
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_references_addedit_barcode" title="" class="modal hide" data-width="750">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
-        <h3>View barcode in set <strong>{{ barcode.name }}</strong></h3>
+        <h3>{{ title|safe }}</h3>
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
         <div class="form-horizontal">
             <div class="control-group">
-                <label for="id_str" class="control-label">Barcode ID</label>
+                <label for="id_str" class="control-label">{{ Barcode.id_str.verbose_name }}</label>
                 <div class="controls">
                     <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text" readonly />
                 </div>
             </div>
 
             <div class="control-group">
-                <label for="sequence" class="control-label">Sequence</label>
+                <label for="sequence" class="control-label">{{ Barcode.sequence.verbose_name }}</label>
                 <div class="controls">
                     <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
             </div>
 
             <div class="control-group">
-                <label for="adapter" class="control-label">Adapter</label>
+                <label for="adapter" class="control-label">{{ Barcode.adapter.verbose_name }}</label>
                 <div class="controls">
                     <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;" readonly />
                 </div>
@@ -43,13 +44,13 @@
                 </div>
             </div>
             <div class="control-group">
-                <label for="annotation" class="control-label">Annotation</label>
+                <label for="annotation" class="control-label">{{ Barcode.annotation.verbose_name }}</label>
                 <div class="controls">
                     <input value="{{ barcode.annotation|blankIfNone }}" name="annotation" id="annotation" size="35" maxlength="512" type="text" class="input-xlarge textInput" readonly/>
                 </div>
             </div>
             <div class="control-group">
-                <label for="type" class="control-label">Type</label>
+                <label for="type" class="control-label">{{ Barcode.type.verbose_name }}</label>
                 <div class="controls">
                     <input value="{{ barcode.get_type_display }}" name="annotation" id="annotation" size="35" maxlength="512" type="text" class="input-xlarge textInput" readonly/>
                 </div>
@@ -74,7 +75,6 @@ $('#modal_references_addedit_barcode_form').submit(function(e){
     $("#end_sequence").val($("#end_sequence").val().toUpperCase());
     $("#adapter").val($("#adapter").val().toUpperCase());
     $("#end_adapter").val($("#end_adapter").val().toUpperCase());
-    $("#floworder").val($("#floworder").val().toUpperCase());
     $("#length").val($("#sequence").val().length);
 
     e.preventDefault();
@@ -106,13 +106,17 @@ $('#modal_references_addedit_barcode_form').submit(function(e){
         url: url,
         dataType: "json",
         contentType: "application/json",
-        data: json
+        data: json,
+        headers: {
+            'Accept-Language': '{{ lang.code }}'
+        }
+
     }).done(function(data) {
         $('#modal_references_addedit_barcode').trigger('modal_references_addedit_barcode_done', {});
         $('body #modal_references_addedit_barcode').modal("hide");
     })
     .fail(function(data) {
-        $('#modal_references_addedit_barcode #modal-error-messages').empty().append('<p class="error">Error saving barcode!</p><p>' + data.responseText + '</p>').show()
+        $('#modal_references_addedit_barcode #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}</p><p>' + data.responseText + '</p>').show()
 
     })
     .always(function(data) { });
@@ -124,5 +128,6 @@ $('#modal_references_addedit_barcode_form').submit(function(e){
 $('#modal_references_addedit_barcode').on('hidden', function () {
     $('body #modal_references_addedit_barcode').remove();
 });
+//# sourceURL=templates/rundb/configure/modal_references_addedit_barcode.html
 </script>
 </div>

@@ -6,7 +6,6 @@
 
 #include "BAMWalkerEngine.h"
 #include <algorithm>
-
 #include <errno.h>
 #include <limits.h>
 #include <set>
@@ -14,6 +13,7 @@
 #include "IndelAssembly/IndelAssembly.h"
 #include "InputStructures.h"
 #include "MolecularTag.h"
+#include "IonVersion.h"
 
 
 
@@ -67,7 +67,12 @@ void BAMWalkerEngine::Initialize(const ReferenceReader& ref_reader, TargetsManag
     bam_writing_enabled_ = true;
     SamHeader tmp_header = bam_header_;
     tmp_header.Comments.clear();
-    tmp_header.Programs.Clear();
+
+    // Add PG header line
+    SamProgram my_pg("tvc");
+    my_pg.Name = "tvc";
+    my_pg.Version = IonVersion::GetVersion() + "-" + IonVersion::GetRelease() + " (" +  IonVersion::GetGitHash() + ")";
+    tmp_header.Programs.Add(my_pg);
     bam_writer_.SetCompressionMode(BamWriter::Compressed);
     bam_writer_.SetNumThreads(4);
     if (not bam_writer_.Open(postprocessed_bam, tmp_header, bam_reader_.GetReferenceData())) {
@@ -423,7 +428,7 @@ void BAMWalkerEngine::SaveAlignments(Alignment*& removal_list, VariantCallerCont
     prevEndPos = current_read->alignment.GetEndPosition();
     if (bam_writing_enabled_) {
     	// Remove some tags to make the processed bam file lighter.
-    	const vector<string> unwanted_tags = {"ZM", "ZP", "PG", "ZS"};
+    	const vector<string> unwanted_tags = {"ZM", "ZP", "ZS"};
     	for (vector<string>::const_iterator tag_it = unwanted_tags.begin(); tag_it != unwanted_tags.end(); ++tag_it){
     		if (current_read->alignment.HasTag(*tag_it)){
     			current_read->alignment.RemoveTag(*tag_it);
@@ -441,6 +446,8 @@ void BAMWalkerEngine::SaveAlignments(Alignment*& removal_list, VariantCallerCont
         		current_read->alignment.EditTag("ZH", "Z", current_read->tag_info.readable_fam_info);
     		}
     	}
+    	// The PG of a read in the processed BAM is "tvc"
+    	current_read->alignment.EditTag("PG", "Z", string("tvc"));
         bam_writer_.SaveAlignment(current_read->alignment);
     }
   }
@@ -593,7 +600,7 @@ bool BAMWalkerEngine::GetNextAlignmentCore(Alignment* new_read, VariantCallerCon
 	temp_reads[i].BuildCharData();
 	// Do indel assembly only if no molecular tag detected.
 	if(vc.parameters->program_flow.do_indel_assembly){
-        vc.indel_assembly->processRead(temp_reads[i], indel_target);
+        vc.indel_assembly->processRead(temp_reads[i], indel_target, vc.parameters->useDuplicateReads);
 	}
 	if (temp_reads[i].RefID < 0) break;
 	if (temp_reads[i].Position != temp_reads[0].Position or temp_reads[i].RefID != temp_reads[0].RefID) {
@@ -830,13 +837,13 @@ void ConsensusBAMWalkerEngine::Initialize(const ReferenceReader& ref_reader, Tar
   SamHeader tmp_header = bam_header_;
   //tmp_header.Comments.clear();
   //tmp_header.Programs.Clear();
-  aln_no_needed_consensus_bam_writer_.SetCompressionMode(BamWriter::Compressed);
+  aln_no_needed_consensus_bam_writer_.SetCompressionMode(BamWriter::Uncompressed);
   aln_no_needed_consensus_bam_writer_.SetNumThreads(4);
   if (not aln_no_needed_consensus_bam_writer_.Open(consensus_bam + ".aln_not_needed.bam", tmp_header, bam_reader_.GetReferenceData())) {
     cerr << "ERROR: Could not open consensus BAM file for writing : " << aln_no_needed_consensus_bam_writer_.GetErrorString();
     exit(1);
   }
-  aln_needed_consensus_bam_writer_.SetCompressionMode(BamWriter::Compressed);
+  aln_needed_consensus_bam_writer_.SetCompressionMode(BamWriter::Uncompressed);
   aln_needed_consensus_bam_writer_.SetNumThreads(4);
   if (not aln_needed_consensus_bam_writer_.Open(consensus_bam + ".aln_needed.bam", tmp_header, bam_reader_.GetReferenceData())) {
     cerr << "ERROR: Could not open consensus BAM file for writing : " << aln_needed_consensus_bam_writer_.GetErrorString();
@@ -952,6 +959,7 @@ bool BAMWalkerEngine::GetMostPopularTmap(SamProgram& most_popular_tmap){
 
     for (map<string, unsigned int>::iterator it = read_counts_of_pg_.begin(); it != read_counts_of_pg_.end(); ++it){
     	if ((int) it->second > current_popular_count){
+    		current_popular_count = (int) it->second;
     		most_popular_pg = it->first;
     	}
     }

@@ -1,0 +1,23 @@
+{% load static from staticfiles %}
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
+<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+{# django.middleware.locale.LocaleMiddleware is not used therefore request does not contain LANGUAGE_CODE, see http://django-docs.jarvis.itw/topics/i18n/translation.html#other-tags #}
+{# relies on {% get_language_info for LANGUAGE_CODE as lang %}  #}
+{% ifequal lang.code|lower "zh-cn" %}
+<script type="text/javascript" src="{% static "resources/kendo/js/cultures/kendo.culture.zh-CN.min.js"%}"></script>
+<script type="text/javascript">
+ //set current to the "zh-CN" culture script
+ kendo.culture("zh-CN");
+</script>
+<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.messages.zh-CN.js"%}"></script>
+{% endifequal %}
+{% ifequal lang.code|lower "ru" %}
+<script type="text/javascript" src="{% static "resources/kendo/js/cultures/kendo.culture.ru.min.js"%}"></script>
+<script type="text/javascript">
+ //set current to the "zh-CN" culture script
+ kendo.culture("ru");
+</script>
+<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.messages.ru.js"%}"></script>
+{% endifequal %}

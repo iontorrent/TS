@@ -6,7 +6,8 @@ import os
 import subprocess
 import time
 import json
-import pandas as pd
+import numpy
+import csv
 from optparse import OptionParser
 
 def printtime(message, *args):
@@ -26,6 +27,13 @@ def RunCommand(command,description):
         printtime('ERROR: command failed with status %d' % stat)
         sys.exit(1)
 
+def execute_output(cmd):
+    try:
+        process = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
+        return process.communicate()[0]
+    except:
+        traceback.print_exc()
+        return ''
 
 # -------------------------------------------------------------------------
 # splits argument strings in the torrent suite format into (arg_name, arg_value) tuples
@@ -170,33 +178,28 @@ def create_consensus_metrics(options, parameters):
         param_dict[key] = type_tuple[1](parameters.get('torrent_variant_caller', {}).get(type_tuple[0], param_dict[key]))
     lod_manager.set_parameters(param_dict)
     # Open targets_depth
-    targets_depth_file = os.path.join(options.outdir, 'targets_depth.txt') 
-    df = pd.read_csv(targets_depth_file, sep = '\t')
+    targets_depth_path = os.path.join(options.outdir, 'targets_depth.txt') 
+    with open(targets_depth_path, 'r') as f_target_depth:
+        read_depth_list, family_depth_list = zip(*[(int(region_dict['read_depth']), int(region_dict['family_depth'])) for region_dict in csv.DictReader(f_target_depth, delimiter='\t')])
+    lod_list = [1.0 if lod is None else lod for lod in map(lod_manager.calculate_lod, family_depth_list)]
     # Get stats
-    read_depth_median = df['read_depth'].median()
-    read_depth_20_quantile = df['read_depth'].quantile(0.2)
-    family_depth_median = df['family_depth'].median()
-    family_depth_20_quantile = df['family_depth'].quantile(0.2)
-    lod_median = lod_manager.calculate_lod(family_depth_median)
-    lod_80_quantile = lod_manager.calculate_lod(family_depth_20_quantile)
-    # In case LOD is not monotonic decreasing as mdp increased.
-    if lod_median > lod_80_quantile:
-        lod_median, lod_80_quantile = lod_80_quantile, lod_median
+    read_depth_median = numpy.median(read_depth_list) if read_depth_list else 0
+    read_depth_20_quantile = numpy.percentile(read_depth_list, 20) if read_depth_list else 0
+    family_depth_median = numpy.median(family_depth_list) if family_depth_list else 0
+    family_depth_20_quantile = numpy.percentile(family_depth_list, 20) if family_depth_list else 0
+    lod_median = numpy.median(lod_list) if lod_list else 1.0
+    lod_80_quantile = numpy.percentile(lod_list, 80) if lod_list else 1.0
 
-    consensus_metrics = os.path.join(options.outdir, 'consensus_metrics.txt')
-    with open(consensus_metrics, 'w') as outFileFW:
-        outFileFW.write("Median read coverage:%s\n" % read_depth_median)
-        outFileFW.write("Median molecular coverage:%s\n" %family_depth_median)
-        outFileFW.write("20th percentile read coverage:%s\n" %read_depth_20_quantile)
-        outFileFW.write("20th percentile molecular coverage:%s\n" %family_depth_20_quantile)
-        if lod_median is None:
-            outFileFW.write("Median LOD percent: NA \n")
-        else:
-            outFileFW.write("Median LOD percent:% 2.4f \n" % (lod_median * 100.0))
-        if lod_80_quantile is None:
-            outFileFW.write("80th percentile LOD percent: NA \n")
-        else:
-            outFileFW.write("80th percentile LOD percent:% 2.4f \n" %(lod_80_quantile*100.0))
+    consensus_metrics_path = os.path.join(options.outdir, 'consensus_metrics.txt')
+    lines_to_write = ["Median read coverage:\t%d" %int(read_depth_median),
+                      "Median molecular coverage:\t%d" %int(family_depth_median),
+                      "20th percentile read coverage:\t%d" %int(read_depth_20_quantile),
+                      "20th percentile molecular coverage:\t%d" %int(family_depth_20_quantile),
+                      "Median LOD percent:\t%s" %('N/A' if lod_median == 1.0 else '%2.4f'%(lod_median * 100.0)),
+                      "80th percentile LOD percent:\t%s" %('N/A' if lod_80_quantile == 1.0 else '%2.4f'%(lod_80_quantile * 100.0)),
+                     ]
+    with open(consensus_metrics_path, 'w') as outFileFW:
+        outFileFW.write('\n'.join(lines_to_write))
 
 # -------------------------------------------------------------------------
 # Have the pipeline create a samtools depth file in case tvc does not do it
@@ -245,9 +248,6 @@ def run_tvcutils_unify(options, parameters):
             
     RunCommand(unify_command, 'Unify variants and annotations from all sources (tvc,IndelAssembly,hotpots)')
 
-def merge_blacklist(options, merge_py):
-    mb_command = 'python ' + merge_py + ' '
-
 # -------------------------------------------------------------------------
 # Straighten out which executables to use. The order of precedence is 
 # 1) path explicity supplied through script options (regardless whether executable exists)*
@@ -266,6 +266,62 @@ def get_path_to_executable(parameters, system_exec, json_args, bin_dir):
         return os.path.join(bin_dir,system_exec)
     else:
         return system_exec #4)
+
+# -------------------------------------------------------------------------
+
+def print_bin_versions(options):
+    print(get_tvc_ver(options.path_to_tvc))
+    print(get_tvcutils_ver(options.path_to_tvcutils))
+    print(get_tmap_ver(options.path_to_tmap))
+
+    
+def get_tvc_ver(path_to_tvc):
+    tvc_v_output_text = execute_output('%s -v' %path_to_tvc).strip(' \n').replace('\t', ' ')
+    for line in tvc_v_output_text.split('\n'):
+        # Assumption: 
+        # "tvc -v" outputs the text of the format: tvc <MAJOR>.<MINOR>-<BUILD> (<GITHASH>) - Torrent Variant Caller
+        try:
+            my_idx = line.index(' - Torrent Variant Caller')
+        except ValueError:
+            my_idx = None
+        if line.startswith('tvc') and my_idx is not None:
+            return line[:my_idx]
+    
+    # Unexpected format: return the whole text
+    return tvc_v_output_text if tvc_v_output_text.startswith('tvc ') else 'tvc %s' %tvc_v_output_text
+
+def get_tvcutils_ver(path_to_tvcutils):
+    tvcutils_output_text = execute_output('%s' %path_to_tvcutils).strip('\n').replace('\t', ' ')
+    
+    for line in tvcutils_output_text.split('\n'):
+        # Assumption:
+        # "tvcutils" outputs the text line of the format: tvcutils <MAJOR>.<MINOR>-<BUILD> (<GITHASH>) - Miscellaneous tools used by Torrent Variant Caller plugin and workflow.
+        try:
+            my_idx = line.index(' - Miscellaneous')
+        except ValueError:
+            my_idx = None        
+        
+        if line.startswith('tvcutils') and my_idx is not None:
+            return line[:my_idx]
+    
+    # Unexpected format: return the whole text
+    return tvcutils_output_text if tvcutils_output_text.startswith('tvcutils ') else 'tvcutils %s' %tvc_v_output_text
+
+def get_tmap_ver(path_to_tmap):
+    import re
+    ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')   
+     # tmap -v outputs ansi escape code
+    tmap_v_output_text = execute_output('%s -v' %path_to_tmap).strip('\n').replace('\t', ' ')
+    tmap_v_output_text = ansi_escape.sub('', tmap_v_output_text)
+    for line in tmap_v_output_text.split('\n'):
+        # Assumption:
+        # "tmap" version is in the output text line of the format: 
+        # Version: <MAJOR>.<MINOR>.<BUILD> (<GITHASH>) (<TIMESTAMP>)
+        if line.startswith('Version: '):
+            return 'tmap %s' %(line[len('Version: '):])
+    
+    # Unexpected format: return the whole text
+    return tmap_v_output_text if tmap_v_output_text.startswith('tmap ') else 'tmap %s' %tmap_v_output_text
 
 # ===============================================================================
 
@@ -295,6 +351,7 @@ def main():
     parser.add_option(      '--bin-tvc',         help='Path to tvc executable. Defaults to the system tvc.', dest='path_to_tvc')
     parser.add_option(      '--bin-tvcutils',    help='Path to tvcutils executable. Defaults to the system tvcutils.', dest='path_to_tvcutils')
     parser.add_option(      '--bin-tmap',        help='Path to tmap executable. Defaults to the system tmap.', dest='path_to_tmap')
+    parser.add_option('-v', '--bin-version',     help='Print the versions of tvc, tvcutils, tmap being used in the pipeline.', dest='bin_ver', action='store_true')
     
     # We seem to still need this in TS 5.4 because i can't detangle the plugin code
     parser.add_option('-B', '--bin-dir',          help='DEPRECATED: Directory path to location of variant caller programs. Defaults to the directory this script is located', dest='bindir')
@@ -343,6 +400,13 @@ def main():
         options.path_to_tvcutils =  get_path_to_executable(parameters, 'tvcutils', 'unifyargs', bin_dir)
     if not options.path_to_tmap:
         options.path_to_tmap =  get_path_to_executable(parameters, 'tmap', 'tmapargs', bin_dir)
+
+    # -----------------------------------------------------------------------------------------
+    # Print version and exit:
+    if options.bin_ver:
+        print_bin_versions(options)
+        sys.exit(0)
+    # -----------------------------------------------------------------------------------------
     
     # And give some feedback about executables being used
     printtime('Using tvc      binary: ' + options.path_to_tvc)
@@ -355,7 +419,7 @@ def main():
     
     if not options.bamfile or not options.reference:
         parser.print_help()
-        exit(1)
+        sys.exit(1)
         
     multisample = (options.bamfile.find(",") != -1)
     if options.run_consensus.lower() == 'on' and multisample:

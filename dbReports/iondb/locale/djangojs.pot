@@ -1,0 +1,836 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2019-02-12 14:31-0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: media/js/data_models.js:89
+msgid "global.messages.warning.label"
+msgstr ""
+
+#: media/js/data_models.js:202
+msgid "data.pageable.messages.goprev"
+msgstr ""
+
+#: media/js/data_models.js:203
+msgid "data.pageable.messages.noprev"
+msgstr ""
+
+#: media/js/data_models.js:205
+msgid "data.pageable.messages.gonext"
+msgstr ""
+
+#: media/js/data_models.js:206
+msgid "data.pageable.messages.nonext"
+msgstr ""
+
+#: media/js/data_models.js:208
+msgid "data.pageable.messages.onfirst"
+msgstr ""
+
+#: media/js/data_models.js:209
+msgid "data.pageable.messages.gofirst"
+msgstr ""
+
+#: media/js/data_models.js:211
+msgid "data.pageable.messages.onlast"
+msgstr ""
+
+#: media/js/data_models.js:212
+msgid "data.pageable.messages.golast"
+msgstr ""
+
+#: media/js/data_models.js:223
+msgid "data.pageable.messages.display"
+msgstr ""
+
+#: media/js/data_tab.js:190
+msgid "data.listview.messages.reports-show-more"
+msgstr ""
+
+#: media/js/data_tab.js:199
+msgid "data.listview.messages.reports-show-less"
+msgstr ""
+
+#: media/js/data_tab.js:308 media/js/data_tab.js.c:386 media/js/data_tab.js:500
+#: media/js/monitor_tab.js:75
+#: media/resources/scripts/plan/plan_templates.html.js:230
+#: media/resources/scripts/plan/planned.html.js:71
+#: media/resources/scripts/plan/planned.html.js:97
+#: media/resources/scripts/plan/planned.html.js:116
+#: media/resources/scripts/plan/planned.html.js:368
+#: media/resources/scripts/reports/report.js:369
+#: media/resources/scripts/reports/report.js:482
+#: media/resources/scripts/reports/report.js:516
+#: media/resources/scripts/sample/input_samples.js:60
+#: media/resources/scripts/sample/input_samples.js:105
+#: media/resources/scripts/sample/input_samples.js:141
+#: media/resources/scripts/sample/input_samples.js:182
+#: media/resources/scripts/sample/sampleattributes.js:51
+#: media/resources/scripts/sample/sampleattributes.js:91
+#: media/resources/scripts/sample/sampleattributes.js:133
+#: media/resources/scripts/sample/samplesets.js:63
+#: media/resources/scripts/sample/samplesets.js:87
+#: media/resources/scripts/sample/samplesets.js:109
+#: media/resources/scripts/sample/samplesets.js:169
+#: media/resources/scripts/sample/samplesets.js:193
+#: media/resources/scripts/sample/samplesets.js:223
+#: media/resources/scripts/sample/samplesets.js:252
+msgid "global.messages.error.label"
+msgstr ""
+
+#: media/js/data_tab.js:317
+msgid "data.messages.errors.mesh.changefavorite"
+msgstr ""
+
+#: media/js/data_tab.js:329
+msgid "data.messages.errors.mesh.changerepresentative"
+msgstr ""
+
+#: media/js/data_tab.js:676 media/js/monitor_tab.js:64
+#: media/resources/scripts/plan/plan_templates.html.js:208
+#: media/resources/scripts/plan/plan_templates.html.js:239
+#: media/resources/scripts/plan/plan_templates.html.js:271
+#: media/resources/scripts/plan/plan_templates.html.js:305
+#: media/resources/scripts/plan/plan_templates.html.js:339
+#: media/resources/scripts/plan/plan_templates.html.js:514
+#: media/resources/scripts/plan/plan_templates.html.js:550
+#: media/resources/scripts/plan/planned.html.js:5
+#: media/resources/scripts/plan/planned.html.js:52
+#: media/resources/scripts/plan/planned.html.js:398
+#: media/resources/scripts/reports/report.js:493
+#: media/resources/scripts/sample/input_samples.js:15
+#: media/resources/scripts/sample/input_samples.js:40
+#: media/resources/scripts/sample/input_samples.js:73
+#: media/resources/scripts/sample/input_samples.js:121
+#: media/resources/scripts/sample/input_samples.js:162
+#: media/resources/scripts/sample/sampleattributes.js:5
+#: media/resources/scripts/sample/sampleattributes.js:30
+#: media/resources/scripts/sample/sampleattributes.js:70
+#: media/resources/scripts/sample/sampleattributes.js:113
+#: media/resources/scripts/sample/samplesets.js:21
+msgid "global.messages.loading"
+msgstr ""
+
+#: media/js/monitor_tab.js:37
+msgid "monitor.fields.flows.tooltip"
+msgstr ""
+
+#: media/js/monitor_tab.js:38
+msgid "monitor.fields.flows.progress.message"
+msgstr ""
+
+#: media/js/monitor_tab.js:129
+msgid "monitor.fields.flows.progress.message.alternate"
+msgstr ""
+
+#: media/resources/scripts/signal.js:35 media/resources/scripts/signal.min.js:1
+msgid "signal.js.strength.percentage.suffix"
+msgstr ""
+
+#: media/resources/scripts/configure/configure/contacts.js:3
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_add_prune_group.js:15
+#: media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_edit_pruning_config.js:17
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:12
+#: media/resources/scripts/sample/import_samples.js:54
+msgid "uni-form-validation.language.required"
+msgstr ""
+
+#: media/resources/scripts/plan/by_template.js:8
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_chars"
+msgstr ""
+
+#: media/resources/scripts/plan/by_template.js:13
+msgid "workflow.step.saveplan.messages.validate.planName.is_valid_length"
+msgstr ""
+
+#: media/resources/scripts/plan/by_template.js:22
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_chars"
+msgstr ""
+
+#: media/resources/scripts/plan/by_template.js:27
+msgid "workflow.step.saveplan.messages.validate.note.is_valid_length"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning.js:33
+msgid "batch_plans_from_template.messages.validate.planCount"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:62
+msgid "upload_plans_for_template.loadingstatus"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:102
+msgid "row"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:103
+msgid "column"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:124
+msgid "upload_plans_for_template.errors.rowOrColumn"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:138
+msgid "upload_plans_for_template.errors.summary"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:139
+msgid "upload_plans_for_template.errors.totalerrors"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:141
+msgid "upload_plans_for_template.errors.instructions"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:158
+msgid "upload_plans_for_template.errors.rowOrColumn.title"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:179
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:187
+msgid "upload_plans_for_template.errors.rowOrColumnError"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:231
+msgid "upload_plans_for_template.warnings.rowOrColumn.title"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:248
+msgid "global.action.modal.close"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:265
+msgid "upload_plans_for_template.errors.choose.dropdown"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:276
+msgid "upload_plans_for_template.errors.choose.dropdown.choice"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:279
+msgid "upload_plans_for_template.errors.choose.all"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:300
+msgid "upload_plans_for_template.errors.column.rowNumber.title"
+msgstr ""
+
+#: media/resources/scripts/plan/modal_batch_planning_upload.js:301
+msgid "upload_plans_for_template.errors.column.errormsg.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:33
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:53
+msgid "workflow.step.analysisparams.action.viewupdate.label.collapse"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_analysis_params_section.js:49
+msgid "workflow.step.analysisparams.action.viewupdate.label.expand"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:382
+#: media/resources/scripts/plan/page_plan_kits.js:390
+#: media/resources/scripts/plan/page_plan_kits.js:394
+msgid "workflow.step.kits.fields.barcodeId.label.required"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:398
+msgid "workflow.step.kits.fields.barcodeId.label.optional"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:644
+msgid "workflow.step.kits.fields.flowOrder.default"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:657
+msgid "workflow.step.kits.fields.samplePrepProtocol.default"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_kits.js:817
+msgid "workflow.step.kits.advancedsettings.messages.recommendation"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:354
+msgid "workflow.step.sample.grid.columns.field.row.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:359
+msgid "workflow.step.sample.grid.columns.field.barcodeId.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:367
+msgid "workflow.step.sample.grid.columns.field.endBarcodeId.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+#: media/resources/scripts/plan/page_plan_sample_table.js:1342
+msgid "workflow.step.sample.grid.columns.field.sampleName.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:375
+msgid "workflow.step.sample.grid.columns.field.sampleName.title.required"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:383
+msgid "workflow.step.sample.grid.columns.field._control_type.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:388
+msgid "workflow.step.sample.grid.columns.field.controlType.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:396
+msgid "workflow.step.sample.grid.columns.field.sampleExternalId.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:401
+msgid "workflow.step.sample.grid.columns.field.sampleDescription.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title.isDNAandFusions"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:406
+msgid "workflow.step.sample.grid.columns.field.nucleotideType.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:415
+msgid "workflow.step.sample.grid.columns.field._ref_details.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:419
+msgid "workflow.step.sample.grid.columns.field.reference.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:427
+msgid "workflow.step.sample.grid.columns.field.targetRegionBedFile.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:435
+msgid "workflow.step.sample.grid.columns.field.hotSpotRegionBedFile.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:443
+#: media/resources/scripts/plan/page_plan_sample_table.js:1350
+msgid "workflow.step.sample.grid.columns.field.tubeLabel.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:449
+msgid "workflow.step.sample.grid.columns.field.chipBarcode.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:455
+msgid "workflow.step.sample.grid.columns.field.controlSequenceType.title"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1205
+msgid "workflow.step.sample.messages.validate.csv_file.required"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1344
+msgid "workflow.step.sample.messages.validate.sampleName.is_valid_leading_chars"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1358
+msgid "workflow.step.sample.grid.messages.validate.is_valid_chars"
+msgstr ""
+
+#: media/resources/scripts/plan/page_plan_sample_table.js:1364
+msgid "workflow.step.sample.grid.messages.validate.is_valid_length"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:106
+msgid "template.pageable.messages.display"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:107
+msgid "template.pageable.messages.empty"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:114
+msgid "template.fields.planDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:119
+msgid "template.fields.sequencingInstrumentType.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:125
+msgid "template.fields.templatePrepInstrumentType.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:131
+msgid "template.fields.runType.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:137
+msgid "template.fields.barcodeKitName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:142
+msgid "template.fields.reference.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:147
+msgid "template.fields.projects.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:151
+#: media/resources/scripts/plan/planned.html.js:281
+msgid "template.fields.projects.label.plural"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:156
+msgid "template.fields.irAccountName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:162
+msgid "template.fields.irworkflow.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:167
+msgid "template.fields.date.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:172
+msgid "template.fields.isSystem.label"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:469
+msgid "templates.messages.references.notinstalled"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:475
+msgid "templates.messages.bedfiles.notinstalled"
+msgstr ""
+
+#: media/resources/scripts/plan/plan_templates.html.js:600
+msgid "import_plan_template.messages.validate.file.required"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:209
+msgid "plannedruns.pageable.messages.display"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:210
+msgid "plannedruns.pageable.messages.empty"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:218
+msgid "plannedruns.fields.id.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:221
+msgid "plannedruns.selectall.deselectall.tooltip"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:225
+msgid "plannedruns.fields.sampleSetDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:234
+msgid "plannedruns.fields.planShortID.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:240
+msgid "plannedruns.fields.planDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:245
+msgid "plannedruns.fields.barcodeId.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:250
+msgid "plannedruns.fields.library.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:255
+msgid "plannedruns.fields.runType.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:261
+msgid "plannedruns.fields.sampleGroupingName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:266
+msgid "plannedruns.fields.libraryPrepType.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:273
+msgid "plannedruns.fields.combinedLibraryTubeLabel.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:277
+msgid "plannedruns.fields.projects.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:285
+msgid "plannedruns.fields.sampleDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:291
+msgid "plannedruns.fields.sampleTubeLabel.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:296
+msgid "plannedruns.fields.chipBarcode.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:301
+msgid "plannedruns.fields.date.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:306
+msgid "plannedruns.fields.planStatus.label"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.message"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.cancel"
+msgstr ""
+
+#: media/resources/scripts/plan/planned.html.js:395
+msgid "plannedruns.action.set-status-planned.confirmation.confirm"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:99
+msgid "report.section.plugins.messages.nopluginsrun"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:165
+msgid "report.section.plugins.messages.failedtogetpluginstatus"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:188
+msgid "report.messages.status.progresscomplete"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:195
+msgid "report.messages.status.progress.onajaxerror"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:546
+msgid "report.section.plugins.action.removeplugin.confirm"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:553
+msgid "report.section.plugins.action.removeplugin.failure"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:593
+msgid "report.section.plugins.action.viewlog.failure"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:606
+msgid "report.section.plugins.action.terminate.inprogress"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:613
+msgid "report.section.plugins.messages.terminate.inprogress"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:616
+msgid "report.section.plugins.messages.terminate.failed"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:635
+msgid "report.section.plugins.execute.title"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:637
+msgid "report.section.plugins.execute.messages.loadingpluginlist"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:650
+msgid "global.nav.menu.configure.menu.plugins.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:651
+msgid "report.section.plugins.messages.nopluginsenabled"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:747
+msgid "report.section.plugins.execute.messages.executing"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:754
+msgid "report.section.plugins.execute.messages.failureexecuting"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:892
+msgid "report.section.output.barcodes.fields.barcode_name.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:896
+msgid "report.section.output.barcodes.fields.sample.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:900
+msgid "report.section.output.barcodes.fields.total_bases.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:904
+msgid "report.section.output.barcodes.fields.Q20_bases.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:908
+msgid "report.section.output.barcodes.fields.read_count.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:912
+msgid "report.section.output.barcodes.fields.mean_read_length.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:915
+msgid "report.section.output.barcodes.read_len_histogram.label"
+msgstr ""
+
+#: media/resources/scripts/reports/report.js:919
+msgid "report.section.output.barcodes.files.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:347
+msgid "samplesets.PendingSampleSetItemInfo.fields.displayedName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:351
+msgid "samplesets.PendingSampleSetItemInfo.fields.externalId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:355
+msgid "samplesets.PendingSampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:363
+msgid "samplesets.PendingSampleSetItemInfo.fields.barcode.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:367
+msgid "samplesets.PendingSampleSetItemInfo.fields.description.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:371
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:375
+msgid "samplesets.PendingSampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:392
+msgid "samplesets.PendingSampleSetItemInfo.fields.gender.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:396
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipRole.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:400
+msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipGroup.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:404
+msgid "samplesets.PendingSampleSetItemInfo.fields.cancerType.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:408
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellularityPct.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:412
+msgid "samplesets.PendingSampleSetItemInfo.fields.biopsyDays.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:416
+msgid "samplesets.PendingSampleSetItemInfo.fields.cellNum.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:420
+msgid "samplesets.PendingSampleSetItemInfo.fields.coupleId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:424
+msgid "samplesets.PendingSampleSetItemInfo.fields.embryoId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:428
+msgid "samplesets.PendingSampleSetItemInfo.fields.population.label"
+msgstr ""
+
+#: media/resources/scripts/sample/input_samples.js:432
+msgid "samplesets.PendingSampleSetItemInfo.fields.mouseStrains.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:229
+msgid "samplesets.SampleAttribute.fields.displayedName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:234
+msgid "samplesets.SampleAttribute.fields.description.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:237
+msgid "samplesets.SampleAttribute.fields.dataType_name.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:241
+msgid "samplesets.SampleAttribute.fields.isMandatory.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:246
+msgid "samplesets.SampleAttribute.fields.isActive.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:251
+msgid "samplesets.SampleAttribute.fields.sampleCount.label"
+msgstr ""
+
+#: media/resources/scripts/sample/sampleattributes.js:255
+msgid "samplesets.SampleAttribute.fields.lastModifiedDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:366
+msgid "samplesets.fields.id.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:372
+msgid "samplesets.fields.displayedName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:376
+msgid "samplesets.fields.lastModifiedDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:381
+msgid "samplesets.fields.sampleCount.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:384
+msgid "samplesets.fields.description.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:387
+msgid "samplesets.fields.sampleGroupTypeName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:390
+msgid "samplesets.fields.libraryPrepType.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:394
+msgid "samplesets.fields.libraryPrepKitDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:397
+msgid "samplesets.fields.pcrPlateSerialNum.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:400
+msgid "samplesets.fields.combinedLibraryTubeLabel.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:403
+msgid "samplesets.fields.status.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:598
+msgid "samplesets.SampleSetItemInfo.fields.sampleDisplayedName.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:603
+msgid "samplesets.SampleSetItemInfo.fields.sampleExternalId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:608
+msgid "samplesets.SampleSetItemInfo.fields.pcrPlateRow.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:612
+msgid "samplesets.SampleSetItemInfo.fields.controlType.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:616
+msgid "samplesets.SampleSetItemInfo.fields.dnabarcode.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:620
+msgid "samplesets.SampleSetItemInfo.fields.description.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:625
+msgid "samplesets.SampleSetItemInfo.fields.sampleCollectionDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:630
+msgid "samplesets.SampleSetItemInfo.fields.sampleReceiptDate.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:654
+msgid "samplesets.SampleSetItemInfo.fields.gender.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:659
+msgid "samplesets.SampleSetItemInfo.fields.relationshipRole.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:664
+msgid "samplesets.SampleSetItemInfo.fields.relationshipGroup.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:670
+msgid "samplesets.SampleSetItemInfo.fields.cancerType.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:675
+msgid "samplesets.SampleSetItemInfo.fields.cellularityPct.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:680
+msgid "samplesets.SampleSetItemInfo.fields.biopsyDays.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:684
+msgid "samplesets.SampleSetItemInfo.fields.cellNum.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:688
+msgid "samplesets.SampleSetItemInfo.fields.coupleId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:692
+msgid "samplesets.SampleSetItemInfo.fields.embryoId.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:696
+msgid "samplesets.SampleSetItemInfo.fields.population.label"
+msgstr ""
+
+#: media/resources/scripts/sample/samplesets.js:700
+msgid "samplesets.SampleSetItemInfo.fields.mouseStrains.label"
+msgstr ""

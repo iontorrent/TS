@@ -1,0 +1,27 @@
+{% load static from staticfiles %}
+{% load i18n %}
+{% get_language_info for LANGUAGE_CODE as lang %}
+<!-- {{ lang.code|lower }}-->
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js" %}"></script>
+{% ifequal lang.code|lower "zh-cn" %}
+<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/i18n/jquery.ui.datepicker-zh-CN.min.js"%}"></script>
+{% endifequal %}
+{% ifequal lang.code|lower "ru" %}
+<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/i18n/jquery.ui.datepicker-ru.min.js"%}"></script>
+{% endifequal %}
+<script type="text/javascript">
+    console.log('language: \'{{ lang.code }}\'');
+    var _language = function(_language) {
+        var language = _language || 'en-US';
+        language = language.replace(/_/g, '-');
+        var tokens = language.split('-')
+        var lang = tokens[0];
+        var country = tokens[1];
+        country = country && country.toUpperCase() ;
+        return country && lang + '-' + country || lang;
+    };
+    var language = _language('{{ lang.code }}'), lang = language;
+    $(document).ready(function () {
+        $.datepicker.setDefaults($.datepicker.regional[language]);
+    });
+</script>

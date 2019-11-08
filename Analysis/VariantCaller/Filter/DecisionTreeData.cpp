@@ -25,14 +25,32 @@ void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool use_position_bia
   SetFilteredStatus(candidate_variant, true);
 }
 
-string EvaluatedGenotype::GenotypeAsString(){
+string EvaluatedGenotype::GenotypeAsString() const{
   stringstream tmp_g;
-  tmp_g << genotype_component[0] << "/" << genotype_component[1];
-  return(tmp_g.str());
+  tmp_g << genotype_component[0];
+  for (unsigned int gt_idx = 1; gt_idx < genotype_component.size(); ++gt_idx){
+	  tmp_g << "/" << genotype_component[gt_idx];
+  }
+  return tmp_g.str();
 }
 
-bool EvaluatedGenotype::IsReference(){
-	return (genotype_component[0] == 0) and (genotype_component[1] == 0);
+bool EvaluatedGenotype::IsHomReference() const {
+    for (vector<int>::const_iterator gt_component_iter = genotype_component.begin(); gt_component_iter != genotype_component.end(); ++gt_component_iter){
+    	if ((*gt_component_iter) != 0){
+    		return false;
+    	}
+    }
+    return true;
+}
+
+bool EvaluatedGenotype::IsAlleleCalled(int allele_idx) const {
+	// allele_idx = 0, 1, 2, ... for REF, ALT1, ALT2, etc
+    for (vector<int>::const_iterator gt_component_iter = genotype_component.begin(); gt_component_iter != genotype_component.end(); ++gt_component_iter){
+    	if ((*gt_component_iter) == allele_idx){
+    		return true;
+    	}
+    }
+    return false;
 }
 
 void PushValueOntoStringMaps(vector<string> &tag, int index, double value) {
@@ -103,7 +121,7 @@ void SuppressReferenceCalls(vcf::Variant &candidate_variant, const ExtendParamet
 
 void DecisionTreeData::SetupFromMultiAllele(vector<AlleleIdentity>* const allele_identity_vect_ptr, vector<string>* const info_fields_ptr){
 	allele_identity_vector = allele_identity_vect_ptr;
-	info_fields = info_fields_ptr;
+	misc_info_fields = info_fields_ptr;
 	all_summary_stats.Allocate(allele_identity_vector->size() + 1); // ref plus num alternate alleles
 	summary_info_vector.resize(allele_identity_vector->size());
 }
@@ -143,7 +161,7 @@ void DecisionTreeData::FilterByBasicThresholds(int i_alt, MultiBook &m_summary_s
   // Filter out a variant allele if the variant coverage (FAO) is too low.
   // Don't apply the variant coverage filter if we are making a reference call.
   // This is because, by applying this filter, a reference call will be filtered out if any of the variant allele fails to pass the filter, which does not make sense.
-  if (not eval_genotype.IsReference()){
+  if (not eval_genotype.IsHomReference()){
 	  // Min Variant Coverage filter
 	  int effective_min_var_cov = variant_specific_params.min_var_coverage_override ?
 		  variant_specific_params.min_var_coverage : basic_filter.min_var_cov;
@@ -187,7 +205,7 @@ void DecisionTreeData::FilterByBasicThresholds(int i_alt, MultiBook &m_summary_s
 
   float strand_bias = m_summary_stats.OldStrandBias(i_alt, tune_sbias);
   float strand_bias_pval = m_summary_stats.StrandBiasPval(i_alt, tune_sbias);
-  if ((not eval_genotype.IsReference())
+  if ((not eval_genotype.IsHomReference())
 		  and (strand_bias > effective_strand_bias_thr)
 		  and (strand_bias_pval <= effective_strand_bias_pval_thr)) {
      string my_reason = "STDBIAS";
@@ -216,7 +234,6 @@ void DecisionTreeData::FilterByBasicThresholds(int i_alt, MultiBook &m_summary_s
 }
 
 void DecisionTreeData::AddLodTags(vcf::Variant &candidate_variant, const string &sample_name, const ControlCallAndFilters &my_controls){
-	// Currently don't output LOD if use_lod_filter = false
 	if(not use_molecular_tag){
 		return;
 	}
@@ -244,9 +261,10 @@ void DecisionTreeData::FilterOnLod(int i_alt, MultiBook &m_summary_stats, Varian
     if (all_summary_stats.lod.size() != allele_identity_vector->size()){
     	all_summary_stats.lod.resize(allele_identity_vector->size());
     }
+
 	all_summary_stats.lod[i_alt] = lod;
 
-	if (eval_genotype.IsReference()){
+	if (eval_genotype.IsHomReference()){
 		return;
 	}
 
@@ -268,7 +286,7 @@ void DecisionTreeData::FilterOnPositionBias(int i_alt, MultiBook &m_summary_stat
 						VariantOutputInfo &l_summary_info, const ControlCallAndFilters &my_filters,
 						const VariantSpecificParams& variant_specific_params)
 {
-  if ((not my_filters.use_position_bias) or eval_genotype.IsReference()) {
+  if ((not my_filters.use_position_bias) or eval_genotype.IsHomReference()) {
     return;
   }
 
@@ -600,7 +618,7 @@ void DecisionTreeData::GenotypeFromEvaluator(vcf::Variant & candidate_variant, c
   variant_quality[sample_name] = eval_genotype.evaluated_variant_quality;
 
   string genotype_string = eval_genotype.GenotypeAsString();
-  reference_genotype = eval_genotype.IsReference();
+  reference_genotype = eval_genotype.IsHomReference();
 
   StoreGenotypeForOneSample(candidate_variant, sample_name, genotype_string, eval_genotype.evaluated_genotype_quality, parameters.multisample);
 }
@@ -811,9 +829,9 @@ void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  &candidate_
       std::sort(filter_triggered.begin(), filter_triggered.end());
     }
 
-    // Abuse FR tag to write out info fields
-    for (unsigned int i_info=0; i_info<info_fields->size(); i_info++)
-      AddInfoReason(candidate_variant, info_fields->at(i_info), sample_name);
+    // Use MISC tag to write out the miscellaneous information, no abuse FR anymore.
+    for (unsigned int i_info=0; i_info<misc_info_fields->size(); i_info++)
+      AddMiscellaneousInfo(candidate_variant, misc_info_fields->at(i_info), sample_name);
 
     // if no-one escaped
     if (!no_filter){
@@ -893,6 +911,29 @@ void DecisionTreeData::DeterminePossiblePolyploidyAlleles(vcf::Variant &candidat
 		candidate_variant.info["PPA"].push_back(ppa_string);
 	}
 }
+void DecisionTreeData::SuppressLod(vcf::Variant &variant, bool suppress_called_allele_lod){
+	// Must be done before heal-snp!
+	map<string, vector<string> >::iterator info_iter = variant.info.find("LOD");
+	if ((not suppress_called_allele_lod)
+			or (info_iter == variant.info.end())
+			or (not use_molecular_tag)
+			or variant.isFiltered){
+		return;
+	}
+
+//	cout << " (info_iter->second).size() = "<< (info_iter->second).size()<<endl;
+	for (unsigned int i_alt = 0; i_alt < (info_iter->second).size(); ++i_alt){
+		int allele_idx = (int) i_alt + 1;
+		if (eval_genotype.IsAlleleCalled(allele_idx)){
+			(info_iter->second)[i_alt] = ".";
+		}
+		if (allele_idx < (int) is_possible_polyploidy_allele.size()){
+			if (is_possible_polyploidy_allele[allele_idx]){
+				(info_iter->second)[i_alt] = ".";
+			}
+		}
+	}
+}
 
 
 void DecisionTreeData::FillInFiltersAtEnd(VariantCandidate &candidate_variant, const ExtendParameters &parameters, const string &sample_name)
@@ -906,6 +947,8 @@ void DecisionTreeData::FillInFiltersAtEnd(VariantCandidate &candidate_variant, c
   FilterMyCandidate(candidate_variant.variant, parameters, sample_name);
 
   DeterminePossiblePolyploidyAlleles(candidate_variant.variant, parameters);
+
+  SuppressLod(candidate_variant.variant, parameters.my_controls.suppress_called_allele_lod);
 
   CleanupCandidatesIfNeeded(candidate_variant, parameters, sample_name);
 

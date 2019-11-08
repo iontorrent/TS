@@ -40,7 +40,7 @@
       "barcode-spec-file" : "",
       "bkg-dont-emphasize-by-compression" : false,
       "bkg-well-xtalk-name" : "",
-      "gopt" : "/opt/ion/config/gopt_540_ampliseq_exome.param.json",
+      "gopt" : "/opt/ion/config/gopt_541.param.json",
       "xtalk" : "disable"
    },
    "GpuControlOpts" : {
@@ -194,7 +194,8 @@
       "region-size" : [ 100, 100 ],
       "total-timeout" : 36000,
       "bkg-debug-files" : true,
-      "bkg-debug-param" : 3
+      "bkg-debug-param" : 3,
+      "gpuworkload" : 0
    },
    "TraceControl" : {
       "bkg-empty-well-normalization" : false,

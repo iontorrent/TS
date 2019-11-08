@@ -415,8 +415,8 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
-                    title="Minimum number of functional families per target required for variant calling.">
-                    Minimum variant coverage
+                    title="Minimum number of functional molecules that are identified to support the allele required to make a variant call.">
+                    Minimum variant molecular coverage
                 </span>
                 </div>
                 <div class="row-fluid parameter-subname">min_var_coverage</div>
@@ -486,8 +486,8 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
-                      title="Minimum number of reads with same molecular tag required to form a functional family.">
-                      Minimum tag family size
+                      title="Minimum number of reads with the same molecular tag required to form a functional molecule.">
+                      Minimum Functional Molecule Size
                 </span>
                 </div>
                 <div class="row-fluid parameter-subname">min_tag_fam_size</div>
@@ -500,8 +500,8 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
             <td>
                 <div class="row-fluid parameter-name">
                 <span class="help"
-                      title="Minimum per-strand coverage of reads that have the same molecular tag required to form a functional family.">
-                      Minimum per-strand coverage in a family
+                      title="Minimum required number of reads on each strand to form a functional molecule in a bi-directional sequencing run (e.g., AmpliSeq HD).">
+                      Minimum Reads per Strand for Functional Molecules
                 </span>
                 </div>
                 <div class="row-fluid parameter-subname">min_fam_per_strand_cov</div>
@@ -627,7 +627,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
 
                 <div class="row zebra">
                     <div class="span3">
-                        <span>Torrent Variant Caller arguments</span>
+                        <span class="help" title="Advanced arguments for Torrent Variant Caller"> Torrent Variant Caller arguments</span>                                        
                     </div>
 					<br/>
                     <div class="span7">
@@ -638,7 +638,7 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
 				</div>
                 <div class="row zebra">
                     <div class="span3">
-                        <span>Alignment arguments</span>
+                        <span class="help" title="Desirable alignment arguments for variant calling purpose. Re-alignment of the BAM file may be triggered in the plugin if the entry is different from the alignment arguments specified in the run plan.">Alignment arguments</span>                                        
                     </div>
 					<br/>
                     <div class="span7">
@@ -647,17 +647,24 @@ Configuration: <select class="dropdown_short" name="config_combo" id="config_com
                 </div>
                 <div class="row zebra">
                     <div class="span3">
-                        <span>Unify vcf arguments</span>
+                        <span class="help" title="Advanced manipulation of the variant calling VCF file">Unify vcf arguments</span>                    
                     </div>
 					<br/>
                     <div class="span7">
                         <textarea class="plugin_input" id="unifyargs" rows="5" cols="150"></textarea>
                     </div>
-                </div>                
+                </div>
+                <div class="row zebra">
+                    <div class="span3">
+                        <span class="help" title="Full path to a pre-uploaded Sequence Variant Baseline (SVB) bed file, e.g. /results/uploads/BED/65536/foo/unmerged/detail/bar.bed"> SVB BED file </span>
+                    </div>
+					<br/>
+                    <div class="span7">
+                        <textarea class="plugin_input" id="sse_bed" rows="2" cols="150"></textarea>
+                    </div>
+                </div>
             </form>
-
         </div>
-
     </div>
     <div>
 <div id="configuration_save_bottom" style="display:none">
@@ -700,7 +707,7 @@ var default_value = "";
 var advanced_shown = false;
 var plan_run_type = "";
 var plan_page = true;
-var ts_version = "5.10";
+var ts_version = "5.12";
 var custom_set = {};
 var bundle_uri = ""; // If I create a template or plan from an Ampliseq Bundle, plan_bundle is the uri to find it.
 
@@ -793,6 +800,8 @@ var parameter_order = {
 		'indel_func_size_offset',
 		'fd_nonsnp_min_var_cov',
 		'tag_sim_max_cov',
+		'min_callable_prob',
+		'suppress_called_allele_lod',
 		// allele classification parameters
 		"use_fd_param",
 		"min_ratio_for_fd",                                        
@@ -1883,6 +1892,9 @@ function set_custom_set(base_set) {
     if ("unifyargs" in base_set["meta"]){
     	custom_set["meta"]["unifyargs"] = base_set["meta"]["unifyargs"];
     }
+    if ("sse_bed" in base_set["meta"]){
+    	custom_set["meta"]["sse_bed"] = base_set["meta"]["sse_bed"];
+    }    
     for (var section_key in parameter_order){
         $.each(base_set[section_key], function(k,v) {
             custom_set[section_key][k] = v;
@@ -2226,10 +2238,15 @@ function UpdateParameterValues() {
           $("#tvcargs").val("tvc");
         }
         if ("unifyargs" in value)
-            $("#unifyargs").val(value["unifyargs"]);
-          else {
-              $("#unifyargs").val("");
-          }
+          $("#unifyargs").val(value["unifyargs"]);
+        else {
+          $("#unifyargs").val("");
+        }
+        if ("sse_bed" in value)
+          $("#sse_bed").val(value["sse_bed"]);
+        else {
+          $("#sse_bed").val("");
+        }        
         return;
     }
   
@@ -2521,6 +2538,7 @@ function serializeForm() {
 		base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 		base_set["meta"]["tmapargs"] = $("#tmapargs").val().replace(/(\r\n|\n|\r)/gm, " ");
 		base_set["meta"]["unifyargs"] = $("#unifyargs").val().replace(/(\r\n|\n|\r)/gm, " ");
+		base_set["meta"]["sse_bed"] = $("#sse_bed").val().replace(/(\r\n|\n|\r)/gm, " ");
 		
 		// In case a top parameter is not in base_set but the user specify it manually.
 		// If I don't do this, the filled top parameter won't be in base_set.

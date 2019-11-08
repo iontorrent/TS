@@ -48,9 +48,11 @@ tmap_map_pairing_get_position_diff(tmap_map_sam_t *one, tmap_map_sam_t *two, int
   pos_one_right = tmap_map_pairing_get_right(one, one_len);
   pos_two_right = tmap_map_pairing_get_right(two, two_len);
 
-  switch(strandedness) { 
+  switch(strandedness) 
+  { 
     case TMAP_MAP_PAIRING_SAME_STRAND:
-      switch(positioning) {
+      switch(positioning) 
+      {
         case TMAP_MAP_PAIRING_POSITIONING_AB:
           diff = (0 == one->strand) ? (pos_two_right - pos_one_left) : (pos_one_right - pos_two_left);
           break;
@@ -58,6 +60,7 @@ tmap_map_pairing_get_position_diff(tmap_map_sam_t *one, tmap_map_sam_t *two, int
         default:
           diff = (0 == one->strand) ? (pos_one_right - pos_two_left) : (pos_two_right - pos_one_left);
       }
+      break; // DK 102318 - seems like break is needed here. Added.
     case TMAP_MAP_PAIRING_OPPOSITE_STRAND:
     default:
       diff = (0 == one->strand) ? (pos_two_right - pos_one_left) : (pos_one_right - pos_two_left);

@@ -274,6 +274,11 @@ $(function() {//DOM ready handler
 		$("#shares_available").empty();
 		$("#txt_localmntpoint").prop('disabled', true).val("");
 		$("#txt_remotemntpoint").val("");
+		$("#hostname_error").val("");
+		if ($.trim(servername).length == 0) {
+			$('#nas_content').unblock();
+			return;
+		}
 
         console.log("Available shares for " + servername);
         $.ajax({

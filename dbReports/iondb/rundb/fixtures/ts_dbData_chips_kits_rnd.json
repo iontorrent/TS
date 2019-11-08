@@ -6,18 +6,62 @@
       "name": "521",
       "slots": 1,
       "description": "521",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "S5"
     }
   },
-   {
+  {
+    "pk": 12,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.0.19",
+      "slots": 1,
+      "description": "P0(19)",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
     "pk": 13,
     "model": "rundb.chip",
     "fields": {
       "name": "P1.0.20",
       "slots": 1,
       "description": "P0",
+      "isActive": true,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 15,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.2.18",
+      "slots": 1,
+      "description": "P1.2",
       "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 16,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.2.1",
+      "slots": 1,
+      "description": "PQ",
+      "isActive": false,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 17,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.2.2",
+      "slots": 1,
+      "description": "PQ",
+      "isActive": true,
       "instrumentType": "proton"
     }
   },
@@ -28,7 +72,7 @@
       "name": "541",
       "slots": 1,
       "description": "541",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "S5",
       "earlyDatFileDeletion" : "1"
     }
@@ -40,7 +84,7 @@
       "name": "P2.0.1",
       "slots": 1,
       "description": "P2.0.1",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "proton"
     }
   },
@@ -51,7 +95,7 @@
       "name": "P2.1.1",
       "slots": 1,
       "description": "P2.1.1",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "proton"
     }
   },
@@ -62,7 +106,7 @@
       "name": "P2.3.1",
       "slots": 1,
       "description": "P2.3.1",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "proton"
     }
   },
@@ -73,7 +117,7 @@
       "name": "P1.1.541",
       "slots": 1,
       "description": "PI Ti-Cup",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "proton"
     }
   },
@@ -84,11 +128,80 @@
       "name": "522",
       "slots": 1,
       "description": "521-P2.0",
-      "isActive": false,
+      "isActive": true,
       "instrumentType": "S5"
     }
   },
-
+  {
+    "pk": 27,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "560",
+      "slots": 1,
+      "description": "560",
+      "isActive": true,
+      "instrumentType": "S5"
+    }
+  },
+  {
+    "pk": 29,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P2.1.2",
+      "slots": 1,
+      "description": "P2.1.2",
+      "isActive": true,
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 30,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "541v2",
+      "slots": 1,
+      "description": "541v2",
+      "isActive": true,
+      "instrumentType": "S5",
+      "earlyDatFileDeletion" : "1"
+    }
+  },
+  {
+    "pk": 31,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "541M",
+      "slots": 1,
+      "description": "541M",
+      "isActive": true,
+      "instrumentType": "S5",
+      "earlyDatFileDeletion" : "1"
+    }
+  },
+  {
+    "pk": 32,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "GX5v2",
+      "slots": 1,
+      "description": "GX5",
+      "isActive": true,
+      "instrumentType": "S5",
+      "earlyDatFileDeletion" : "1"
+    }
+  },
+  {
+    "pk": 33,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "GX7v1",
+      "slots": 1,
+      "description": "GX7",
+      "isActive": true,
+      "instrumentType": "S5",
+      "earlyDatFileDeletion" : "1"
+    }
+  },
   {
     "pk": 20095,
     "model": "rundb.kitinfo",
@@ -102,13 +215,80 @@
       "uid": "ICPREP0008",
       "instrumentType": "S5",
       "samplePrep_instrumentType" : "IC",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion 541 Kit-Chef",
       "categories" : "s5v1Kit;flowOverridable;multipleReadLength;s5541",
-      "chipTypes" : "541"
+      "chipTypes" : "541;541v2;GX5v2"
     }
   },
-
+  {
+    "pk": 20108,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonProtonPQKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 150,
+      "uid": "SEQ0027",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT_IC_IA",
+      "isActive": true,
+      "description": "Ion PQ Sequencing Kit",
+      "chipTypes" : "P2.2.1;P2.2.2",
+      "categories" : "readLengthDerivableFromFlows;"
+    }
+  },
+  {
+    "pk": 20109,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PQ Template OT2 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0020",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PQ Template OT2 Kit",
+      "chipTypes" : "P2.2.1;P2.2.2"
+    }
+  },
+  {
+    "pk": 20110,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PQ Controls Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0026",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PQ Controls Kit",
+      "chipTypes" : "P2.2.1;P2.2.2"
+    }
+  },
+  {
+    "pk": 20115,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryPrepKit",
+      "name": "Ion AmpliSeq HD DL8 (Placeholder)",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LPREP0004",
+      "instrumentType": "",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion AmpliSeq HD DL8 (Placeholder)",
+      "applicationType" : "AMPS_ANY"
+    }
+  },
   {
     "pk": 20221,
     "model": "rundb.kitpart",
@@ -138,5 +318,115 @@
         "ICPREP0008"
       ]
     }
-  } 
+  }, 
+  {
+    "pk": 20250,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28897",
+      "kit": [
+        "SEQ0027"
+      ]
+    }
+  },
+  {
+    "pk": 20251,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28226",
+      "kit": [
+        "SEQ0027"
+      ]
+    }
+  },
+  {
+    "pk": 20252,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28900",
+      "kit": [
+        "SEQ0027"
+      ]
+    }
+  },
+  {
+    "pk": 20253,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28901",
+      "kit": [
+        "SEQ0027"
+      ]
+    }
+  },
+  {
+    "pk": 20254,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "SEQ0027_4488651",
+      "kit": [
+        "SEQ0027"
+      ]
+    }
+  },
+  {
+    "pk": 20255,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28896",
+      "kit": [
+        "TEMPLT0020"
+      ]
+    }
+  },
+  {
+    "pk": 20256,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28899",
+      "kit": [
+        "TEMPLT0020"
+      ]
+    }
+  },
+  {
+    "pk": 20257,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26367b",
+      "kit": [
+        "TEMPLT0020"
+      ]
+    }
+  },
+  {
+    "pk": 20258,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28898",
+      "kit": [
+        "TEMPLT0020"
+      ]
+    }
+  },
+  {
+    "pk": 20259,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28904",
+      "kit": [
+        "LIB0026"
+      ]
+    }
+  },
+  {
+    "pk": 20266,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "AMPLISEQ_HD_LIBPREP_PLACEHOLDER",
+      "kit": [
+        "LPREP0004"
+      ]
+    }
+  }
 ]

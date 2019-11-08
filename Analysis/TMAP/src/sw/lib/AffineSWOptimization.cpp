@@ -30,7 +30,7 @@ AffineSWOptimization::AffineSWOptimization(int type) {
         break;
 // current default, see TS/Analysis/TMAP/src/map/util/tmap_map_opt.c:1143:  opt->vsw_type = 4;
       case 4:
-        s = new Solution4();
+        s = new Solution4 ();
         break;
 //      case 5:
 //       s = new Solution5();
@@ -52,7 +52,7 @@ AffineSWOptimization::AffineSWOptimization(int type) {
         s = new Solution10();
         break;
       default:
-        fprintf(stderr, "Error: unknown type: %d\n", type);
+        fprintf(stderr, "Error: vectorized SW implementation %d not supported.\n", type);
         exit(1);
     }
 #ifdef AFFINESWOPTIMIZATION_USE_HASH

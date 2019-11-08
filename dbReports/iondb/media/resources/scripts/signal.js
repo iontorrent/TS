@@ -32,7 +32,7 @@
 			percentage = parseFloat(percentage)
 		}
 		if (typeof suffix == 'undefined' || suffix == null) {
-			suffix = ' %';
+			suffix = gettext('signal.js.strength.percentage.suffix') || ' %';
 		}
 		signalCaptionContainer.append("<p class='percentage'>" + percentage + suffix + '</p>');
 		if (typeof caption == 'undefined' || caption == null) {

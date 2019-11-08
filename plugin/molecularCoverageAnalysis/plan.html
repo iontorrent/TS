@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+   .parameter-subname {
+      color: #808080;
+      font-size: 12px;
+      margin-left: 30px;
+      margin-bottom: 12px;
+  }
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .center { margin-left:auto; margin-right:auto; }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+function load_tvc_parameters(){
+	var table_entry = '';
+	var compatible_lib = '';
+	var parameter_sets_json_path = window.location.protocol + "//" + window.location.host + "/plugins/variantCaller/pluginMedia/parameter_sets/parameter_sets.json";
+	// Reset parameters
+	$("#parameter_sets_table").empty();
+	tvc_parameter_sets = [];
+	
+	if (planLibType.includes("AMPS_HD")){
+		compatible_lib = "ampliseq_hd"
+	}else if (planLibType == "TAG_SEQUENCING"){
+		compatible_lib = "tag_sequencing";
+	}else{
+		return;
+	}
+	
+	$.get(parameter_sets_json_path, function (data) {
+        $.each(data, function (index, param){
+    	    if (param['meta']['compatibility']['library'].indexOf(compatible_lib) >= 0 ){
+    	    	tvc_parameter_sets.push(param);
+    	    	var my_id = "param_" + (tvc_parameter_sets.length - 1);
+      		    table_entry += '<div style="height:22px"><input type="radio" name="param_table" id="'+ my_id + '">  &nbsp <span class="help" title="'+ param['meta']['tooltip']+'">'+ param['meta']['name']+ '</span></div>';
+      		    table_entry += '<div class="parameter-subname">' +  param['meta']['configuration'] + ', TS version: '+ param['meta']['ts_version'] + '</div>';    
+            }
+        });
+        
+    	if (tvc_parameter_sets.length == 0){
+        	console.error("No valid TVC parameter set is available.");
+    	}
+        // External parameter file
+        table_entry += '<div style="height:22px"> <input type="radio" name="param_table" id="param_external" value="Custom" /> &nbsp <span class="help" title="Use custom setting from an external parameter file."> Custom </span> &nbsp <button id="load_external" type="button" onclick="$(\'#files\').click()" > Load external file</button> </div>';
+        table_entry += '<div class="parameter-subname" id="ext_file_name"> No parameter file being uploaded </div>';      
+    	$("#parameter_sets_table").append(table_entry);
+    	// Select the first one for now
+		selected_param_id =  "param_0";
+    	$("#" + selected_param_id).prop("checked", true); 	
+    }).fail(function () {
+    	console.error("Unable to load TVC parameters from " + parameter_sets_json_path);
+    });
+	select_default_param();
+}
+
+function select_default_param(){
+	// Unfortunately, I can't help you select the default parameters in plan.html.
+	return;
+}
+
+//get the parameter set being selected by the radio button.
+function get_selected_param(){
+	if (tvc_parameter_sets.length == 0){
+		return {};
+	}
+	if (selected_param_id == 'param_external'){
+		return external_param;
+	}
+	var param_idx = parseInt(selected_param_id.substr("param_".length));
+	return tvc_parameter_sets[param_idx];
+}
+
+// Save the data when the user click "Save Changes"
+function serializeForm() {
+	var base_set = {'tvc_config': get_selected_param(), 'planLibType': planLibType, 'external_param': external_param};
+	return base_set;
+}
+
+// restore the data from the previous returned data from serializeForm
+function restoreForm(data) {
+	previous_tvc_config = data.tvc_config || {}
+	if ($.isEmptyObject(previous_tvc_config) || !('meta' in previous_tvc_config)){
+		// Nothing to restore
+		return;
+	}
+	
+	// Restore the external param that was previously uploaded
+	external_param = data.external_param || {};
+	if ($.isEmptyObject(external_param)){
+	    $("#ext_file_name").html('No parameter file being uploaded');
+	}else{
+	    $("#ext_file_name").html(external_param.meta.filename || 'Unknown file name');
+	}
+
+	var is_custom = previous_tvc_config.meta.custom || false;
+	if (is_custom){
+		selected_param_id = 'param_external';
+	}else{
+		var my_configuration = previous_tvc_config.meta.configuration || 'unknown'
+		var param_found = false;
+		for (var idx = 0; idx < tvc_parameter_sets.length; idx++){
+			if (my_configuration == tvc_parameter_sets[idx]['meta']['configuration']){
+				param_found = true;
+				selected_param_id = 'param_' + idx;
+				if ( tvc_parameter_sets[idx]['meta']['ts_version'] != previous_tvc_config.meta.ts_version){
+					alert('The version (' + previous_tvc_config.meta.ts_version + ') of the configuration that was previously selected is different from the current version (' + tvc_parameter_sets[idx]['meta']['ts_version'] +') in the system. Use the system default.');
+				}
+				break;
+			}
+		}
+		if (!param_found){
+			// In case that the previously selected configuration is deprecated, I restore the deprecated configuration to custom.
+			alert('WARNING: The configuration "' + my_configuration +'" that was previously selected is not found in the system! Restore the configuration to custom.')
+			external_param = previous_tvc_config;
+			external_param['meta']['custom'] = true;
+			external_param['meta']['filename'] = my_configuration;
+			selected_param_id = 'param_external';
+			$("#ext_file_name").html(external_param['meta']['filename']);
+		}
+	}
+	$("#" + selected_param_id).prop("checked", true);
+}
+
+function click_on_parameter_sets_table() {
+	var my_selected_id = $("#parameter_sets_table input[type='radio']:checked").attr("id");
+	// No external file was previously uploaded. Automatically trigger the file upload dialog.
+	if (my_selected_id == 'param_external' && $.isEmptyObject(external_param)){
+		// Check the previously selected parameter for now.
+		// Handle the click on external parameter file by $("#files").change later.
+		$("#" + selected_param_id).prop("checked", true);
+		// Trigger file upload.
+		$('#files').click();
+		return;
+	}
+	selected_param_id = my_selected_id;
+}
+
+
+ var selected_param_id = ''; // The id of the parameter set being selected by the radio button.
+ var planLibType = ''; // Library type of the run 
+ var tvc_parameter_sets = []; // Tvc parameter sets for the library (either tag_sequencing or ampliseq_hd)
+ var external_param = {}; // External parameter file 
+  $(function() {
+    var runTypes = {};
+    $.ajaxSetup( {async:false} );
+    $.get( '/rundb/api/v1/runtype/?format=json', function(data) {
+      $.each( data.objects, function(intIndex,result) {
+        var runType = result.runType;
+        var selName = result.description.trim();
+        // debar unsuported applications here, e.g. runType != "GENS"
+        if( selName != "" ) {
+          runTypes[runType] = selName;
+        }
+      });
+    });
+    planLibType = TB_plan_json.runType;
+    if(planLibType.includes("AMPS_HD") || planLibType =='TAG_SEQUENCING'){
+           $('.center').show();
+           $('.warnning').hide();
+    }
+    else{
+           $('.center').hide();
+           $('.warnning').show();
+    }
+    $("#libtypetxt").html(runTypes[TB_plan_json.runType]);
+    // populate settings avaialble to the current Run Plan application type
+    //setOptionDefaults(TB_plan_json.runType);
+    load_tvc_parameters();
+    $("#parameter_sets_table").click(function() {
+    	click_on_parameter_sets_table();
+  	});
+    $("#files").change(function (evt) {
+        var JsonObj = null;
+        var files = evt.target.files; // FileList object
+        //f = files[0];
+        var theFile = files[0];
+        var reader = new FileReader();
+		var error_msg = '';
+        reader.onload = function (e) {
+          console.log(theFile);
+          try {
+            JsonObj = e.target.result;
+            var new_config = JSON.parse(JsonObj);
+            // First check keys
+            var required_keys = ['torrent_variant_caller', 'freebayes'];            
+            for (var key_idx = 0; key_idx < required_keys.length; key_idx++){
+              	if (!(required_keys[key_idx] in new_config)){
+              		error_msg = "Invalid TVC parameter file " + theFile.name + ": The key \"" + required_keys[key_idx] + " \" is not found!"
+                    break;
+            	}            	
+            }
+            
+            // Second check compatible library
+            if (error_msg == ''){
+    			var compatible_lib = new_config.meta.compatibility.library || [];
+    			if (! $.isEmptyObject(compatible_lib)){
+    				if (compatible_lib.indexOf('ampliseq_hd') < 0 && compatible_lib.indexOf('tag_sequencing') < 0){
+    					error_msg = "Invalid TVC parameter file " + theFile.name + ': Neither "tag_sequencing" nor "ampliseq_hd" is listed in meta.compatibility.library.';
+    				}
+    			}
+            }
+          }
+          catch (e) {
+        	  error_msg = "Failed to load the external file \"" + theFile.name + "\"!";
+          }        
+          if (error_msg == ''){
+              external_param = new_config;
+              external_param['meta']['custom'] = true;
+              external_param['meta']['filename'] = theFile.name;
+              $("#ext_file_name").html(theFile.name);
+              // Success: the radio button can safely be "param_external"
+              $("#param_external").prop("checked", true);
+              selected_param_id = $("#parameter_sets_table input[type='radio']:checked").attr("id");
+              alert('The parameter file "' + theFile.name + '" is uploaded successfully!');        	
+          }
+          else{
+            alert(error_msg);        		
+            $("#" + selected_param_id).prop("checked", true);
+           
+          }
+            // I always reset #file-form. Otherwise the user can't upload the same file from local twice though the file is changed.
+          $("#file-form").trigger('reset');
+          $("#files").attr("value", "");
+        };
+        // Read in JSON as a data URL.
+        reader.readAsText(theFile, 'UTF-8');
+    });
+    
+  });
+ </script>
+</head>
+
+<body>
+ <form id="molecularCoverageAnalysis" name="molecularCoverageAnalysis">
+  <div style="text-align:center">
+   <h1>Molecular Coverage Analysis Plugin</h1>
+  </div>
+   <div class="warnning" style="text-align:center">
+   <h3> The plugin works with AmpliSeq HD or Tag Sequencing library ONLY. </h3>
+  </div>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td><span class="help" title="The application (aka library, run or enrichment) type currently selected in the run. Available plugin options are dependent on the application.">Library Type:</span></td>
+     <td><span id="libtypetxt">As Planned</span>
+   </tr>
+     <tr>
+       <td valign="top">
+         <span class="help" title="Select a parameter file from variantCaller. The file will be used for determining functinoality of molecules, read filtering and LOD calculation."> Parameter File:</span>
+       </td>
+       <td valign="middle"> 
+         <div class="span9" id="parameter_sets_table"> </div>
+       </td>
+     </tr>
+     <input form="file-form" style="display:none" type="file" id="files" name="files[]"/>
+   </table>
+   <input type="hidden" id="launch_mode" name="launch_mode" value="Autostart with plan plugin configuration"/>
+   <br/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+    This plugin generates statistics, downloadable data files and interactive visualization of molecular coverage over
+targeted regions of the reference genome.</p>
+   </div>
+ </form>
+</body>
+</html>
+

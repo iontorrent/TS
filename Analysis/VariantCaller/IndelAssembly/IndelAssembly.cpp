@@ -600,9 +600,14 @@ void IndelAssemblyArgs::processParameters(OptArgs& opts) {
     return KMER_LEN;
   }
 
-  bool IndelAssembly::processRead(BamAlignment& alignment, vector<MergedTarget>::iterator& current_target) {
+  bool IndelAssembly::processRead(BamAlignment& alignment, vector<MergedTarget>::iterator& current_target, bool useDuplicateReads) {
     if (!alignment.IsMapped()) {
       return true;
+    }
+
+    // Do not use PCR duplicate reads.
+    if ((not useDuplicateReads) and alignment.IsDuplicate()){
+    	return true;
     }
 
     // back up a couple of targets

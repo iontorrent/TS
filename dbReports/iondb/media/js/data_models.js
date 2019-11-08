@@ -69,8 +69,11 @@ $(function(){
                     error(self, resp);
                 }
             };
-            this.currentFetch = Backbone.Collection.prototype.fetch.call(this, options);
-            return this.currentFetch;
+            var sendAcceptHeader = function(xhr) {
+                xhr.setRequestHeader('Accept-Language', language || 'en-us');
+            }
+            options.beforeSend = sendAcceptHeader;
+            return Backbone.Collection.prototype.fetch.call(this, options);
         },
 
         parse: function (resp) {
@@ -83,7 +86,7 @@ $(function(){
                 resp.warnings.map(function (warningText) {
                     $("<div/>", {
                         class: "alert mesh-warning",
-                        html: "<strong>Warning!</strong> " + warningText
+                        html: "<strong>" + gettext('global.messages.warning.label') + "</strong> " + warningText
                     }).insertAfter("#search_bar");
                 });
             }
@@ -196,9 +199,17 @@ $(function(){
                 lower_range: this.offset + 1,
                 upper_range: max,
                 prev: false,
+                prev_tooltip: gettext('data.pageable.messages.goprev'), //'Go to the previous page',
+                not_prev_tooltip: gettext('data.pageable.messages.noprev'), //'No previous page',
                 next: false,
+                next_tooltip: gettext('data.pageable.messages.gonext'), //'Go to the next page',
+                not_next_tooltip: gettext('data.pageable.messages.nonext'), //'No next page',
                 is_first: this.offset == 0,
-                is_last: this.offset + this.limit >= this.total
+                is_first_tooltip: gettext('data.pageable.messages.onfirst'), //'On the first page',
+                not_is_first_tooltip: gettext('data.pageable.messages.gofirst'), //'Go to the first page',
+                is_last: this.offset + this.limit >= this.total,
+                is_last_tooltip: gettext('data.pageable.messages.onlast'), //'On last page',
+                not_is_last_tooltip: gettext('data.pageable.messages.golast'), //'Go to the last page',
             };
 
             if (this.offset > 0) {
@@ -208,6 +219,8 @@ $(function(){
             if (this.offset + this.limit < info.total) {
                 info.next = this.offset + this.limit;
             }
+
+            info.pager_info = interpolate(gettext('data.pageable.messages.display'), {lower_range: info.lower_range, upper_range: info.upper_range, total:info.total}, true);
 
             return info;
         },

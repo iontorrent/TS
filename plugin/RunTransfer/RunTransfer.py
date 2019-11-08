@@ -30,7 +30,7 @@ OPTIONAL_SIGNAL_FILE_PATTERNS = ['Bead_density_20.png', 'Bead_density_70.png', '
 class RunTransfer(IonPlugin):
     """Main class definition for this plugin"""
 
-    version = '5.10.0.1'
+    version = '5.12.0.0'
     author = "bernard.puc@thermofisher.com"
     runtypes = [RunType.FULLCHIP, RunType.COMPOSITE]
 

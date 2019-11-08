@@ -12,7 +12,7 @@ function getDisplayValue(value) {
 
 function onDataBinding(arg) {
 	//20130707-TODO-the busy cursor neds to be shown earlier!!
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     $('body').prepend(busyDiv);
 
 }
@@ -29,7 +29,6 @@ function onDataBound(arg) {
     bindActions(source);
 }
 
-
 function bindActions(source) {
 	
     $(".edit_sample").click(function(e) {
@@ -38,23 +37,17 @@ function bindActions(source) {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
-
+        libraryPrepType = get_libraryPrepType();
         url = $(this).attr('href');
         
         console.log("at input_sample.js - bindActions - edit_sample - url=", url);
         
         $('body #modal_add_samplesetitem_popup').remove();
         $.get(url, function(data) {
-
-        	if (data.indexOf("Error,") >= 0) {
-                apprise(data);
-            }
-            else {
-            	$('body').append(data);
-            	$("#modal_add_samplesetitem_popup").modal("show");
-            }
+            $('body').append(data);
+            $("#modal_add_samplesetitem_popup").modal("show");
             return false;
         }).done(function(data) {
             console.log("success:", url);            
@@ -64,16 +57,63 @@ function bindActions(source) {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
+            if (libraryPrepType == "amps_hd_on_chef_v1"){
+                $('#pcrPlateRow').addClass('hide');
+            }
+            else{
+                $('#pcrPlateRow').removeClass('hide');
+            }
             delete busyDiv;
         });
     });
+
+
+    function show_busy(show){
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        if (show){
+            $('body').css("cursor", "wait");
+            $('body').prepend(busyDiv);
+        } else {
+            $('body').css("cursor", "default");
+            $('.myBusyDiv').remove();
+        }
+    }
+
+    $(".remove_sample_from_set").unbind('click').click(function(e) {
+        e.preventDefault();
+        $('#error-messages').hide().empty();
+        show_busy(true);
+
+        var url = $(this).attr('href');
+
+        $('body #modal_confirm_delete').remove();
+        $.get(url, function(data) {
+            if (data == "true"){
+                refreshKendoGrid("#input_samplesetitem_grid");
+                show_busy(false);
+            }
+            $('body').append(data);
+            $("#modal_confirm_delete").modal("show");
+            return false;
+        }).done(function(data) {
+            show_busy(false);
+            console.log("success:", url);
+        }).fail(function(data) {
+            show_busy(false);
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
+            console.log("error:", data);
+        });
+
+    });
+
 }
 
 
@@ -84,12 +124,11 @@ $(function() {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
-        //url = $(this).attr('href');
-        url = "/sample/samplesetitem/input_save/"    
-            
+        url = $(this).attr('href');
+
         $('body #modal_save_samplesetitems_popup').remove();
         $.get(url, function(data) {
             $('body').append(data);
@@ -105,7 +144,7 @@ $(function() {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -119,18 +158,25 @@ $(function() {
 });
 
 
+function get_libraryPrepType(){
+    var libraryPrepType = $('#new_sampleSet_libraryPrepType :selected').val();
+    if(! libraryPrepType ){
+        libraryPrepType = $('#libraryPrepType :selected').val();
+    }
+    return libraryPrepType;
+}
+
 $(document).ready(function() {
 	  
     $('.modal_enter_sample').click(function(e) {
-    	
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
-        //url = $(this).attr('href');
-        url = "/sample/samplesetitem/input/add/"    
+        libraryPrepType = get_libraryPrepType();
+        url = $(this).attr('href');
             
         $('body #modal_add_samplesetitem_popup').remove();
         $.get(url, function(data) {
@@ -147,10 +193,16 @@ $(document).ready(function() {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
+            if (libraryPrepType == "amps_hd_on_chef_v1"){
+                 $('#pcrPlateRow').addClass('hide');
+            }
+            else{
+                $('#pcrPlateRow').removeClass('hide');
+            }
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
@@ -158,7 +210,11 @@ $(document).ready(function() {
         });
     });
 
-
+    url = $("#edit_amp_sampleSet").val();
+    if (!url) {
+        url = "/sample/samplesetitem/input/getdata";
+    }
+    console.log(url);
     
 	var grid = $("#input_samplesetitem_grid").kendoGrid({
 
@@ -166,7 +222,7 @@ $(document).ready(function() {
             type : "json",
             transport : {
                 read : {
-                    url : "/sample/samplesetitem/input/getdata",
+                    url : url,
                     //contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     //dataType : 'json'
@@ -199,6 +255,12 @@ $(document).ready(function() {
     					description : {
     						type : "string",
     					},
+    					sampleCollectionDate : {
+                        	type : "string",
+                        },
+    					sampleReceiptDate : {
+                        	type : "string",
+                        },
     					relationshipGroup : {
     						type : "number",
     					},
@@ -223,7 +285,13 @@ $(document).ready(function() {
                         nucleotideType : {
                             type : "string",
                         },
+                        sampleSource : {
+                            type : "string",
+                        },
                         pcrPlateRow : {
+                            type : "string",
+                        },
+                        panelPoolType : {
                             type : "string",
                         },
                         biopsyDays : {
@@ -236,6 +304,12 @@ $(document).ready(function() {
                         	type : "string",
                         },
                         embryoId : {
+                        	type : "string",
+                        },
+                        population : {
+                        	type : "string",
+                        },
+                        mouseStrains : {
                         	type : "string",
                         },
     				}
@@ -254,103 +328,149 @@ $(document).ready(function() {
 		dataBinding : onDataBinding,
 		dataBound : onDataBound	    
 		});
-		
-		
+
+    // hide the pcr plate column in the sample grid based on library prep type selection
+	var libraryPrepType = $('#new_sampleSet_libraryPrepType :selected').val();
+    if(! libraryPrepType ){
+        libraryPrepType = $('#libraryPrepType :selected').val();
+    }
+    pcrPlateRowDisplay(libraryPrepType);
+    $("select#libraryPrepType").change(function () {
+       pcrPlateRowDisplay($(this).val());
+
+    });
+    $("select#new_sampleSet_libraryPrepType").change(function () {
+        pcrPlateRowDisplay($(this).val());
+    });
     $(document).bind('modal_confirm_delete_done', function () {
 		refreshKendoGrid("#input_samplesetitem_grid");
 	});
   
 }); 
 
+function pcrPlateRowDisplay(libraryPrepType) {
+    var grid = $("#input_samplesetitem_grid").data("kendoGrid");
+    if (libraryPrepType == 'amps_hd_on_chef_v1') {
+        grid.hideColumn('pcrPlateRow');
+    }
+    else {
+        grid.showColumn('pcrPlateRow')
+    }
+}
 
 function getColumns() {
     var columnArray = [];
     var custom_sample_list = [];
     	
+    function _customAttributeTemplate(i) {
+        return "# var _value = data.attribute_dict[customAttributes_json[" + i + "]] # \n" +
+                "# if((typeof _value !== 'undefined') && _value) { #\n" +
+                "#= _value # \n" +
+                "# } else { # \n" +
+                "#= '' # \n" +
+                "# } #\n";
+    }
 
 	for (var i = 0; i < customAttributes_json.length; i++) {
-    //for (attribute in attributes) {
     	console.log("input_samples.js - getColumns - LOOP - customAttributes_json[i]=", customAttributes_json[i]);
-    	//var sampleAttribute = attributes[i];
-
-    	customAttributes_index = i;
-
-    	//document.getElementById("customAttribute").value = customAttributes_json[i]
-    	if ( i < 20) {    	
-    	custom_sample_list.push({ 
-    	   field: customAttributes_json[i], 
-    	   title: customAttributes_json[i], 
-    	   sortable: false,
-    	   //workaround 
-    	   template: kendo.template($('#CustomSampleAttributeTemplate_'+i).html())
-    	});
-    	}
+        custom_sample_list.push({
+           field: customAttributes_json[i],
+           title: customAttributes_json[i],
+           sortable: false,
+           //workaround
+           template: kendo.template(_customAttributeTemplate(i))
+        });
 	}
 	
     var default_columnArray = [
      {
          field: "displayedName", 
-         title: "Sample Name", 
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.displayedName.label'), //"Sample Name"
          sortable: true,
      } , {
          field: "externalId",
-         title: "Sample ID",         
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.externalId.label'), //"Sample ID",
          sortable: true,
      } , {
          field: "pcrPlateRow",
-         title: "PCR Plate Position",        
-         sortable: true,           
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.pcrPlateRow.label'), //"PCR Plate Position",
+         sortable: true,
      } , {
-         field: "barcodeKit",
-         title: "Barcode Kit",        
+     /*    field: "barcodeKit",
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.barcodeKit.label'), //"Barcode Kit",
          sortable: false,        
-     } , {
+     } , {  */
          field: "barcode",
-         title: "Barcode",        
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.barcode.label'), //"Barcode",
          sortable: true,         
      } , {    	 
          field: "description",
-         title: "Description",        
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.description.label'), //"Description",
          sortable: false,         
      } , {
+         field: "sampleCollectionDate",
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.sampleCollectionDate.label'), //"Sample Collection Date",
+         sortable: false,
+     }, {
+         field: "sampleReceiptDate",
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.sampleReceiptDate.label'), //"Sample Receipt Date",
+         sortable: false,
+     }, {
          field: "nucleotideType",
-         title: "DNA/ RNA/ Fusions",       
+         //title: gettext('samplesets.PendingSampleSetItemInfo.fields.nucleotideType.label'), //"DNA/ RNA/ Fusions",
+         title: "Nucleotide Type",
+         sortable: true,
+     } , {
+         field: "sampleSource",
+         title: "Sample Source",
+         sortable: true,
+     } , {
+         field: "panelPoolType",
+         title: "Panel Pool Type",
          sortable: true,
      } , {
          field: "gender",
-         title: "Gender",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.gender.label'), //"Gender",
          sortable: true,
      } , {
          field: "relationshipRole",
-         title: "Type",        
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.relationshipRole.label'), //"Type",
          sortable: true,
      } , {
          field: "relationshipGroup",
-         title: "Group",        
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.relationshipGroup.label'), //"Group",
          sortable: true,
      } , {
          field: "cancerType",
-         title: "Cancer Type",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.cancerType.label'), //"Cancer Type",
          sortable: true,
      } , {
          field: "cellularityPct",
-         title: "Cellularity %",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.cellularityPct.label'), //"Cellularity %",
          sortable: true,
      } , {
          field: "biopsyDays",
-         title: "Biopsy Days",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.biopsyDays.label'), //"Biopsy Days",
          sortable: true,
      } , {
          field: "cellNum",
-         title: "Cell Num",   
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.cellNum.label'), //"Cell Num",
          sortable: true,
      } , {
          field: "coupleId",
-         title: "Couple ID",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.coupleId.label'), //"Couple ID",
          sortable: true,
      } , {
          field: "embryoId",
-         title: "Embryo ID",       
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.embryoId.label'), //"Embryo ID",
+         sortable: true,
+     }, {
+         field: "population",
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.population.label'), //"Population",
+         sortable: true,
+     }, {
+         field: "mouseStrains",
+         title: gettext('samplesets.PendingSampleSetItemInfo.fields.mouseStrains.label'), //"MouseStrains",
          sortable: true,
      }];
 

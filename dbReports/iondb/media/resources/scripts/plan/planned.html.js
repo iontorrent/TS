@@ -2,7 +2,7 @@
 
 function onDataBinding(arg) {
 	//20130707-TODO - does not work!!
-    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+    var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
     $('body').prepend(busyDiv);
 
 }
@@ -49,7 +49,7 @@ function onDataBound(arg) {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
-        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+        var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
         $('body').prepend(busyDiv);
 
         url = $(this).attr('href');
@@ -68,7 +68,7 @@ function onDataBound(arg) {
             $('body').remove('.myBusyDiv');
 
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
             console.log("error:", data);
 
         }).always(function(data) {/*console.log("complete:", data);*/
@@ -94,7 +94,7 @@ function onDataBound(arg) {
                 console.log("success:", url);
             }).fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
                 console.log("error:", data);
 
             }).always(function(data) {/*console.log("complete:", data);*/
@@ -113,20 +113,20 @@ function onDataBound(arg) {
                 console.log("success:", url);
             }).fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
                 console.log("error:", data);
             });
         });
 }
 
 $(document).ready(function() {
-    //20130711-moved-to-be-global var checked_ids = [];
+    var urlRead = $("#grid").data('urlRead');
     var grid = $("#grid").kendoGrid({
         dataSource : {
             type : "json",
             transport : {
                 read : {
-                    url : "/rundb/api/v1/plannedexperiment/?isReusable=False&planExecuted=False",
+                    url : urlRead,
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
@@ -206,8 +206,8 @@ $(document).ready(function() {
         sortable : true,
         pageable : {
             messages: {
-                display: "{0} - {1} of {2} planned runs",
-                empty: "No planned runs to display"
+                display: gettext('plannedruns.pageable.messages.display'), //"{0} - {1} of {2} planned runs"
+                empty: gettext('plannedruns.pageable.messages.empty'), //"No planned runs to display"
             }
         },
 		dataBinding : onDataBinding,
@@ -215,14 +215,14 @@ $(document).ready(function() {
 		
         columns : [{
             field : "id",
-            title : "",
+            title : gettext('plannedruns.fields.id.label'), //" "
             sortable : false,
             width: '25px',
-            headerTemplate: "<span rel='tooltip' title='(De)select All'><input  class='selectall' type='checkbox'></span>",
+            headerTemplate: interpolate("<span rel='tooltip' title='%(tooltip)s'><input  class='selectall' type='checkbox'></span>", {tooltip: gettext('plannedruns.selectall.deselectall.tooltip')}, true), //'(De)select All'
             template : "<input id='${id}' name='runs' type='checkbox' class='selected'>"
         }, {
             field : "sampleSetDisplayedName",
-            title : "Sample Set",
+            title : gettext('plannedruns.fields.sampleSetDisplayedName.label'), //"Sample Set",
             width: '10%',
             sortable : false,
             template : function(item){
@@ -231,79 +231,79 @@ $(document).ready(function() {
                        }
         }, {
             field : "planShortID",
-            title : "Run Code",
+            title : gettext('plannedruns.fields.planShortID.label'), //"Run Code",
             width: '70px',
             // template: "<a href='/data/project/${id}/results'>${name}</a>"
             template :kendo.template($('#PlanShortIdColumnTemplate').html())
         }, {
             field : "planDisplayedName",
-            title : "Planned Run Name",
+            title : gettext('plannedruns.fields.planDisplayedName.label'), //"Planned Run Name",
             width: '25%',
             sortable : true
         }, {
             field : "barcodeId",
-            title : "Barcodes",
+            title : gettext('plannedruns.fields.barcodeId.label'), //"Barcodes",
             width: '15%',
             sortable : false
         }, {
             field : "library",
-            title : "Reference",
+            title : gettext('plannedruns.fields.library.label'), //"Reference",
             width: '10%',
             sortable : false
         }, {
             field : "runType",
-            title : "Res App",
+            title : gettext('plannedruns.fields.runType.label'), //"Res App",
             sortable : true,
             width: '32px',
             template : kendo.template($('#RunTypeColumnTemplate').html())
         }, {
             field : "sampleGroupingName",
-        	title : "Group",
+        	title : gettext('plannedruns.fields.sampleGroupingName.label'), //"Group",
             width: '10%',
         	sortable : true
         }, {
             field : "libraryPrepType",
-        	title : "Library Prep Type",
+        	title : gettext('plannedruns.fields.libraryPrepType.label'), //"Library Prep Type",
         	width: '75px',
         	sortable : false,
         	template : kendo.template($('#LibTypeColumnTemplate').html())
         }, {
             field : "combinedLibraryTubeLabel",
 			width: '80px',
-        	title : "Combined Library Tube Label",
+        	title : gettext('plannedruns.fields.combinedLibraryTubeLabel.label'), //"Combined Library Tube Label",
         	sortable : false
         },{    
             field : "projects",
-            title : "Project",
+            title : gettext('plannedruns.fields.projects.label'), //"Project",
             width: '10%',
             sortable : false,
             template : function(item){
-                          var data = { id: item.id, label: "Projects", values: item.projects.split(',') };
+                          var data = { id: item.id, label: gettext('template.fields.projects.label.plural'), values: item.projects.split(',') };
                           return kendo.template($("#PopoverColumnTemplate").html())(data);
                        }
         }, {
-            title : "Sample",
+            title : gettext('plannedruns.fields.sampleDisplayedName.label'), //"Sample",
             sortable : false,
             width: '10%',
             template : kendo.template($('#SampleColumnTemplate').html())
         }, {
             field : "sampleTubeLabel",
-            title : "Sample Tube Label",
+            title : gettext('plannedruns.fields.sampleTubeLabel.label'), //"Sample Tube Label",
             width: '10%',
             sortable : false,
         }, {
             field : "chipBarcode",
-            title : "Chip Barcode",
+            title : gettext('plannedruns.fields.chipBarcode.label'), //"Chip Barcode",
             width: '10%',
             sortable : false,
         }, {
             field : "date",
-            title : "Last Modified",
+            title : gettext('plannedruns.fields.date.label'), //"Last Modified",
             width : '9%',
             template : '#= kendo.toString(new Date(Date._parse(date)),"MMM d yyyy") #'
         }, {
             field : "planStatus",
-            title : "Status",
+            title : gettext('plannedruns.fields.planStatus.label'), //"Status",
             width: '70px',
             sortable : true,
             template : '<span style="text-transform: capitalize;">#=planStatus#</span>'
@@ -318,16 +318,7 @@ $(document).ready(function() {
     switch_to_view(window.location.hash.replace('#',''));
 
     var today = Date.parse('today');
-    $('#dateRange').daterangepicker({
-        dateFormat: 'M d yy',
-        presetRanges: [
-            {text: 'Today', dateStart: today, dateEnd: today},
-            {text: 'Last 7 Days', dateStart: 'today-7days', dateEnd: today},
-            {text: 'Last 30 Days', dateStart: 'today-30days', dateEnd: today},
-            {text: 'Last 60 Days', dateStart: 'today-60days', dateEnd: today},
-            {text: 'Last 90 Days', dateStart: 'today-90days', dateEnd: today}
-        ],
-    });
+    $('#dateRange').daterangepicker($.DateRangePickerSettings.get());
     $('.search_trigger').click(function (e) { filter(e); });
     $('#search_text').keypress(function(e){ if (e.which == 13 || e.keyCode == 13) filter(e); });
     $('#dateRange, .selectpicker').change(function (e) { filter(e); });
@@ -346,9 +337,10 @@ $(document).ready(function() {
                 $(this).addClass("icon-white");
             }
         });
-        
-        $("#search_subject_nav").attr("title", "Search by " + this.text);
-        $("#search_text").attr("placeholder", "Search by " + this.text);
+        var x = $("#search_subject_nav");
+        x.attr("title", x.data('titlePrefix') + this.text);
+        var x = $("#search_text");
+        x.attr("placeholder", x.data('placeholderPrefix') + this.text);
     });
 
 
@@ -373,10 +365,11 @@ $(document).ready(function() {
                 $('#modal_confirm_delete').modal("show");
             }).fail(function(data) {
                 $('#error-messages').empty().show();
-                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                $('#error-messages').append('<p class="error">' + gettext('global.messages.error.label') + ': ' + data.responseText + '</p>');
                 console.log("error:", data);
 
             }).always(function(data) {/*console.log("complete:", data);*/
+                $("#grid input.selectall:checked").attr('checked', false);
             });
         }
 
@@ -397,30 +390,25 @@ $(document).ready(function() {
 
     //Force plan link. Used to force plans from pending -> planned which is normally done by chef
     $("#grid").on("click", ".force-planned", function (event) {
-        var confirmText = "Are you sure?";
         event.preventDefault();
-        if (confirm(confirmText)) {
-            //Show busy div
-            var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
-            $('body').prepend(busyDiv);
-            $.ajax({
-                url: "/rundb/api/v1/plannedexperiment/" + $(this).data("id") + "/",
-                type : 'PATCH',
-                data: JSON.stringify({planStatus: "planned"}),
-                contentType: "application/json; charset=utf-8",
-                dataType: "json",
-        	}).fail(function(data) {
-            	$('body').remove('.myBusyDiv');
-
-            	$('#error-messages').empty().show();
-            	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            	console.log("error:", data);
-
-            }).always(function () {
-                $('body').remove('.myBusyDiv');
-                refreshKendoGrid('#grid');
-            });
-        }
+        var url = $(this).attr('href');
+        bootbox.confirm(gettext('plannedruns.action.set-status-planned.confirmation.message'), gettext('plannedruns.action.set-status-planned.confirmation.cancel'), gettext('plannedruns.action.set-status-planned.confirmation.confirm'), function(result) {
+            if (result) {
+                //Show busy div
+                var busyDiv = '<div class="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">' + gettext('global.messages.loading') + '</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+                $('body').prepend(busyDiv);
+                $.ajax({
+                    url: url,
+                    type : 'PATCH',
+                    data: JSON.stringify({planStatus: "planned"}),
+                    contentType: "application/json; charset=utf-8",
+                    dataType: "json",
+                }).always(function () {
+                    $('body').remove('.myBusyDiv');
+                    refreshKendoGrid('#grid');
+                });
+            }
+        });
     });
 
 });
@@ -468,17 +456,17 @@ function _get_query_string(val){
     return val;
 }
 
+function _daterange_to_filter(val){
+    if (!val) return "";
+    var range = val.split('-');
+    var start = new Date(range[0]).toString('yyyy-MM-dd HH:mm');
+    var end = range.length > 1 ? new Date(range[1]).toString('yyyy-MM-dd HH:mm') : start;
+    return start + ',' + end.replace('00:00', '23:59');
+}
+
 function filter(e){
     e.preventDefault();
     e.stopPropagation();
-
-    var date = "";
-    var daterange = $("#dateRange").data("daterange");
-    if (daterange) {
-        var start = daterange.start.toString('yyyy-MM-dd HH:mm');
-        var end = daterange.end.toString('yyyy-MM-dd HH:mm').replace('00:00', '23:59');
-        date = start + ',' + end;
-    }
 
     var filters = [
         {
@@ -489,7 +477,7 @@ function filter(e){
         {
             field: "date",
             operator: "__range",
-            value: date
+            value: _daterange_to_filter($("#dateRange").val())
         },
         {
             field: "planStatus",

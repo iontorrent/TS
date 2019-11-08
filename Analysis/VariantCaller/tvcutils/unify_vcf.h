@@ -58,6 +58,7 @@ public:
 
   bool   check_enabled;
   bool   simple_mnp_alignment;
+  bool   ignore_symmetric_subsets;
   bool   debug; // If enabled shows information about failures as well as conditional subset alignments
 
 };
@@ -202,10 +203,7 @@ public:
   int variant_cmp(const T* v1, const vcf::Variant* v2) const;
   
   template <typename T>
-  int variant_cmp_secplus(const T* v1, const vcf::Variant* v2) const;
-
-  template <typename T>
-  int variant_cmp_secplus_more(const T* v1, const vcf::Variant* v2) const;
+  int variant_cmp_secplus(const T* v1, const vcf::Variant* v2, int) const;
 
   template <typename T>
   bool is_within_target_region(T *variant);
@@ -251,12 +249,14 @@ private:
   bool too_far(vcf::Variant*, vcf::Variant*);
   bool too_far_far(vcf::Variant*, vcf::Variant*);
   bool find_and_merge_assembly();
+  bool find_and_merge_assembly(vcf::Variant *x, bool use_too_far);
 
   void generate_novel_annotations(vcf::Variant* variant);
 
   void merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot);
   void merge_annotation_into_vcf(vcf::Variant* hotspot); 
   void flush_vcf(vcf::Variant* latest);
+  void genotype_to_set(std::set<int> &gt_set, const string &gt_str, char delim);
   void annotate_subset(vcf::Variant* variant);
   bool find_match(vcf::Variant* merged_entry, string &hotspot_ref,vector<string>::iterator oid, vector<string>::iterator opos, vector<string>::iterator oref, vector<string>::iterator oalt, string *omapalt, int record_ref_extension, string &annotation_ref_extension);
   bool find_match_new(vcf::Variant* merged_entry, vcf::Variant* hotspot, string *omapalt, int &gt_v, int &allele_reads_count, string &adj_omp, long &idx);

@@ -1,16 +1,17 @@
 {% load pagetools %}
 {% load humanize %}
 {% load ion_readable %}
+{% load i18n %}
 
 <div id="alignMap" class="span4 well centered">
 	<div class="number-chunk row-fluid">
 		<div class="span6">
 			<h2>{{ionstats_alignment.aligned.num_bases|ion_readable}}</h2>
-			<small rel='tooltip' title="Total number of bases aligned to the reference sequence, excludes library key, barcodes and 3' adapter sequences">Total Aligned Bases</small>
+			<small rel='tooltip' title="{% trans "report.section.aligned.map.ionstats_alignment.aligned.num_bases.tooltip" %}">{% trans "report.section.aligned.map.ionstats_alignment.aligned.num_bases.label" %}</small>
 		</div>
 		<div class="span6">
 			<h2>{{avg_coverage_depth_of_target}} </h2>
-			<small rel='tooltip' title="Total aligned bases divided by the number of bases in the reference sequence. Will not be aware of or account for any enrichment that may have been done to selectively amplify a subset of the reference sequence">Reference Coverage</small>
+			<small rel='tooltip' title="{% trans "report.section.aligned.map.avg_coverage_depth_of_target.tooltip" %}">{% trans "report.section.aligned.map.avg_coverage_depth_of_target.label" %}</small>
 		</div>
 	</div>
 
@@ -21,31 +22,31 @@
     <thead>
       <tr>
         <th>&nbsp;</th>
-        <th style="text-align: right;">Count</th>
-        <th style="text-align: right;">%</th>
+        <th style="text-align: right;">{% trans "report.section.aligned.map.column.count" %}</th>
+        <th style="text-align: right;">{% trans "report.section.aligned.map.column.percentage" %}</th>
       </tr>
     </thead>
     <tbody>
       {% if ionstats_alignment %}
       <tr>
-        <td rel="tooltip" title="Reads generated during basecalling">Total Reads</td>
+        <td rel="tooltip" title="{% trans "report.section.aligned.map.ionstats_alignment.full.num_reads.tooltip" %}">{% trans "report.section.aligned.map.ionstats_alignment.full.num_reads.label" %}</td>
         <td style="text-align: right;">{{ionstats_alignment.full.num_reads|intcomma}}</td>
         <td style="text-align: right;">&nbsp;&mdash;&nbsp;</td>
       </tr>
       <tr>
-        <td rel="tooltip" title="Reads aligned to reference genome">Aligned Reads</td>
+        <td rel="tooltip" title="{% trans "report.section.aligned.map.ionstats_alignment.aligned.num_reads.tooltip" %}">{% trans "report.section.aligned.map.ionstats_alignment.aligned.num_reads.label" %}</td>
         <td style="text-align: right;">{{ionstats_alignment.aligned.num_reads|intcomma}}</td>
         <td style="text-align: right;">{{ionstats_alignment.aligned.p_num_reads|floatformat:"1"}}%</td>
       </tr>
       <tr>
-        <td rel="tooltip" title="Reads not-aligned to reference genome">Unaligned Reads</td>
+        <td rel="tooltip" title="{% trans "report.section.aligned.map.ionstats_alignment.unaligned.num_reads.tooltip" %}">{% trans "report.section.aligned.map.ionstats_alignment.unaligned.num_reads.label" %}</td>
         <td style="text-align: right;">{{ionstats_alignment.unaligned.num_reads|intcomma}}</td>
         <td style="text-align: right;">{{ionstats_alignment.unaligned.p_num_reads|stringformat:".1f"}}%</td>
       </tr>
       {% endif %}
       {% if duplicate_metrics %}
       <tr>
-        <td rel="tooltip" title="Aligned reads marked as potential PCR duplicates">Duplicate Reads</td>
+        <td rel="tooltip" title="{% trans "report.section.aligned.map.duplicate_metrics.duplicate_reads.tooltip" %}">{% trans "report.section.aligned.map.duplicate_metrics.duplicate_reads.label" %}</td>
         <td style="text-align: right;">{{duplicate_metrics.duplicate_reads|intcomma}}</td>
         <td style="text-align: right;">{{duplicate_metrics.duplicate_read_percentage|stringformat:".1f"}}%</td>
       </tr>
@@ -56,13 +57,13 @@
     <div class="modal hide" id="alignRate" style="width: 830px; margin-left: -415px;">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>Alignment summary</h3>
+            <h3>{% trans "report.section.aligned.map.summary.title" %}</h3>
         </div>
         <div class="modal-body" id="alignRate_body" style="max-height: 900px;">
             <img style="width: 770px;" src="{{report.reportWebLink}}/large_alignment_rate_plot.png">
         </div>
         <div class="modal-footer">
-            <a href="#" class="btn" data-dismiss="modal">Close</a>
+            <a href="#" class="btn" data-dismiss="modal">{% trans "global.action.modal.close" %}</a>
         </div>
     </div>
 

@@ -2,17 +2,18 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block tab-configure-configure %}
-    <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
+    <li class="active"><a href="{% url "configure_configure" %}">{% trans "global.nav.menu.configure.menu.configure.label" %}</a></li>
 {% endblock tab-configure-configure %}
 {% block content %}
     <div class="content clearfix">
         <form class="form-horizontal" id="contacts_form" enctype="application/x-www-form-urlencoded" action="{% url "configure_configure" %}" method="POST" >
             <div>
-                <h1>Customer Support Contact</h1>
-                <p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
+                <h1>{% trans "configure_configure.config_contacts.lab_contact.title" %}</h1>
+                <p>{% trans "configure_configure.config_contacts.lab_contact.description" %}</p>
                 <div class="control-group">
-                    <label for="csc_name" class="control-label">Name</label>
+                    <label for="csc_name" class="control-label">{{ UserProfile.name.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.lab_contact.name }}" name="lab_contact-name" id="id_lab_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -22,7 +23,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="csc_email" class="control-label">Email</label>
+                    <label for="csc_email" class="control-label">{{ UserProfile.user.email.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.lab_contact.email }}" name="lab_contact-email" id="id_lab_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -32,7 +33,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="csc_phone" class="control-label">Telephone Number</label>
+                    <label for="csc_phone" class="control-label">{{ UserProfile.phone_number.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.lab_contact.phone_number }}" name="lab_contact-phone_number" id="id_lab_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -44,10 +45,10 @@
             </div>
 
             <div>
-                <h1>IT Contact</h1>
-                <p>This is the person in your organization who should be notified during a support request of problems related to the Torrent Server's hardware or the network environment.</p>
+                <h1>{% trans "configure_configure.config_contacts.it_contact.title" %}</h1>
+                <p>{% trans "configure_configure.config_contacts.it_contact.description" %}</p>
                 <div class="control-group">
-                    <label for="itc_name" class="control-label">Name</label>
+                    <label for="itc_name" class="control-label">{{ UserProfile.name.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.it_contact.name }}" name="it_contact-name" id="id_it_contact-name" class="input-xlarge textInput required" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -57,7 +58,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="itc_email" class="control-label">Email</label>
+                    <label for="itc_email" class="control-label">{{ UserProfile.user.email.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.it_contact.email }}" name="it_contact-email" id="id_it_contact-email" class="input-xlarge textInput required validateEmail" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -67,7 +68,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="itc_phone" class="control-label">Telephone Number</label>
+                    <label for="itc_phone" class="control-label">{{ UserProfile.phone_number.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{ contacts.it_contact.phone_number }}" name="it_contact-phone_number" id="id_it_contact-phone_number" class="input-xlarge textInput" maxlength="512" type="text">
                         <p class="help-block error"></p>
@@ -81,22 +82,22 @@
         </form>
 
         <div class="pull-left">
-            <a id="upfile" class="btn btn-primary save_button" href="#">Save Contacts</a>
-            <a id="contacts_form_reset" class="btn">Reset</a>
+            <a id="upfile" class="btn btn-primary save_button" href="#">{% trans "configure_configure.config_contacts.action.submit" %}</a>
+            <a id="contacts_form_reset" class="btn">{% trans "global.action.reset" %}</a>
         </div>
     </div>
 
      <div class="content">
-        <h1>Customize Site Name</h1>
+        <h1>{% trans "configure_configure.config_site_name.title" %}</h1>
         <br>
         <form action="{% url "configure_configure" %}" method="POST" class="form-inline" id="sitename">
             <input type="text" name="site_name" value="{{base_site_name}}">
-            <input class="btn btn-primary" type="submit" value="Save Name">
+            <input class="btn btn-primary" type="submit" value="{% trans "configure_configure.config_site_name.action.submit" %}">
         </form>
     </div>
 
 <div class="content">
-        <h1>Change Timezone</h1>
+        <h1>{% trans "configure_configure.zone_select.title" %}</h1>
         <br>
         <form action="{% url "configure_configure" %}" method="POST" class="form-inline" id="timezone">
             {%if all_TZ %}<select id="zone_select" name="zone_select" class="dropdown">
@@ -105,10 +106,14 @@
             <select id="city_select" name="city_select" class="dropdown">
                 {%for city in all_TZ.cities %}<option value={{city}} {%if current_TZ.cities == city %}selected{%endif %}>{{city}}</option>{% endfor %}
             </select>{%endif %}
-            <input id="submit_button" class="btn btn-primary" type="submit" value="Save Time Zone">
+            <input id="submit_button" class="btn btn-primary" type="submit" value="{% trans "configure_configure.zone_select.action.submit" %}" data-value="{% trans "configure_configure.zone_select.action.submit" %}" data-value-inprogress="{% trans "configure_configure.zone_select.messages.inprogress" %}">
             <br><br>
-            <a id="auto_detect" href="{% url "auto_detect_timezone" %}" class="btn btn-primary">Auto Detect Timezone</a>
-            <div id="timezone_saved"></div>
+            <a id="auto_detect" href="{% url "auto_detect_timezone" %}" class="btn btn-primary" data-value="{% trans "configure_configure.zone_select.action.auto_detect_timezone" %}" data-value-inprogress="{% trans "configure_configure.zone_select.messages.auto_detect_timezone.inprogress" %}">{% trans "configure_configure.zone_select.action.auto_detect_timezone" %}</a>
+            <div id="timezone_saved"
+                 data-msg-success="{% trans "configure_configure.zone_select.messages.success" %}"
+                 data-msg-failed="{% trans "configure_configure.zone_select.messages.failed" %}"
+                 data-msg-auto-detect-timezone-success="{% trans "configure_configure.zone_select.messages.auto_detect_timezone.success" %}"
+                 data-msg-auto-detect-timezone-failed="{% trans "configure_configure.zone_select.messages.auto_detect_timezone.fail" %}"></div>
         </form>
     </div>
 
@@ -121,23 +126,41 @@
 -->
     <div class="content">
         <div class="clearfix">
-            <h1 class="pull-left" name="email">Email</h1>
-            <a id="add_email" href="{% url "edit_email" %}" class="btn btn-primary pull-right">Add Email</a>
+            <h1 class="pull-left" name="email">{% trans "configure_configure.email.title" %}</h1>
+            <a id="add_email" href="{% url "edit_email" %}" class="btn btn-primary pull-right">{% trans "configure_configure.email.action.add_email" %}</a>
         </div>
         <div>
             <label class="checkbox"><input id="enable_nightly" type="checkbox" {%if enable_nightly %}checked{% endif %}/>
-                Enable Nightly Email Notifications?</label>
+                {{ GlobalConfig.enable_nightly_email.verbose_name }}</label>
         </div>
         <div id="email_table"></div>
-        <div id="no_email_configured" class="centered_message" style="display:none">No Email Addresses Configured.</div>
+        <div id="no_email_configured" class="centered_message" style="display:none">{% trans "configure_configure.email.messages.none" %}</div>
     </div>
+    <script type="text/javascript">
+    var EMAIL_COLUMNS = [ {
+                field: "id",
+                title: "{% trans "global.column.manage" %}",
+                sortable: false,
+                template: "<a class='edit_email' href='editemail/${id}'>{% trans "configure_configure.email.action.edit_email" %}</a> | <a class='delete_email' href='deleteemail/${id}'>{% trans "configure_configure.email.action.delete_email" %}</a>"
+            } , {
+                field: "selected",
+                title: "{{ EmailAddress.selected.verbose_name }}",
+                template: "<input data-pk='${id}' type='checkbox' class='emailselected' # if(data.selected){ # checked # } # >"
+            } , {
+                field: "email",
+                title: "{{ EmailAddress.email.verbose_name }}",
+            }
+        ];
+    </script>
+
     <div class="content">
         <div class="clearfix">
-            <h1>Database Administration</h1>
+            <h1>{% trans "configure_configure.admin.title" %}</h1>
             <br>
-            <p>The <a href="/admin" target="_blank">Admin Interface</a> provides direct access to the database entries for system administrators.</p>
+            <p>{% trans "configure_configure.admin.description"|safe %}</p>
         </div>
     </div>
+{% if featureflags.NAS_STORAGE %}
     <div class="content clearfix" id="nas_content">
         <div class="row-fluid">
             <h1 class="span3">Torrent Storage</h1>
@@ -184,13 +207,14 @@
             </div>
         </div>
     </div>
+{% endif %}
 
-
-<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
+{% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
 <script type="text/javascript" src="{% static "js/jquery.blockUI.js" %}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/contacts.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/emails.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/timezones.js"%}"></script>
+{% if featureflags.NAS_STORAGE %}
 <script type="text/javascript" src="{% static "resources/scripts/configure/configure/nasunits.js"%}"></script>
-
+{% endif %}
 {% endblock content %}

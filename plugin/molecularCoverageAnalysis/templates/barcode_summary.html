@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+
+<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+
+{% load humanize %}
+
+{% if autorefresh %}
+<META HTTP-EQUIV="refresh" CONTENT="15">
+{% endif %}
+
+<style type="text/css">
+  body {background:white}
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+  td {word-break:break-all}
+</style>
+
+</head>
+
+<title>Torrent Molecular Coverage Analysis Report</title>
+<body>
+
+<div class="container-fluid">
+
+<h1><center>Molecular Coverage Analysis Report</center></h1>
+<h3><center>{{run_name}}<center></h3>
+<h2><center>Barcode Summary</center></h2>
+
+<h4>
+<b>Library type:</b> {{library_type}}<br/>
+<b>Target regions:</b> {{target_regions}}<br/>
+</h4>
+
+<script type="text/javascript">
+  function numberWithCommas(x) {
+    if( x == null || isNaN(x) ) return "NA";
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+  }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (100 * x)+"%";
+  }
+</script>
+
+<!-- Capture django variable in to javascript -->
+<script>
+  var barcodes_json = {{barcode_results|safe}};
+</script>
+
+<script type="text/javascript">
+$(document).ready(function() {
+  if (typeof barcodes_json !== 'undefined'){
+    $("#barcodes").kendoGrid({
+      height: 'auto',
+      groupable: false,
+      scrollable: false,
+      selectable: false,
+      sortable: { mode: "multiple", allowUnsort: true },
+      pageable : { pageSizes:[5,10,20,50,100,1000] },
+      dataSource: {
+        data: barcodes_json,
+        schema: { model: { fields: {
+          barcode_name: {type:"string"},
+          sample: {type:"string"},
+          funcfam: {type:"number"},
+          //funcratio: {type:"float"},
+          uniformity: {type:"float"},
+          famsize: {type:"float"},
+          conversion: {type:"float"}
+        } } },
+        pageSize: 20
+      },
+      columns: [
+        {field:"barcode_name",width:"15%"},
+        {field:"sample",width:"30%"},
+        {field:"funcfam"},
+        //{field:"funcratio"},
+        {field:"uniformity"},
+        {field:"famsize"},
+        {field:"conversion"}
+      ],
+      rowTemplate: kendo.template($("#barcodesRowTemplate").html())
+    });
+  }
+});
+</script>
+
+<div>
+  <table id="barcodes" style="width:100%">
+    <thead>
+    <tr>
+      <th title="{{help_dict.barcode_name}}">Barcode Name</th>
+      <th title="{{help_dict.sample_name}}">Sample</th>
+      <th title="{{help_dict.funcfam}}">Median Functional Molecules</th>
+      <th title="{{help_dict.uniformity}}">Molecular Uniformity</th>
+      <th title="{{help_dict.famsize}}">Median Average Molecular Size</th>
+      <th title="{{help_dict.conversion}}">Read conversion</th>
+    </tr>
+    </thead>
+    <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
+      <tr>
+        <td> #= barcode_details #</td>
+        <td> #= (sample) ? sample : "None" #</td>
+        <td> #= numberWithCommas(funcfam) # </td>
+        <td>#= uniformity #</td>
+        <td>#= famsize #</td>
+        <td>#= numberToPercent(conversion) #</td>
+      </tr>
+    </script>
+  </table>
+</div>
+
+{% if bctable %}
+<li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
+{% endif %}
+{% if bcmatrix %}
+<li><a href="{{bcmatrix}}" title='Click to download a table file of {{bcmfield}} individual {{bcmtype}}s for each barcode.'>Download barcode/{{bcmtype}} coverage matrix</a></li>
+{% endif %}
+
+{% if not autorefresh %}
+<li><div id="ziplink">
+<script type='text/javascript'>
+  var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
+  var a = document.createElement('a');
+  var linkText = document.createTextNode('Download a ZIP report summary.');
+  a.appendChild(linkText);
+  a.title = 'Click to save a compressed version of this report. Unzip coverageAnalysisReport.zip to a local folder on your computer. This will contain PDF images versions of the main reports and primary analysis output files, separated into individual folders for each barcode.';
+  a.href = window.location.protocol+'//'+window.location.host+'/auth'+locpath+'/zipReport.php3';
+  document.getElementById('ziplink').appendChild(a);
+</script>
+</div></li>
+{% endif %}
+
+{% if autorefresh %}
+<br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+<a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+<div style="text-align:center">Click here to refresh</div></a>
+{% endif %}
+
+</div>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
+
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>
+

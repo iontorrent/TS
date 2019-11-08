@@ -317,7 +317,7 @@ int main (int argc, const char *argv[])
     bc_params.SetBaseCallerContextVars(bc);
 
     // --------- Stand alone phase estimation and exit ---------------------------------------
-    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
+    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer, bc.compress_multi_taps);
 
     if (bc_params.JustPhaseEstimation()) {
       wells.OpenForIncrementalRead();
@@ -739,7 +739,22 @@ void * BasecallerWorker(void *input)
                 float ie = bc.estimator.GetWellIE(x,y);
                 float dr = bc.estimator.GetWellDR(x,y);
 
-                for (int flow = 0; flow < num_flows; ++flow)
+                // Multi-tap compression
+                if (bc.compress_multi_taps) {
+                  int sig_idx = 0;
+                  for (int flow = 0; flow < num_flows; ++flow){
+                    if (flow>0 and bc.flow_order[flow-1]==bc.flow_order[flow]) {
+                      wells_measurements[flow] = 0.0;
+                      wells_measurements[sig_idx] += wells.At(y,x,flow);
+                    }
+                    else {
+                      sig_idx = flow;
+                      wells_measurements[flow] = wells.At(y,x,flow);
+                    }
+                  }
+                }
+                else
+                  for (int flow = 0; flow < num_flows; ++flow)
                     wells_measurements[flow] = wells.At(y,x,flow);
 
 
@@ -748,7 +763,7 @@ void * BasecallerWorker(void *input)
                 for (int flow = 0; flow < num_flows; ++flow) {
                     if (!isnan(wells_measurements[flow]))
                         continue;
-                    wells_measurements[flow] = 0;
+                    wells_measurements[flow] = 0.0;
                     nanflow.push_back(flow);
                 }
                 if (nanflow.size() > 0) {

@@ -1,0 +1,32 @@
+{
+    "activationClass":"none",
+    "dependsOn":[
+        "none"
+    ],
+    "embeddedOutput":"true",
+    "executeDxAdapter":"true",
+    "img":"none",
+    "inWorkflow":"true",
+    "inputs":[
+        "analysisDir",
+        "pluginOutputDir"
+    ],
+    "name":"molecularCoverageAnalysis",
+    "outputs":[
+        "./outputs"
+    ],
+    "payOption":"Free",
+    "runAllowed":"false",
+    "runOnceOnly":"true",
+    "scriptLauncher":"molecularCoverageAnalysis.py",
+    "validWorkflowAppTypes":[
+        "DNA",
+        "RNA",
+        "DNA_RNA"
+    ],
+    "variantAnnotationKeys":[
+        "type"
+    ],
+    "vendorActivation":"/share/apps/",
+    "ver":"5.12.0.4"
+}

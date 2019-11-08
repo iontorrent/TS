@@ -16,8 +16,8 @@ while( ($j = strpos( $keyrows, ",", $i )) !== false ) {
 }
 $skey = $key;
 sort($skey);
-var_dump($key);
-var_dump($skey);
+//var_dump($key);
+//var_dump($skey);
 
 $dtfh = fopen($dataFile,"r");
 if( $dtfh == 0 || feof($dtfh) ) {

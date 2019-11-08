@@ -2,6 +2,7 @@
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
 {% block extra_head %}
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <style type="text/css">
@@ -34,17 +35,17 @@
 </style>
 {% endblock extra_head %}
 {% block sub-nav %}
-<li class="active"><a href="{% url "monitor" %}">Runs in Progress</a></li>
-<li><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
+<li class="active"><a href="{% url "monitor" %}">{% trans "global.nav.menu.monitor.menu.monitor.label" %}</a></li>
+<li><a href="{% url "monitor_chef" %}">{% trans "global.nav.menu.monitor.menu.monitor_chef.label" %}</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div id="monitor_view" class="content group">
     <div class="pull-right">
-        <small id="update_status">Page is static until refreshed</small> <a id='live_button' class="btn btn-success">Auto Refresh</a>
+        <small id="update_status" data-live-on="{% trans "global.mode.live.enable.helptext" %}" data-live-off="{% trans "global.mode.live.disable.helptext" %}" >{% trans "global.mode.live.disable.helptext" %}</small> <a id='live_button' class="btn btn-success" data-live-on="{% trans "global.mode.live.enable" %}" data-live-off="{% trans "global.mode.live.disable" %}">{% trans "global.mode.live.enable" %}</a>
     </div>
-    <h1 style="margin-bottom:5px;">Runs in Progress</h1>
+    <h1 style="margin-bottom:5px;">{% trans "monitor.title" %}</h1>
 	<div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
-        <a id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_table" class="active">Table View</a>
+        <a href="#full" id="view_full" class="">{% trans "global.mode.listview.label" %}</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">{% trans "global.mode.tableview.label" %}</a>&nbsp;
     </div>
     <br/>      
     <div id="data_panel"></div>
@@ -53,12 +54,12 @@
 <script src="{% static "js/underscore.js"%}"></script>
 <script src="{% static "js/backbone.js"%}"></script>
 <script src="{% static "js/chosen.jquery.js"%}"></script>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+{% include "rundb/common/head_jqueryui_script.html" %}
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing 
 	iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script> 
 <script src="{% static "js/date.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+{% include "rundb/common/head_daterangepicker_script.html" %}
 <script src="{% static "js/template.js"%}"></script>
 <script src="{% static "js/compiler.js"%}"></script>
 <script src="{% static "js/messagebox.js"%}"></script>
@@ -88,16 +89,16 @@
                 		{{/king_report}}{{^king_report}}&nbsp;{{/king_report}}
                 	</h3>
                     <div class="run-status">
-                        {{#king_report}}<span>{{king_report.status}}</span>{{/king_report}}{{^king_report}}&nbsp;{{/king_report}} | {{#exp.plan}}<a class="review-plan" href="/plan/reviewplan/{{exp.plan.id}}/">Review Run Plan</a>{{/exp.plan}}{{^exp.plan}}No Run Plan{{/exp.plan}}
+                                {{#king_report}}<span>{{king_report.i18nstatus.i18n}}</span>{{/king_report}}{{^king_report}}&nbsp;{{/king_report}} | {{#exp.plan}}<a class="review-plan" href="/plan/reviewplan/{{exp.plan.id}}/">{% endraw %}{% trans "monitor.action.review_plan" %}{% raw %}</a>{{/exp.plan}}{{^exp.plan}}{% endraw %}{% trans "monitor.action.review_plan.none" %}{% raw %}{{/exp.plan}}
                     </div>
                     </div>
                 </div>
                 <div class="run-details">
-                        <b>Run Started:</b> {{ date_string }}<br />
-                        <b>Chip:</b> {{ exp.chipDescription }}<br />
-                        {{#exp.barcodeId}}<b>Barcode:</b> {{exp.barcodeId}}<br />{{/exp.barcodeId}}
+                        <b>{% endraw %}{% trans "monitor.fields.experiment.date.label" %}{% raw %}:</b> {{ date_string }}<br />
+                        <b>{% endraw %}{% trans "monitor.fields.experiment.chipDescription.label" %}{% raw %}:</b> {{ exp.chipDescription }}<br />
+                        {{#exp.barcodeId}}<b>{% endraw %}{% trans "monitor.fields.experiment.barcodeId.label" %}{% raw %}:</b> {{exp.barcodeId}}<br />{{/exp.barcodeId}}
                         <div>
-                            <b>Notes:</b> {{exp.notes}}
+                            <b>{% endraw %}{% trans "monitor.fields.experiment.notes.label" %}{% raw %}:</b> {{exp.notes}}
                         </div>
                 </div>
             </div><!-- run-summary -->
@@ -109,35 +110,35 @@
     </div><!-- row-fluid -->
 	<div class="row-fluid metrics-row">
         <div class="span2">
-            <a rel="tooltip" title="Addressable wells on the chip which have detectable loading" href="#" class="run-metric-box bead-loading-link clearfix">
-            	<div class="bead-loading"></div>
+            <a rel="tooltip" title="{% endraw %}{% trans "monitor.fields.bead_loading.tooltip" %}{% raw %}" href="#" class="run-metric-box bead-loading-link clearfix">
+            	<div class="bead-loading" data-signal-caption="{% endraw %}{% trans "monitor.fields.bead_loading.label" %}{% raw %}"></div>
             </a>
         </div>
         <div class="span2">
-            <a rel="tooltip" title="Loaded wells which have a live signal" href="#" class="run-metric-box clearfix">
-                <div class="bead-live"></div>
+            <a rel="tooltip" title="{% endraw %}{% trans "monitor.fields.live_beads.tooltip" %}{% raw %}" href="#" class="run-metric-box clearfix">
+                <div class="bead-live" data-signal-caption="{% endraw %}{% trans "monitor.fields.live_beads.label" %}{% raw %}"></div>
             </a>
         </div>
         <div class="span2">
-            <a rel="tooltip" title="Live wells with a library template" href="#" class="run-metric-box clearfix">
-                <div class="bead-lib"></div>
+            <a rel="tooltip" title="{% endraw %}{% trans "monitor.fields.library_beads.tooltip" %}{% raw %}" href="#" class="run-metric-box clearfix">
+                <div class="bead-lib" data-signal-caption="{% endraw %}{% trans "monitor.fields.library_beads.label" %}{% raw %}"></div>
             </a>                           
         </div>
         <div class="span2">
-            <a rel="tooltip" title="Average 1-mer signal in the library key" href="#" class="run-metric-box key-signal-link clearfix">
-                <div class="key-signal"></div>
+            <a rel="tooltip" title="{% endraw %}{% trans "monitor.fields.keysignal.tooltip" %}{% raw %}" href="#" class="run-metric-box key-signal-link clearfix">
+                <div class="key-signal" data-signal-caption="{% endraw %}{% trans "monitor.fields.keysignal.label" %}{% raw %}"></div>
             </a>
         </div>
         <div class="span2">
-            <a rel="tooltip" title="Percentage of the sequence available for analysis after filtering"
+            <a rel="tooltip" title="{% endraw %}{% trans "monitor.fields.usable_sequence.tooltip" %}{% raw %}"
              href="#" class="run-metric-box usable-sequence-link clearfix">
-                <div class="usable-sequence"></div>
+                <div class="usable-sequence" data-signal-caption="{% endraw %}{% trans "monitor.fields.usable_sequence.label" %}{% raw %}"></div>
             </a>
         </div>
 	</div>
     <div class="run-progress">
-        <h4>Flow Transfer: {{progress_flows}} of {{exp.flows}} flows</h4>
-        <div rel="tooltip" title="Progress is {{progress_flows}} of {{exp.flows}} flows" class="progress{{#in_progress}} progress-striped {{/in_progress}}">
+        <h4>{% endraw %}{% trans "monitor.fields.flows.label" %}{% raw %}: {{progress_message}}</h4>
+        <div rel="tooltip" title="{{progress_tooltip}}" class="progress{{#in_progress}} progress-striped {{/in_progress}}">
             <div class="bar" style="width: {{progress_percent}}%;"></div>
         </div>
     </div>
@@ -148,7 +149,7 @@
         {{#total}}{{lower_range}} to {{upper_range}} of {{total}}{{/total}}
         {{^total}}
             <div class="well">
-                There are no current or recent TS runs at this time.
+                {% endraw %}{% trans "monitor.pageable.messages.empty" %}{% raw %}
             </div>
         {{/total}}
         {{#next}}<a href="#" class="next">Next {{limit}}</a>{{/next}}
@@ -167,13 +168,13 @@
             {{^king_report}}&nbsp;{{/king_report}}
         <td>
             {{#in_progress}}
-                {{progress_flows}}/{{exp.flows}} flows
+                {{progress_message}}
                 <div class="progress progress-striped">
                     <div class="bar" style="width: {{progress_percent}}%;"></div>
                 </div>
             {{/in_progress}}
             {{^in_progress}}
-                {{ king_report.status }}
+                {{ king_report.i18nstatus.i18n }}
             {{/in_progress}}
         </td>
         <td title="{{ date_string }}">{{ date_string }}</td>
@@ -186,7 +187,7 @@
         <td>{{king_report.libmetrics.aveKeyCounts}}</td>
         <td>{{usable_seq}}</td>
 </script>
-{% endraw %}
+
 <script type="text/template" id="experiment_list_table_template">
     <div class="k-widget k-grid table-dense">
         <table id="main_table" class='table-striped'>
@@ -206,18 +207,18 @@
             </colgroup>
             <thead class="k-grid-header">
                 <tr>
-                    <th class="k-header"><a class="sort_link" data-name="experiment__pgmName" href="#">Instrument<span class="order_indicator"></span></a></th>
-                    <th class="k-header"><a class="sort_link" data-name="resultsName" href="#">Report Name<span class="order_indicator"></span></a></th>
-                    <th class="k-header">Status</th>
-                    <th class="k-header"><a class="sort_link" data-name="timeStamp" href="#">Date<span class="order_indicator order_indicator_default k-icon k-i-arrow-s"></span></a></th>
-                    <th class="k-header"><a class="sort_link" data-name="experiment__chipType" href="#">Chip<span class="order_indicator"></span></a></th>
-                    <th class="k-header">Reference</th>
-                    <th class="k-header">Barcode</th>
-                    <th class="k-header">Loading</th>
-                    <th class="k-header">Live ISPs</th>
-                    <th class="k-header">Library ISPs</th>
-                    <th class="k-header">Key Signal</th>
-                    <th class="k-header">Usable Seq</th>
+                    <th class="k-header"><a class="sort_link" data-name="experiment__pgmName" href="#">{% endraw %}{% trans "monitor.fields.experiment.pgmName.label" %}{% raw %}<span class="order_indicator"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="resultsName" href="#">{% endraw %}{% trans "monitor.fields.experiment.resultsName.label" %}{% raw %}<span class="order_indicator"></span></a></th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.status.label" %}{% raw %}</th>
+                    <th class="k-header"><a class="sort_link" data-name="timeStamp" href="#">{% endraw %}{% trans "monitor.fields.timeStamp.label" %}{% raw %}<span class="order_indicator order_indicator_default k-icon k-i-arrow-s"></span></a></th>
+                    <th class="k-header"><a class="sort_link" data-name="experiment__chipType" href="#">{% endraw %}{% trans "monitor.fields.experiment.chipType.label" %}{% raw %}<span class="order_indicator"></span></a></th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.eas.reference.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.experiment.barcodeId.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.bead_loading.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.live_beads.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.library_beads.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.keysignal.label" %}{% raw %}</th>
+                    <th class="k-header">{% endraw %}{% trans "monitor.fields.usable_sequence.label" %}{% raw %}</th>
                 </tr>
             </thead>
             <tbody id="main_list"></tbody>
@@ -225,6 +226,7 @@
         <div id="pager" class="k-pager-wrap k-grid-pager k-widget" data-role="pager"></div>
     </div>
 </script>
+{% endraw %}
 <script src="{% static "js/data_models.js"%}"></script>
 <script src="{% static "js/monitor_tab.js"%}"></script>
 <script>

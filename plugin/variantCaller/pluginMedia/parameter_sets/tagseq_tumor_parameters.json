@@ -3,7 +3,7 @@
         "name": "Oncomine Tumor DNA - PGM (318) or S5/S5XL (5xx)", 
         "tooltip": "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.", 
         "configuration": "tagseq_ffpe", 
-        "ts_version": "5.10", 
+        "ts_version": "5.12", 
         "compatibility": {
             "chip": [
                 "510", 
@@ -58,6 +58,7 @@
         "indel_strand_bias": 1, 
         "indel_strand_bias_pval": 0, 
         "max_flows_to_test": 10, 
+        "min_callable_prob": 0.8, 
         "min_ratio_for_fd": 0.1, 
         "min_tag_fam_size": 3, 
         "mnp_min_allele_freq": 0.0035, 
@@ -82,6 +83,7 @@
         "snp_strand_bias_pval": 0, 
         "sse_prob_threshold": 1.0, 
         "suppress_recalibration": 0, 
+        "suppress_called_allele_lod": 0, 
         "tag_sim_max_cov": 10, 
         "tag_trim_method": "sloppy-trim", 
         "try_few_restart_freq": 1, 

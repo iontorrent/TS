@@ -97,6 +97,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   barcode_error_filter_           = opts.GetFirstDouble ('-', "barcode-error-filter", 0.0);
   barcode_filter_postpone_        = opts.GetFirstInt    ('-', "barcode-filter-postpone", 0);
   barcode_filter_named_           = opts.GetFirstBoolean('-', "barcode-filter-named", false);
+  barcode_clip_measurements_      = opts.GetFirstBoolean('-', "barcode-clip-measurements", false);
   check_limits_                   = opts.GetFirstBoolean('-', "barcode-check-limits", true);
   score_auto_config_              = opts.GetFirstBoolean('-', "barcode-auto-config", false);
   bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", true);
@@ -343,7 +344,7 @@ void BarcodeClassifier::SetClassificationParams(int mode, double cutoff, double 
     cout << "   No Hamming distance information available." << endl;
     if (score_auto_config_) {
       cout << "   WARNING: Auto-config of barcode scoring parameters not possible." << endl;
-      cerr << " BarcodeClassifier WARNING: Auto-config of barcode scoring parameters not possible: No Hamming distance available." << endl;
+      cerr << "BarcodeClassifier WARNING: Auto-config of barcode scoring parameters not possible: No Hamming distance available." << endl;
     }
     CheckParameterLowerUpperBound("barcode-cutoff",     score_cutoff_,     0.0,1, 0.0,0, 1.0);
     CheckParameterLowerUpperBound("barcode-separation", score_separation_, 0.0,1, 0.0,0, 2.5);
@@ -479,7 +480,7 @@ int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecall
                                                   vector<float>& best_bias, int& filtered_zero_errors)
 {
     int best_barcode     = -1;
-    best_errors          =  0;
+    best_errors          = -1;
     filtered_zero_errors = -1;
     best_distance        = score_cutoff_ + score_separation_;
     float second_best_distance = 1e20;
@@ -497,9 +498,11 @@ int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecall
 
     	// Compute Bias
     	bias.at(flow-barcode_min_start_flow_) = basecaller_read.normalized_measurements.at(flow) - barcode_[bc].predicted_signal.at(flow);
-    	// Thresholding of measurements to a range of [0,2]
-    	double acting_measurement = basecaller_read.normalized_measurements.at(flow);
-    	acting_measurement = max(min(acting_measurement, (double)barcode_max_hp_),0.0);
+    	// Thresholding of measurements to a range of [0,[ or[0,2]
+    	double acting_measurement = max(0.0, (double)basecaller_read.normalized_measurements.at(flow));
+    	if (barcode_clip_measurements_)
+    	  acting_measurement = min(acting_measurement, (double)barcode_max_hp_);
+    	  //acting_measurement = max(min(acting_measurement, (double)barcode_max_hp_),0.0);
     	// Compute distance
     	double residual = barcode_[bc].predicted_signal.at(flow) - acting_measurement;
     	if (flow == barcode_[bc].num_flows-1)
@@ -527,7 +530,7 @@ int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecall
 
     if (second_best_distance - best_distance  < score_separation_) {
       if (best_errors == 0)
-        filtered_zero_errors = best_barcode;
+        filtered_zero_errors = barcode_.at(best_barcode).read_group_index;
       best_barcode = -1;
     }
     return best_barcode;
@@ -542,7 +545,7 @@ bool BarcodeClassifier::MatchesBarcodeSignal(const BasecallerRead& basecaller_re
     return false;
 
   int   best_barcode         = -1;
-  int   best_errors          =  0;
+  int   best_errors          = -1;
   int   filtered_zero_errors = -1;
   float best_distance        = 0.0;
   vector<float> best_bias;
@@ -558,7 +561,7 @@ int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& b
                                                   vector<float>& best_bias, int& filtered_zero_errors)
 {
     int best_barcode     = -1;
-    best_errors          =  0;
+    best_errors          = -1;
     filtered_zero_errors = -1;
     best_distance        = score_cutoff_ + score_separation_;
     float second_best_distance = 1e20;
@@ -606,7 +609,7 @@ int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& b
 
     if (second_best_distance - best_distance  < score_separation_) {
       if (best_errors == 0)
-        filtered_zero_errors = barcode_[best_barcode].read_group_index;
+        filtered_zero_errors = barcode_.at(best_barcode).read_group_index;
       best_barcode = -1;
     }
     return best_barcode;
@@ -708,6 +711,7 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   barcode_mask_.IndexToRowCol (read_index, y, x);
   barcode_mask_.SetBarcodeId(x, y, (uint16_t)bce.mask_index);
   processed_read.read_group_index = bce.read_group_index;
+  processed_read.barcode_n_errors = max(processed_read.barcode_n_errors, 0);
 
   if(barcode_bam_tag_)
 	processed_read.bam.AddTag("XB","i", processed_read.barcode_n_errors);
@@ -768,7 +772,7 @@ void BarcodeClassifier::LoadHandlesFromArgs(OptArgs& opts,
   cout << "   handle-cutoff            : " << handle_cutoff_ << endl;
 
   if (not end_flow_synch_ and handle_mode_ !=0){
-    cerr << "WARNING: Handles do not have a distinct start flow. Using base space matching handle-mode=0!" << endl;
+    cerr << "BarcodeClassifier WARNING: Handles do not have a distinct start flow. Using base space matching handle-mode=0!" << endl;
     handle_mode_ = 0;
   }
   if (handle_mode_ == 0){
@@ -787,7 +791,7 @@ void BarcodeClassifier::LoadHandlesFromArgs(OptArgs& opts,
       have_ambiguity_codes = true;
       break;
     } else if (handle_sequence_[iHandle].length() == 0){
-      cerr << "ERROR: Barcode handle " << (iHandle+1) << " has no sequence specified" << endl;
+      cerr << "BarcodeClassifier ERROR: Barcode handle " << (iHandle+1) << " has no sequence specified" << endl;
       exit(EXIT_FAILURE);
     }
 
@@ -811,7 +815,7 @@ void BarcodeClassifier::LoadHandlesFromArgs(OptArgs& opts,
   }
 
   if (have_ambiguity_codes){
-    cerr << "WARNING: Non-ACTG characters detected in handle sequences. Using base space matching handle-mode=0!" << endl;
+    cerr << "BarcodeClassifier WARNING: Non-ACTG characters detected in handle sequences. Using base space matching handle-mode=0!" << endl;
     handle_mode_ = 0;
     handle_.clear();
   }
@@ -1058,7 +1062,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
         //unsigned int adapter_filtered = (*rg)["barcode_adapter_filtered"].asUInt();
         i_am_filtered = (5*adapter_filtered > read_count) ? true : false;
         if (i_am_filtered)
-          cerr << "WARNING: Read group " << barcode_name << " is likely to be contaminated and is being filtered." << endl;
+          cerr << "BarcodeClassifier WARNING: Read group " << barcode_name << " is likely to be contaminated and is being filtered." << endl;
       }
 
       // Set status in datasets
@@ -1086,10 +1090,12 @@ EndBarcodeClassifier::EndBarcode::EndBarcode()
 void EndBarcodeClassifier::PrintHelp()
 {
   cout << "End Barcode classification options:" << endl;
-  cout << "     --end-barcodes                BOOL       Activates/Deactivates end barcde classification [on]" << endl;
+  cout << "     --end-barcodes                BOOL       Activates/Deactivates end barcode classification [on]" << endl;
   cout << "     --end-barcode-mode            INT        Selects barcode classification algorithm [1]" << endl;
-  cout << "     --end-barcode-cutoff          INT        Maximum score to call a barcode [3]" << endl;
-  cout << "     --end-bc-adapter-cutoff       INT        Maximum score to accept barcode adapter [3]" << endl;
+  cout << "     --end-barcode-cutoff          INT        Maximum score to call a barcode [2]" << endl;
+  cout << "     --end-barcode-separation      INT        Minimum difference between best and second best scores [2]" << endl;
+  cout << "     --end-bc-adapter-cutoff       INT        Maximum score to accept barcode adapter [2]" << endl;
+  cout << "     --end-bc-keep-nomatch         BOOL       Keeps reads that would normally be filtered in BAM [false]" << endl;
   // Handle options are listed in the start barcode classifier
   cout << endl;
 }
@@ -1104,29 +1110,25 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
      flow_order_p_(flow_order), barcode_mask_pointer_(MaskPointer),
      have_handles_(false), handle_filter_(false)
 {
+  if (not datasets.DatasetInUse() or datasets.IsControlDataset())
+    return;
 
   enable_barcodes_            = opts.GetFirstBoolean('-', "end-barcodes", true);
   score_mode_                 = opts.GetFirstInt    ('-', "end-barcode-mode", 1);
   score_cutoff_               = opts.GetFirstInt    ('-', "end-barcode-cutoff", 2);
   score_separation_           = opts.GetFirstInt    ('-', "end-barcode-separation", 2);
   adapter_cutoff_             = opts.GetFirstInt    ('-', "end-bc-adapter-cutoff", 2);
+  keep_nomatch_reads_         = opts.GetFirstBoolean('-', "end-bc-keep-nomatch", false);
   trim_barcodes_              = opts.GetFirstBoolean('-', "trim-barcodes", true);
 
-  if (not datasets.DatasetInUse() or datasets.IsControlDataset())
-    return;
-
-  cout << "End Barcode Classifier:" << endl;
-  if (not enable_barcodes_){
-    demux_barcode_list_ = false;
-    cout << "  Disabled." << endl << endl;
-    return;
-  }
-
-  // Development option to demultiplex barcodes read from a csv list
+  // TS 5.10 development option to demultiplex barcodes that are read from a csv list
+  // From TS 5.12 on, end-barcodes=off is the preferred way of demultiplexing.
   string end_barcode_list     = opts.GetFirstString('-', "end-barcode-list", "");
   demux_barcode_list_         = LoadBarcodesFromCSV(end_barcode_list);
 
   // Verbose classifier options
+  cout << "End Barcode Classifier:" << endl;
+  cout << "  end-barcodes          : " << enable_barcodes_ << endl;
   cout << "  end-barcode-mode      : " << score_mode_     << endl;
   cout << "  end-barcode-cutoff    : " << score_cutoff_   << endl;
   cout << "  end-bc-adapter-cutoff : " << adapter_cutoff_ << endl;
@@ -1134,45 +1136,22 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
     cout << "  end-barcode-list      : " << end_barcode_list << endl;
   }
 
-  // Load pcr handle information
+  // Load PCR handle information
   LoadHandlesFromArgs(opts, structure);
 
-  // --- Loop loading individual barcode informations from json
-  read_group_.resize(datasets.num_read_groups());
-
-  for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
-    Json::Value& read_group = datasets.read_group(rg_idx);
-
-    if (not read_group.isMember("barcode_sequence") and
-        not read_group.isMember("barcode") and
-        datasets.read_group_name(rg_idx).find("nomatch") != std::string::npos)
-    {
-      nomatch_read_group_ = rg_idx;
-      continue;
-    }
-
-    if (read_group.isMember("end_barcode")){
-
-      if (demux_barcode_list_){
-        cerr << "EndBarcodeClassifyer ERROR: Can only use end-barcode-list when there are no end-barcodes in the run plan." << endl;
-        exit(EXIT_FAILURE);
-      }
-
-      AddBarcode(read_group_[rg_idx],
-          read_group["end_barcode"].get("barcode_sequence", "").asString(),
-          read_group["end_barcode"].get("barcode_adapter", "").asString());
-
-      read_group_[rg_idx].barcode_name = read_group["end_barcode"].get("barcode_name", "").asString();
-      // The command line argument to de-multiplex a barcode list takes precedence
-      if (demux_barcode_list_){
-        read_group_[rg_idx].end_barcode = false;
-      }
-    }
-
+  if (enable_barcodes_){
+    // Load dual barcode info from barcodes datasets &/| determine no-match read group
+    LoadBarcodesFromDatasets(datasets);
   }
-
-  // Verbose
-  cout << "  Found " << num_end_barcodes_ << " read groups with end barcodes." << endl << endl;
+  else{
+    if (demux_barcode_list_){
+      cerr << "EndBarcodeClassifier: It makes no sense to jointly use an end-barcode-list and the option end-barcodes=false." << endl;
+      cout << "EndBarcodeClassifier: It makes no sense to jointly use an end-barcode-list and the option end-barcodes=false." << endl;
+      exit(EXIT_FAILURE);
+    }
+    // Create a list and demultiplex all end barcodes found in datasets
+    CreateBarcodeListFromDatasets(datasets);
+  }
 
   // Add classifier options to datasets meta information
 
@@ -1194,7 +1173,55 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
 
 // ----------------------------------------------------------------------------
 
-void EndBarcodeClassifier::AddBarcode(EndBarcode& barcode, const string& bc_sequence, const string& bc_adapter)
+bool EndBarcodeClassifier::LoadBarcodesFromDatasets(BarcodeDatasets& datasets)
+{
+  // --- Loop loading individual barcode informations from json
+  read_group_.resize(datasets.num_read_groups());
+
+  for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
+
+    Json::Value& read_group = datasets.read_group(rg_idx);
+
+    // Setting no-match read group
+    if (not read_group.isMember("barcode_sequence") and
+      not read_group.isMember("barcode") and
+      datasets.read_group_name(rg_idx).find("nomatch") != std::string::npos)
+    {
+      nomatch_read_group_ = rg_idx;
+      //cout << "EndBarcodeClassifier:: Set nomatch read group to " << nomatch_read_group_ << endl;
+      continue;
+    }
+
+    // The command line argument to de-multiplex a barcode list takes precedence over set end barcodes.
+    if (demux_barcode_list_){
+      read_group_[rg_idx].end_barcode = false;
+      continue;
+    }
+
+    if (read_group.isMember("end_barcode")){
+
+      AddBarcode(read_group_[rg_idx],
+          read_group["end_barcode"].get("barcode_sequence", "").asString(),
+          read_group["end_barcode"].get("barcode_adapter", "").asString());
+
+      read_group_[rg_idx].barcode_name = read_group["end_barcode"].get("barcode_name", "").asString();
+    }
+
+  }
+  // Verbose
+  if (demux_barcode_list_)
+    cout << "  Loaded " << num_end_barcodes_ << " end barcodes from external file." << endl << endl;
+  else
+    cout << "  Found " << num_end_barcodes_ << " read groups with end barcodes." << endl << endl;
+
+  return have_end_barcodes_;
+}
+
+// ----------------------------------------------------------------------------
+
+void EndBarcodeClassifier::AddBarcode(EndBarcode& barcode,
+                                      const string& bc_sequence,
+                                      const string& bc_adapter)
 {
   barcode.barcode_sequence = bc_sequence;
   barcode.barcode_adapter  = bc_adapter;
@@ -1218,6 +1245,8 @@ void EndBarcodeClassifier::AddBarcode(EndBarcode& barcode, const string& bc_sequ
   }
 };
 
+// ----------------------------------------------------------------------------
+
 int  EndBarcodeClassifier::GetStartHP(const string& base_str)
 {
   if (base_str.empty())
@@ -1238,7 +1267,7 @@ bool EndBarcodeClassifier::LoadBarcodesFromCSV(string filename)
 
   ifstream bcfile(filename.c_str());
   if (not bcfile.is_open()){
-    cerr << "ERROR: Unable to open end barcode list file " << filename << endl;
+    cerr << "EndBarcodeClassifier ERROR: Unable to open end barcode list file " << filename << endl;
     exit(1);
   }
 
@@ -1273,7 +1302,7 @@ bool EndBarcodeClassifier::LoadBarcodesFromCSV(string filename)
 
     if (line_number == 1){
       if (name_idx < 0 or seq_idx <0 or adapter_idx < 0)
-        cerr << "ERROR: The end barcode csv file needs to have the columns id_str, sequence, adapter. " << endl;
+        cerr << "EndBarcodeClassifier ERROR: The end barcode csv file needs to have the columns id_str, sequence, adapter. " << endl;
       continue;
     }
 
@@ -1285,6 +1314,52 @@ bool EndBarcodeClassifier::LoadBarcodesFromCSV(string filename)
   }
   return true;
 };
+
+// ----------------------------------------------------------------------------
+// The closest we can get to emulating a single sided barcodes anlysis
+
+bool EndBarcodeClassifier::CreateBarcodeListFromDatasets(BarcodeDatasets& datasets)
+{
+  end_barcodes_.clear();
+  end_barcode_names_.clear();
+  read_group_.resize(datasets.num_read_groups());
+
+  demux_barcode_list_ = true;
+  if (not keep_nomatch_reads_){
+    keep_nomatch_reads_ = true;
+    cout << "EndBarcodeClassifier INFO: Setting end-bc-keep-nomatch=true." << endl;
+  }
+
+  for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
+
+    Json::Value& read_group = datasets.read_group(rg_idx);
+
+    if (not read_group.isMember("barcode_sequence") and
+      not read_group.isMember("barcode") and
+      datasets.read_group_name(rg_idx).find("nomatch") != std::string::npos)
+    {
+      nomatch_read_group_ = rg_idx;
+      continue;
+    }
+
+    if (read_group.isMember("end_barcode")){
+
+      // Add barcode information to end barcodes list
+      end_barcodes_.push_back(EndBarcode());
+      AddBarcode(end_barcodes_.back(),
+          read_group["end_barcode"].get("barcode_sequence", "").asString(),
+          read_group["end_barcode"].get("barcode_adapter", "").asString());
+
+      end_barcodes_.back().barcode_name = read_group["end_barcode"].get("barcode_name", "").asString();
+      end_barcode_names_.push_back(end_barcodes_.back().barcode_name);
+      read_group_[rg_idx] = end_barcodes_.back();
+    }
+  }
+  // Verbose
+  cout << "  Created list with " << num_end_barcodes_ << " end barcodes from datasets." << endl << endl;
+  return have_end_barcodes_;
+}
+
 
 // ----------------------------------------------------------------------------
 // Classify end barcode and handles
@@ -1300,13 +1375,19 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
   if (processed_read.read_group_index == nomatch_read_group_)
     return;
 
+  // Shortcut for runs without end handle or barcodes
+  if (not have_end_barcodes_ and not have_handles_) {
+    processed_read.filter.n_bases_after_barcode_trim = processed_read.filter.n_bases_after_adapter_trim;
+    return;
+  }
+
   // *** No end barcode to trim but we need to investigate handles & propagate a valid 3' trimming point
 
   bool have_adapter = processed_read.filter.n_bases_after_adapter_trim > 0 and
         processed_read.filter.n_bases_after_adapter_trim < processed_read.filter.n_bases;
   int best_handle, handle_start_flow, n_bases_handle = 0;
 
-  if (not read_group_.at(processed_read.read_group_index).end_barcode and not demux_barcode_list_) {
+  if (not demux_barcode_list_ and not read_group_.at(processed_read.read_group_index).end_barcode) {
 
     if (have_handles_){
       if (have_adapter and TrimHandle(
@@ -1321,7 +1402,8 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
       }
       else {
         processed_read.end_handle_filtered = true;
-        FilterRead(read_index, processed_read);
+        if (not keep_nomatch_reads_)
+          PushReadToNomatch(read_index, processed_read);
         return;
       }
     }
@@ -1419,7 +1501,8 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
 
   // Push to nomatch if no barcode assignment occurred
   if (best_barcode < 0) {
-    FilterRead(read_index, processed_read);
+    if (not keep_nomatch_reads_)
+      PushReadToNomatch(read_index, processed_read);
     return;
   }
   processed_read.end_barcode_index = best_barcode;
@@ -1433,6 +1516,12 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
   if (demux_barcode_list_){
     my_YK_tag += end_barcodes_.at(best_barcode).barcode_adapter;
     my_YK_tag += end_barcodes_.at(best_barcode).barcode_sequence;
+    // Remove clearly identified barcode contamination
+    if (read_group_[processed_read.read_group_index].end_barcode and
+        read_group_.at(processed_read.read_group_index).barcode_sequence !=
+        end_barcodes_.at(best_barcode).barcode_sequence){
+      PushReadToNomatch(read_index, processed_read);
+    }
   }
   UpdateReadTrimming(processed_read, n_bases_trimmed, my_YK_tag);
 };
@@ -1446,8 +1535,9 @@ void EndBarcodeClassifier::UpdateReadTrimming(ProcessedRead &processed_read,
   processed_read.filter.n_bases_after_barcode_trim = max(0, processed_read.filter.n_bases_filtered-trim_n_bases);
   processed_read.filter.n_bases_filtered = processed_read.filter.n_bases_after_barcode_trim;
 
-  // Edit ZA tag
-  processed_read.bam.EditTag("ZA", "i", max(processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix, 0));
+  // Edit ZA tag if we trimmed something
+  if (trim_n_bases>0)
+    processed_read.bam.EditTag("ZA", "i", max(processed_read.filter.n_bases_filtered - processed_read.filter.n_bases_prefix, 0));
 
   if (not YK_tag.empty()){
     processed_read.bam.AddTag("YK", "Z", YK_tag);
@@ -1456,7 +1546,7 @@ void EndBarcodeClassifier::UpdateReadTrimming(ProcessedRead &processed_read,
 
 // ----------------------------------------------------------------------------
 
-void EndBarcodeClassifier::FilterRead(int read_index, ProcessedRead &processed_read)
+void EndBarcodeClassifier::PushReadToNomatch(int read_index, ProcessedRead &processed_read)
 {
   int x, y;
   barcode_mask_pointer_->IndexToRowCol (read_index, y, x);
@@ -1551,7 +1641,7 @@ int EndBarcodeClassifier::FlowAlignClassification(ProcessedRead &processed_read,
   else{
 
     ReverseFlowAlignDistance(base_to_flow,
-           read_group_[processed_read.read_group_index].barcode_sequence,
+           read_group_.at(processed_read.read_group_index).barcode_sequence,
            base_to_flow.at(processed_read.filter.n_bases_prefix),
            base_to_flow.at(processed_read.filter.n_bases_filtered),
            1,

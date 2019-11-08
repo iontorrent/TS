@@ -5,7 +5,6 @@ import subprocess
 
 
 class Devices(object):
-
     def __init__(self, path, ftype, blocks, used, avail, capac, mounted):
         self.name = mounted.strip().split("/")[-1].strip()
         self.path = mounted
@@ -20,7 +19,7 @@ class Devices(object):
         return self.name
 
     def get_free_space(self):
-        return float(100 - int(self.capac.split('%')[0]))
+        return float(100 - int(self.capac.split("%")[0]))
 
     def get_path(self):
         return self.mounted
@@ -33,21 +32,22 @@ class Devices(object):
 
 
 def disk_report():
-    report = {}  # dictionary, {'deviceName': [type,1024-blocks,Used,Aval,Capac,MountedOn]}
+    report = (
+        {}
+    )  # dictionary, {'deviceName': [type,1024-blocks,Used,Aval,Capac,MountedOn]}
     # If df fails after 2 seconds kill the process
-    p = subprocess.Popen("ion_timeout.sh 2 df -TP", shell=True,
-                         stdout=subprocess.PIPE)
+    p = subprocess.Popen("ion_timeout.sh 2 df -TP", shell=True, stdout=subprocess.PIPE)
     stdout, _ = p.communicate()
 
-    dat = [i.strip().split(' ') for i in stdout.splitlines(True)][1:]
+    dat = [i.strip().split(" ") for i in stdout.splitlines(True)][1:]
     for i in dat:
         key = i[0]
         report[key] = []
         for j in i[1:]:
-            if j != '':
+            if j != "":
                 report[key].append(j)
     devices = []
-    for k, v in report.iteritems():
+    for k, v in report.items():
         ftype = v[0]
         blocks = v[1]
         used = v[2]
@@ -66,11 +66,11 @@ def to_media(devArr):
         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
         # if 'media' in path and ('ext' in type or 'nfs' in type):
         # if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
-        if 'nfs' in ftype or path.startswith('/media') or path.startswith('/mnt'):
+        if "nfs" in ftype or path.startswith("/media") or path.startswith("/mnt"):
             try:
-                if os.path.exists(os.path.join(path, '.not_an_archive')):
+                if os.path.exists(os.path.join(path, ".not_an_archive")):
                     continue
-            except:
+            except Exception:
                 continue
             ret.append((path, path))
     return ret

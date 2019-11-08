@@ -1,4 +1,4 @@
-
+{% load i18n %}
 <input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
 
@@ -6,18 +6,18 @@
     <div class="span12 collapsible-section">
         <h3>
             <a class="pull-right" href="#"><i class="showhide icon-minus"></i></a>                    
-         Default Reference & BED Files</h3>
+         {% trans "workflow.step.reference.title" %}</h3>
         <div id="default_reference_section" class="hideable_default_reference_section">        
             <div class="span6">
             <table id="default_reference_table" class="table table-striped table-condensed">
                 <tbody>
                 <tr>
                 <td>
-                <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %}(optional){% endif %}:</b>
+                <b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_reference.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_reference.label" %}{% endif %}{% if not helper.getApplProduct.isTargetRegionBEDFileSupported %}{% trans "global.field.label.optional" %}{% endif %}:</b>
                 </td>
                 <td>
                     <select id="default_reference" name="default_reference" class="default_reference selectpicker" data-width="300px" data-live-search="true">
-                        <option value="">None</option>
+                        <option value="">{% trans "workflow.step.reference.fields.default_reference.choice.default" %}</option>
                         {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
                             {% ifequal ref.short_name helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference %}
                                 <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
@@ -27,7 +27,7 @@
                         {% endfor %}
                
                         {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.referenceMissing %}
-                            <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}</option>
+                            <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{% trans "workflow.step.reference.fields.default_reference.choice.referenceMissing" %}{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}</option>
                         {% endif %}
                     </select>
                 </td>
@@ -35,39 +35,39 @@
 
                 <tr {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %} style="display: none;"{%endif%}>
                     <td>
-                    <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Target Regions:</b>
+                    <b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_targetBedFile.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_targetBedFile.label" %}{% endif %}:</b>
                     </td>
                     <td>        
                         <select id="default_targetBedFile" name="default_targetBedFile" class="default_targetBedFile selectpicker" data-width="300px" data-live-search="true">
-                            <option value="">None</option>
+                            <option value="">{% trans "workflow.step.reference.fields.default_targetBedFile.choice.default" %}</option>
                             {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFileMissing %}
-                                <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}</option>
+                                <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{% trans "workflow.step.reference.fields.default_targetBedFile.choice.targetBedFileMissing" %} {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}</option>
                             {% endif %}
                         </select>    
                     </td>
                 </tr>
 
-                <tr {% if not helper.getApplProduct.isHotspotRegionBEDFileSuppported %} style="display: none;"{%endif%}>
+                <tr {% if not helper.getApplProduct.isHotspotRegionBEDFileSuppported %} style="display: none;"{% endif %}>
                     <td>
-                    <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Hotspot Regions:</b>
+                    <b>{%if helper.isDualNucleotideTypeBySample %}{% trans "workflow.step.reference.fields.default_hotSpotBedFile.label.isDualNucleotideTypeBySample" %}{% else %}{% trans "workflow.step.reference.fields.default_hotSpotBedFile.label" %}{% endif %}:</b>
                     </td>
                     <td>
                         <select id="default_hotSpotBedFile" name="default_hotSpotBedFile" class="default_hotSpotBedFileselectpicker" data-width="300px" data-live-search="true">
-                            <option value="">None</option>
+                            <option value="">{% trans "workflow.step.reference.fields.default_hotSpotBedFile.choice.default" %}</option>
                             {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFileMissing %}
-                                <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}</option>
+                                <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{% trans "workflow.step.reference.fields.default_hotSpotBedFile.choice.hotSpotBedFileMissing" %} {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}</option>
                             {% endif %}
                         </select> 
                     </td>
                 </tr>
 
-                <tr {% if not helper.isPlan %} style="display: none;"{%endif%}>
+                <tr {% if not helper.isPlan %} style="display: none;"{% endif %}>
                     <td colspan="2">
                         <div>
                             <label class="checkbox inline">
-                                <input type="checkbox" id="isSameRefInfoPerSample" name="isSameRefInfoPerSample" style="vertical-align:top" {% if helper.getStepDict.Reference.getCurrentSavedFieldDict.isSameRefInfoPerSample %}checked{%endif%}>
+                                <input type="checkbox" id="isSameRefInfoPerSample" name="isSameRefInfoPerSample" style="vertical-align:top" {% if helper.getStepDict.Reference.getCurrentSavedFieldDict.isSameRefInfoPerSample %}checked{% endif %}>
+                                <b>{%if step.getCurrentSavedFieldDict.barcodeSet %}{% trans "workflow.step.reference.fields.isSameRefInfoPerSample.label.barcodes" %}{%else%}{% trans "workflow.step.reference.fields.isSameRefInfoPerSample.label.chips" %}{% endif %}</b>
                             </label>
-                            <b>Use same reference & BED files for all {%if step.getCurrentSavedFieldDict.barcodeSet %}barcodes{%else%}chips{%endif%}</b>                        
                         </div>
                     </td>
                 </tr>
@@ -81,11 +81,11 @@
                         <tbody>
                         <tr>                
                         <td>
-                        <b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Reference Library:</b>
+                        <b>{%if helper.isOCPApplicationGroup %}{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.label.isOCPApplicationGroup" %}{%else%}{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.label" %}{% endif %}:</b>
                         </td>
                         <td>
                             <select id="mixedTypeRNA_reference" name="mixedTypeRNA_reference" class="selectpicker" data-width="300px" data-live-search="true">
-                                <option value="">None</option>
+                                <option value="">{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.choice.default" %}</option>
                                 {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
                                     {% ifequal ref.short_name helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference %}
                                         <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
@@ -99,7 +99,7 @@
                                 {% endfor %}
            
                                 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_referenceMissing %}
-                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}</option>
+                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{% trans "workflow.step.reference.fields.mixedTypeRNA_reference.choice.mixedTypeRNA_referenceMissing" %}{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}</option>
                                 {% endif %}
                             </select>
                         </td>                
@@ -107,13 +107,13 @@
                         
                         <tr>
                         <td>
-                        <b>{%if helper.isOCPApplicationGroup %}Fusions{%else%}RNA{%endif%} Target Regions:</b>
+                        <b>{%if helper.isOCPApplicationGroup %}{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.label.isOCPApplicationGroup" %}{% else %}{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.label" %}{% endif %}:</b>
                         </td>
                         <td>
                             <select id="mixedTypeRNA_targetBedFile" name="mixedTypeRNA_targetBedFile" class="selectpicker" data-width="300px" data-live-search="true">
-                                <option value="">None</option>
+                                <option value="">{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.choice.default" %}</option>
                                 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_targetBedFileMissing %}
-                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile}}">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedRNA_targetBedFile}}</option>
+                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile}}">{% trans "workflow.step.reference.fields.mixedTypeRNA_targetBedFile.choice.mixedTypeRNA_targetBedFileMissing" %}{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedRNA_targetBedFile}}</option>
                                 {% endif %}
                             </select>
                         </td>               

@@ -1,24 +1,25 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
-'''
+"""
 Created on May 21, 2013
 
 @author: ionadmin
-'''
+"""
 import logging
+
 logger = logging.getLogger(__name__)
 
 
 class AbstractStepData(object):
 
-    '''
+    """
     Superclass for stepdata classes. SavedFields are fields that users set values for,
     PrepopulatedFields are fields that the step page shows to the user.
-    '''
+    """
 
     def __init__(self, sh_type):
         self.resourcePath = None
-        self.prev_step_url = '#'
-        self.next_step_url = '#'
+        self.prev_step_url = "#"
+        self.next_step_url = "#"
         self.savedFields = {}
         self.savedListFieldNames = []
         self.savedObjects = {}
@@ -48,7 +49,7 @@ class AbstractStepData(object):
 
         if not self.step_sections:
             return default_value
-        if sectionName in self.step_sections.keys():
+        if sectionName in list(self.step_sections.keys()):
             sectionObj = self.step_sections[sectionName]
             if sectionObj:
                 # logger.debug("abstract_step_data.getSectionSavedFieldDict() sectionObj.savedFields=%s" %(sectionObj.savedFields))
@@ -88,13 +89,13 @@ class AbstractStepData(object):
 
     def updateSavedFieldValuesFromRequest(self, request):
         changed = False
-        for key in self.savedFields.keys():
+        for key in list(self.savedFields.keys()):
             if self.updateSavedFieldValueFromRequest(request, key):
                 changed = True
 
-        for sectionKey, sectionObj in self.step_sections.items():
+        for sectionKey, sectionObj in list(self.step_sections.items()):
             if sectionObj:
-                for key in sectionObj.getCurrentSavedFieldDict().keys():
+                for key in list(sectionObj.getCurrentSavedFieldDict().keys()):
                     if sectionObj.updateSavedFieldValueFromRequest(request, key):
                         changed = True
 
@@ -105,22 +106,29 @@ class AbstractStepData(object):
         return changed
 
     def validate(self):
-        for key in self.savedFields.keys():
+        for key in list(self.savedFields.keys()):
             self.validateField(key, self.savedFields[key])
 
-        for sectionKey, sectionObj in self.step_sections.items():
+        for sectionKey, sectionObj in list(self.step_sections.items()):
             if sectionObj:
                 # logger.debug("abstract_step_data.validate() sectionKey=%s" %(sectionKey))
-                for key in sectionObj.getCurrentSavedFieldDict().keys():
+                for key in list(sectionObj.getCurrentSavedFieldDict().keys()):
                     self.validationErrors.pop(key, None)
-                    sectionObj.validateField_in_section(key, sectionObj.savedFields[key])
+                    sectionObj.validateField_in_section(
+                        key, sectionObj.savedFields[key]
+                    )
 
                 # if sectionObj.validationErrors:
-                if (len(sectionObj.validationErrors) > 0):
-                    logger.debug("after validateField_in_section sectionObj.validationErrors=%s" % (sectionObj.validationErrors))
+                if len(sectionObj.validationErrors) > 0:
+                    logger.debug(
+                        "after validateField_in_section sectionObj.validationErrors=%s"
+                        % (sectionObj.validationErrors)
+                    )
                     self.validationErrors.update(sectionObj.validationErrors)
 
-        self.validateField_crossField_dependencies(self.savedFields.keys(), self.savedFields)
+        self.validateField_crossField_dependencies(
+            list(self.savedFields.keys()), self.savedFields
+        )
 
         self.validateStep()
 
@@ -131,8 +139,12 @@ class AbstractStepData(object):
                 new_value = request.POST.getlist(saved_field_name)
             else:
                 new_value = request.POST.get(saved_field_name, None)
-            if new_value != self.savedFields[saved_field_name] and str(new_value) != str(self.savedFields[saved_field_name]):
-                self.updateChangedFields(saved_field_name, self.savedFields[saved_field_name], new_value)
+            if new_value != self.savedFields[saved_field_name] and unicode(
+                new_value
+            ) != unicode(self.savedFields[saved_field_name]):
+                self.updateChangedFields(
+                    saved_field_name, self.savedFields[saved_field_name], new_value
+                )
                 self.savedFields[saved_field_name] = new_value
                 retval = True
         elif self.savedFields[saved_field_name]:
@@ -147,21 +159,21 @@ class AbstractStepData(object):
             self._changedFields[key] = [old_value, new_value]
 
     def validateStep(self):
-        '''
+        """
         default overall validation does nothing
-        '''
+        """
         return
 
     def validateField(self, field_name, new_field_value):
-        '''
+        """
         default field validation does nothing.
-        '''
+        """
         return
 
     def validateField_crossField_dependencies(self, fieldNames, fieldValues):
-        '''
+        """
         default overall cross field validations does nothing
-        '''
+        """
         return
 
     def validateField_in_section(self, field_name, new_field_value):
@@ -171,13 +183,13 @@ class AbstractStepData(object):
         return
 
     def updateSavedObjectsFromSavedFields(self):
-        raise NotImplementedError('you must use a subclass to invoke this method')
+        raise NotImplementedError("you must use a subclass to invoke this method")
 
     def getStepName(self):
-        raise NotImplementedError('you must use a subclass to invoke this method')
+        raise NotImplementedError("you must use a subclass to invoke this method")
 
     def updateFromStep(self, step_depended_on):
-        raise NotImplementedError('you must use a subclass to invoke this method')
+        raise NotImplementedError("you must use a subclass to invoke this method")
 
     def alternateUpdateFromStep(self, step_depended_on):
         """

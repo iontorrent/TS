@@ -1,7 +1,7 @@
 ## Config file, inherited by all vhosts (http and https)
 # Useful elements from github.com/h5bp/server-configs
 #
-# Installed by Torrent Suite, required for proper operation of Torrent Browser
+# Installed by Torrent Suite, required for proper operation of Torrent Suite (TM)
 #
 # ------------------------------------------------------------------------------
 # | CORS-enabled images                                                        |

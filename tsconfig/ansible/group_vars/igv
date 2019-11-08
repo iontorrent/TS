@@ -1,8 +1,0 @@
----
-# file: igv
-igv_syspkg_list:
-  - tomcat6
-  
-igv_ionpkg_list:
-  - ion-jk
-  - ion-igv

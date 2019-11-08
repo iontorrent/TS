@@ -1,22 +1,54 @@
 ---
 # file: roles/igv/tasks/main.yml
+# this playbook will be used as stop-gap solution until we have a better
+# package dependency built into ion-jk and ion-igv
 
 - name:
   include: '../../../globals.yml'
 #-----------------------------------------------------------------------------
 # Install system packages for igv
 #-----------------------------------------------------------------------------
-- name: Install tomcat server
-  apt: name={{ item }} state=present force=yes
+- name: Install tomcat 7 server on 14.04
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
   with_items:
     - tomcat7
     - tomcat7-admin
-  
+  when: ansible_distribution_version == "14.04"
+
+- name: Install tomcat 8 server on 18.04
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
+  with_items:
+    - tomcat8
+    - tomcat8-admin
+  when: ansible_distribution_version == "18.04"
+
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for igv
 #-----------------------------------------------------------------------------
-- name: Install packages for igv node
-  apt: name={{ item }} state=present force=yes
+# ion-jk and ion-igv 5.2.0 built for 14.04 only
+- name: Install packages for igv node in 14.04
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
   with_items:
-    - ion-jk
-    - ion-igv
+    - ion-jk=5.2.0
+    - ion-igv=5.2.0
+  when: ansible_distribution_version == "14.04"
+
+# ion-jk and ion-igv 5.12.0 is built for 18.04 only
+- name: Install packages for igv node in 18.04
+  apt:
+    name: "{{ item }}"
+    state: present
+    force: yes
+  with_items:
+    - ion-jk=5.12.0
+    - ion-igv=5.12.0
+  when: ansible_distribution_version == "18.04"

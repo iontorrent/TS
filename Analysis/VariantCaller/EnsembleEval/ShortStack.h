@@ -25,6 +25,7 @@ class ShortStack{
 public:
 	int num_hyp_not_null = 0;
     vector<CrossHypotheses> my_hypotheses;
+    vector<vector<float> > stranded_bias_adj;
     vector<int> valid_indexes;
     bool preserve_full_data = false; // preserve information of all flows in the evaluator?
     bool DEBUG = false;

@@ -1,12 +1,13 @@
 {% load url from future %}
 {% load static from staticfiles %}
+{% load i18n %}
 <div id="modal_references_edit_TF" title="" class="modal hide" data-width="550">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
         {% if id %}
-        <h3>Edit Test Fragment</h3>
+        <h3>{{ title }}</h3>
         {% else %}
-        <h3>Add New Test Fragment</h3>
+        <h3>{{ title }}</h3>
         {% endif %}
     </div>
     <div class="modal-body">
@@ -15,7 +16,7 @@
         <form  class="form-horizontal" id="modal_references_edit_TF_form" action="{{action}}" enctype="multipart/form-data">
             <fieldset>
                 <div class="control-group">
-                    <label for="name" class="control-label">Name</label>
+                    <label for="name" class="control-label">{{ TestFragment.name.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{tf.name}}" name="name" id="name" class="input-xlarge textInput required" maxlength="512" type="text">
                         <p class="help-block error">
@@ -25,7 +26,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="key" class="control-label">Key</label>
+                    <label for="key" class="control-label">{{ TestFragment.key.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{tf.key}}" name="key" id="key" class="input-xlarge textInput required validateNuc" maxlength="512" type="text">
                         <p class="help-block error">
@@ -35,7 +36,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="sequence" class="control-label">Sequence</label>
+                    <label for="sequence" class="control-label">{{ TestFragment.sequence.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{tf.sequence}}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="512" type="text">
                         <p class="help-block error">
@@ -45,7 +46,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="isofficial" class="control-label">Enabled</label>
+                    <label for="isofficial" class="control-label">{{ TestFragment.isofficial.verbose_name }}</label>
                     <div class="controls">
                         <label class="checkbox"> {% if tf.isofficial %}
                         <input checked="{{tf.isofficial}}" name="isofficial" id="isofficial" type="checkbox">
@@ -59,7 +60,7 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="comments" class="control-label">Comments</label>
+                    <label for="comments" class="control-label">{{ TestFragment.comments.verbose_name }}</label>
                     <div class="controls">
                         <input value="{{tf.comments}}" name="comments" id="comments" class="input-xlarge" maxlength="512" type="text">
                         <p class="help-block error">
@@ -73,15 +74,15 @@
     </div>
     <div class="modal-footer">
         {% if id %}
-        <a id="delete" class="btn" href="{% url "references_TF_delete" id %}" style="float:left;">Delete</a>
+        <a id="delete" class="btn" href="{% url "references_TF_delete" id %}" style="float:left;">{% trans "global.action.delete" %}</a>
         {% endif %}
-        <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-        <a id="save" class="btn btn-primary" href="#">Save</a>
+        <a class="btn" href="#" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</a>
+        <a id="save" class="btn btn-primary" href="#">{{ submitLabel }}</a>
     </div>
 
-    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
+    {% include "rundb/common/head_uni-form-validation.jquery.js.html" %}
     <script type="text/javascript">
-        jQuery.fn.uniform.language.required = '%s is required';
+        jQuery.fn.uniform.language.required = '{% trans "uni-form-validation.language.required" %}';  //'%s is required'
         $('#modal_references_edit_TF_form').uniform({
             holder_class : 'control-group',
             msg_selector : 'p.help-block.error',
@@ -116,7 +117,7 @@
                 });
                 return false;
             }).fail(function(data){
-                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">Error:</p><p>' + data.responseText + '</p>').show()
+                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}:</p><p>' + data.responseText + '</p>').show()
             });
         });
 
@@ -148,7 +149,10 @@
                 data : json,
                 contentType : 'application/json',
                 dataType : 'json',
-                processData : false
+                processData : false,
+                headers: {
+                    'Accept-Language': '{{ lang.code }}'
+                }
             }).done(function(data) {
                 console.log("success:", data);
                 $('#modal_references_edit_TF').trigger('modal_references_edit_TF_done', {
@@ -163,11 +167,12 @@
                 catch(e) {
                     err_text = data.responseText;
                 }
-                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">ERROR: ' + err_text + '</p>').show();
+                $('#modal_references_edit_TF #modal-error-messages').empty().append('<p class="error">{% trans "global.messages.error.label" %}: ' + err_text + '</p>').show();
                 console.log("error:", data);
             }).always(function(data) {/*console.log("complete:", data);*/
             });
         });
+        //# sourceURL=templates/rundb/configure/modal_references_edit_TF.html
     </script>
 </div>
 

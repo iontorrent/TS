@@ -6,11 +6,15 @@
     - roles/gridengine_master/defaults/main.yml
     
   tasks:      
-    - name: Restart primary network interface
+    - name: Restart primary network interface on 14.04
       shell: bash -lc "ifdown {{ ansible_default_ipv4.alias }} && ifup {{ ansible_default_ipv4.alias }}"
-      when: "ansible_default_ipv4.alias is defined"
+      when: ansible_distribution_version != "18.04" and ansible_default_ipv4.alias is defined
       register: output
     - debug: var=output.stderr
+
+    - name: Restart networking on 18.04
+      service: name=networking state=restarted
+      when: ansible_distribution_version == "18.04"
 
     - name: Execute the gridengine-master playbook
       include: roles/gridengine_master/tasks/main.yml

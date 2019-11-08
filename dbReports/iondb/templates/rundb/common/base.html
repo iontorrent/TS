@@ -1,17 +1,20 @@
-<!DOCTYPE html>
-<html lang="en">
 {% load url from future %}
 {% load pagetools %}
 {% load static from staticfiles %}
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="en">
 <head>
     {% block head %}
 
-        {% block title %}
-            <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
-        {% endblock title %}
+    {% block title %}
+        <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}{% trans "global.head.title2" %}</title>
+    {% endblock title %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+
+    {% if featureflags.SENDFEEDBACK %}
     {% comment %}
         Only our dbReports package will include feedback.html. This with tag is needed to prevent django
         from trying to include the file before evaling the if statement.
@@ -20,6 +23,7 @@
         {% with "rundb/common/feedback.html" as path %}
             {% include path %}
         {% endwith %}
+    {% endif %}
     {% endif %}
 
     {% if base_js_extra %}
@@ -59,14 +63,13 @@
     <script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
     <script type="text/javascript" src="{% static "js/json2.min.js"%}"></script> <!-- include in cases browser doesn't natively support JSON.stringify -->
     <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
-    <script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
-    <script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+    {% include "rundb/common/head_kendo_script.html" %}
     <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
     <script src="{% static "js/underscore.min.js"%}"></script>
     <script src="{% static "js/backbone.min.js"%}"></script>
     <script src="{% static "js/messagebox.min.js"%}"></script>
-
+    <script type="text/javascript" src="{% url 'django.views.i18n.javascript_catalog' %}"></script>
     {% block extra_head_js %}{% endblock extra_head_js %}
 
     {% endblock head %}
@@ -96,8 +99,8 @@
     </style>
     <div class="container">
         <div class="alert alert-block">
-            <h1>Warning!</h1>
-            <h3>The Torrent Browser requires JavaScript. Please ensure that your browser has JavaScript enabled.</h3>
+            <h1>{% trans "global.noscriptmsg.h1" %}</h1>
+            <h3>{% trans "global.noscriptmsg.h3" %}</h3>
         </div>
     </div>
 </noscript>
@@ -113,29 +116,42 @@
                 {% endif %}
                     <li class="dropdown">
                         <a class="dropdown-toggle" data-toggle="dropdown" href="#" style="margin-top: 2px;">
-                        Help {% if help_urls %}<span class="badge" style="margin-left: 3px; line-height:10px">{{ help_urls|length }}</span>{% endif %}
+                        Help {% if featureflags.HELP_ION_DOCS %}{% if help_urls %}<span class="badge" style="margin-left: 3px; line-height:10px">{{ help_urls|length }}</span>{% endif %}{% endif %}
                         <b class="caret"></b>
                         </a>
                         <ul class="dropdown-menu">
+
+                            {% if featureflags.HELP_ION_DOCS %}
                             {% for help_url in help_urls %}
                                 <li><a href="{{ help_url.url }}" target="_blank" style="font-weight:bold">{{ help_url.display_name }}</a></li>
                             {%  endfor %}
                             {% if help_urls %}
                                 <li class="divider"></li>
                             {% endif %}
+                            {% endif %}
+                            {% if featureflags.HELP_ION_DOCS %}
                             <li><a target="_blank" href="/ion-docs/">Software Help</a></li>
+                            {% endif %}
+                            {% if featureflags.HELP_SEQUENCING_PROTOCOLS %}
                             <li><a target="_blank" href="http://www.thermofisher.com/us/en/home/technical-resources/technical-reference-library/next-generation-sequencing-support-center/ngs-support.html">Sequencing Protocols</a></li>
+                            {% endif %}
+                            {% if featureflags.IONREPORTERUPLOADER %}
                             <li><a target="_blank" href="https://www.thermofisher.com/order/catalog/product/4487118?ICID=search-product">Ion Reporter Help</a></li>
-                            <li><a target="_blank" href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html#tab-2">Support</a></li>
+                            {% endif %}
+                            <li><a target="_blank" href="{% trans "global.footer.p.2.a.1.href" %}">{% trans "global.footer.p.2.a.1.text" %}</a></li>
+                            {% if featureflags.AMPLISEQ %}
                             <li><a target="_blank" href="https://www.ampliseq.com">AmpliSeq Designer</a></li>
+                            {% endif %}
+                            {% if featureflags.HELP_SDK_DOCUMENATION %}
                             <li><a target="_blank" href="http://ion-torrent-sdk.readthedocs.io">SDK Documentation</a></li>
+                            {% endif %}
                             <li class="divider"></li>
-                            <li><a href="/configure/info">System Support Diagnostics</a></li>
-                            <li><a href="/configure/chips">Instrument Diagnostics</a></li>
+                            <li><a href="/configure/info">{% trans "configure_system_stats.title" %}</a></li>
+                            <li><a href="/configure/chips">{% trans "configure_instrument_stats.title" %}</a></li>
                         </ul>
                     </li>
                 {% if user.is_authenticated %}
-                    <li><a href="{% url "logout" %}" style="margin-top: 2px;">Sign Out</a></li>
+                    <li><a href="{% url "logout" %}" style="margin-top: 2px;">{% trans "logout.title" %}</a></li>
                 {% endif %}
                 </ul>
             </div>
@@ -151,13 +167,13 @@
                             <a href="{% url "dashboard" %}" class="nav-tab">Home</a>
                         </li>
                         <li id="plan-menu" class="{% block plan_menu %}{% endblock %}">
-                            <a href="{% url "plan" %}" class="nav-tab">Plan</a>
+                            <a href="{% url "plan" %}" class="nav-tab">{% trans "global.nav.menu.plan.label" %}</a>
                         </li>
                         <li id="monitor-menu" class="{% block monitor_menu %}{% endblock %}">
-                            <a href="{% url "monitor" %}" class="nav-tab">Monitor</a>
+                            <a href="{% url "monitor" %}" class="nav-tab">{% trans "global.nav.menu.monitor.label" %}</a>
                         </li>
                         <li id="data-menu" class="{% block data_menu %}{% endblock %}">
-                            <a href="{% url "data" %}" class="nav-tab">Data</a>
+                            <a href="{% url "data" %}" class="nav-tab">{% trans "global.nav.menu.data.label" %}</a>
                         </li>
                     </ul>
                     <ul class="nav nav-tabs pull-right" id="configureNav">
@@ -166,16 +182,24 @@
                             <div id="gear" class="gear-inactive"><b class="caret"></b></div>
                             </a>
                             <ul class="dropdown-menu">
-                                <li><a href="{% url "configure_about" %}">About</a></li>
-                                <li><a href="{% url "configure_account" %}">Accounts</a></li>
-                                <li><a href="{% url "configure_analysisargs" %}">Analysis Parameters</a></li>
-                                <li><a href="{% url "configure_configure" %}">Configure</a></li>
-                                <li><a href="{% url "configure_mesh" %}">Ion Mesh</a></li>
-                                <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-                                <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-                                <li><a href="{% url "configure_references" %}">References</a></li>
-                                <li><a href="{% url "configure_services" %}">Services</a></li>
-                                <li><a href="{% url "offcycle_updates" %}">Updates</a></li>
+                                <li><a href="{% url "configure_about" %}">{% trans "global.nav.menu.configure.menu.about.label" %}</a></li>
+                                <li><a href="{% url "configure_account" %}">{% trans "global.nav.menu.configure.menu.account.label" %}</a></li>
+                                {% if featureflags.CONFIGURE_ANALYSISPARAMETERS %}
+                                <li><a href="{% url "configure_analysisargs" %}">{% trans "global.nav.menu.configure.menu.analysisargs.label" %}</a></li>
+                                {% endif %}
+                                <li><a href="{% url "configure_configure" %}">{% trans "global.nav.menu.configure.menu.configure.label" %}</a></li>
+                                <li><a href="{% url "configure_mesh" %}">{% trans "global.nav.menu.configure.menu.mesh.label" %}</a></li>
+                                {% if featureflags.IONREPORTERUPLOADER %}
+                                <li><a href="{% url "configure_ionreporter" %}">{% trans "global.nav.menu.configure.menu.ionreporter.label" %}</a></li>
+                                {% endif %}
+                                <li><a href="{% url "configure_plugins" %}">{% trans "global.nav.menu.configure.menu.plugins.label" %}</a></li>
+                                <li><a href="{% url "configure_references" %}">{% trans "global.nav.menu.configure.menu.references.label" %}</a></li>
+                                {% if featureflags.CONFIGURE_SERVICES %}
+                                <li><a href="{% url "configure_services" %}">{% trans "global.nav.menu.configure.menu.services.label" %}</a></li>
+                                {% endif %}
+                                {% if featureflags.OFFCYCLE_UPDATES %}
+                                <li><a href="{% url "offcycle_updates" %}">{% trans "global.nav.menu.configure.menu.updates.label" %}</a></li>
+                                {% endif %}
                             </ul>
                         </li>
                     </ul>
@@ -217,22 +241,7 @@
     </div>
     <div class="main-push"></div>
 </div>
-<div class="footer">
-    <div class="container">
-        <div class="row">
-            <div class="span12">
-                <img class="pull-left" src="{% static "resources/img/ion-by-thermo-logo-125px.png"%}" border="0">
-                <div class="pull-right">
-                    <p>For Research Use Only. Not for use in diagnostic procedures.</p>
-                    <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
-                    <a href="http://www.thermofisher.com/us/en/home/technical-resources/contact-us.html">Technical Support</a> |
-                    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a>
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+{% include "rundb/common/footer.html" %}
 {% block post-raw %}
 {% endblock post-raw %}
 {% include 'rundb/common/modals.html' %}

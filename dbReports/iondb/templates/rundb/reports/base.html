@@ -1,7 +1,8 @@
 {% extends "rundb/data/base.html" %}
 {% load url from future %}
+{% load i18n %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url "data" %}">Completed Runs & Reports</a></li>
-    <li><a href="{% url "projects" %}">Projects</a></li>
-    <li><a href="{% url "datamanagement" %}">Data Management</a></li>
+    <li class="active"><a href="{% url "data" %}">{% trans "global.nav.menu.data.menu.data.label" %}</a></li>
+    <li><a href="{% url "projects" %}">{% trans "global.nav.menu.data.menu.projects.label" %}</a></li>
+    {% if request.user.is_staff %}<li><a href="{% url "datamanagement" %}">{% trans "global.nav.menu.data.menu.datamanagement.label" %}</a></li>{% endif %}
 {% endblock sub-nav %}

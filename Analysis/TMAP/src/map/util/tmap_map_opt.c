@@ -155,6 +155,10 @@ __tmap_map_opt_option_print_func_reads_format_init(reads_format)
 __tmap_map_opt_option_print_func_chars_init(fn_sam, "stdout")
 __tmap_map_opt_option_print_func_int64_init(bam_start_vfo)
 __tmap_map_opt_option_print_func_int64_init(bam_end_vfo)
+__tmap_map_opt_option_print_func_tf_init(use_param_ovr)
+__tmap_map_opt_option_print_func_tf_init(use_bed_in_end_repair)
+__tmap_map_opt_option_print_func_tf_init(use_bed_in_mapq)
+__tmap_map_opt_option_print_func_tf_init(use_bed_read_ends_stat)
 __tmap_map_opt_option_print_func_int_init(score_match)
 __tmap_map_opt_option_print_func_int_init(pen_mm)
 __tmap_map_opt_option_print_func_int_init(pen_gapo)
@@ -206,7 +210,7 @@ __tmap_map_opt_option_print_func_int_init(realign_cliptype)
 
 __tmap_map_opt_option_print_func_tf_init(report_stats)
 __tmap_map_opt_option_print_func_chars_init(realign_log, "")
-__tmap_map_opt_option_print_func_tf_init(log_text_als)
+// __tmap_map_opt_option_print_func_tf_init(log_text_als)
 
 // end tandem repeat clip
 __tmap_map_opt_option_print_func_tf_init(do_repeat_clip)
@@ -224,7 +228,7 @@ __tmap_map_opt_option_print_func_double_init(context_mis_score)
 __tmap_map_opt_option_print_func_double_init(context_gip_score)
 __tmap_map_opt_option_print_func_double_init(context_gep_score)
 __tmap_map_opt_option_print_func_int_init(context_extra_bandwidth)
-__tmap_map_opt_option_print_func_int_init(context_debug_log)
+__tmap_map_opt_option_print_func_int_init(debug_log)
 // __tmap_map_opt_option_print_func_int_init(context_noclip)
 
 // alignment length filtering
@@ -556,6 +560,30 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_bam_end_vfo,
                            TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "par-ovr", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "use location-specific parameters overriding if provided in BED file",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_param_ovr,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "no-bed-er", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "use of amplicon edge coordinates from BED file in end repair",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_bed_in_end_repair,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "no-bed-mapq", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "use of amplicon edge coordinates from BED file in map quality calculation",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_bed_in_mapq,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "read-ends", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "use read ends statistics in end repair if provided in BED file",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_bed_read_ends_stat,
+                           TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "score-match", required_argument, 0, 'A', 
                            TMAP_MAP_OPT_TYPE_INT,
                            "score for a match",
@@ -841,20 +869,20 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            tmap_map_opt_option_print_func_report_stats,
                            TMAP_MAP_ALGO_GLOBAL);
 
-  tmap_map_opt_options_add(opt->options, "r-log", required_argument, 0, 0, 
+  tmap_map_opt_options_add(opt->options, "log", required_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_FILE,
                            "the realignment log file name",
                            NULL,
                            tmap_map_opt_option_print_func_realign_log,
                            TMAP_MAP_ALGO_GLOBAL);
-
+/*
   tmap_map_opt_options_add(opt->options, "text-als", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
                            "include textual alignments in realignment log",
                            NULL,
                            tmap_map_opt_option_print_func_log_text_als,
                            TMAP_MAP_ALGO_GLOBAL);
-
+*/
   // alignment end repeat clipping
   tmap_map_opt_options_add(opt->options, "do-repeat-clip", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
@@ -931,11 +959,11 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            tmap_map_opt_option_print_func_context_extra_bandwidth,
                            TMAP_MAP_ALGO_GLOBAL);
   // context debug log
-  tmap_map_opt_options_add(opt->options, "context-debug-log", no_argument, 0, 0, 
+  tmap_map_opt_options_add(opt->options, "debug-log", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
-                           "log context alignment details to standard log file",
+                           "log alignment post-processing details into the log file",
                            NULL,
-                           tmap_map_opt_option_print_func_context_debug_log,
+                           tmap_map_opt_option_print_func_debug_log,
                            TMAP_MAP_ALGO_GLOBAL);
 
   // filtering by alignment length
@@ -1381,6 +1409,10 @@ tmap_map_opt_init(int32_t algo_id)
   opt->fn_sam = NULL;
   opt->bam_start_vfo = 0;
   opt->bam_end_vfo = 0;
+  opt->use_param_ovr = 0;
+  opt->use_bed_in_end_repair = 1;
+  opt->use_bed_in_mapq = 1;
+  opt->use_bed_read_ends_stat = 0;
   opt->score_match = TMAP_MAP_OPT_SCORE_MATCH;
   opt->pen_mm = TMAP_MAP_OPT_PEN_MM;
   opt->pen_gapo = TMAP_MAP_OPT_PEN_GAPO;
@@ -1443,7 +1475,7 @@ tmap_map_opt_init(int32_t algo_id)
   opt->context_gip_score = -5.;
   opt->context_gep_score = -2.;
   opt->context_extra_bandwidth = 5;
-  opt->context_debug_log = 0;
+  opt->debug_log = 0;
   // alignment length filtering
   opt->min_al_len = 0;
   opt->min_al_cov = 0.0;
@@ -1791,7 +1823,7 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       tmap_error("unrecognized algorithm", Exit, OutOfRange);
       break;
   }
-  
+
   while((c = getopt_long(argc, argv, getopt_format, options, &option_index)) >= 0) {
       // Global options
       if(c == '?') {
@@ -1803,59 +1835,70 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if(0 == c && 0 == strcmp("bam-end-vfo", options[option_index].name)) {
           opt->bam_end_vfo = strtol(optarg,NULL,0);
       }
-      else if(c == 'A' || (0 == c && 0 == strcmp("score-match", options[option_index].name))) {       
+      else if((0 == c && 0 == strcmp("par-ovr", options[option_index].name))) {
+          opt->use_param_ovr = 1;
+      }
+      else if((0 == c && 0 == strcmp("no-bed-er", options[option_index].name))) {
+          opt->use_bed_in_end_repair = 0;
+      }
+      else if((0 == c && 0 == strcmp("no-bed-mapq", options[option_index].name))) {
+          opt->use_bed_in_mapq = 0;
+      }
+      else if((0 == c && 0 == strcmp("read-ends", options[option_index].name))) {
+          opt->use_bed_read_ends_stat = 1;
+      }
+      else if(c == 'A' || (0 == c && 0 == strcmp("score-match", options[option_index].name))) {
           opt->score_match = atoi(optarg);
       }
-      else if(c == 'B' || (0 == c && 0 == strcmp("max-seed-band", options[option_index].name))) {       
+      else if(c == 'B' || (0 == c && 0 == strcmp("max-seed-band", options[option_index].name))) {
           opt->max_seed_band = atoi(optarg);
       }
       else if(c == 'C' || (0 == c && 0 == strcmp("ignore-rg-from-sam", options[option_index].name))) {
           opt->ignore_rg_sam_tags = 1;
       }
-      else if(c == 'D' || (0 == c && 0 == strcmp("bidirectional", options[option_index].name))) {       
+      else if(c == 'D' || (0 == c && 0 == strcmp("bidirectional", options[option_index].name))) {
           opt->bidirectional = 1;
       }
-      else if(c == 'E' || (0 == c && 0 == strcmp("pen-gap-extension", options[option_index].name))) {       
+      else if(c == 'E' || (0 == c && 0 == strcmp("pen-gap-extension", options[option_index].name))) {
           opt->pen_gape = atoi(optarg);
       }
-      else if(c == 'G' || (0 == c && 0 == strcmp("pen-gap-long", options[option_index].name))) {       
+      else if(c == 'G' || (0 == c && 0 == strcmp("pen-gap-long", options[option_index].name))) {
           opt->pen_gapl = atoi(optarg);
       }
-      else if(c == 'H' || (0 == c && 0 == strcmp("vsw-type", options[option_index].name))) {       
+      else if(c == 'H' || (0 == c && 0 == strcmp("vsw-type", options[option_index].name))) {
           opt->vsw_type = atoi(optarg); 
       }
-      else if(c == 'I' || (0 == c && 0 == strcmp("use-seq-equal", options[option_index].name))) {       
+      else if(c == 'I' || (0 == c && 0 == strcmp("use-seq-equal", options[option_index].name))) {
           opt->seq_eq = 1;
       }
       else if(c == 'J' || (0 == c && 0 == strcmp("max-adapter-bases-for-soft-clipping", options[option_index].name))) {
           opt->max_adapter_bases_for_soft_clipping = atoi(optarg);
       }
-      else if(c == 'K' || (0 == c && 0 == strcmp("gap-long-length", options[option_index].name))) {       
+      else if(c == 'K' || (0 == c && 0 == strcmp("gap-long-length", options[option_index].name))) {
           opt->gapl_len = atoi(optarg);
       }
-      else if(c == 'M' || (0 == c && 0 == strcmp("pen-mismatch", options[option_index].name))) {       
+      else if(c == 'M' || (0 == c && 0 == strcmp("pen-mismatch", options[option_index].name))) {
           opt->pen_mm = atoi(optarg);
-      }                                           
-    
-      else if(c == 'O' || (0 == c && 0 == strcmp("pen-gap-open", options[option_index].name))) {       
+      }
+      else if(c == 'O' || (0 == c && 0 == strcmp("pen-gap-open", options[option_index].name))) {
           opt->pen_gapo = atoi(optarg);
       }
-      else if(c == 'R' || (0 == c && 0 == strcmp("sam-read-group", options[option_index].name))) {       
+      else if(c == 'R' || (0 == c && 0 == strcmp("sam-read-group", options[option_index].name))) {
           tmap_map_opt_add_tabbed(&opt->sam_rg, &opt->sam_rg_num, optarg);
       }
-      else if(c == 'T' || (0 == c && 0 == strcmp("score-thres", options[option_index].name))) {       
+      else if(c == 'T' || (0 == c && 0 == strcmp("score-thres", options[option_index].name))) {
           opt->score_thr = atoi(optarg);
       }
-      else if(c == 'U' || (0 == c && 0 == strcmp("unroll-banding", options[option_index].name))) {       
+      else if(c == 'U' || (0 == c && 0 == strcmp("unroll-banding", options[option_index].name))) {
           opt->unroll_banding = 1;
       }
-      else if(c == 'W' || (0 == c && 0 == strcmp("duplicate-window", options[option_index].name))) {       
+      else if(c == 'W' || (0 == c && 0 == strcmp("duplicate-window", options[option_index].name))) {
           opt->dup_window = atoi(optarg);
       }
-      else if(c == 'a' || (0 == c && 0 == strcmp("aln-output-mode", options[option_index].name))) {       
+      else if(c == 'a' || (0 == c && 0 == strcmp("aln-output-mode", options[option_index].name))) {
           opt->aln_output_mode = atoi(optarg);
       }
-      else if(c == 'f' || (0 == c && 0 == strcmp("fn-fasta", options[option_index].name))) {       
+      else if(c == 'f' || (0 == c && 0 == strcmp("fn-fasta", options[option_index].name))) {
           free(opt->fn_fasta);
           opt->fn_fasta = tmap_strdup(optarg);
       }
@@ -1863,41 +1906,41 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           free(opt->bed_file);
           opt->bed_file = tmap_strdup(optarg);
       }
-      else if(c == 'g' || (0 == c && 0 == strcmp("softclip-type", options[option_index].name))) {       
+      else if(c == 'g' || (0 == c && 0 == strcmp("softclip-type", options[option_index].name))) {
           opt->softclip_type = atoi(optarg);
       }
-      else if(c == 'h' || (0 == c && 0 == strcmp("help", options[option_index].name))) {       
+      else if(c == 'h' || (0 == c && 0 == strcmp("help", options[option_index].name))) {
           break;
       }
-      else if(c == 'i' || (0 == c && 0 == strcmp("reads-format", options[option_index].name))) {       
+      else if(c == 'i' || (0 == c && 0 == strcmp("reads-format", options[option_index].name))) {
           opt->reads_format = tmap_get_reads_file_format_int(optarg);
       }
-      else if(c == 'j' || (0 == c && 0 == strcmp("input-bz2", options[option_index].name))) {       
+      else if(c == 'j' || (0 == c && 0 == strcmp("input-bz2", options[option_index].name))) {
           opt->input_compr = TMAP_FILE_BZ2_COMPRESSION;
           for(i=0;i<opt->fn_reads_num;i++) {
               tmap_get_reads_file_format_from_fn_int(opt->fn_reads[i], &opt->reads_format, &opt->input_compr);
           }
       }
-      else if(c == 'k' || (0 == c && 0 == strcmp("shared-memory-key", options[option_index].name))) {       
+      else if(c == 'k' || (0 == c && 0 == strcmp("shared-memory-key", options[option_index].name))) {
           opt->shm_key = atoi(optarg);
       }
       else if(c == 'o' || (0 == c && 0 == strcmp("output-type", options[option_index].name))) {
           opt->output_type = atoi(optarg);
       }
-      else if(c == 'n' || (0 == c && 0 == strcmp("num-threads", options[option_index].name))) {       
+      else if(c == 'n' || (0 == c && 0 == strcmp("num-threads", options[option_index].name))) {
           opt->num_threads = atoi(optarg);
           opt->num_threads_autodetected = 0;
       }
-      else if(c == 'q' || (0 == c && 0 == strcmp("reads-queue-size", options[option_index].name))) {       
+      else if(c == 'q' || (0 == c && 0 == strcmp("reads-queue-size", options[option_index].name))) {
           opt->reads_queue_size = atoi(optarg);
       }
-      else if(c == 'r' || (0 == c && 0 == strcmp("fn-reads", options[option_index].name))) {       
+      else if(c == 'r' || (0 == c && 0 == strcmp("fn-reads", options[option_index].name))) {
           opt->fn_reads_num++;
           opt->fn_reads = tmap_realloc(opt->fn_reads, sizeof(char*) * opt->fn_reads_num, "opt->fn_reads");
           opt->fn_reads[opt->fn_reads_num-1] = tmap_strdup(optarg); 
           tmap_get_reads_file_format_from_fn_int(opt->fn_reads[opt->fn_reads_num-1], &opt->reads_format, &opt->input_compr);
       }
-      else if(c == 's' || (0 == c && 0 == strcmp("fn-sam", options[option_index].name))) {       
+      else if(c == 's' || (0 == c && 0 == strcmp("fn-sam", options[option_index].name))) {
           free(opt->fn_sam);
           opt->fn_sam = tmap_strdup(optarg);
       }
@@ -1913,7 +1956,7 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if(0 == c && 0 == strcmp("newQV",  options[option_index].name)) {
           opt->use_new_QV = atoi(optarg);
       }
-      else if(c == 'v' || (0 == c && 0 == strcmp("verbose", options[option_index].name))) {       
+      else if(c == 'v' || (0 == c && 0 == strcmp("verbose", options[option_index].name))) {
           tmap_progress_set_verbosity(1);
       }
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -1921,10 +1964,10 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           opt->sample_reads = atof(optarg); 
       }
 #endif
-      else if(c == 'w' || (0 == c && 0 == strcmp("band-width", options[option_index].name))) {       
+      else if(c == 'w' || (0 == c && 0 == strcmp("band-width", options[option_index].name))) {
           opt->bw = atoi(optarg);
       }
-      else if(c == 'z' || (0 == c && 0 == strcmp("input-gz", options[option_index].name))) {       
+      else if(c == 'z' || (0 == c && 0 == strcmp("input-gz", options[option_index].name))) {
           opt->input_compr = TMAP_FILE_GZ_COMPRESSION;
           for(i=0;i<opt->fn_reads_num;i++) {
               tmap_get_reads_file_format_from_fn_int(opt->fn_reads[i], &opt->reads_format, &opt->input_compr);
@@ -1973,13 +2016,13 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if (0 == c && 0 == strcmp ("stats", options [option_index].name)) {
           opt->report_stats = 1;
       }
-      else if (0 == c && 0 == strcmp ("r-log", options [option_index].name)) {       
+      else if (0 == c && 0 == strcmp ("log", options [option_index].name)) {
           free(opt->realign_log);
           opt->realign_log = tmap_strdup(optarg);
       }
-      else if (0 == c && 0 == strcmp ("text-als", options [option_index].name)) {
-          opt->log_text_als = 1;
-      }
+//      else if (0 == c && 0 == strcmp ("text-als", options [option_index].name)) {
+//          opt->log_text_als = 1;
+//      }
       // tail-repeat clipping
       else if (0 == c && 0 == strcmp ("do-repeat-clip", options [option_index].name)) {
           opt->do_repeat_clip = 1;
@@ -2012,8 +2055,8 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if (0 == c && 0 == strcmp ("c-bw", options [option_index].name)) {
           opt->context_extra_bandwidth = atoi (optarg);
       }
-      else if (0 == c && 0 == strcmp ("context-debug-log", options [option_index].name)) {
-          opt->context_debug_log = 1;
+      else if (0 == c && 0 == strcmp ("debug-log", options [option_index].name)) {
+          opt->debug_log = 1;
       }
       // filtering by alignment length
       else if (0 == c && 0 == strcmp ("min-al-len", options [option_index].name)) {
@@ -2028,19 +2071,19 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           opt->min_identity = atof (optarg);
       }
       // Flowspace options
-      else if(c == 'F' || (0 == c && 0 == strcmp("final-flowspace", options[option_index].name))) {       
+      else if(c == 'F' || (0 == c && 0 == strcmp("final-flowspace", options[option_index].name))) {
           opt->aln_flowspace = 1;
       }
-      else if(c == 'N' || (0 == c && 0 == strcmp("use-flowgram", options[option_index].name))) {       
+      else if(c == 'N' || (0 == c && 0 == strcmp("use-flowgram", options[option_index].name))) {
           opt->ignore_flowgram = 1;
       }
-      else if(c == 'X' || (0 == c && 0 == strcmp("pen-flow-error", options[option_index].name))) {       
+      else if(c == 'X' || (0 == c && 0 == strcmp("pen-flow-error", options[option_index].name))) {
           opt->fscore = atoi(optarg);
       }
-      else if(c == 'Y' || (0 == c && 0 == strcmp("sam-flowspace-tags", options[option_index].name))) {       
+      else if(c == 'Y' || (0 == c && 0 == strcmp("sam-flowspace-tags", options[option_index].name))) {
           opt->sam_flowspace_tags = 1;
       }
-      else if(c == 'y' || (0 == c && 0 == strcmp("softclip-key", options[option_index].name))) {       
+      else if(c == 'y' || (0 == c && 0 == strcmp("softclip-key", options[option_index].name))) {
           opt->softclip_key = 1;
       }
       // End of flowspace options
@@ -2306,6 +2349,9 @@ tmap_map_opt_check_global(tmap_map_opt_t *opt_a, tmap_map_opt_t *opt_b)
     if(opt_a->bam_end_vfo != opt_b->bam_end_vfo) {
         tmap_error("option --bam-end-vfo was specified outside of the common options", Exit, CommandLineArgument);
     }
+    if(opt_a->use_param_ovr != opt_b->use_param_ovr) {
+        tmap_error("option --par-ovr was specified outside of the common options", Exit, CommandLineArgument);
+    }
     if(opt_a->score_match != opt_b->score_match) {
         tmap_error("option -A was specified outside of the common options", Exit, CommandLineArgument);
     }
@@ -2517,6 +2563,10 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   }
   tmap_error_cmd_check_int64(opt->bam_start_vfo, 0, INT64_MAX, "--bam-start-vfo");
   tmap_error_cmd_check_int64(opt->bam_end_vfo, 0, INT64_MAX, "--bam-end-vfo");
+  tmap_error_cmd_check_int(opt->use_param_ovr, 0, 1, "--par-ovr");
+  tmap_error_cmd_check_int(opt->use_bed_in_end_repair, 0, 1, "--no-bed-er");
+  tmap_error_cmd_check_int(opt->use_bed_in_mapq, 0, 1, "--no-bed-mapq");
+  tmap_error_cmd_check_int(opt->use_bed_read_ends_stat, 0, 1, "--read-ends");
   tmap_error_cmd_check_int(opt->score_match, 1, INT32_MAX, "-A");
   tmap_error_cmd_check_int(opt->pen_mm, 1, INT32_MAX, "-M");
   tmap_error_cmd_check_int(opt->pen_gapo, 1, INT32_MAX, "-O");
@@ -2613,10 +2663,13 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int (opt->context_gip_score, INT32_MIN, INT32_MAX, "--c-gip");
   tmap_error_cmd_check_int (opt->context_gep_score, INT32_MIN, INT32_MAX, "--c-gep");
   tmap_error_cmd_check_int (opt->context_extra_bandwidth, 0, 256, "--c-bw");
-  tmap_error_cmd_check_int (opt->context_debug_log, 0, 1, "--context-debug-log");
+  tmap_error_cmd_check_int (opt->debug_log, 0, 1, "--debug-log");
 
-  if (opt->num_threads > 1 && opt->context_debug_log)
-      tmap_error ("Context logging is available only in single-threaded mode", Exit, CommandLineArgument);
+  // DK: check if still required. warning: the logging is thread-safe, but locking file for the duration of alignment may cause deadlock.
+  if (opt->num_threads > 1 && opt->debug_log)
+      tmap_error ("Debug logging is available only in single-threaded mode", Exit, CommandLineArgument);
+  if (!opt->realign_log && opt->debug_log)
+      tmap_error ("Debug logging is available only when realign log file is specified", Exit, CommandLineArgument);
 
   // alignment length filtering
   tmap_error_cmd_check_int (opt->min_al_len, 0, INT32_MAX, "--min-al-len");
@@ -2733,6 +2786,10 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->fn_sam = tmap_strdup(opt_src->fn_sam);
     opt_dest->bam_start_vfo = opt_src->bam_start_vfo;
     opt_dest->bam_end_vfo = opt_src->bam_end_vfo;
+    opt_dest->use_param_ovr = opt_src->use_param_ovr;
+    opt_dest->use_bed_in_end_repair = opt_src->use_bed_in_end_repair;
+    opt_dest->use_bed_in_mapq = opt_src->use_bed_in_mapq;
+    opt_dest->use_bed_read_ends_stat = opt_src->use_bed_read_ends_stat;
     opt_dest->score_match = opt_src->score_match;
     opt_dest->pen_mm = opt_src->pen_mm;
     opt_dest->pen_gapo = opt_src->pen_gapo;
@@ -2780,6 +2837,32 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
 #endif
     opt_dest->vsw_type = opt_src->vsw_type;
 
+    // realignment control
+    opt_dest->do_realign = opt_src->do_realign;
+    opt_dest->realign_mat_score = opt_src->realign_mat_score;
+    opt_dest->realign_mis_score = opt_src->realign_mis_score;
+    opt_dest->realign_gip_score = opt_src->realign_gip_score;
+    opt_dest->realign_gep_score = opt_src->realign_gep_score;
+    opt_dest->realign_bandwidth = opt_src->realign_bandwidth;
+    opt_dest->realign_cliptype = opt_src->realign_cliptype;
+
+    // context control
+    opt_dest->do_hp_weight = opt_src->do_hp_weight;
+    opt_dest->gap_scale_mode = opt_src->gap_scale_mode;
+    opt_dest->context_mat_score = opt_src->context_mat_score;
+    opt_dest->context_mis_score = opt_src->context_mis_score;
+    opt_dest->context_gip_score = opt_src->context_gip_score;
+    opt_dest->context_gep_score = opt_src->context_gep_score;
+    opt_dest->context_extra_bandwidth = opt_src->context_extra_bandwidth;
+
+    // repeat tail clipping
+    opt_dest->do_repeat_clip = opt_src->do_repeat_clip;
+    opt_dest->repclip_continuation = opt_src->repclip_continuation;
+
+    // sanity checking
+    opt_dest->cigar_sanity_check = opt_src->cigar_sanity_check;
+
+    opt_dest->debug_log = opt_src->debug_log;
     opt_dest->cigar_sanity_check = opt_src->cigar_sanity_check;
 
     // flowspace options
@@ -2831,6 +2914,10 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "reads_format=%d\n", opt->reads_format);
   fprintf(stderr, "bam_start_vfo=%ld\n", opt->bam_start_vfo);
   fprintf(stderr, "bam_end_vfo=%ld\n", opt->bam_end_vfo);
+  fprintf(stderr, "use_param_ovr=%d\n", opt->use_param_ovr);
+  fprintf(stderr, "use_bed_in_end_repair=%d\n", opt->use_bed_in_end_repair);
+  fprintf(stderr, "use_bed_in_mapq=%d\n", opt->use_bed_in_mapq);
+  fprintf(stderr, "use_bed_read_ends_stat=%d\n", opt->use_bed_read_ends_stat);
   fprintf(stderr, "score_match=%d\n", opt->score_match);
   fprintf(stderr, "pen_mm=%d\n", opt->pen_mm);
   fprintf(stderr, "pen_gapo=%d\n", opt->pen_gapo);

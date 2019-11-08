@@ -158,12 +158,12 @@ else
 fi
 # NOTE: Using comma as delimiter in the sed statement.
 sed -i "s,BOX_URL = .*,BOX_URL = \"$URL_LOCATION\"," ${WHERE}/Vagrantfile
-sed -i "s,ION_APT =.*,ION_APT = \"deb http://$URL_LOCATION/updates/software/archive/$VERSION ${DIST}/\"," ${WHERE}/Vagrantfile
+sed -i "s,ION_APT =.*,ION_APT = \"deb [arch=amd64 trusted=yes] http://$URL_LOCATION/updates/software/archive/$VERSION ${DIST}/\"," ${WHERE}/Vagrantfile
 sed -i "s,TS_VERSION =.*,TS_VERSION = '$VERSION'," ${WHERE}/Vagrantfile
 sed -i "s,DIST =.*,DIST = '$DIST'," ${WHERE}/Vagrantfile
 
 if on_intranet && [ ${VERSION} = ${LATEST} ]; then
-    sed -i "s,ION_APT =.*,ION_APT = \"deb http://$URL_LOCATION/updates/software/ ${DIST}-beta/\"," ${WHERE}/Vagrantfile
+    sed -i "s,ION_APT =.*,ION_APT = \"deb [arch=amd64 trusted=yes] http://$URL_LOCATION/updates/software/ ${DIST}-beta/\"," ${WHERE}/Vagrantfile
 fi
 
 if ${BASIC_SERVER}; then STR_BS='true'; else STR_BS='false';fi

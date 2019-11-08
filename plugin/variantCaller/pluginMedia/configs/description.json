@@ -323,7 +323,7 @@
 		"min_tag_fam_size":
             {"type": "Integer",
              "range": "[1,inf)",
-             "description": ["Minimum number of reads with same molecular tag required to form a functional family",
+             "description": ["An evaluation parameter (TagSeq/AmpliSeq HD only): Minimum number of reads with the same molecular tag required to form a functional molecule.",
                              "Allowed values: Integers > 0",
                              "Suggested trial value between 3 and 7",
                              "Impact: Increasing values make variant calls less sensitive but more specific"]},
@@ -331,7 +331,7 @@
 		"min_fam_per_strand_cov":
             {"type": "Integer",
              "range": "[0,inf)",
-             "description": [" Minimum required coverage of reads on each strand in a bi-directional molecular tag family",
+             "description": ["An evaluation parameter (AmpliSeq HD only): Minimum required number of reads on each strand to form a functional molecule in a bi-directional sequencing run (e.g., AmpliSeq HD)",
                              "Allowed values: Integers >= 0",
                              "Suggested trial value: 0 (TagSeq), 1 (AmpliSeq HD)",
                              "Impact: Increasing values make variant calls less sensitive but more specific for AmpliSeq HD."]},                             
@@ -339,7 +339,7 @@
        "indel_func_size_offset":
             {"type": "Integer",
              "range": "[0,inf)",
-             "description": ["A tagseq parameter: require family of size >= (min_tag_fam_size + this value) to be functional for calling HP-INDEL",
+             "description": ["An evaluation parameter (TagSeq/AmpliSeq HD only): Require molecule of size >= (min_tag_fam_size + this value) to be functional for calling HP-INDELs",
                              "Allowed values: Integers >= 0",
                              "Suggested trial value between 0 and 4",
                              "Impact: Increasing values make variant calls less sensitive but more specific"]},
@@ -354,7 +354,7 @@
         "tag_trim_method":
         	{"type": "String",
         	 "in": ["strict-trim", "sloppy-trim"],
-             "description": ["A tagseq parameter: \"strict-trim\" requires that the UID must match the format specified in the run plan, while \"sloppy-trim\" does not.",
+             "description": ["An evaluation parameter (TagSeq/AmpliSeq HD only): \"strict-trim\" requires that the molecular tag must match the format specified in the run plan, while \"sloppy-trim\" does not.",
                              "Allowed values: \"sloppy-trim\" or \"strict-trim\"",
                              "Suggested trial value: \"sloppy-trim\""]},
          
@@ -406,7 +406,7 @@
         "tag_sim_max_cov":
             {"type": "Integer",
              "range": "[0,inf)",
-             "description": ["A filter parameter: Check the similarity of UID of variant molecules if the variant molecular coverage <= this value",
+             "description": ["A filter parameter (TagSeq/AmpliSeq HD only): Check the similarity of molecular tags of variant molecules if the variant molecular coverage is less than or equal to this value.",
                              "Related VCF field: TGSM",
                              "Allowed values: Integers >= 0",
                              "Suggested trial value 20"]},
@@ -425,11 +425,23 @@
                              "Allowed values: Decimal numbers > 0.0",
                              "Suggested trial value 0.6"]},
 
+        "min_callable_prob":
+            {"type": "Float",
+             "range": "(0.0,1)",
+             "description": ["A reporting parameter (TagSeq/AmpliSeq HD only): The minimum callable probability for the calculation of Limit Of Detection (LOD).",
+                             "Note that LOD is defined to be the lowest possible allele frequency in the sample such that the variant is callable with probability greater than this value, when the molecular depth is given.",
+                             "Allowed values: Decimal numbers between (0, 1)",
+                             "Suggested trial value 0.98"]},
+        
+        "suppress_called_allele_lod":
+            {"type": "Bool",
+             "description": ["A reporting parameter (TagSeq/AmpliSeq HD only): Suppress the LOD reporting of a variant allele that is called as present."]},                                                       
+
         "try_few_restart_freq":
             {"type": "Bool",
              "description": ["A variant evaluation parameter: Speed up the evaluator by trying fewer initial guesses of allele frequency",
                              "Allowed values: 0 = normal case, 1 = speed-up",
-                             "Suggested trial value (TagSeq) 1, (other) 0"]},
+                             "Suggested trial value (TagSeq/AmpliSeq HD) 1, (other) 0"]},
 
         "report_ppa":
             {"type": "Bool",
@@ -558,14 +570,14 @@
              "range": "[0,inf)",
              "description": ["A read filtering parameter: Do not use reads with number of mismatches (where 1 gap open counts 1) above this value",
                              "Allowed value: Integers >= 0, (0 to disable this filter)",
-                             "Suggested trial value (TagSeq) 5, (other) 0"]},
+                             "Suggested trial value (TagSeq/AmpliSeq HD) 5, (other) 0"]},
 
         "min_cov_fraction":
             {"type": "Float",
              "range": "[0.0,1.0]",
              "description": ["A read filtering parameter: Do not use reads with fraction of covering the best assigned unmerged target region below this",
                              "Allowed values: Decimal numbers between 0 and 1",
-                             "Suggested trial value (TagSeq) 0.9, (other) 0"]}
+                             "Suggested trial value (TagSeq/AmpliSeq HD) 0.9, (other) 0"]}
     },
 
     "long_indel_assembler":{

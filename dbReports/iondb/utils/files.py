@@ -9,11 +9,11 @@ import subprocess
 from ion.utils.timeout import timeout
 
 # Times out after 60 seconds
-#@timeout(60,None)
+# @timeout(60,None)
 
 
 def disk_attributes(directory):
-    '''returns disk attributes'''
+    """returns disk attributes"""
     try:
         resDir = os.statvfs(directory)
     except:
@@ -28,26 +28,24 @@ def disk_attributes(directory):
 
 
 def get_disk_attributes_gb(directory):
-    ''' returns disk attributes in GB '''
-    stats = {
-        'disksize': 0,
-        'diskfree': 0,
-        'percentfull': 0,
-    }
+    """ returns disk attributes in GB """
+    stats = {"disksize": 0, "diskfree": 0, "percentfull": 0}
     try:
-        total, availSpace, freeSpace, bsize = disk_attributes(directory)    # bytes
-        stats['disksize'] = float(total*bsize)/(1024*1024*1024)
-        stats['diskfree'] = float(availSpace*bsize)/(1024*1024*1024)
+        total, availSpace, freeSpace, bsize = disk_attributes(directory)  # bytes
+        stats["disksize"] = float(total * bsize) / (1024 * 1024 * 1024)
+        stats["diskfree"] = float(availSpace * bsize) / (1024 * 1024 * 1024)
         # free_gb = float(freeSpace*bsize)/(1024*1024*1024)
-        stats['percentfull'] = 100-(float(availSpace)/float(total)*100) if total > 0 else 0
-    except:
+        stats["percentfull"] = (
+            100 - (float(availSpace) / float(total) * 100) if total > 0 else 0
+        )
+    except Exception:
         raise
 
     return stats
 
 
 def percent_full(directory):
-    '''returns percentage of disk in-use'''
+    """returns percentage of disk in-use"""
     try:
         totalSpace, availSpace, _, _ = disk_attributes(directory)
     except:
@@ -55,20 +53,20 @@ def percent_full(directory):
     else:
         if not totalSpace > 0:
             return 0
-        percentFull = 100-(float(availSpace)/float(totalSpace)*100)
+        percentFull = 100 - (float(availSpace) / float(totalSpace) * 100)
 
     return percentFull
 
 
 def test_sigproc_infinite_regression(directory):
-    '''
+    """
     When pre-3.0 Reports are re-analyzed, a symbolic link is created in the
     report directory named 'sigproc_results' which points to it's parent directory.
     When copying the Report directory, and following this link, ends up in an
     infinite regression.
     We detect this situation and delete the link file.
-    '''
-    testfile = os.path.join(directory, 'sigproc_results')
+    """
+    testfile = os.path.join(directory, "sigproc_results")
     if os.path.islink(testfile):
         if os.path.samefile(directory, testfile):
             os.unlink(testfile)
@@ -79,14 +77,14 @@ def getSpaceKB(drive_path):
     """Return free space in kilobytes"""
     s = os.statvfs(drive_path)
     freebytes = s[statvfs.F_BSIZE] * s[statvfs.F_BAVAIL]
-    return float(freebytes)/1024
+    return float(freebytes) / 1024
 
 
 def getSpaceMB(drive_path):
     """Return free space in megabytes"""
     s = os.statvfs(drive_path)
     freebytes = s[statvfs.F_BSIZE] * s[statvfs.F_BAVAIL]
-    return float(freebytes)/(1024*1024)
+    return float(freebytes) / (1024 * 1024)
 
 
 @timeout(30, None)
@@ -102,11 +100,9 @@ def getdiskusage(directory):
             return 0
 
         file_walker = (
-            os.path.join(root, f)
-            for root, _, files in os.walk(start)
-            for f in files
+            os.path.join(root, f) for root, _, files in os.walk(start) for f in files
         )
-        total = 0L
+        total = 0
         for f in file_walker:
             if os.path.isdir(f):
                 total += dir_size(f)
@@ -118,8 +114,9 @@ def getdiskusage(directory):
             except OSError:
                 pass
         return total
+
     # Returns size in MB
-    return dir_size(directory)/(1024*1024)
+    return dir_size(directory) / (1024 * 1024)
 
 
 def get_common_prefix(files):
@@ -135,7 +132,7 @@ def get_common_prefix(files):
     """
     # Handle empty input
     if not files or not any(files):
-        return '', []
+        return "", []
     # find the common prefix in the directory names.
     directories = [os.path.dirname(f) for f in files]
     prefix = os.path.commonprefix(directories)
@@ -163,45 +160,44 @@ def make_relative_directories(root, files):
 
 
 def unzip_archive(root, data):
-    zip_file = zipfile.ZipFile(data, 'r')
+    zip_file = zipfile.ZipFile(data, "r")
     namelist = zip_file.namelist()
     namelist = valid_files(namelist)
     _, files = get_common_prefix(namelist)
     make_relative_directories(root, files)
-    out_names = [(n, f) for n, f in zip(namelist, files) if
-                 os.path.basename(f) != '']
+    out_names = [(n, f) for n, f in zip(namelist, files) if os.path.basename(f) != ""]
     for key, out_name in out_names:
         if os.path.basename(out_name) != "":
             full_path = os.path.join(root, out_name)
-            contents = zip_file.open(key, 'r')
+            contents = zip_file.open(key, "r")
             try:
-                output_file = open(full_path, 'wb')
+                output_file = open(full_path, "wb")
                 output_file.write(contents.read())
                 output_file.close()
             except IOError:
-                print "For zip's '%s', could not open '%s'" % (key, full_path)
+                print("For zip's '%s', could not open '%s'" % (key, full_path))
     return [f for n, f in out_names]
 
 
 def ismountpoint(directory):
-    '''shell command to run mountpoint tool'''
-    cmd = ['/bin/mountpoint', directory]
+    """shell command to run mountpoint tool"""
+    cmd = ["/bin/mountpoint", directory]
     p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     p1.communicate()
     return p1.returncode
 
 
 def is_mounted(path):
-    '''Returns mountpoint directory, if its a mountpoint'''
+    """Returns mountpoint directory, if its a mountpoint"""
     try:
         path = os.path.abspath(path)
         while path != os.path.sep:
             if ismountpoint(path) == 0:
                 return path
             path = os.path.dirname(path)
-    except:
+    except Exception:
         pass
-    return ''
+    return ""
 
 
 def get_inodes(partition):
@@ -215,15 +211,18 @@ def get_inodes(partition):
 def rename_extension(path, old_ext, new_ext):
     # the old and new extensions must contain the '.' when sent to this function
     import fnmatch
+
     exten = "*" + old_ext
 
     # loops through all files in the given directory and all of its subdirectories
     # returns only the files that have the extension "exten"
-    all_files = [os.path.join(dirpath, f)
-                 for dirpath, _, files in os.walk(os.path.join('/etc/apt'))
-                 for f in fnmatch.filter(files, exten)]
+    all_files = [
+        os.path.join(dirpath, f)
+        for dirpath, _, files in os.walk(os.path.join("/etc/apt"))
+        for f in fnmatch.filter(files, exten)
+    ]
     # this ensures that the installed packages will come from only the usb.
     for filename in all_files:
-        newfile = filename[:-(len(old_ext))]
+        newfile = filename[: -(len(old_ext))]
         newfile = newfile + new_ext
         os.rename(filename, newfile)

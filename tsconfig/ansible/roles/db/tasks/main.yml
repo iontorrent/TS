@@ -11,7 +11,7 @@
   apt: name=python-psycopg2 state=installed force=yes
 
 - name: Determine postgresql version string
-  shell: "psql --version | grep ^psql | awk '{print $3}' | cut -f1-2 -d."
+  shell: "dpkg -l postgresql | grep ^ii | awk '/+/ {print $3}' | cut -d'+' -f1"
   register: psql_version
 
 - debug: msg='Postgresql version {{ psql_version.stdout }}'
@@ -48,12 +48,6 @@
   lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
                 regexp='.*commit_delay.*'
                 line='commit_delay = {{ commit_delay }}'
-
-- name: Modify postgresql.conf - checkpoint_segments
-  sudo_user: postgres
-  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
-                regexp='.*checkpoint_segments.*'
-                line='checkpoint_segments = {{ checkpoint_segments }}'
 
 # Turn on autovacuum.  See TS-10936
 - name: Enable postgres autovacuum
@@ -117,6 +111,7 @@
 - name:  Initialize ion user in database
   postgresql_user: name="ion"
                      password="ion"
+                     encrypted=yes
                      db="iondb"
                      role_attr_flags=SUPERUSER
                      priv=ALL

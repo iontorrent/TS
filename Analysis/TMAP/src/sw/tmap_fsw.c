@@ -1189,10 +1189,14 @@ tmap_fsw_flowseq_from_seq(tmap_fsw_flowseq_t *fs, tmap_seq_t *seq, uint8_t *flow
   int32_t to_fill = 0, was_int;
   int32_t num_flows = 0;
 
-  if(NULL == fs) {
+  if(NULL == fs) 
+  {
       fs = tmap_calloc(1, sizeof(tmap_fsw_flowseq_t), "fs");
+      fs->base_calls = NULL;
+      fs->flow_order = NULL;
+      fs->flowgram = NULL;
   }
-  
+
   // base sequence
   bases = tmap_seq_get_bases(seq);
   if(0 == bases->l) tmap_bug();
@@ -1306,15 +1310,16 @@ tmap_fsw_flowseq_from_seq(tmap_fsw_flowseq_t *fs, tmap_seq_t *seq, uint8_t *flow
   else {
       fs->num_flows = 0;
   }
-  if(0 == fs->num_flows) { // unsuccessful
+  if(0 >= fs->num_flows) { // unsuccessful
       // will generate one from the base sequence
       to_fill = 1;
-      
+
       // flowgram
       fs->num_flows = num_flows; 
       if(fs->mem < fs->num_flows) {
           fs->mem = fs->num_flows;
           fs->flowgram = tmap_realloc(fs->flowgram, sizeof(uint16_t) * fs->mem, "flowgram");
+          fs->base_calls = tmap_realloc(fs->base_calls, sizeof(uint8_t) * fs->mem, "base_calls");
       }
   }
   else if(0 < key_seq_len) {
@@ -1330,7 +1335,12 @@ tmap_fsw_flowseq_from_seq(tmap_fsw_flowseq_t *fs, tmap_seq_t *seq, uint8_t *flow
       // NB: we must remove ending flows that are not part of the base sequence
       if(num_flows < fs->num_flows) {
           fs->num_flows = num_flows;
-          fs->flowgram = tmap_realloc(fs->flowgram, sizeof(uint16_t) * fs->num_flows, "fs->flowgram");
+          if (fs->mem < fs->num_flows)
+          {
+              fs->mem = fs->num_flows;
+              fs->flowgram = tmap_realloc(fs->flowgram, sizeof(uint16_t) * fs->num_flows, "fs->flowgram");
+            fs->base_calls = tmap_realloc(fs->base_calls, sizeof(uint8_t) * fs->mem, "base_calls");
+          }
       }
       else if(fs->num_flows < num_flows) {
           tmap_print_debug_int(fs->num_flows);
@@ -1345,8 +1355,9 @@ tmap_fsw_flowseq_from_seq(tmap_fsw_flowseq_t *fs, tmap_seq_t *seq, uint8_t *flow
 
   // base calls and memory
   if(fs->mem < fs->num_flows) {
-      fs->base_calls = tmap_realloc(fs->base_calls, sizeof(uint8_t) * fs->num_flows, "base_calls");
       fs->mem = fs->num_flows;
+      fs->flowgram = tmap_realloc(fs->flowgram, sizeof(uint16_t) * fs->mem, "flowgram");
+      fs->base_calls = tmap_realloc(fs->base_calls, sizeof(uint8_t) * fs->mem, "base_calls");
   }
 
   // flowgram and bases
