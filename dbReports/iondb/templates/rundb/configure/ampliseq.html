@@ -95,8 +95,8 @@
                         </div>
                         <div class="filter-item">
                             <select id='recommend_app' class="selectpicker recommend_app_filter"
-                                    title="Recommended Application" data-persist-title="true" data-option-size="10px" data-width="210px">
-                                <option value="All">All</option>
+                                    title="Recommended Application" data-persist-title="false" data-option-size="10px" data-width="auto">
+                                <option value="All">Recommended Application: All</option>
                                 {% for app in recommended_apps %}
                                     <option value="{{ app }}">{{ app }}</option>
                                 {% endfor %}
@@ -194,7 +194,7 @@
                         width: '25%',
                         template: function(dataItem) {
                             value = "{{ ampliseq_url }}";
-                            if (panel_type == "ready-to-use") {
+                            if ((panel_type == "ready-to-use") || (panel_type == "community")) {
                                 if (dataItem.type == "COMMUNITY_PANEL") {
                                     value += "/protected/tmpl/dashboard.action?tmplDesignType=" + dataItem.type;
                                     return "<a href=" + value + "  target='_blank'>" + kendo.htmlEncode(dataItem.name) + "</a>";
@@ -279,7 +279,7 @@
                             if (dataItem.status == "Successfully Completed"){
                                 return "<a class='btn btn-primary btn-mini' role='button' disabled='true'>Import</a>";
                             }
-                            if (panel_type == "ready-to-use"){
+                            if ((panel_type == "ready-to-use") || (panel_type == "community")) {
                                 fixed_solutions = kendo.htmlEncode(dataItem.id)+","+kendo.htmlEncode(dataItem.genome);
                                 description = kendo.htmlEncode(dataItem.description);
                                 return "<a id='do_update' class='do_update btn btn-primary btn-mini' role='button'" + "data-description='" + description + "'  data-fixed-solutions='" + fixed_solutions +"' data-panel-tab='" + panel_type + "' aria-disabled='true' href='"  + value+"' data-confirm_msg='Install " + kendo.htmlEncode(dataItem.name) +" ????'>" + "Import</a>";

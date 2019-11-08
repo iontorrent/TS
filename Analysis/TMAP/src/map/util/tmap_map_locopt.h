@@ -29,6 +29,7 @@ typedef struct __tmap_map_stage_sw_params_ovr_t
 // defines options that can be overriden based on read / base position on the reference genome
 typedef struct __tmap_map_locopt_t
 {
+    tmap_map_opt_ovr_i_t use_bed_in_end_repair; /*!< use amplicon edge coordinates in end repair to find possible edge-bound long gaps or inserts */
     tmap_map_opt_ovr_i_t score_match; /*!< the match score (-A,--score-match) */
     tmap_map_opt_ovr_i_t pen_mm;  /*!< the mismatch penalty (-M,--pen-mismatch) */
     tmap_map_opt_ovr_i_t pen_gapo;  /*!< the indel open penalty (-O,--pen-gap-open) */

@@ -6,20 +6,20 @@ case "$1" in
 	configure)
     
     	# Test for X server running
-        if ps -ef|grep /usr/bin/X|grep -v grep >/dev/null; then
-        	echo
-            echo "************************************************"
-        	echo
-            echo "WARNING:"
-            echo "X server is running.  nVidia device drivers will"
-            echo "not be installed.  If you want the GPU enabled,"
-            echo "shut down the X server and run this package install"
-            echo "again.  Otherwise, ignore this warning."
-            echo
-        	echo "************************************************"
-            echo
-            exit 0
-        fi
+#        if ps -ef|grep /usr/bin/X|grep -v grep >/dev/null; then
+#        	echo
+#            echo "************************************************"
+#        	echo
+#            echo "WARNING:"
+#            echo "X server is running.  nVidia device drivers will"
+#            echo "not be installed.  If you want the GPU enabled,"
+#            echo "shut down the X server and run this package install"
+#            echo "again.  Otherwise, ignore this warning."
+#            echo
+#        	echo "************************************************"
+#            echo
+#            exit 0
+#        fi
         
         # Test for nvidia graphics device
         if ! lspci|grep -i "nvidia"|egrep '(3D controller|VGA compatible controller)';then
@@ -72,7 +72,9 @@ case "$1" in
             --no-questions \
             --ui=none \
             --dkms \
-            --run-nvidia-xconfig >& /tmp/nvidiadriver_install.log
+            --run-nvidia-xconfig \
+	    --no-x-check \
+	    --no-cc-version-check >& /tmp/nvidiadriver_install.log
 
         install_status=$?
         nvidia_installer_log="/var/log/nvidia-installer.log"

@@ -58,6 +58,10 @@ function getIonReporterFields(){
         irSampleReceiptDate:       { type: "date", defaultValue: "",
             editable: function(){return USERINPUT.is_ir_connected}
         },
+        // 16S only
+        irBacterialMarkerType:      { type: "string", defaultValue: ""},
+        // ReproSeq only
+        irWitness:      { type: "string", defaultValue: ""},
         irSetID:        { type: "number" }
     }
     return iru_fields;
@@ -172,6 +176,23 @@ function getIonReporterColumns(){
             editor: irmouseStrainsEditor,
             template: dropDnTemplate({'html': '#=irmouseStrains#'})
         },
+        // 16S
+        {
+            field: "irBacterialMarkerType", title: "Bacterial Marker Type",
+            width: '100px',
+            attributes: { "name": "irBacterialMarkerType" },
+            hidden: planCategories.indexOf("16s") < 0,
+            editor: irBacterialMarkerTypeEditor,
+            template: dropDnTemplate({'html': '#=irBacterialMarkerType#'})
+        },
+        // ReproSeq
+        {
+            field: "irWitness", title: "Witness",
+            width: '100px',
+            attributes: { "name": "irWitness" },
+            hidden: planCategories.indexOf("repro") < 0,
+        },
+
         {
             field: "irSetID", title: "IR Set ID",
             width: '60px',
@@ -379,6 +400,22 @@ function irSampleReceiptDateEditor(container, options) {
               min: new Date(options.model.irSampleCollectionDate)
           });
 }
+
+
+function irBacterialMarkerTypeEditor(container, options) {
+    $('<input id="irBacterialMarkerTypeEditor" name="irBacterialMarkerTypeEditor" data-bind="value:' + options.field + '"/>')
+        .appendTo(container)
+        .kendoDropDownList({
+            dataSource: markers,
+            dataTextField: "display",
+            dataValueField: "value",
+            optionLabel: "---",
+            change: function(e){
+                updateIRvalidationErrors(options.model.row, ['irBacterialMarkerType']);
+            }
+        });
+}
+
 function hasGender(Relation){
     return (Relation in USERINPUT.relations_with_gender)
 }

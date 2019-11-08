@@ -61,6 +61,8 @@ MAX_LENGTH_SAMPLE_EMBRYO_ID = SampleSetItem._meta.get_field("cellNum").max_lengt
 SC_DATE_FORMAT = "YYYY/MM/DD"
 ASHD_SAMPLESET_ITEM_LIMIT = 8
 
+VALID_LIB_TYPES = ["amps_on_chef_v1", "amps_hd_on_chef_v1"] # some validations are applicable only for these types
+
 
 def validate_sampleSet(queryDict, isNew=False, sampleset_label=_SampleSet.verbose_name):
     """
@@ -1583,7 +1585,7 @@ def validate_samplesetGroupType(groupType, field_label="Group Type"):
 def validate_sampleset_items_limit(pending_samplesetitems, sampleSet):
     ss_object = SampleSet.objects.get(pk=int(sampleSet[0]))
     # sample set items limit only apply to Ampliseq HD on chef
-    if ss_object.libraryPrepType != "amps_hd_on_chef_v1":
+    if ss_object.libraryPrepType not in VALID_LIB_TYPES:
         return True, None
 
     available_samples_in_ss = len(ss_object.samples.all())

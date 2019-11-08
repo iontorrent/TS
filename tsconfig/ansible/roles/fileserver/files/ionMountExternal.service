@@ -1,0 +1,13 @@
+[Unit]
+Description=Ion service to mount "/mnt/external"
+Wants=network-online.target
+After=network-online.target
+Before=ionRestartTS.service
+ConditionPathExists=/etc/init.d/mountExternal
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -ec '/etc/init.d/mountExternal -t build_results 2>&1 | tee -a /mnt/ionFirstLog'
+
+[Install]
+WantedBy=multi-user.target

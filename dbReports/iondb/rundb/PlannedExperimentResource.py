@@ -697,9 +697,13 @@ class PlannedExperimentValidation(Validation):
                     )  # "Bed file(%s) exists but No Reference" % (value)
 
             if key == "selectedPlugins":
-                err = " | ".join(
+                plugin_config_validation = " | ".join(
                     plan_validator.validate_plugin_configurations(bundle.data.get(key))
                 )
+                if isTemplate:
+                    key_specific_warning = plugin_config_validation
+                else:
+                    err = plugin_config_validation
 
             if err:
                 errors[key] = err
@@ -1976,7 +1980,10 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                         or sample.get("sampleDescription", ""),
                         "externalId": sample.get("externalId")
                         or sample.get("sampleExternalId", ""),
-                        "nucleotideType": sample.get("nucleotideType", "").upper() or default_nuctype,
+                        "nucleotideType": models.SampleSetItem.nuctype_for_planning(
+                            sample.get("nucleotideType")
+                        )
+                        or default_nuctype,
                         "reference": sample.get("reference", ""),
                         "targetRegionBedFile": sample.get("targetRegionBedFile", ""),
                         "hotSpotRegionBedFile": sample.get("hotSpotRegionBedFile", ""),
@@ -2028,7 +2035,9 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     }
                 )
             else:
-                barcodedSamples = _get_barcodedSamples(data["samplesList"], default_nuctype)
+                barcodedSamples = _get_barcodedSamples(
+                    data["samplesList"], default_nuctype
+                )
                 payload_samples_key = "samplesList"
 
         # process SampleSet, if specified
@@ -2101,7 +2110,9 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     if item.dnabarcode:
                         sampleset_barcodeKit = item.dnabarcode.name
 
-                barcodedSamples = _get_barcodedSamples(sampleset_samples, default_nuctype)
+                barcodedSamples = _get_barcodedSamples(
+                    sampleset_samples, default_nuctype
+                )
 
                 if not bundle.data["barcodeId"]:
                     bundle.data["barcodeId"] = sampleset_barcodeKit

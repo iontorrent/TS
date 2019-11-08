@@ -4,6 +4,7 @@
 
 void tmap_map_locopt_init (tmap_map_locopt_t* locopt)
 {
+    locopt->use_bed_in_end_repair.over = 0;
     locopt->score_match.over = 0;
     locopt->pen_mm.over = 0;
     locopt->pen_gapo.over = 0;

@@ -1,30 +1,27 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 from __future__ import absolute_import
-from celery.task import task, periodic_task
-from celery.utils.log import get_task_logger
-from celery.result import AsyncResult
-import celery.states
-from datetime import timedelta
-from iondb.rundb import models
-import errno
-import time
-import hashlib
+
 import json
 import os
 import os.path
+
+import boto
+import boto.s3.key
+import celery.states
 import requests
+from celery.result import AsyncResult
+from celery.task import task
+from celery.utils.log import get_task_logger
 from django import forms
 from django.conf import settings
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-import boto
-import boto.s3.key
-
-from iondb.utils import makePDF
 from ion.utils import makeCSA
+
+from iondb.rundb import models
 from iondb.rundb.api import SupportUploadResource
+from iondb.utils import makePDF
 
 logger = get_task_logger(__name__)
 
@@ -238,44 +235,6 @@ def check_authentication(support_upload_pk):
         upload.local_status = "Access Denied"
         upload.save()
         return False
-
-
-@periodic_task(run_every=timedelta(hours=12), queue="periodic")
-def poll_support_site():
-    """This function checks to determine whether or not the customer support
-    back-end site is accessible.  The purpose of this check is to allow the
-    user to manually initiate an upload of the CSA to the support server;
-    however, we don't want to present the UI to do this on servers which are
-    offline where it won't work anyway.
-    This does not initiate or enable the transfer of any data except by manual
-    user action, on a case by case basis, from the report page.
-    """
-    config = models.GlobalConfig.get()
-    account, created = models.RemoteAccount.objects.get_or_create(
-        remote_resource="support.iontorrent",
-        defaults={"account_label": "Ion Torrent Support"},
-    )
-    url = settings.SUPPORT_AUTH_URL
-    auth_header = make_auth_header(account)
-    info = get_ts_info()
-    params = {
-        "version": info.get("version", "Version Missing"),
-        "serial_number": info.get("serialnumber", "Serial Missing"),
-        "poll": True,
-    }
-    try:
-        response = requests.get(url, params=params, headers=auth_header, verify=False)
-    except requests.exceptions.ConnectionError:
-        pass
-    else:
-        if response.ok:
-            config.enable_support_upload = True
-            config.save()
-            return True
-    # Either there was an exception or the response was not OK
-    config.enable_support_upload = False
-    config.save()
-    return False
 
 
 @task

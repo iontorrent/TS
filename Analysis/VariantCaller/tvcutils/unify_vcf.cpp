@@ -277,8 +277,8 @@ void PriorityQueue::next() {
   while (size() < _size) {
     ComparableVcfVariant* v = new ComparableVcfVariant(merger, file, _vc++);
     if (get_next_variant(v)) {
-      trim_variant(v);
-      left_align_variant(v);
+      //trim_variant(v);
+      //left_align_variant(v);
       push(v);
     } else {
       _size = 0;
@@ -761,14 +761,6 @@ bool VcfOrderedMerger::find_match_new(vcf::Variant* merged_entry, vcf::Variant* 
 
 void set_annotate(vcf::Variant* merged_entry,vector<string>::iterator oid, vector<string>::iterator opos, vector<string>::iterator oref, vector<string>::iterator oalt, string &adj_omp, long idx)
 {
-    if (oref->length() >= 1 && oalt->length() >= 1 && (*oref)[0] == (*oalt)[0]) {
-      *oref = oref->substr(1);
-      *oalt = oalt->substr(1);
-      long p = atol(opos->c_str());
-      stringstream ss;
-      ss<<++p;
-      *opos = ss.str();
-    }
     if (oref->empty()) {
       *oref = "-";
     }

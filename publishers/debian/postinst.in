@@ -6,8 +6,19 @@ set -e
 
 case "$1" in
     configure)
-    #echo "Restarting publisher dependent services..."
-    #service celeryd restart && service apache2 restart
+    pub_code=$(cat <<PUB
+try:
+    import iondb.bin.djangoinit, iondb.rundb.publishers as pub
+except ImportError:
+    print("ion-dbreports not install yet, unable to scan for publishers")
+    import sys
+    sys.exit(0)
+print("rescanning publishers")
+pub.search_for_publishers()
+PUB
+)
+    python -c "${pub_code}"
+
     echo "NOTE!  Dependent services need to be restarted!"
     echo "The following commands are suggested:"
     echo "sudo service celeryd restart"

@@ -1,0 +1,262 @@
+div.header ul.nav.nav-tabs.pull-left{
+    position: absolute;
+}
+
+.hide
+{
+	display: none;
+}
+.no_barcodes{
+	padding-top: 0px;
+}
+.show
+{
+	display: inline;
+	align: center;
+}
+
+#progress {
+    margin-top: 20px;
+}
+
+#PluginOutput {
+    margin-bottom: 20px;
+}
+
+.pluginBlock{
+	background: white;
+}
+
+.pluginGroup{
+    border-radius: 4px;
+    border: 1px solid #E3E3E3;
+    margin: 20px 0 10px 0;
+    padding: 10px;
+}
+
+.pluginGroup:first-of-type {
+    margin-top: 0px;
+}
+
+.plugin-controls {
+  margin: 0 0 0 12px;
+}
+
+.pluginGroupHeadInner{
+    padding: 4px;
+}
+
+.pluginGroupHeadInner h2 {
+    display: inline;
+    margin-right: 6px;
+}
+
+.pluginVersion, span.changePluginResult {
+    color: #999;
+}
+
+.pluginGroupHeadInner select {
+    position: relative;
+    top: 2px;
+}
+
+.pluginGroupList {
+	padding: 4px;
+}
+
+.pluginGroupButtons {
+    position: absolute;
+    right: 0;
+    padding-right: 34px;
+}
+
+#pluginStatusTable{
+	margin-top: 0px;
+    margin-bottom: 34px;
+}
+
+#RunSummary {
+    padding-top: 0;
+}
+#RunSummary .well {
+    -webkit-box-shadow: none;
+    box-shadow: none;
+}
+#runSection {
+    padding: 0 0 0 0;
+    margin-top: 20px;
+    border: none;
+}
+#runSection .aligned, #runSection .unaligned {
+    padding-bottom: 0;
+}
+#runSection .aligned > div {
+    min-height: 570px;
+}
+#runSection .unaligned > div {
+    min-height: 570px;
+}
+.well .signal {
+    margin: 15px auto 15px auto;
+    float: none;
+    max-width: 200px;
+}
+.number-chunk {
+    border-bottom: 1px solid #D6D6D6;
+    padding: 0 0 10px 0;
+    margin: 0 0 10px 0;
+}
+#RunSummary .number-chunk small {
+    font-size: 12px;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+.unaligned
+{
+    page-break-after: always;
+}
+
+hr{
+    margin: 3px 0;
+    color: #000;
+    background-color: #000;
+    height: 2px;
+}
+
+#resultList {
+    width: auto;
+}
+
+.majorNameRow .plugin_links a {
+    margin-left: 10px;
+    line-height: 48px;
+}
+
+#tabs .tab-content {
+    border-width: 1px 0 0 0;
+    padding: 20px 0 0 0;
+}
+
+.iru-account{
+    text-align: left;
+}
+
+.report-label {
+    font-size: 12px;
+    color: #777;
+}
+
+/* ---------- 4. Plugin Iframe Modal ---------- */
+
+#plugin-iframe-modal iframe{
+    width: 100%;
+    height: 100%;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* --- Side nav scroll bar--- */
+    
+.report-side-nav::-webkit-scrollbar {
+    -webkit-appearance: none;
+}
+
+.report-side-nav::-webkit-scrollbar:vertical {
+    width: 8px;
+}
+
+.report-side-nav::-webkit-scrollbar:horizontal {
+    height: 8px;
+}
+
+.report-side-nav::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.5);
+    -webkit-border-radius: 100px;
+}
+
+.report-side-nav::-webkit-scrollbar-track {
+    background-color: #fff;
+    border-radius: 8px;
+}
+
+/* --- Side nav --- */
+
+.report-side-nav {
+    overflow-y: auto;
+    margin-top: 11px;
+}
+
+.report-side-nav.affix {
+    top: 43px;
+}
+
+
+.report-side-nav .nav-list>li>a {
+    padding: 3px;
+}
+
+
+.report-side-nav .nav-list > .active > a, .nav-list > .active > a:hover {
+    color: #000;
+    text-shadow: none;
+    background-color: #fff;
+}
+.report-side-nav .nav-list a:hover {
+    background-color: #fff;
+}
+
+.section-header {
+    color: #005daa;
+    border-bottom: 1px solid #005daa;
+}
+
+/* --- Correct for floating header --- */
+
+.anchor:before {
+    display: block;
+    content: "";
+    height: 50px;
+    margin: -50px 0 0;
+}
+
+/* --- Top nav --- */
+
+#top-nav-container {
+    height: 43px;
+    width: 100%;
+}
+
+#top-nav {
+    width: 100%;
+    padding: 6px 20px 3px 20px;
+    box-sizing: border-box;
+    z-index: 1040; /* to still be under the modal backdrop */
+    left: 0;
+}
+
+#top-nav.affix-top {
+    padding: 6px 0 3px 0;
+}
+
+#top-nav.affix {
+    background: white;
+    top: 0;
+    border-bottom: 1px solid #e4e6ea;
+}
+
+/* --- Bottom Section --- */
+
+#ReportDetailsTabContent {
+    min-height: 400px;
+}
+
+#fileSection .k-grid {
+    margin-top: 0px;
+}
+
+#report {
+    margin-top: 14px;
+}

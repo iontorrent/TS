@@ -54,13 +54,14 @@
   apt:
     name: ifupdown
     state: present
+  when: has_network_access
 
 - name: remove netplan.io on 18.04 if installed
   apt:
     name: netplan.io
     state: absent
     force: yes
-  when: ansible_distribution_version == "18.04"
+  when: ansible_distribution_version == "18.04" and has_network_access
 
 - name: checking if {{ default_interface }} in /etc/network/interfaces
   shell: grep -q "{{ default_interface }}" /etc/network/interfaces
@@ -111,6 +112,7 @@
   apt:
     name: vsftpd
     state: present
+  when: has_network_access
 
 # Create ftp user
 - name: initialize ftp system user
@@ -198,7 +200,15 @@
   apt:
     name: isc-dhcp-server
     state: present
+  when: has_network_access
 
+# TS-17915: need to explicitly enable dhcp on boot
+- name: enable isc-dhcp-server to start on boot if compatible interfaces are available
+  service:
+    name: isc-dhcp-server
+    enabled: yes
+  when: enable_dhcp|bool == True
+    
 # shutdown the service and disable it on boot
 - name: shutdown DHCP services if not configured or enabled
   service:
@@ -236,7 +246,7 @@
   apt:
     name: dnsmasq
     state: present
-  when: enable_dhcp|bool == True
+  when: enable_dhcp|bool == True and has_network_access
 
 - name: dnsmasq configuration
   template:
@@ -259,6 +269,13 @@
     line: "conf-dir=/etc/dnsmasq.d"
   when: enable_dhcp|bool == True
 
+- name: enable bind-interfaces
+  lineinfile:
+    dest: /etc/dnsmasq.conf
+    regexp: "^.*bind-interfaces"
+    line: "bind-interfaces"
+  when: enable_dhcp|bool == True
+
 - name: restart dnsmasq service
   service:
     name: dnsmasq
@@ -273,6 +290,7 @@
   apt:
     name: ntp
     state: present
+  when: has_network_access
 
 - name: Start ntp daemon if not started
   service:
@@ -353,3 +371,62 @@
     line: '/rawdata {{ ansible_default_ipv4.network }}/{{ CIDR }}(rw,async,subtree_check,no_root_squash)'
   when: export_results == True and p.stat.exists
   notify: restart exportfs
+
+#============================================================================
+# Add systemd unit files for ionMountExternal and ionRestartTS for 18.04
+#============================================================================
+- name: update mountExternal to /etc/init.d (18.04 TsVm only)
+  copy:
+    src: mountExternal
+    dest: /etc/init.d/mountExternal
+    force: yes
+    mode: 755
+    owner: root
+    group: root
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+- name: Add ionMountExternal.service to /etc/systemd/system/ (18.04 TsVm only)
+  copy:
+    src: ionMountExternal.service
+    dest: /etc/systemd/system/ionMountExternal.service
+    force: yes
+    mode: 644
+    owner: root
+    group: root
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+- name: Add ionRestartTS.service to /etc/systemd/system/ (18.04 TsVm only)
+  copy:
+    src: ionRestartTS.service
+    dest: /etc/systemd/system/ionRestartTS.service
+    force: yes
+    mode: 644
+    owner: root
+    group: root
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+# need to delete ionMountExternal and ionRestartTS since they are not valid upstart scripts
+- name: delete /etc/init.d/ionMountExternal (18.04 TsVm only)
+  file:
+    path: /etc/init.d/ionMountExternal
+    state: absent
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+- name: delete /etc/init.d/ionRestartTS (18.04 TsVm only)
+  file:
+    path: /etc/init.d/ionRestartTS
+    state: absent
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+# enable both services on boot
+- name: enable ionMountExternal.service on boot (18.04 TsVm only)
+  service:
+    name: ionMountExternal
+    enabled: yes
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+
+- name: enable ionRestartTS.service on boot (18.04 TsVm only)
+  service:
+    name: ionRestartTS
+    enabled: yes
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"

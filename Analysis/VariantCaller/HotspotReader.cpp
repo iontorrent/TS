@@ -116,6 +116,7 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 	  hint_entry.pos = pos-1;
 	  hint_entry.value = hint;
 	  hint_entry.rlen = 0;
+	  hint_entry.prefix = 0;
 	  hint_vec.push_back(hint_entry);
 	} else if (s_pos < semicolon_pos) {
           vector<string> fields = split(line, '\t');
@@ -125,7 +126,8 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
           long int chrom_idx = ref_reader_->chr_idx(sequenceName.c_str());
 	  vector<string> alts = split(fields.at(4), ',');
 	  vector<string> bstr = split(line.substr(found+bstrand.size()+1, semicolon_pos-(found+bstrand.size()+1)), ',');
-	  int len = fields.at(3).size();
+	  string& ref = fields.at(3);
+	  unsigned int len = ref.size();
 	  for (unsigned int i = 0; i < alts.size(); i++) {
 	    if (bstr.at(i)[0] == 'S') {
 	      hint = BOTH_BAD_HINT;
@@ -149,6 +151,12 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
           	hint_entry.value = hint;
 		hint_entry.rlen = len;
 		hint_entry.alt = alts.at(i);
+		{
+		    unsigned int i;
+		    for (i = 0; i < len and i < hint_entry.alt.size(); i++) if (hint_entry.alt[i] != ref[i]) break;
+		    if (i == len or i == hint_entry.alt.size()) i--;
+		    hint_entry.prefix = i;
+		}
 		if (bstr[i].size()>2) {
 		    float x, y;
 		    sscanf(bstr[i].c_str()+2, "%f:%f", &x, &y);
@@ -167,7 +175,14 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
   }
    //std::cout << "BL size: " << hint_vec.size() << endl; 
 }
-		  
+		 
+unsigned int find_index(vector<string>& omap, string& alt) {
+   if (omap.size() == 0) return 0;
+   for (unsigned i = 0; i < omap.size(); i++) {
+	if (omap[i] == alt) return i+1;
+   }
+   return 0;
+}
   
 void HotspotReader::FetchNextVariant()
 {
@@ -215,6 +230,9 @@ void HotspotReader::FetchNextVariant()
     vector<string>& sse_prob_threshold = current_hotspot.info["sse_prob_threshold"];
     vector<string>& fwdb = current_hotspot.info["FWDB"];
     vector<string>& revb = current_hotspot.info["REVB"];
+    vector<string>& oref = current_hotspot.info["OREF"];
+    vector<string>& oalt = current_hotspot.info["OALT"];
+    vector<string>& omap = current_hotspot.info["OMAPALT"];
 
     // collect bad-strand info
     vector<string>& black_list_strand = current_hotspot.info["BSTRAND"];
@@ -231,6 +249,7 @@ void HotspotReader::FetchNextVariant()
       hotspot.pos = next_pos_;
       hotspot.ref_length = current_hotspot.ref.length();
       hotspot.alt = current_hotspot.alt[alt_idx];
+      hotspot.suffix_padding = 0;
 
       int altlen = hotspot.alt.size();
 
@@ -250,7 +269,19 @@ void HotspotReader::FetchNextVariant()
         hotspot.type = ALLELE_COMPLEX;
         hotspot.length = altlen;
       }
-
+      unsigned int idx = find_index(omap, hotspot.alt);
+      if (idx > 0 and oref.size() > 1 and  idx <= oref.size() and idx <= oalt.size()) {
+	idx--;
+	int rl = oref[idx].length();
+	int al = oalt[idx].length();
+	if (rl == al or rl == 0 or al == 0 or ((rl == 1 or al==1) and oref[idx][0] == oalt[idx][0])) {  // indel, in bed file
+	    if (rl == 0 or al == 0) {rl++; al++;}
+	    if (rl <  hotspot.ref_length) {
+		hotspot.suffix_padding = hotspot.ref_length- rl;
+		//cerr << current_hotspot.ref << " "  << idx << " " << hotspot.suffix_padding << hotspot.alt << endl; 
+	    }
+	}
+      }
 
 
       if (alt_idx < min_allele_freq.size() and min_allele_freq[alt_idx] != ".") {

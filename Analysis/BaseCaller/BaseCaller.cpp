@@ -1018,6 +1018,7 @@ void * BasecallerWorker(void *input)
                 // Step 4a. Barcode classification of library reads
                 //
 
+                bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
                 bc.filters->TrimKeySequence(bc.keys[read_class].bases_length(), processed_read.filter);
 
                 if (read_class == 0)

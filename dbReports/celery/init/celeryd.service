@@ -1,7 +1,7 @@
 # Should be /etc/systemd/system/celeryd.service
 [Unit]
 Description=This service manages all of the celery queues for the Torrent Suite
-After=rabbitmq-server.service
+After=rabbitmq-server.service postgresql.service
 
 [Service]
 Type=forking

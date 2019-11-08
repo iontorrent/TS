@@ -1,5 +1,6 @@
 {
     "activationClass":"none",
+    "amplificationType":"ampliseqhd",
     "dependsOn":[
         "none"
     ],
@@ -28,5 +29,5 @@
         "type"
     ],
     "vendorActivation":"/share/apps/",
-    "ver":"5.12.0.4"
+    "ver":"5.12.0.28"
 }

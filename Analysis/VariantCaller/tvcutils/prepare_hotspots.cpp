@@ -355,7 +355,7 @@ int PrepareHotspots(int argc, const char *argv[])
   bool filter_bypass              = opts.GetFirstBoolean('f', "filter-bypass", false);
   bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
   bool strict_check               = opts.GetFirstBoolean('S', "strict-check", true);
-  bool remove_trim                = opts.GetFirstBoolean('t', "remove-trim", false);
+  bool remove_trim                = opts.GetFirstBoolean('t', "remove-trim", true);
   bool remove_padding		  = opts.GetFirstBoolean('x', "remove-padding", false);
   opts.CheckNoLeftovers();
 

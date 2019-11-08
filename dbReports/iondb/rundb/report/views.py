@@ -1,52 +1,47 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from django.utils.translation import ugettext as _
-from django.contrib.auth.decorators import login_required
-from django.template import RequestContext
-from django.db.models import Q
-from iondb.rundb import models
-from iondb.rundb import forms
-from iondb.utils import makePDF
-from ion.utils import makeCSA
-from django import http
-import json
-import os
+import ConfigParser
+import copy
 import csv
-import re
-import traceback
 import fnmatch
 import glob
-import ast
-import file_browse
-import numpy
-import math
-import urllib
-import ConfigParser
+import json
 import logging
+import math
+import os
+import re
 import subprocess
-import copy
+import traceback
+import urllib
 from cStringIO import StringIO
+from collections import OrderedDict
+from datetime import datetime
 
-from django.views.decorators.csrf import csrf_exempt
-from django.http import (
-    HttpResponsePermanentRedirect,
-    HttpResponseRedirect,
-    HttpResponse,
-    StreamingHttpResponse,
-    HttpResponseServerError,
-)
+import numpy
+from django import http
+from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.servers.basehttp import FileWrapper
 from django.core.urlresolvers import reverse
-from django.shortcuts import get_object_or_404, redirect, render_to_response
-from django.conf import settings
-from datetime import datetime, date
-from collections import OrderedDict
-
-from iondb.rundb.report.analyze import createReport_and_launch, get_project_names
-from iondb.rundb.data import dmactions_types
-from iondb.plugins.plugin_barcodes_table import barcodes_table_for_plugin
-
+from django.db.models import Q
+from django.http import (
+    HttpResponseRedirect,
+    HttpResponse,
+    HttpResponseServerError,
+)
+from django.shortcuts import get_object_or_404, render_to_response
+from django.template import RequestContext
+from django.utils.translation import ugettext as _
+from django.views.decorators.csrf import csrf_exempt
 from ion.reports import wells_beadogram
+from ion.utils import makeCSA
+
+import file_browse
+from iondb.plugins.plugin_barcodes_table import barcodes_table_for_plugin
+from iondb.rundb import forms
+from iondb.rundb import models
+from iondb.rundb.data import dmactions_types
+from iondb.rundb.report.analyze import createReport_and_launch, get_project_names
+from iondb.utils import makePDF
 from iondb.utils.utils import is_internal_server
 
 logger = logging.getLogger(__name__)
@@ -358,8 +353,13 @@ def get_barcodes(datasets):
                     datasets["read_groups"][rg]["file_prefix"] = file_prefix
 
         for key, value in datasets.get("read_groups", {}).items():
+            # filtered field is not present in thumbnail nomatch
+            # so need to be included by default, i.e. filtered = False
             if value.get("filtered", False):
-                continue
+                if value.get("sample") and value.get("sample") != "none":
+                    value["warning"] = True
+                else:
+                    continue
             try:
                 value["mean_read_length"] = "%d bp" % int(
                     float(value["total_bases"]) / float(value["read_count"])
@@ -902,6 +902,20 @@ def find_output_file_groups(report, datasets, barcodes):
     if datasets and "barcode_config" in datasets:
         # links for barcodes.html: mapped bam links if aligned to reference, unmapped otherwise
         for barcode in barcodes:
+            # read length histograms
+            if os.path.exists("{}/basecaller_results/{}.read_len_histogram.png".format(
+                    report_path,
+                    barcode["file_prefix"]
+            )):
+                barcode["read_len_histogram_full_link"] = "{}/basecaller_results/{}.read_len_histogram.png".format(
+                    web_link,
+                    barcode["file_prefix"]
+                )
+                barcode["read_len_histogram_sparkline_link"] = "{}/basecaller_results/{}.sparkline.png".format(
+                    web_link,
+                    barcode["file_prefix"]
+                )
+            # file links
             barcode["basecaller_bam_link"] = (
                 "%s/basecaller_results/%s.basecaller.bam"
                 % (web_link, barcode["file_prefix"])
@@ -1403,6 +1417,17 @@ def _report_context(request, report_pk):
             self.status_msg = status_msg
 
     isInternalServer = is_internal_server()
+
+    # group sample names in chunks for latex rendering
+    chunked_sample_names = []
+    chunk = []
+    for sample in experiment.samples.all():
+        chunk.append(str(sample))
+        if len(chunk) > 31:
+            chunked_sample_names.append(chunk)
+            chunk = []
+    if chunk:
+        chunked_sample_names.append(chunk)
 
     try:
         if _should_build_report_for_blocks(isInternalServer, report, experiment):
@@ -2017,12 +2042,6 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                 plugins_list = form_plugins_list
                 selectedPlugins = {}
                 for plugin in form_plugins_list:
-                    configuration = form_pluginsUserInput.get(str(plugin.id), "")
-                    # check each plugin and ensure that each of them have been properly configured.
-                    configuration_errors += models.Plugin.validate(
-                        plugin.id, configuration, "plan"
-                    )
-
                     selectedPlugins[plugin.name] = {
                         "id": str(plugin.id),
                         "name": plugin.name,
@@ -2032,6 +2051,15 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                     }
             else:
                 selectedPlugins = eas.selectedPlugins
+
+            # validate plugin configuration
+            for name, plugin in selectedPlugins.items():
+                plugin_model = models.Plugin.objects.get(name=name, active=True)
+                if plugin_model.requires_configuration:
+                    # check each plugin and ensure that each of them have been properly configured.
+                    configuration_errors += models.Plugin.validate(
+                        plugin_model.id, plugin["userInput"]
+                    )
 
             # from-BaseCalling reanalysis needs to copy Beadfind and Analysis args from previous report
             if rpf.cleaned_data["blockArgs"] == "fromWells":

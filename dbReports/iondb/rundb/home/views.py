@@ -6,10 +6,8 @@ import json
 import os
 import socket
 import subprocess
-from multiprocessing import Pool
 
 import pytz
-from django.contrib.auth.decorators import login_required
 from django.core.urlresolvers import reverse
 from django.http import Http404
 from django.http import HttpResponse
@@ -35,6 +33,7 @@ from iondb.rundb.models import (
 )
 from iondb.utils import devices
 from iondb.utils.files import get_disk_attributes_gb, is_mounted
+from iondb.utils.utils import ManagedPool
 
 
 def is_live(ip):
@@ -225,8 +224,8 @@ def dashboard_fragments(request, skip_runs=False):
     rigs = Rig.objects.exclude(host_address="")
     num_rigs = len(rigs)
     if num_rigs > 1:
-        pool = Pool(processes=min(num_rigs, 50))
-        instruments = pool.map(get_instrument_info, rigs)
+        with ManagedPool(processes=min(num_rigs, 50)) as pool:
+            instruments = pool.map(get_instrument_info, rigs)
     else:
         instruments = [get_instrument_info(rig) for rig in rigs]
 

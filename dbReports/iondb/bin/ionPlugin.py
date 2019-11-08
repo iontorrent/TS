@@ -409,7 +409,7 @@ class PluginServer(object):
                     # perform the validation of the plugin configuration here
                     pr.validation_errors = {
                         "validation_errors": Plugin.validate(
-                            p["id"], start_json["pluginconfig"], run_mode
+                            p["id"], start_json["pluginconfig"], run_mode == "manual"
                         )
                     }
                     pr.save()

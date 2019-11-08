@@ -561,6 +561,16 @@ class RunType(models.Model):
 
     alternate_name = models.CharField(max_length=512, blank=True, null=True, default="")
 
+    @staticmethod
+    def is_dna_rna(runtype):
+        if not isinstance(runtype, RunType):
+            try:
+                runtype = RunType.objects.get(runType=runtype)
+            except:
+                logger.error("Uknown runType: %s" % runtype)
+                return
+        return runtype.nucleotideType == "dna_rna"
+
     def __unicode__(self):
         return self.runType
 
@@ -3069,7 +3079,9 @@ class ExperimentAnalysisSettings(models.Model):
                     for barcode, sampleInfo in list(value["barcodeSampleInfo"].items()):
                         bed_file_list.add(sampleInfo.get("hotSpotRegionBedFile"))
                         bed_file_list.add(sampleInfo.get("targetRegionBedFile"))
-            bed_file_list.update([self.targetRegionBedFile, self.hotSpotRegionBedFile, self.sseBedFile])
+            bed_file_list.update(
+                [self.targetRegionBedFile, self.hotSpotRegionBedFile, self.sseBedFile]
+            )
         return list(bed_file_list)
 
     def have_args(
@@ -3194,6 +3206,7 @@ class SampleAnnotation_CV(models.Model):
         ("libraryPrepType", "LibraryPrepType"),
         ("cyclingProtocols", "CyclingProtocols"),
         ("additionalCycles", "AdditionalCycles"),
+        ("16s_markers", "16S_Markers"),
     )
 
     annotationType = models.CharField(
@@ -3421,7 +3434,6 @@ class SampleSetItem(models.Model):
         ("rna", "RNA"),
         ("tna", "TNA"),
     )
-
     nucleotideType = models.CharField(
         max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default="", blank=True
     )
@@ -3451,6 +3463,17 @@ class SampleSetItem(models.Model):
     @staticmethod
     def get_nucleotideType_choices():
         return SampleSetItem.ALLOWED_NUCLEOTIDE_TYPES
+
+    @staticmethod
+    def nuctype_for_planning(nuctype):
+        if not nuctype:
+            nuctype = ""
+        elif nuctype.upper() == "TNA":
+            nuctype = "DNA"
+        return nuctype.upper()
+
+    def get_nucleotideType_for_planning(self):
+        return SampleSetItem.nuctype_for_planning(self.nucleotideType)
 
     def __unicode__(self):
         return u"%s/%s/%d" % (self.sampleSet, self.sample, self.relationshipGroup)
@@ -6039,9 +6062,9 @@ class Plugin(models.Model):
         pluginmanager.rescan()
 
     @staticmethod
-    def validate(pk, configuration, run_mode):
+    def validate(pk, configuration, manual_run_mode=False):
         """This will create an instance of the plugin and run the validation on it"""
-
+        run_mode = "manual" if manual_run_mode else "pipeline"
         instance = Plugin.create_instance(pk)
         return (
             instance.validate(configuration, run_mode)

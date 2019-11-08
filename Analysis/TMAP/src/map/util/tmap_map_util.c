@@ -23,6 +23,15 @@
 #include "tmap_map_util.h"
 #include "../../sw/tmap_sw.h"
 
+// #define CONCURRENT_PARAMETERS_CACHE 1
+#ifdef CONCURRENT_PARAMETERS_CACHE
+
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+#endif
+
+#endif
+
 #include "../../realign/realign_c_util.h"
 
 extern int32_t local_ovrs;
@@ -1308,6 +1317,14 @@ tmap_sw_param_t* tmap_map_util_populate_alt_sw_par (
     return alt_sw_params;
 }
 
+#ifdef CONCURRENT_PARAMETERS_CACHE
+
+#ifdef HAVE_LIBPTHREAD
+static pthread_mutex_t locopt_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+#endif
+
 uint8_t cache_sw_overrides (
     tmap_map_locopt_t* locopt,
     int32_t stage_ord,
@@ -1320,6 +1337,10 @@ uint8_t cache_sw_overrides (
     // check if stage sw params already cached in this locopt;
     // allocate memory if not yet or not enough allocated
     tmap_map_stage_sw_param_ovr_t *p;
+    uint32_t allready_cached = 0;
+#ifdef CONCURRENT_PARAMETERS_CACHE
+    pthread_mutex_lock (&locopt_mutex);
+#endif
     if (!locopt->stages_allocated)
     {
         locopt->stages_allocated = 1;
@@ -1332,10 +1353,13 @@ uint8_t cache_sw_overrides (
         tmap_map_stage_sw_param_ovr_t *sent;
         for (p = locopt->stage_sw_params, sent = locopt->stage_sw_params + locopt->stages_used; p != sent; ++p)
             if (p->stage == stage_ord)
-                return 0; // already cached
+            {
+                allready_cached = 1;
+                break;
+            }
 
-        // Not found. Check if there is a slot to store cache
-        if (locopt->stages_used == locopt->stages_allocated)
+        // need to cache. Check if there is a slot to store cached sw params
+        if (!allready_cached && locopt->stages_used == locopt->stages_allocated)
         {
             locopt->stages_allocated <<= 1; // duplicate
             locopt->stage_sw_params = tmap_realloc (locopt->stage_sw_params, locopt->stages_allocated * sizeof (tmap_map_stage_sw_param_ovr_t), "amplicon/stage sw param overrides");
@@ -1343,11 +1367,17 @@ uint8_t cache_sw_overrides (
         }
     }
         // store
-    p = locopt->stage_sw_params + locopt->stages_used;
-    ++(locopt->stages_used);
-    p->stage = stage_ord;
-    p->sw_params = tmap_map_util_populate_alt_sw_par (def_sw_par, stage_opt, locopt);
-    return 1;
+    if (!allready_cached)
+    {
+        p = locopt->stage_sw_params + locopt->stages_used;
+        ++(locopt->stages_used);
+        p->stage = stage_ord;
+        p->sw_params = tmap_map_util_populate_alt_sw_par (def_sw_par, stage_opt, locopt);
+    }
+#ifdef CONCURRENT_PARAMETERS_CACHE
+    pthread_mutex_unlock (&locopt_mutex);
+#endif
+    return !allready_cached;
 }
 
 static inline void
@@ -2604,6 +2634,7 @@ tmap_map_util_end_repair
     // use le (low end) for F5P and R3P; use he (high end) for R5P and F3P
     uint32_t use_le = (sori == F5P || sori == R3P);
     int32_t end_repair = opt->end_repair;
+    int32_t use_bed_in_end_repair = opt->use_bed_in_end_repair;
     int32_t score_match = opt->score_match;
     int32_t pen_mm = opt->pen_mm;
     int32_t pen_gapo = opt->pen_gapo;
@@ -2625,6 +2656,8 @@ tmap_map_util_end_repair
             pen_gape = s->param_ovr->pen_gape.value;
         if (s->param_ovr->bw.over)
             pen_gape = s->param_ovr->bw.value;
+        if (s->param_ovr->use_bed_in_end_repair.over)
+            use_bed_in_end_repair = s->param_ovr->use_bed_in_end_repair.value;
         if (use_le) // lower-coordinate end of the amplicon
         {
             if (s->param_ovr->end_repair_le.over)
@@ -2924,7 +2957,7 @@ tmap_map_util_end_repair
             // uint32_t ampl_start, ampl_end;
             int min_anchor = min_anchor_large_indel_rescue;
             int half_anchor = min_anchor / 2;
-            if (refseq->bed_exist && opt->use_bed_in_end_repair && total_scl >= half_anchor && s->ampl_start != 0)
+            if (refseq->bed_exist && use_bed_in_end_repair && total_scl >= half_anchor && s->ampl_start != 0)
                 // tmap_map_get_amplicon (refseq, s->seqid, start_o, end_o, &ampl_start, &ampl_end, NULL, o_strand)) // DK: id bed exists and coords use in end repair enabled, the amplicon coords are cached within *s (tmap_map_sam_t)
             {
                 //total_scl is desired to be larger than 5
@@ -3625,6 +3658,7 @@ int find_alignment_start
     }
     tmp_sam.result.target_end -= tmp_sam.result.target_start;
     tmp_sam.result.target_start = 0;
+    tmp_sam.target_len = tmp_sam.result.target_end;
 
 
     *dest_sam = tmp_sam;
@@ -4558,8 +4592,14 @@ void tmap_map_find_amplicons
             dest_sam->ampl_start = ampl_start;
             dest_sam->ampl_end = ampl_end;
             dest_sam->param_ovr = locopt;
+            //
             // check if override sw parameters for stage are already cached; cache if not
-            cache_sw_overrides (locopt, stage_ord, stage_opt, def_sw_par);
+            // 
+            // !!! TS-17814: do not do this here - causes race condition. Protecting against that causes seralization bottleneck
+            // do not uncomment the line that follows without #defining CONCURRENT_PARAMETERS_CACHE
+            // 
+            // cache_sw_overrides (locopt, stage_ord, stage_opt, def_sw_par);
+            // 
             dest_sam->read_ends = ends;
         }
         else
@@ -4646,7 +4686,7 @@ void tmap_map_util_salvage_edge_indels
             if (dest_sam->param_ovr->gapl_len.over)
                 gapl_len = dest_sam->param_ovr->gapl_len.value;
         }
-        if (gapl_len < 0) // overriden to disabled
+        if (pen_gapl < 0) // disabled globally (and not overriden to enabled), or overriden to disabled
             continue;
         salvage_long_indel_at_edges (
             dest_sam,      // destination: refined (aligned) mapping
@@ -4992,8 +5032,15 @@ tmap_map_util_fsw
     {
         tmap_map_sam_t *s = &sams->sams [i];
         if (!stage_fsw_use)
+        {
             if (!use_param_ovr || !(s->param_ovr && s->param_ovr->aln_flowspace.over && s->param_ovr->aln_flowspace.value))
                 continue;
+        }
+        else
+        {
+            if (use_param_ovr && s->param_ovr && s->param_ovr->aln_flowspace.over && !s->param_ovr->aln_flowspace.value)
+                continue;
+        }
 
         uint32_t ref_start, ref_end;
         // get the reference end position

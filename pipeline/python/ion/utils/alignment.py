@@ -391,6 +391,7 @@ def align(
         samtool_threads = min(threads, 12)
         if do_sorting:
             if do_mark_duplicates:
+                # use '-T' option to avoid temp file name collision among barcodes
                 cmd += " | samtools sort -m 1000M -l1 -@%d -T tmp_%s -O bam -o - -" % (
                     samtool_threads,
                     bamBase,
@@ -402,10 +403,9 @@ def align(
                 )
                 cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
             else:
-                #                cmd += " | ( samtools sort -m 1000M -l1 -@12 - %s <&0 & )" % bamBase
-                cmd += " | samtools sort -m 1000M -l1 -@%d - %s" % (
-                    samtool_threads,
-                    bamBase,
+                # use '-T' option to avoid temp file name collision among barcodes
+                cmd += " | samtools sort -m 1000M -l1 -@{thread_num} -T tmp_{output_prefix} -O bam -o - - > {output_prefix}.bam".format(
+                    thread_num=samtool_threads, output_prefix=bamBase
                 )
         else:
             cmd += " > %s.bam" % bamBase

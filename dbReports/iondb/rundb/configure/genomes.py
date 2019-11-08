@@ -1,58 +1,43 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 from __future__ import print_function
 
+import base64
 import csv
 import datetime
+import fileinput
+import glob
+import json
+import logging
 import os
 import shutil
-import socket
-import xmlrpclib
-import glob
-import fileinput
-import logging
-import json
-import base64
-import httplib2
-import tempfile
-import zipfile
-import mimetypes
-import re
-import subprocess
-import urllib2
 import traceback
 
-from django.contrib.auth.decorators import login_required
+import requests
+from django.conf import settings
+from django.core import urlresolvers
 from django.core.urlresolvers import reverse
-from django.shortcuts import render_to_response, get_object_or_404
 from django.http import (
     HttpResponse,
     HttpResponsePermanentRedirect,
     HttpResponseRedirect,
     HttpResponseServerError,
 )
+from django.shortcuts import render_to_response, get_object_or_404
 from django.template import RequestContext
-from django.conf import settings
-from django.core import urlresolvers
-from django.core.files import File
-from iondb.utils import i18n_errors, validation
-
-from iondb.rundb.ajax import render_to_json
-from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import (
-    ReferenceGenome,
-    ContentUpload,
-    Content,
-    FileMonitor,
-    Publisher,
-)
-from iondb.rundb import tasks, publishers, labels
 from django.utils.translation import ugettext_lazy as _, ugettext
 
+from iondb.rundb import tasks, labels
+from iondb.rundb.ajax import render_to_json
 from iondb.rundb.configure.util import plupload_file_upload
+from iondb.rundb.forms import EditReferenceGenome
+from iondb.rundb.models import ReferenceGenome, ContentUpload, Content, FileMonitor
+from iondb.utils import i18n_errors, validation
 
 logger = logging.getLogger(__name__)
 
 JOBSERVER_HOST = "127.0.0.1"
+
+TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
 
 
 def file_upload(request):
@@ -594,49 +579,49 @@ def start_index_rebuild(request, reference_id):
 
 
 def get_references():
-    h = httplib2.Http()
-    response, content = h.request(settings.REFERENCE_LIST_URL)
-    if response["status"] == "200":
-        references = json.loads(content)
-        id_hashes = [
-            r["meta"]["identity_hash"] for r in references if r["meta"]["identity_hash"]
-        ]
-        installed = dict(
-            (r.identity_hash, r)
-            for r in ReferenceGenome.objects.filter(identity_hash__in=id_hashes)
-        )
-        for ref in references:
-            ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
-            ref["notes"] = ref["meta"].get("notes", "")
-            ref["installed"] = installed.get(ref["meta"]["identity_hash"], None)
-            if not ref["installed"]:
-                preInstalled = ReferenceGenome.objects.filter(
-                    short_name=ref["meta"]["short_name"],
-                    index_version=settings.TMAP_VERSION,
-                    enabled=True,
-                )
-                if preInstalled:
-                    ref["preInstalled"] = preInstalled[0]
-            ref["annotation_encoded"] = base64.b64encode(
-                json.dumps(ref.get("annotation", ""))
+
+    try:
+        resp = requests.get(settings.REFERENCE_LIST_URL, timeout=TIMEOUT_LIMIT_SEC)
+        resp.raise_for_status()
+        references = resp.json()
+    except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as err:
+        logger.error(
+            "get_references timeout or connection errors for {u}: {e}".format(
+                e=str(err), u=settings.REFERENCE_LIST_URL
             )
-            ref["reference_mask_encoded"] = ref.get("reference_mask", None)
-            ref["bedfiles"] = ref.get("bedfiles", [])
-            ref["bedfiles_encoded"] = base64.b64encode(json.dumps(ref["bedfiles"]))
-        return references
-    else:
+        )
+        return None
+    except ValueError as decode_err:
+        logger.error("get_references JSON decode error: {}".format(str(decode_err)))
         return None
 
-
-def download_genome_annotation(annotation_lists, reference_args, username):
-    for item in annotation_lists:
-        remoteAnnotUrl = item.get("url", None)
-        remoteAnnotUpdateVersion = item.get("updateVersion", None)
-
-        if remoteAnnotUrl:
-            tasks.new_annotation_download.delay(
-                remoteAnnotUrl, remoteAnnotUpdateVersion, username, **reference_args
+    id_hashes = [
+        r["meta"]["identity_hash"] for r in references if r["meta"]["identity_hash"]
+    ]
+    installed = dict(
+        (r.identity_hash, r)
+        for r in ReferenceGenome.objects.filter(identity_hash__in=id_hashes)
+    )
+    for ref in references:
+        ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
+        ref["notes"] = ref["meta"].get("notes", "")
+        ref["installed"] = installed.get(ref["meta"]["identity_hash"], None)
+        if not ref["installed"]:
+            preInstalled = ReferenceGenome.objects.filter(
+                short_name=ref["meta"]["short_name"],
+                index_version=settings.TMAP_VERSION,
+                enabled=True,
             )
+            if preInstalled:
+                ref["preInstalled"] = preInstalled[0]
+        ref["annotation_encoded"] = base64.b64encode(
+            json.dumps(ref.get("annotation", ""))
+        )
+        ref["reference_mask_encoded"] = ref.get("reference_mask", None)
+        ref["bedfiles"] = ref.get("bedfiles", [])
+        ref["bedfiles_encoded"] = base64.b64encode(json.dumps(ref["bedfiles"]))
+
+    return references
 
 
 def get_bedfile_status(bedfile, reference):
@@ -773,29 +758,24 @@ def download_genome(request):
 def validate_annotation_url(remoteAnnotUrl):
     isValid = True
     ctx = {}
+
     try:
-        req = urllib2.urlopen(remoteAnnotUrl)
-        url = req.geturl()
-    except urllib2.HTTPError as err:
+        resp = requests.get(remoteAnnotUrl, timeout=TIMEOUT_LIMIT_SEC)
+        resp.raise_for_status()
+    except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as err:
         isValid = False
-        if err.code == 404:
-            logger.debug(
-                "HTTP Error: {0}. Please contact TS administrator  {1}".format(
-                    err, remoteAnnotUrl
-                )
-            )
-            ctx["msg"] = "HTTP Error: {0}. Please contact TS administrator.".format(
-                err.msg
-            )
-        else:
-            logger.debug("Error in validate_annotation_url({0})".format(err))
-            ctx["msg"] = err
-    except urllib2.URLError as err:
-        logger.debug("Connection Error in validate_annotation_url: ({0})".format(err))
-        isValid = False
-        ctx["msg"] = "Connection Error. Please contact TS administrator.".format(
-            err.reason
+        logger.debug(
+            "validate_annotation_url: connection or timeout error: %s" % str(err)
         )
+        ctx["msg"] = (
+            "Please contact TS administrator. Connection or timeout error: %s"
+            % str(err)
+        )
+    except Exception as err:
+        # catch all
+        isValid = False
+        logger.debug("Unknown error: %s" % str(err))
+        ctx["msg"] = "Please contact TS administrator. Unknown error: %s" % str(err)
 
     ctx["isValid"] = isValid
     return ctx

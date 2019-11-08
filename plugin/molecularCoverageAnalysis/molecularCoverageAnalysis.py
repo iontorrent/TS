@@ -1,6 +1,5 @@
 #!/usr/bin/python
-# Copyright (C) 2019 Thermo Fisher Scientific, Inc. All Rights Reserved.
-
+# Copyright (C) 2019 Thermo Fisher Scientific, Inc. All Rights Reserved
 import os
 import sys
 from subprocess import *
@@ -8,14 +7,16 @@ from ion.plugin import *
 
 class molecularCoverageAnalysis(IonPlugin):
   '''Molecular Coverage Analysis. (Ion R&D)'''
-  version = "5.12.0.23"
+  version = "5.12.0.28"
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]
   requires_configuration = True
   __doc__ = 'This plugin generates statistics, downloadable data files and interactive visualization of molecular coverage over targeted regions of the reference genome.'
 
-  def launch(self,data=None):
+  def launch(self, data=None):
+    run_name = os.environ['TSP_RUN_NAME']
+    run_name = run_name.replace(" ","_")
     plugin_cmd = [
         os.path.join(os.environ['DIRNAME'], 'molecularCoverageAnalysis_plugin.py'), 
         '-V', self.version, 
@@ -32,7 +33,7 @@ class molecularCoverageAnalysis(IonPlugin):
     plugin = Popen(plugin_cmd, stdout=PIPE, shell=False )
     plugin.communicate()
     sys.exit(plugin.poll())
-    
+
   def custom_validation(self, configuration, run_mode):
     errors = []
     if run_mode.lower() != 'manual' and configuration:

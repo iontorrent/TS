@@ -383,8 +383,8 @@ EOF
     # Update status values for plugins
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.cleanup_pluginresult_state.apply_async(countdown=60)'
 
-    # Check whether or not we're online for CSA support upload
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_export as tasks; tasks.poll_support_site.apply_async(countdown=61)'
+    # Rescan for Publishers
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.publishers as pub; pub.search_for_publishers()'
 
     #TS-6081: Create DMFileStat objs for existing Results objs without them.
     echo -n "Migrating to new Data Management..."

@@ -17,6 +17,7 @@
     - gridengine-qmon
     - gridengine-client
     - gridengine-drmaa-dev
+  when: has_network_access
 
 # TEST.  Force running package configuration for case where gridengine is installed but need to be
 # reconfigured (during headnode host renaming for example)

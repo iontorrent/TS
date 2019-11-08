@@ -4,18 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
-<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+<link rel="stylesheet" media="all" href="css/bootstrap.min.css" />
+<link href="css/kendo.common.min.css" rel="stylesheet" />
+<link href="css/kendo.tb.min.css" rel="stylesheet" />
 <!-- Do not include tb_layout.css in block reports - it causes continuous scrolling -->
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="css/tb-styles.min.css" />
 
-<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
-<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
-<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="css/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="css/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="css/report.css" media="screen" />
 
-<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+<script type="text/javascript" src="scripts/js/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="scripts/js/kendo.custom.min.js"></script>
 
 {% load humanize %}
 
@@ -36,7 +36,7 @@
 {% if target_regions %}
 <b>Target regions:</b> {{target_regions}}<br/>
 {% endif %}
-<b>Parameters:</b> <a href="download.php3?name=local_parameters.json"> {{configure_file}}</a><br/>
+<b>Parameters:</b> <a href="local_parameters.json" download > {{configure_file}}</a><br/>
 </h4>
 
 <script type="text/javascript">

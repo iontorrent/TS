@@ -277,22 +277,21 @@ def run_plugin(skiprun=False,barcode=""):
     # Note: The stand-alone command can perform the (required) annotation but does not handle padding
     rptopt = 'molecularCoverageAnalysis.html' if pluginParams['cmdOptions'].cmdline else ''
     printtime("Running Molecular Coverage Analysis pipeline...")
-  #  runcmd = '%s %s %s "%s" "%s" "%s" "%s" %s %s %s "%s" %s %s %s %s %s %s %s %s %s' % (
-  #      os.path.join(plugin_dir,'run_mol_barcoding_analysis.sh'), plugin_dir, output_dir, output_prefix, hotspotfile, truthfile, libtype, reference, bamfile, bedfile, sample, min_fam_size, min_num_var_fam, min_func_cov, func_maf, sfa,max_var_num,prefix_seq,suffix_seq,bid)
-  #  if logopt: printlog('\n$ %s\n'%runcmd)
     runcmd = '%s %s %s "%s" "%s" "%s" "%s" %s  "%s" %s ' % (
         os.path.join(plugin_dir,'run_molecular_coverage.sh'), plugin_dir, bamfile, reference, sample, libtype , bedfile, num_thread, output_dir, output_prefix)
     if( os.system(runcmd) ):
       raise Exception("Failed running run_molecular_coverage.sh. Refer to Plugin Log.")
-
   printtime("Generating report...")
-
-  # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
-  createlink( os.path.join(plugin_dir,'flot'), output_dir )
-  createlink( os.path.join(plugin_dir,'lifechart'), output_dir )
-  createlink( os.path.join(plugin_dir,'bin','igv.php3'), output_dir )
-  createlink( os.path.join(plugin_dir,'bin','zipReport.php3'), output_dir )
-   
+  try:
+    # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
+    createlink( os.path.join(plugin_dir,'flot'), output_dir )
+    createlink( os.path.join(plugin_dir,'lifechart'), output_dir )
+    createlink( os.path.join(plugin_dir,'css'), pluginParams['results_dir'] )
+    createlink( os.path.join(plugin_dir,'scripts'), pluginParams['results_dir'] )
+    createlink( os.path.join(plugin_dir,'bin','igv.php3'), output_dir )
+    createlink( os.path.join(plugin_dir,'bin','zipReport.php3'), output_dir )
+  except Exception as Err:
+    printtime("Symbolic linking Error: %s", Err)
   # Optional: Delete intermediate files after successful run. These should not be required to regenerate any of the
   # report if the skip-analysis option. Temporary file deletion is also disabled when the --keep_temp option is used.
   #deleteTempFiles([ '*.bam', '*.bam.bai', '*.tmp' ])
@@ -414,8 +413,11 @@ def run_meta_plugin():
     bcrep = bcreports[bcname]
     #printlog(" final barcode %s : %s" % (bcname,bcrep))
     if 'output_dir' not in bcrep: continue
-    bcline = bcname+"\t"+bcdata['sample']+"\t"+bcdata['funcfam']+"\t"+bcdata['funcratio']+"\t"+bcdata['uniformity']+"\t"+bcdata['famsize']+"\t"+bcdata['conversion']
-    bctable.append(bcline)
+    try:
+      bcline = bcname+"\t"+bcdata['sample']+"\t"+bcdata['funcfam']+"\t"+bcdata['funcratio']+"\t"+bcdata['uniformity']+"\t"+bcdata['famsize']+"\t"+bcdata['conversion']
+      bctable.append(bcline)
+    except Exception, Err:
+      printtime("Error during barcode summary processing: %s", Err)
     reportfile = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext)
     reportfile2 = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext2)
     if os.path.exists(reportfile):
@@ -453,7 +455,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
     if 'Error' in resultData:
       errMsg = resultData['Error']
       errZero = "no mapped" in errMsg or "no read" in errMsg
-    sample = resultData['Sample Name']
+    sample = resultData.get('Sample Name', None)
     if sample == '' : sample = 'None'
     # barcodes_json dictoonary is firmcoded in Kendo table template that we are using for main report styling
     if errMsg != "":
@@ -711,6 +713,7 @@ def parseCmdArgs():
   pluginParams['jsonInput'] = args[0]
   pluginParams['jsonParams'] = jsonParams
   pluginParams['barcodeInput'] = args[1]  
+  pluginParams['barcoded'] = os.path.exists(args[1]) 
    
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
@@ -722,6 +725,7 @@ def emptyResultsFolder():
   for fname in os.listdir(results_dir):
     # avoid specific files needed to launch run
     if not os.path.isdir(fname):
+      if "log" in fname: continue
       start = os.path.basename(fname)[:10]
       if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi" or start == "barcodes.j":
         continue
@@ -895,7 +899,7 @@ def loadPluginParams():
   pluginParams['bamroot']   = copts.bamfile   if copts.bamfile != "" else '%s/rawlib.bam' % pluginParams['analysis_dir']
   pluginParams['prefix']    = copts.prefix    if copts.prefix != "" else pluginParams['analysis_name']
   pluginParams['results_url'] = copts.results_url if copts.results_url != "" else os.path.join(
-    jsonParams['runinfo'].get('url_root','.'),'plugin_out',pluginParams['plugin_name']+'_out' )
+  jsonParams['runinfo'].get('url_root','.'),'plugin_out',pluginParams['plugin_name']+'_out' )
   # set URL to local .fasta (later IGV .genome if this becomes available) file or default to genome name
   pluginParams['genome_url'] = '{http_host}/auth'+copts.reference_url if copts.reference_url != "" else pluginParams['genome_id']
  
@@ -911,7 +915,11 @@ def loadPluginParams():
   pluginParams['output_url'] = pluginParams['results_url']
   pluginParams['output_prefix'] = pluginParams['prefix']
   pluginParams['bamname'] = os.path.basename(pluginParams['bamfile'])
-  pluginParams['barcoded'] = os.path.exists(pluginParams['analysis_dir']+'/barcodeList.txt')
+  #pluginParams['barcoded'] = (os.path.exists(pluginParams['results_dir']+'/barcodes.json'))
+  #pluginParams['barcoded'] = (os.path.exists(pluginParams['analysis_dir']+'/barcodeList.txt'))
+  #pluginParams['barcoded'] = (os.path.exists(pluginParams['results_dir']+'/barcodes.json'))
+  #pluginParams['barcoded'] = (os.path.exists(pluginParams['results_dir']+'/barcodes.json'))
+  #pluginParams['barcoded'] = True
   pluginParams['sample_names'] = sampleNames()
 
   # disable run skip if no report exists => plugin has not been run before
@@ -952,6 +960,7 @@ def loadPluginParams():
     raise Exception("The plugin can't run without any configuration")
 
   # code to handle single or per-barcode target files
+  if 'librarytype' not in config: config['library'] =  jsonParams['runType']
   runtype = config['librarytype']
   if runtype[:7] == 'AMPS_HD' :
     config['librarytype']= 'ampliseq_hd'
@@ -965,7 +974,18 @@ def loadPluginParams():
   pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
 
   # loading tvc_configuration file
-  tvc_config = config['tvc_config']
+  if 'tvc_config' not in config :
+    tvc_json = os.path.join(pluginParams['analysis_dir'], 'inputs','vc','VariantCallerActor','VariantCallerActor.json')
+    if not os.path.exists(tvc_json):
+        printlog('No tvc config file' %(tvc_json))
+        exit(1)
+    with open(tvc_json) as jsonFile:
+        tvc_config = json.load(jsonFile)
+        config['tvc_config'] = tvc_config
+        config['tvc_config']['meta']['configuration']='customized'
+  else :
+    tvc_config = config['tvc_config']
+
   tvc_param_file = os.path.join(pluginParams['results_dir'], 'local_parameters.json')
   writeDictToJsonFile(tvc_config,tvc_param_file)
 
@@ -1030,15 +1050,15 @@ def runForBarcodes():
   global pluginParams, pluginResult, pluginReport
   # read barcode ids
   barcodes = []
-  try:
-    bcfileName = pluginParams['analysis_dir']+'/barcodeList.txt'
-    with open(bcfileName) as bcfile:
-      for line in bcfile:
-        if line.startswith('barcode '):
-          barcodes.append(line.split(',')[1])
-  except:
-    printerr("Reading barcode list file '%s'" % bcfileName)
-    raise
+  #try:
+  #  bcfileName = pluginParams['analysis_dir']+'/barcodeList.txt'
+  #  with open(bcfileName) as bcfile:
+  #    for line in bcfile:
+  #      if line.startswith('barcode '):
+  #        barcodes.append(line.split(',')[1])
+  #except:
+  #  printerr("Reading barcode list file '%s'" % bcfileName)
+  #  raise
   # RULES: A barcode-specific target set to None ('') assumes the default target UNLESS require_specific_targets is set (for library type),
   # in which case an error for the barcode is set. Otherwise if the barcode-specific target resolves to None then the barcode is skipped
   # for library types requiring a target. For AMPS_DNA_RNA it is a reported error if the barcode has no targets.
@@ -1061,7 +1081,10 @@ def runForBarcodes():
     #barcodeData = barcodeSpecifics(barcode)
     #if(barcodeData['filtered']) : continue
     #bcbam = barcodeData['bamfile']
-    bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
+    #printlog("barcode")
+    details = bc_details[barcode]
+    bcbam = details['bam_filepath']
+    printlog("barcode %s : bam  %s ...\n" % (barcode,bcbam))
     if not os.path.exists(bcbam):
       bcBamFile.append("ERROR: BAM file not found")
       continue
@@ -1214,7 +1237,7 @@ def createScraperLinksFolder(outdir,rootname):
   # rootname is a file path relative to outdir and should not contain globbing characters
   scrapeDir = os.path.join(outdir,'scraper')
   if pluginParams['cmdOptions'].logopt:
-    printlog("Creating scraper folder %s"%scrapeDir)
+    printlog("Creating scraper folder %s" % scrapeDir)
   if not os.path.exists(scrapeDir):
     os.makedirs(scrapeDir)
   subroot =  os.path.basename(rootname)+'.'
@@ -1247,7 +1270,7 @@ def plugin_main():
     emsg = str(e)
     if emsg[:6] == 'CATCH:':
       emsg = emsg[6:]
-      printlog('ERROR: %s'%emsg)
+      printlog('ERROR: %s' % emsg)
       createIncompleteReport(emsg)
       return 0
     else:

@@ -1333,6 +1333,40 @@ def upload_plans_for_template(request):
     )
 
 
+def _get_reader_for_v2(columnBasedReader):
+    """
+        Get the reader Dict for the column based CSV
+          - csv module handles data row-wise
+          - process the column based data set and return the dict
+          - this function is called only for main plan csv file, not for the samples csv
+    """
+    rowBasedReader = []
+    for colInput in columnBasedReader:
+        rowBasedReader.append(tuple(colInput))
+
+    # null values gets trimmed when no input in the last row
+    # parse it and handle gracefully
+    if len(rowBasedReader[-1]) != len(rowBasedReader[0]):
+        missingelement = len(rowBasedReader[0]) - len(rowBasedReader[-1])
+        lastElement = list(rowBasedReader[-1])
+        lastElement.extend([""] * missingelement)
+        rowBasedReader[-1] = tuple(lastElement)
+
+    converted = zip(*rowBasedReader)
+    headers = list(converted.pop(0))
+
+    v2_reader = []
+    for row in converted:
+        processed_dictReader = {}
+        planDetails = list(row)
+        for rowIndex, rowValue in enumerate(planDetails):
+            for headerIndex, headerItem in enumerate(headers):
+                if rowIndex == headerIndex:
+                    processed_dictReader[headerItem] = rowValue
+                    break
+        v2_reader.append(processed_dictReader)
+    return v2_reader
+
 @transaction.commit_manually
 def save_uploaded_plans_for_template(request):
     """add plans, with CSV validation"""
@@ -1356,40 +1390,6 @@ def save_uploaded_plans_for_template(request):
         return HttpResponse(
             json.dumps(error, cls=LazyJSONEncoder), mimetype="text/html"
         )
-
-    def _get_reader_for_v2(columnBasedReader):
-        """
-            Get the reader Dict for the column based CSV
-              - csv module handles data row-wise
-              - process the column based data set and return the dict
-              - this function is called only for main plan csv file, not for the samples csv
-        """
-        rowBasedReader = []
-        for colInput in columnBasedReader:
-            rowBasedReader.append(tuple(colInput))
-
-        # null values gets trimmed when no input in the last row
-        # parse it and handle gracefully
-        if len(rowBasedReader[-1]) != len(rowBasedReader[0]):
-            missingelement = len(rowBasedReader[0]) - len(rowBasedReader[-1])
-            lastElement = list(rowBasedReader[-1])
-            lastElement.extend([""] * missingelement)
-            rowBasedReader[-1] = tuple(lastElement)
-
-        converted = zip(*rowBasedReader)
-        headers = list(converted.pop(0))
-
-        v2_reader = []
-        for row in converted:
-            processed_dictReader = {}
-            planDetails = list(row)
-            for rowIndex, rowValue in enumerate(planDetails):
-                for headerIndex, headerItem in enumerate(headers):
-                    if rowIndex == headerIndex:
-                        processed_dictReader[headerItem] = rowValue
-                        break
-            v2_reader.append(processed_dictReader)
-        return v2_reader
 
     logger.debug("language=%s", translation.get_language())
     postedfile = request.FILES["postedfile"]
@@ -1812,6 +1812,8 @@ def page_plan_samples_table_keys(is_barcoded, include_IR=False):
         ("irRelationRole", "IR Relation"),
         ("irGender", "IR Gender"),
         ("irPopulation", "IR Population"),
+        ("irBacterialMarkerType", "Bacterial Marker Type"),
+        ("irWitness", "Witness"),
         ("irSetID", "IR Set ID"),
     )
 
@@ -2181,7 +2183,15 @@ def plan_template_import(request):
             )  # "CSV Version is missing or not supported. Please download latest CSV file format"
             return http.HttpResponseBadRequest(error)
 
-        reader = csv.DictReader(f)
+        csv_version = StrictVersion(str(float(csv_version_row[1])))
+        if csv_version >= "2.2":
+            # process column-based file
+            csv_reader = csv.reader(f)
+            reader = _get_reader_for_v2(csv_reader)
+        else:
+            # process row-based file
+            reader = csv.DictReader(f)
+
         errors = {}
         warnings = {}
         plans = []
@@ -2245,11 +2255,24 @@ def plan_template_import(request):
                         for plugin in Plugin.objects.filter(
                             name__in=plugins, active=True
                         ):
+                            plugin_config = row.get(PlanCSVcolumns.COLUMN_PLUGIN_CONFIG % plugin.name, {})
+                            if plugin_config:
+                                try:
+                                    plugin_config = json.loads(plugin_config)
+                                except:
+                                    warnings.setdefault("%d" % (index + 1), {})[
+                                        PlanCSVcolumns.COLUMN_PLUGIN_CONFIG % plugin.name
+                                    ] = validation.invalid_invalid_value(
+                                        PlanCSVcolumns.COLUMN_PLUGIN_CONFIG % plugin.name,
+                                        plugin_config
+                                    )
+                                    plugin_config = {}
+
                             selectedPlugins[plugin.name] = {
                                 "id": plugin.id,
                                 "name": plugin.name,
                                 "version": plugin.version,
-                                "userInput": {},
+                                "userInput": plugin_config,
                             }
                         value = selectedPlugins
                         # add warning if missing plugins

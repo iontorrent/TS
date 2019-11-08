@@ -16,10 +16,10 @@ case "$1" in
 			pkill Analysis
 		fi
 
-		if [ -n "`service --status-all | grep -i lightdm`" ]; then
-			# stop lightdm server
-			service lightdm stop
-		fi
+#		if [ -n "`service --status-all | grep -i lightdm`" ]; then
+#			# stop lightdm server
+#			service lightdm stop
+#		fi
     
 		if [ -n "`service --status-all | grep -i ganglia-monitor`" ]; then
 			# stop ganglia-monitor server (which might monitor the GPU)

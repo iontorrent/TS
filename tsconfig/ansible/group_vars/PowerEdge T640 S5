@@ -1,0 +1,11 @@
+---
+#----------------------------------------------------------------------------
+# Gridengine queue slot definition
+#----------------------------------------------------------------------------
+queues: 
+  - { name: all.q, slots: 6}
+  - { name: plugin.q, slots: 2}
+  - { name: thumbnail.q, slots: 2}
+  - { name: thumbnail_worker.q, slots: 2}
+  - { name: tl.q, slots: 10}
+GRUB_BOOT_DEVICE: "/dev/sda, /dev/sdb"

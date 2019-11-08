@@ -35,6 +35,7 @@ PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
 SECURITY_UPDATE=0       # Run apt-get unattended-upgrade
 FORCE=False             # Some cases, ignore disk space requirement
 NONINTERACTIVE=False    # Set to true to disable any user interaction operations
+CONFIG_NO_NETWORK=0     # flag to allow non-network environment server configuration
 version=5.2
 
 
@@ -77,7 +78,12 @@ while [ $# != 0 ]; do
         '-f'|'--force')
             FORCE=true
         ;;
-        '--configure-server'|'--reconfigure')
+        '--reconfigure')
+            if [ $EXECUTE == 1 ];then user_msg "Configure Torrent Server in no network environment"; fi
+            CONF_HEAD_NODE=1
+            CONFIG_NO_NETWORK=1
+        ;;
+        '--configure-server')
             if [ $EXECUTE == 1 ];then user_msg "Configure Torrent Server"; fi
             CONF_HEAD_NODE=1
         ;;
@@ -135,7 +141,7 @@ while [ $# != 0 ]; do
         ;;
         *)
         echo "Unknown option: $1.  Exiting"
-        echo "Use TSconfig-ansible --help for options."
+        echo "Use TSconfig --help for options."
         exit 1
         ;;
     esac
@@ -277,7 +283,9 @@ if [ $CONF_HEAD_NODE == 1 ]; then
     fi
 
     # Install prerequisites
-    install_prerequisites
+    if [ $CONFIG_NO_NETWORK == 0 ]; then
+        install_prerequisites
+    fi
 
     #============================================================================================
     # Compute Node Handling
@@ -321,15 +329,26 @@ if [ $CONF_HEAD_NODE == 1 ]; then
     log "Configure Head Node"
     echo "=================================================================="
     echo "Starting the site configuration"
+    if [ $CONFIG_NO_NETWORK == 1 ]; then
+      echo "  ... allowing in non-network environment"
+      echo "  ... WARNING: this will not install the missing required package"
+    fi
     echo "=================================================================="
     cd $ANSIBLE_HOME
-    ansible-playbook site.yml \
+    TSCONFIG_NO_NETWORK=$CONFIG_NO_NETWORK ansible-playbook site.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
         --become
 
     echo "=================================================================="
     echo "TSconfig configure process completed successfully"
     echo "=================================================================="
+
+
+    echo "=================================================================="
+    echo "Restarting all system services after configuration"
+    echo "=================================================================="
+    eval "$CHECK_SYSTEM_SERVICES_PY --start"
+
     disable_maintenance_mode
     exit 0
 fi

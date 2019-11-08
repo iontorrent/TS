@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <alloca.h>
 #include <assert.h>
+#include <limits.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -1200,6 +1201,8 @@ static char *strsave(char *s)
 // returns 0 if no overrides found, 1 otherwise
 enum ovr_opt_code
 {
+    // --no-bed-er
+    OO_no_bed_er,
     // -A,--score-match
     OO_score_match = 127, //over any ASCII value, so short opts can be checked same way
     // -M,--pen-mismatch
@@ -1297,7 +1300,7 @@ enum ovr_opt_code
     OO_softclip_key,
     // --ignore-flowgram
     OO_ignore_flowgram,
-    // --align_flowspace
+    // --final_flowspace
     OO_aln_flowspace 
 };
 
@@ -1305,6 +1308,8 @@ typedef struct option sysopt_t;
 
 static const sysopt_t overridable_opts [] =
 {
+    // --no-bed-er
+    { "no-bed-er",            optional_argument,  NULL, OO_no_bed_er },
     // -A,--score-match
     { "score-match",          required_argument,  NULL, OO_score_match },
     // -M,--pen-mismatch
@@ -1402,7 +1407,7 @@ static const sysopt_t overridable_opts [] =
     { "softclip-key",                                   optional_argument,  NULL, OO_softclip_key },
     // --ignore-flowgram
     { "ignore-flowgram",                                optional_argument,  NULL, OO_ignore_flowgram },
-    // --align_flowspace
+    // --final_flowspace
     { "final-flowspace",                                optional_argument,  NULL, OO_aln_flowspace },
     { NULL,                                             0,                  NULL, 0 }
 };
@@ -1491,7 +1496,9 @@ static uint8_t str2double (const char* str, double* value)
 }
 
 // parses string to get override parameters
+//
 // following TMAP options are recognized:
+// --no-bed-er
 // -A,--score-match
 // -M,--pen-mismatch
 // -O,--pen-gap-open
@@ -1530,7 +1537,9 @@ static uint8_t str2double (const char* str, double* value)
 // --er-5clip
 // the following option has a special meaning:
 // --log : if specified, cancels the post-processing logging for all amplicons but the ones for which it is specified.
+//
 // returns number of parameter overrides succesfully parsed
+
 
 uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str, int32_t* specific_log, char* bed_fname, int lineno)
 {
@@ -1539,8 +1548,8 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
     if (argc < 2)
         return 0;
     // now use getopt_long to extract parameters
-    optind = 1; // reset global state for getopt_long
     uint32_t ovr_count = 0;
+    optind = 0; // reset global state for getopt_long. This is GLIBC way to reset internal getopt_long state. Non-portable. Should not use 1 as for original K&R implementation.
     while (1)
     {
         int option_index;
@@ -1552,6 +1561,23 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
 
         switch (c)
         {
+            case OO_no_bed_er:
+                if (!optarg) // optional argument not given : treat as 1
+                    local_params->use_bed_in_end_repair.value = 0,
+                    local_params->use_bed_in_end_repair.over = 1,
+                    ++ovr_count;
+                else if (str2int (optarg, &value))
+                {
+                    if (value < 0 || value > 1)
+                        tmap_warning ("%s:%d Invalid value (%d) for override for --no-bed-er", bed_fname, lineno, value);
+                    else
+                        local_params->use_bed_in_end_repair.value = value?0:1,
+                        local_params->use_bed_in_end_repair.over = 1,
+                        ++ovr_count;
+                }
+                else
+                    tmap_warning ("%s:%d Error parsing parameters override: --no-bed-er", bed_fname, lineno);
+                break;
             case 'A':
             case OO_score_match:
                 if (str2int (optarg, &value))
@@ -2032,7 +2058,7 @@ uint32_t extract_overrides (tmap_map_locopt_t* local_params, const char* descrip
         return 0;
     block_beg += sizeof (BLOCK_HEAD) - 1;
     // scan for opening brace
-    while (isspace (*block_beg))
+    while (isspace (*block_beg) || *block_beg == '=')
         ++block_beg;
     if (*block_beg != BLOCK_OPEN)
     {
@@ -2053,9 +2079,14 @@ uint32_t extract_overrides (tmap_map_locopt_t* local_params, const char* descrip
     // *block_end = 0;
     // pass parmeters block strng to parser
     // copy block to temp buffer as parse_overrides will modify it while parsing
-    char* block = alloca (block_end - block_beg + 1);
-    memcpy (block, block_beg, block_end - block_beg);
-    block [block_end - block_beg] = 0;
+    size_t block_len = block_end - block_beg;
+    char* block = alloca (block_len + 1);
+    memcpy (block, block_beg, block_len);
+    // replace '@' symbols with '=' symbols: this is needed to keep BED description consistent with key = value; syntax
+    char* b, *sent;
+    for (b = block, sent = block + block_len; b != sent; b ++)
+        if (*b == '@') *b = '=';
+    block [block_len] = 0;
     return parse_overrides (local_params, block, local_logs, bed_fname, lineno);
 }
 
@@ -2386,6 +2417,19 @@ tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32
                 memsize *= 3;
                 b = tmap_realloc (b, sizeof (uint32_t) *memsize, "realloc_b");
                 e = tmap_realloc (e, sizeof (uint32_t) *memsize, "realloc_e");
+                // TS-17849
+                // if there are allready any parovr entries allocated for this contig, keep the size of contig's parovr array in sync with the size of amplicon beg/end arrays.
+                if (refseq->parovr && refseq->parovr [seq_id]) // could be check for (last_parovr_mem_size != NULL)
+                {
+                    refseq->parovr [seq_id] = tmap_realloc (refseq->parovr [seq_id], sizeof (uint32_t) * memsize, "refseq->parovr[seq_id]");
+                    uint32_t *par_idx, *par_idx_sent;
+                    for (par_idx = refseq->parovr [seq_id] + last_parovr_mem_size, 
+                            par_idx_sent = refseq->parovr [seq_id] + memsize; 
+                            par_idx != par_idx_sent;
+                            ++par_idx) 
+                        *par_idx = UINT32_MAX;
+                    last_parovr_mem_size = memsize;
+                }
             }
             if (b [num-1] > beg) 
             {
@@ -2416,10 +2460,12 @@ tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32
                 refseq->parovr = tmap_malloc (sizeof (uint32_t *) * n_anno, "refseq->parovr");
                 memset (refseq->parovr, 0, sizeof (uint32_t*) * n_anno); // NULL should always be all-bytes-zeroes, safe enough.
             }
-            if (memsize > last_parovr_mem_size) // no need to check if the allocation is first: realloc handles NULL ptr reallocation safely.
+            if (memsize > last_parovr_mem_size) // no need to check if the allocation is first: realloc handles NULL ptr reallocation safely. 
+                                                // After TS-17849 fix, This actually is invoked at first allocation only; for the rest, size of provr array is kept in sync with the size of ampl beg/end arrays
+                                                // (so the test can be replaced with if (!last_parovr_mem_size)
             {
                 refseq->parovr [seq_id] = tmap_realloc (refseq->parovr [seq_id], sizeof (uint32_t) * memsize, "refseq->parovr[seq_id]");
-                // memset (refseq->parovr [seq_id] + last_parovr_mem_size, 0xF, (memsize - last_parovr_mem_size) * sizeof (tmap_map_locopt_t*));
+                // memset (refseq->parovr [seq_id] + last_parovr_mem_size, 0xFF, (memsize - last_parovr_mem_size) * sizeof (tmap_map_locopt_t*));
                 // the above is not so portable, explicit (below) is safe
                 uint32_t *par_idx, *par_idx_sent;
                 for (par_idx = refseq->parovr [seq_id] + last_parovr_mem_size, 

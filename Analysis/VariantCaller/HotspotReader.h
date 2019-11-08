@@ -28,6 +28,7 @@ struct HotspotAllele {
   string alt;
   AlleleType type;
   int length;
+  int suffix_padding;
 
   VariantSpecificParams params;
 };
@@ -52,6 +53,7 @@ class hint_item {
   double afmean, afsd;
   double AFf, AFr;
   string alt;
+  int prefix;
 }; 
  
 class HotspotReader {
@@ -74,6 +76,7 @@ public:
   long int hint_position() const { return hint_vec[hint_cur_].pos; }
   long int hint_value() const { return hint_vec[hint_cur_].value; }
   long int  hint_rlen() const { return hint_vec[hint_cur_].rlen; }
+  int hint_prefix() const { return hint_vec[hint_cur_].prefix;}
   bool hint_getAF(double &af, double &sd) const { 
 	if (hint_vec[hint_cur_].afmean == 0) return false;
 	af = hint_vec[hint_cur_].afmean; sd = hint_vec[hint_cur_].afsd;

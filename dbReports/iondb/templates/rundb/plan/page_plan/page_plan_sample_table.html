@@ -175,7 +175,7 @@
 <script type="text/javascript">
     var samplesTableInit = {{step.savedFields.samplesTable|safe}};
     var samplesTableValidationErrors = [];
-    var planCategories = $("input[name='planCategories']").val();
+    var planCategories = $("input[name='planCategories']").val().split(";");
 
     var planOpt = {
         "isDualNucleotideType" : "{{helper.isDualNucleotideTypeBySample}}" === "True",
@@ -211,6 +211,7 @@
     var cancerTypes = [];
     var populations = [];
     var mouseStrains = [];
+    var markers = [];
     {% for obj in step.prepopulatedFields.sampleAnnotations %}
         {% if obj.annotationType == "controlType" %}
             controlTypes.push({
@@ -229,6 +230,11 @@
             });
         {% elif obj.annotationType == "mouseStrains" %}
             mouseStrains.push({
+               "value": "{{obj.value}}",
+               "display": "{{obj.value}}" || "None"
+            });
+        {% elif obj.annotationType == "16s_markers" %}
+            markers.push({
                "value": "{{obj.value}}",
                "display": "{{obj.value}}" || "None"
             });

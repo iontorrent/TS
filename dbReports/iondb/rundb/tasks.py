@@ -1636,7 +1636,7 @@ def test_node_and_update_db(node, head_versions):
     logger.info("Testing node: %s" % node.name)
     node_status = {"name": node.name, "status": "", "connect_tests": [], "error": ""}
     try:
-        node_status = connect_nodetest(node.name)
+        node_status = connect_nodetest(node.name, timeout_sec=90)
     except SoftTimeLimitExceeded:
         logger.error("Time limit exceeded for connect_nodetest on %s" % node.name)
         node_status["status"] = "error"
@@ -1647,7 +1647,7 @@ def test_node_and_update_db(node, head_versions):
     if node_status["status"] == "good":
         logger.info("Node: %s passed connect test" % node.name)
         try:
-            node_status.update(config_nodetest(node.name, head_versions))
+            node_status.update(config_nodetest(node.name, head_versions, timeout_sec=90))
             logger.info("Node: %s passed config test" % node.name)
         except SoftTimeLimitExceeded:
             logger.error("Time limit exceeded for config_nodetest on %s" % node.name)
@@ -1841,57 +1841,6 @@ def check_gunzip(gunZipFile, logger=None):
         logger.error("Failed to extract .gz file %s" % err)
 
     return isTaskSuccess, gunZipFile
-
-
-@app.task
-def new_annotation_download(annot_url, updateVersion, username, **reference_args):
-    ref_short_name = reference_args["short_name"]
-    from iondb.rundb.models import ReferenceGenome, Publisher
-    from django.core.files import File
-    from iondb.rundb import publishers
-
-    fileToRegister = None
-    isTaskSuccess = False
-    try:
-        reference = ReferenceGenome.objects.get(short_name=ref_short_name)
-    except Exception as err:
-        logger.debug(
-            "Reference does not exists for  Annotation File {0} with version {1}".format(
-                annot_url, updateVersion
-            )
-        )
-        return err
-    try:
-        (isTaskSuccess, fileToRegister, downloadstatus) = start_annotation_download(
-            annot_url, reference, updateVersion=updateVersion
-        )
-        print(isTaskSuccess, fileToRegister, downloadstatus)
-    except Exception as Err:
-        logger.debug("System Error {0}".format(Err))
-
-    if isTaskSuccess and downloadstatus == "Complete":
-        # convert the raw file into Django File object so that publisher framework can accept it
-        fileObject = open(fileToRegister)
-        upload = File(fileObject)
-        file_name = os.path.basename(upload.name)
-        upload.name = file_name
-        # Go ahead and register the annotation file via publisher framework
-        pub_name = "refAnnot"
-        meta = {
-            "publisher": pub_name,
-            "reference": ref_short_name,
-            "annotation_url": annot_url,
-            "username": username,
-            "upload_type": publisher_types.ANNOTATION,
-        }
-        try:
-            pub = Publisher.objects.get(name=pub_name)
-            contentUpload, _ = publishers.edit_upload(pub, upload, json.dumps(meta))
-            return contentUpload
-        except Exception:
-            logger.debug("Publisher does not exists {0}".format(pub_name))
-
-    return isTaskSuccess
 
 
 @app.task(queue="w1")

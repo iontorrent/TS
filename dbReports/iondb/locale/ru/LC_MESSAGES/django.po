@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-02-13 11:34-0800\n"
+"POT-Creation-Date: 2019-05-13 17:57+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -60,19 +60,19 @@ msgstr "переведите:An error occurred during the installation of the pl
 msgid "entity.Plugin.messages.uninstall.errormsg"
 msgstr "переведите:An error occurred during the uninstall of the plugin (%(id)s). Please contact Customer Support for assistance."
 
-#: rundb/api.py:6498 rundb/configure/views.py:926
+#: rundb/api.py:6528 rundb/configure/views.py:930
 msgid "entity.IonMeshNode.fields.status.choices.connection_error.description"
 msgstr "переведите:Could not make a connection to the remote server"
 
-#: rundb/api.py:6503 rundb/configure/views.py:930
+#: rundb/api.py:6533 rundb/configure/views.py:934
 msgid "entity.IonMeshNode.fields.status.choices.timeout.description"
 msgstr "переведите:Timeout while trying to get response from remote server"
 
-#: rundb/api.py:6515
+#: rundb/api.py:6545
 msgid "entity.IonMeshNode.fields.status.choices.incompatible.description"
 msgstr "переведите:Remote server has incompatible software version"
 
-#: rundb/api.py:6531 rundb/configure/views.py:935
+#: rundb/api.py:6561 rundb/configure/views.py:939
 msgid "entity.IonMeshNode.fields.status.choices.unauthorized.description"
 msgstr "переведите:Invalid user credentials"
 
@@ -1054,7 +1054,7 @@ msgstr "переведите:The following error occurred while attempting to lo
 msgid "Cannot install this plugin because the it would be a downgrade from version {oldVersion} to {newVersion}. "
 msgstr "переведите:Cannot install this plugin because the it would be a downgrade from version {oldVersion} to {newVersion}. "
 
-#: rundb/models.py:6003
+#: rundb/models.py:6006
 #, python-brace-format
 msgid "Error upgrading plugin: {exceptionMsg}"
 msgstr "переведите:Error upgrading plugin: {exceptionMsg}"
@@ -1160,8 +1160,8 @@ msgstr "переведите:Yes, Install!"
 
 #: rundb/configure/views.py:449 rundb/configure/views.py:485
 #: rundb/configure/views.py:529 rundb/configure/views.py:580
-#: rundb/configure/views.py:745 rundb/configure/views.py:2794
-#: rundb/plan/views.py:1772 rundb/sample/views.py:1445
+#: rundb/configure/views.py:749 rundb/configure/views.py:2798
+#: rundb/plan/views.py:1772 rundb/sample/views.py:1438
 #: templates/rundb/configure/account.html:253
 #: templates/rundb/configure/account.html:267
 #: templates/rundb/configure/modal_configure_edit_email.html:23
@@ -1174,7 +1174,7 @@ msgstr "переведите:Yes, Install!"
 #: templates/rundb/plan/plan_templates.html:284
 #: templates/rundb/plan/plan_templates.html:299
 #: templates/rundb/sample/modal_add_sample_attribute.html:106
-#: templates/rundb/sample/modal_add_sampleset.html:146
+#: templates/rundb/sample/modal_add_sampleset.html:158
 #: templates/rundb/sample/modal_add_samplesetitem.html:81
 #: templates/rundb/sample/modal_plan_run.html:27
 msgid "global.action.modal.cancel"
@@ -1193,13 +1193,13 @@ msgid "configure_plugins_plugin_install.fields.pickfile.label"
 msgstr "переведите:Upload a Plugin File"
 
 #: rundb/configure/views.py:475 rundb/configure/views.py:519
-#: rundb/configure/views.py:2784
+#: rundb/configure/views.py:2788
 #: templates/rundb/ion_publisher_content_add.html:33
 msgid "global.fields.pickfile.select"
 msgstr "переведите:Select File"
 
 #: rundb/configure/views.py:478 rundb/configure/views.py:522
-#: rundb/configure/views.py:2787
+#: rundb/configure/views.py:2791
 msgid "global.fields.pickfile.helptext"
 msgstr "переведите:In order to provide a better uploading experience an HTML5 compatible browser are required for file uploading. You may need to contact your local system administrator for assistance."
 
@@ -1251,39 +1251,39 @@ msgstr "переведите:Yes, Upgrade!"
 msgid "configure_plugins_plugin_upgrade.messages.submitmsg"
 msgstr "переведите:Now upgrading, please wait."
 
-#: rundb/configure/views.py:733
+#: rundb/configure/views.py:737
 msgid "configure_plugins_plugin_uninstall.title"
 msgstr "переведите:Confirm Uninstall Plugin"
 
-#: rundb/configure/views.py:736
+#: rundb/configure/views.py:740
 msgid "configure_plugins_plugin_uninstall.messages.confirmmsg.singular"
 msgstr "переведите:Are you sure you want to uninstall %(versionedName)s Plugin (%(id)s)?"
 
-#: rundb/configure/views.py:743
+#: rundb/configure/views.py:747
 msgid "configure_plugins_plugin_uninstall.action.submit"
 msgstr "переведите:Yes, Uninstall!"
 
-#: rundb/configure/views.py:747
+#: rundb/configure/views.py:751
 msgid "configure_plugins_plugin_uninstall.messages.submitmsg"
 msgstr "переведите:Now uninstalling, please wait."
 
-#: rundb/configure/views.py:940 rundb/configure/views.py:971
+#: rundb/configure/views.py:944 rundb/configure/views.py:975
 msgid "configure_mesh.setup.messages.error"
 msgstr "переведите:Unable to set up Mesh link. Ensure remote server has the same version of Torrent Suite as this server. "
 
-#: rundb/configure/views.py:949
+#: rundb/configure/views.py:953
 msgid "configure_mesh.setup.messages.system_id.localhost"
 msgstr "переведите:Adding your own local host into mesh is not allowed. Please check your hostname/address. "
 
-#: rundb/configure/views.py:954
+#: rundb/configure/views.py:958
 msgid "configure_mesh.setup.messages.exists"
 msgstr "переведите:This system has already been setup in the mesh as '%(mesh_node_name)s'. "
 
-#: rundb/configure/views.py:1226
+#: rundb/configure/views.py:1230
 msgid "references_TF_edit.edit.title"
 msgstr "переведите:Edit Test Fragment"
 
-#: rundb/configure/views.py:1228 rundb/configure/views.py:1245
+#: rundb/configure/views.py:1232 rundb/configure/views.py:1249
 #: templates/rundb/ion_publisher_upload_status.html:64
 #: templates/rundb/configure/account.html:188
 #: templates/rundb/configure/edit_reference.html:223
@@ -1293,128 +1293,128 @@ msgstr "переведите:Edit Test Fragment"
 msgid "global.action.save"
 msgstr "переведите:Save"
 
-#: rundb/configure/views.py:1243
+#: rundb/configure/views.py:1247
 msgid "references_TF_edit.add.title"
 msgstr "переведите:Add New Test Fragment"
 
-#: rundb/configure/views.py:1271
+#: rundb/configure/views.py:1275
 msgid "testfragment.modal_confirm_delete.title.singular"
 msgstr "Подтвердить удаление тестового фрагмента"
 
-#: rundb/configure/views.py:1274
+#: rundb/configure/views.py:1278
 msgid "testfragment.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "переведите: Are you sure you want to delete this Test Fragment <b>%(testFragmentName)s</b> (%(testFragmentId)s)?"
 
-#: rundb/configure/views.py:1277
+#: rundb/configure/views.py:1281
 msgid "testfragment.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/configure/views.py:1278
+#: rundb/configure/views.py:1282
 msgid "testfragment.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/configure/views.py:1295
+#: rundb/configure/views.py:1299
 msgid "references_barcodeset.title"
 msgstr "переведите:Barcodes in {barCodeSetName}"
 
-#: rundb/configure/views.py:1354
+#: rundb/configure/views.py:1358
 msgid "references_barcodeset_add.messages.error.barcoderequired"
 msgstr "переведите:Error: There must be at least one barcode! Please reload the page and try again with more barcodes."
 
-#: rundb/configure/views.py:1409
+#: rundb/configure/views.py:1413
 msgid "references_barcodeset_add.messages.success"
 msgstr "переведите:Barcodes Uploaded! The barcode set will be listed on the references page."
 
-#: rundb/configure/views.py:1462
+#: rundb/configure/views.py:1466
 msgid "barcodeset.modal_confirm_delete.title.singular"
 msgstr "Подтвердить удаление набора штрих-кода"
 
-#: rundb/configure/views.py:1465
+#: rundb/configure/views.py:1469
 msgid "barcodeset.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "переведите: Are you sure you want to delete this Barcode Set <b>%(barCodeSetName)s</b>?"
 
-#: rundb/configure/views.py:1468
+#: rundb/configure/views.py:1472
 msgid "barcodeset.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/configure/views.py:1469
+#: rundb/configure/views.py:1473
 msgid "barcodeset.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/configure/views.py:1500
+#: rundb/configure/views.py:1504
 msgid "references_barcode_edit.title"
 msgstr "переведите:Edit barcode in set <strong>{barCodeSetName}</strong>"
 
-#: rundb/configure/views.py:1509
+#: rundb/configure/views.py:1513
 msgid "references_barcode_add.title"
 msgstr "переведите:Add new barcode in set <strong>{barCodeSetName}</strong>"
 
-#: rundb/configure/views.py:1551
+#: rundb/configure/views.py:1555
 msgid "barcode.modal_confirm_delete.title.singular"
 msgstr "Подтвердить удаление штрих-кода"
 
-#: rundb/configure/views.py:1554
+#: rundb/configure/views.py:1558
 msgid "barcode.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "переведите: Are you sure you want to delete this Barcode <b>%(barCodeIdStr)s</b> (%(barCodePk)s)?"
 
-#: rundb/configure/views.py:1557
+#: rundb/configure/views.py:1561
 msgid "barcode.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/configure/views.py:1558
+#: rundb/configure/views.py:1562
 msgid "barcode.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/configure/views.py:1851
+#: rundb/configure/views.py:1855
 msgid "configure_configure.email.add_email.title"
 msgstr "переведите:Add Email"
 
-#: rundb/configure/views.py:1859
+#: rundb/configure/views.py:1863
 msgid "configure_configure.email.edit_email.title"
 msgstr "переведите:Edit Email"
 
-#: rundb/configure/views.py:1886
+#: rundb/configure/views.py:1890
 msgid "emailaddress.modal_confirm_delete.title.singular"
 msgstr "Подтвердить удаление адреса электронной почты"
 
-#: rundb/configure/views.py:1889
+#: rundb/configure/views.py:1893
 msgid "emailaddress.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "переведите: Are you sure you want to delete this Email Address <b>%(emailAddress)s</b> (%(emailId)s)?"
 
-#: rundb/configure/views.py:1892
+#: rundb/configure/views.py:1896
 msgid "emailaddress.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/configure/views.py:1893
+#: rundb/configure/views.py:1897
 msgid "emailaddress.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/configure/views.py:2438 rundb/data/views.py:473
+#: rundb/configure/views.py:2442 rundb/data/views.py:473
 #: rundb/data/views.py:1760 rundb/data/views.py:1781
 msgid "eventlog.messages.empty"
 msgstr "Журналы, найденные для %(title)s,"
 
-#: rundb/configure/views.py:2776
+#: rundb/configure/views.py:2780
 msgid "configure_offline_bundle.title"
 msgstr "переведите:Install Updates"
 
-#: rundb/configure/views.py:2781
+#: rundb/configure/views.py:2785
 msgid "configure_offline_bundle.fields.pickfile.label"
 msgstr "переведите:Upload an Updates File"
 
-#: rundb/configure/views.py:2792
+#: rundb/configure/views.py:2796
 msgid "configure_offline_bundle.action.submit"
 msgstr "переведите:Upload and Install"
 
-#: rundb/configure/views.py:2796
+#: rundb/configure/views.py:2800
 msgid "configure_offline_bundle.messages.submitmsg"
 msgstr "The install process may take a few minutes to complete..."
 
-#: rundb/configure/views.py:2799
+#: rundb/configure/views.py:2803
 msgid "configure_offline_bundle.messages.submitsuccessmsg"
 msgstr "переведите:Started Install Updates"
 
-#: rundb/configure/views.py:2802
+#: rundb/configure/views.py:2806
 msgid "configure_offline_bundle.messages.submitprocessingmsg"
 msgstr "переведите:Installing, please wait ..."
 
@@ -1715,12 +1715,12 @@ msgstr "Подтверждение удаления запланированны
 msgid "plannedrun.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "переведите: Are you sure you want to delete these Planned Runs?"
 
-#: rundb/plan/views.py:881 rundb/sample/views.py:1764
+#: rundb/plan/views.py:881 rundb/sample/views.py:1757
 msgid "samplesets.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/plan/views.py:882 rundb/sample/views.py:1718
-#: rundb/sample/views.py:1765
+#: rundb/plan/views.py:882 rundb/sample/views.py:1711
+#: rundb/sample/views.py:1758
 msgid "samplesets.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
@@ -1832,7 +1832,7 @@ msgstr "переведите:Transfer"
 #: templates/rundb/data/modal_report_log.html:10
 #: templates/rundb/plan/modal_plannedexperiment_detail.html:500
 #: templates/rundb/plan/plan_templates.html:301
-#: templates/rundb/reports/blocks/barcodes.html:132
+#: templates/rundb/reports/blocks/barcodes.html:141
 #: templates/rundb/reports/blocks/basecaller.html:112
 #: templates/rundb/reports/blocks/beadfind.html:34
 #: templates/rundb/reports/blocks/beadfind.html:46
@@ -2119,27 +2119,27 @@ msgstr "Контрольная последовательность"
 msgid "workflow.step.kits.fields.samplePreparationKit.label"
 msgstr "Набор для подготовки образца"
 
-#: rundb/report/views.py:1178
+#: rundb/report/views.py:1195
 msgid "report.section.unaligned.beadfind.fields.keysignal.details"
 msgstr "Порог качества - <strong>%(key_signal_threshold)s</strong> . <br/> Средний 1-мерный сигнал в библиотечном ключе <br/> Цветные полосы указывают порог качества, установленный в вашем плане, синий - выше, а красный - ниже."
 
-#: rundb/report/views.py:1196
+#: rundb/report/views.py:1213
 msgid "report.section.unaligned.beadfind.fields.bead_loading.details"
 msgstr "Порог качества - <strong>%(bead_loading_threshold)s%%</strong> . <br/> Цветные полосы указывают порог качества, установленный в вашем плане, синий - выше, а красный - ниже."
 
-#: rundb/report/views.py:1235
+#: rundb/report/views.py:1252
 msgid "report.section.unaligned.basecaller.fields.usable_sequence.details"
 msgstr "Порог качества - <strong>%(usable_sequence_threshold)s%%</strong> . <br/> Цветные полосы указывают порог качества, установленный в вашем плане, синий - выше, а красный - ниже."
 
-#: rundb/report/views.py:1395
+#: rundb/report/views.py:1412
 msgid "report.section.aligned.messages.noalignmentstatsshown"
 msgstr "Для секвенирования RNA см. Вывод плагина RNASeq Analysis для статистики выравнивания"
 
-#: rundb/report/views.py:1470
+#: rundb/report/views.py:1487
 msgid "report.section.summary.messages.no_live_beads_status"
 msgstr "(Запуск завершен с %(status)s!)"
 
-#: rundb/report/views.py:1582
+#: rundb/report/views.py:1599
 msgid "report.classic.name"
 msgstr "Классический отчет"
 
@@ -2243,7 +2243,7 @@ msgstr "Пара ID"
 msgid "samplesets.samplesetitem.fields.embryoId.label"
 msgstr "Идентификатор эмбрионов"
 
-#: rundb/sample/sample_validator.py:979 rundb/sample/views.py:1903
+#: rundb/sample/sample_validator.py:979 rundb/sample/views.py:1896
 #: templates/rundb/sample/modal_add_sample_attribute.html:27
 msgid "samplesets.sampleattributes.fields.displayedName.label"
 msgstr "имя атрибута"
@@ -2277,142 +2277,142 @@ msgstr "Источник:"
 msgid "samplesets.addedit.fields.groupType.tooltip.disabled"
 msgstr "переведите:Group Type cannot be changed since this sample set status is %(status)s"
 
-#: rundb/sample/views.py:376
+#: rundb/sample/views.py:371
 msgid "samplesets.addedit.fields.libraryPrepType.tooltip"
 msgstr " "
 
-#: rundb/sample/views.py:379 templates/rundb/sample/modal_add_sampleset.html:66
+#: rundb/sample/views.py:374
 msgid "samplesets.addedit.fields.libraryPrepType.tooltip.disabled"
 msgstr "переведите:Library Prep Type cannot be changed since this sample set status is %(status)s"
 
-#: rundb/sample/views.py:388
+#: rundb/sample/views.py:383
 msgid "samplesets.addedit.fields.libraryPrepKit.tooltip"
 msgstr " "
 
-#: rundb/sample/views.py:391 templates/rundb/sample/modal_add_sampleset.html:91
+#: rundb/sample/views.py:386
 msgid "samplesets.addedit.fields.libraryPrepKit.tooltip.disabled"
 msgstr "переведите:Library Prep Kit cannot be changed since this sample set status is %(status)s"
 
-#: rundb/sample/views.py:426
+#: rundb/sample/views.py:421
 msgid "samplesets.messages.sampleset_plan_run.validationerrors"
 msgstr "переведите: Cannot Plan Run from %(sampleSetNames)s. "
 
-#: rundb/sample/views.py:445
+#: rundb/sample/views.py:440
 msgid "samplesets.messages.sampleset_plan_run.warnings.SampleGroupType_CV.multiple"
 msgstr "переведите:%(errorPrefix)s%(warningPrefix)s multiple Group Types selected: %(sampleGroupTypes)s"
 
-#: rundb/sample/views.py:842
+#: rundb/sample/views.py:837
 #: templates/rundb/sample/modal_save_samplesetitems.html:23
 msgid "samplesets.input_samples.save.fields.sampleset.label"
 msgstr "Набор образцов"
 
-#: rundb/sample/views.py:919
+#: rundb/sample/views.py:912
 msgid "samplesets.input_samples.save.error"
 msgstr "переведите: Error saving manually entered sample set info to database."
 
-#: rundb/sample/views.py:1013
+#: rundb/sample/views.py:1006
 msgid "import_samples.messages.failure"
 msgstr "переведите: Import Samples validation failed. The samples have not been imported. Please correct the errors and try again or choose a different sample file to import. "
 
-#: rundb/sample/views.py:1060
+#: rundb/sample/views.py:1053
 msgid "import_samples.messages.file_contains_non_ascii_characters"
 msgstr "переведите: Only ASCII characters are supported. Please carefully inspect the file to ensure only ASCII characters are specified. The following files contain non-ASCII characters: %(files)s."
 
-#: rundb/sample/views.py:1099 rundb/sample/views.py:1120
-#: rundb/sample/views.py:1184 templates/rundb/sample/import_samples.html:66
+#: rundb/sample/views.py:1092 rundb/sample/views.py:1113
+#: rundb/sample/views.py:1177 templates/rundb/sample/import_samples.html:66
 msgid "import_samples.fields.file.label"
 msgstr "Файл примера"
 
-#: rundb/sample/views.py:1200 rundb/sample/views.py:1226
-#: rundb/sample/views.py:1236 rundb/sample/views.py:1249
+#: rundb/sample/views.py:1193 rundb/sample/views.py:1219
+#: rundb/sample/views.py:1229 rundb/sample/views.py:1242
 #: templates/rundb/sample/import_samples.html:90
 #: templates/rundb/sample/import_samples.html:135
 msgid "import_samples.fields.sampleset.label"
 msgstr "Набор образцов"
 
-#: rundb/sample/views.py:1281 templates/rundb/sample/import_samples.html:50
+#: rundb/sample/views.py:1274 templates/rundb/sample/import_samples.html:50
 #: templates/rundb/sample/import_samples.html:58
 msgid "import_samples.title"
 msgstr "Импорт образцов"
 
-#: rundb/sample/views.py:1291
+#: rundb/sample/views.py:1284
 msgid "import_samples.messages.success"
 msgstr "переведите: Import Samples completed successfully! The sample set will be listed on the sample set page."
 
-#: rundb/sample/views.py:1442
+#: rundb/sample/views.py:1435
 #: templates/rundb/sample/modal_add_samplesetitem.html:36
 msgid "samplesets.samplesetitem.edit.title"
 msgstr "Изменить образец"
 
-#: rundb/sample/views.py:1443
+#: rundb/sample/views.py:1436
 msgid "samplesets.samplesetitem.edit.pending.messages.invalidid"
 msgstr "переведите: The selected Sample (%(pendingSampleSetItemId)s) is no longer available for this session."
 
-#: rundb/sample/views.py:1620
+#: rundb/sample/views.py:1613
 msgid "samplesets.sampleattribute.modal_confirm_delete.title.singular"
 msgstr "Подтвердить выбор набора проб"
 
-#: rundb/sample/views.py:1622
+#: rundb/sample/views.py:1615
 msgid "samplesets.sampleattribute.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "Вы уверены, что хотите удалить этот набор образцов <b>%(sampleAttributeName)s</b> (%(sampleAttributeId)s)?"
 
-#: rundb/sample/views.py:1625
+#: rundb/sample/views.py:1618
 msgid "samplesets.sampleattribute.modal_confirm_delete.title.plural"
 msgstr "Подтвердите удаление набора образцов и ассоциаций (-ов), связанных с %(sampleAttributeSamplesCount)d"
 
-#: rundb/sample/views.py:1629
+#: rundb/sample/views.py:1622
 msgid "samplesets.sampleattribute.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "Вы уверены, что хотите удалить этот набор образцов <b>%(sampleAttributeName)s</b> (%(sampleAttributeId)s)и связанных с %(sampleAttributeSamplesCount)d ассоциаций образцов ?"
 
-#: rundb/sample/views.py:1650
+#: rundb/sample/views.py:1643
 msgid "samplesets.sampleattribute.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/sample/views.py:1653
+#: rundb/sample/views.py:1646
 msgid "samplesets.sampleattribute.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/sample/views.py:1679
+#: rundb/sample/views.py:1672
 msgid "samplesets.modal_confirm_delete.title.singular"
 msgstr "Подтвердить выбор набора проб"
 
-#: rundb/sample/views.py:1680
+#: rundb/sample/views.py:1673
 msgid "samplesets.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "Вы уверены, что хотите удалить этот набор образцов <b>%(sampleSetName)s</b> (%(sampleSetId)s)?"
 
-#: rundb/sample/views.py:1685
+#: rundb/sample/views.py:1678
 msgid "samplesets.modal_confirm_delete.title.plural"
 msgstr "Подтвердите удаление набора образцов и ассоциаций (-ов), связанных с %(sampleSetItemsCount)d"
 
-#: rundb/sample/views.py:1688
+#: rundb/sample/views.py:1681
 msgid "samplesets.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "Вы уверены, что хотите удалить этот набор образцов <b>%(sampleSetName)s</b> (%(sampleSetId)s) и связанных с %(sampleSetItemsCount)d ассоциаций образцов ?"
 
-#: rundb/sample/views.py:1704
+#: rundb/sample/views.py:1697
 msgid "samplesets.messages.delete.usedbyplantemplatesorplannedruns"
 msgstr "переведите: Error, The Sample Set %(sampleSetName)s is used by %(plannedRunsCount)d Planned Run(s) and %(planTemplatesCount)d Plan Template(s). Sample Set %(sampleSetName)s cannot be deleted."
 
-#: rundb/sample/views.py:1800
+#: rundb/sample/views.py:1793
 msgid "samplesets.samplesetitem.modal_confirm_delete.title.singular"
 msgstr "Подтвердить выбор набора проб"
 
-#: rundb/sample/views.py:1812
+#: rundb/sample/views.py:1805
 msgid "samplesets.samplesetitem.messages.delete.usedbyplantemplatesorplannedruns"
 msgstr "переведите: Error, The Sample %(sampleName)s belongs to a Sample Set %(sampleSetName)s that is used by %(plannedRunsCount)d Planned Run(s) and %(planTemplatesCount)d Plan Template(s). Sample %(sampleName)s cannot be removed from the Sample Set %(sampleSetName)s."
 
-#: rundb/sample/views.py:1826 rundb/sample/views.py:1865
+#: rundb/sample/views.py:1819 rundb/sample/views.py:1858
 msgid "samplesets.samplesetitem.modal_confirm_delete.action.cancel"
 msgstr "Отмена"
 
-#: rundb/sample/views.py:1854
+#: rundb/sample/views.py:1847
 msgid "samplesets.samplesetitem.modal_confirm_delete.messages.confirmmsg"
 msgstr "Вы уверены, что хотите удалить этот образец <b>%(sampleName)s</b> (%(sampleId)s) из набора пробных наборов %(sampleSetName)s?"
 
-#: rundb/sample/views.py:1862
+#: rundb/sample/views.py:1855
 msgid "samplesets.samplesetitem.modal_confirm_delete.action.submit"
 msgstr "Да, Удалить!"
 
-#: rundb/sample/views.py:1924
+#: rundb/sample/views.py:1917
 #: templates/rundb/sample/modal_add_sample_attribute.html:43
 msgid "samplesets.sampleattributes.fields.dataType.dataType.label"
 msgstr "Тип атрибута"
@@ -5504,12 +5504,10 @@ msgstr "переведите:Upload Panel from Zip Archive"
 msgid "template.fields.note.label"
 msgstr "Заметки"
 
-#: templates/rundb/plan/plan_templates.html:362
 #: templates/rundb/plan/plan_templates.html:367
 msgid "template.fields.targetRegionBedFile.label"
 msgstr "цель"
 
-#: templates/rundb/plan/plan_templates.html:362
 #: templates/rundb/plan/plan_templates.html:370
 msgid "template.fields.hotSpotRegionBedFile.label"
 msgstr "горячая точка"
@@ -6920,57 +6918,62 @@ msgstr "Файлы для каждого штрих-кода"
 msgid "report.section.output.barcodes.files.label"
 msgstr "файлы"
 
-#: templates/rundb/reports/blocks/barcodes.html:47
-#: templates/rundb/reports/blocks/barcodes.html:55
+#: templates/rundb/reports/blocks/barcodes.html:49
+#, fuzzy
+msgid "report.section.output.barcodes.filtered.tooltip"
+msgstr "Файлы для каждого штрих-кода"
+
+#: templates/rundb/reports/blocks/barcodes.html:51
+#: templates/rundb/reports/blocks/barcodes.html:62
 msgid "report.section.output.barcodes.messages.barcode_name.none"
 msgstr "Нет штрих-кода"
 
-#: templates/rundb/reports/blocks/barcodes.html:48
+#: templates/rundb/reports/blocks/barcodes.html:53
 msgid "report.section.output.barcodes.messages.sample.none"
 msgstr "Никто"
 
-#: templates/rundb/reports/blocks/barcodes.html:59
-#: templates/rundb/reports/blocks/barcodes.html:61
+#: templates/rundb/reports/blocks/barcodes.html:68
+#: templates/rundb/reports/blocks/barcodes.html:70
 #: templates/rundb/reports/blocks/output.html:27
 msgid "report.section.output.unaligned.basecaller_bam.tooltip"
 msgstr "Обрезанные чтения в выровненным BAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:59
-#: templates/rundb/reports/blocks/barcodes.html:61
+#: templates/rundb/reports/blocks/barcodes.html:68
+#: templates/rundb/reports/blocks/barcodes.html:70
 #: templates/rundb/reports/blocks/output.html:27
 #: templates/rundb/reports/blocks/output.html:29
 msgid "report.section.output.unaligned.basecaller_bam.label"
 msgstr "UBAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:64
-#: templates/rundb/reports/blocks/barcodes.html:66
+#: templates/rundb/reports/blocks/barcodes.html:73
+#: templates/rundb/reports/blocks/barcodes.html:75
 #: templates/rundb/reports/blocks/output.html:35
 #: templates/rundb/reports/blocks/output.html:37
 msgid "report.section.output.aligned.bam.tooltip"
 msgstr "Выровненные чтения отсортированы по ссылке."
 
-#: templates/rundb/reports/blocks/barcodes.html:64
-#: templates/rundb/reports/blocks/barcodes.html:66
+#: templates/rundb/reports/blocks/barcodes.html:73
+#: templates/rundb/reports/blocks/barcodes.html:75
 #: templates/rundb/reports/blocks/output.html:35
 #: templates/rundb/reports/blocks/output.html:37
 msgid "report.section.output.aligned.bam.label"
 msgstr "BAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:69
-#: templates/rundb/reports/blocks/barcodes.html:71
+#: templates/rundb/reports/blocks/barcodes.html:78
+#: templates/rundb/reports/blocks/barcodes.html:80
 #: templates/rundb/reports/blocks/output.html:41
 #: templates/rundb/reports/blocks/output.html:43
 msgid "report.section.output.aligned.bai.tooltip"
 msgstr "Файл индекса BAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:69
-#: templates/rundb/reports/blocks/barcodes.html:71
+#: templates/rundb/reports/blocks/barcodes.html:78
+#: templates/rundb/reports/blocks/barcodes.html:80
 #: templates/rundb/reports/blocks/output.html:41
 #: templates/rundb/reports/blocks/output.html:43
 msgid "report.section.output.aligned.bai.label"
 msgstr "БАЙ"
 
-#: templates/rundb/reports/blocks/barcodes.html:126
+#: templates/rundb/reports/blocks/barcodes.html:135
 msgid "report.section.output.barcodes.read_len_histogram.details.title"
 msgstr "Длины считывания штрих-кода"
 
@@ -7469,42 +7472,42 @@ msgstr "необходимые"
 msgid "samplesets.addedit.fields.groupType.label"
 msgstr "Тип группы"
 
-#: templates/rundb/sample/modal_add_sampleset.html:61
+#: templates/rundb/sample/modal_add_sampleset.html:67
 #: templates/rundb/sample/sampleset_input_section.html:31
 #: templates/rundb/sample/sampleset_input_section.html:38
 msgid "samplesets.addedit.fields.libraryPrepType.label"
 msgstr "Тип библиотеки библиотеки"
 
-#: templates/rundb/sample/modal_add_sampleset.html:86
+#: templates/rundb/sample/modal_add_sampleset.html:93
 #: templates/rundb/sample/sampleset_input_section.html:69
 #: templates/rundb/sample/sampleset_input_section.html:77
 msgid "samplesets.addedit.fields.libraryPrepKit.label"
 msgstr "Набор для подготовки библиотеки"
 
-#: templates/rundb/sample/modal_add_sampleset.html:129
+#: templates/rundb/sample/modal_add_sampleset.html:141
 #: templates/rundb/sample/sampleset_input_section.html:90
 #: templates/rundb/sample/sampleset_input_section.html:93
 msgid "samplesets.addedit.fields.pcrPlateSerialNum.label"
 msgstr "Серийный номер ПЦР-плиты"
 
-#: templates/rundb/sample/modal_add_sampleset.html:131
+#: templates/rundb/sample/modal_add_sampleset.html:143
 #: templates/rundb/sample/sampleset_input_section.html:91
 #: templates/rundb/sample/sampleset_input_section.html:94
 msgid "samplesets.addedit.fields.pcrPlateSerialNum.placeholder"
 msgstr "Необязательный"
 
-#: templates/rundb/sample/modal_add_sampleset.html:135
+#: templates/rundb/sample/modal_add_sampleset.html:147
 #: templates/rundb/sample/sampleset_input_section.html:118
 #: templates/rundb/sample/sampleset_input_section.html:121
 msgid "samplesets.addedit.fields.sampleSetDescription.label"
 msgstr "описание"
 
-#: templates/rundb/sample/modal_add_sampleset.html:137
+#: templates/rundb/sample/modal_add_sampleset.html:149
 #: templates/rundb/sample/sampleset_input_section.html:122
 msgid "samplesets.addedit.fields.sampleSetDescription.placeholder"
 msgstr "Необязательный"
 
-#: templates/rundb/sample/modal_add_sampleset.html:147
+#: templates/rundb/sample/modal_add_sampleset.html:159
 msgid "samplesets.addedit.action.submit"
 msgstr "ИДТИ"
 

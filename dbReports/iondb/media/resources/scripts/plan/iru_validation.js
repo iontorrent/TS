@@ -153,6 +153,8 @@ function get_user_input_info_from_ui() {
             dict["cellNum"] = row["ircellNum"];
             dict["coupleID"] = row["ircoupleID"];
             dict["embryoID"] = row["irembryoID"];
+            dict["BacterialMarkerType"] = row["irBacterialMarkerType"];
+            dict["Witness"] = row["irWitness"];
             dict["setid"] = row["irSetID"];
             dict["controlType"] = row["controlType"];
             dict["reference"] = row["reference"];

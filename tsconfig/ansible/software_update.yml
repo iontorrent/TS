@@ -8,6 +8,22 @@
     - name:
       include: globals.yml
 
+    # Restarting apache2 cleanly prior to update
+    - name: Stopping apache2
+      service:
+        name: apache2
+        state: stopped
+      ignore_errors: yes
+
+    - name: Force kill apache2 if necessary
+      command: pkill -9 apache2
+      ignore_errors: yes
+
+    - name: Starting apache2
+      service:
+        name: apache2
+        state: started
+
     # Ensure Ion system daemons are stopped
     - name: Ion Daemons shutting down...
       service:

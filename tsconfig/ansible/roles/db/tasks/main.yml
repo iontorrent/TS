@@ -6,9 +6,11 @@
 
 - name: Install postgresql package
   apt: pkg=postgresql state=present
+  when: has_network_access
 
 - name: Need python-psycopg2
   apt: name=python-psycopg2 state=installed force=yes
+  when: has_network_access
 
 - name: Determine postgresql version string
   shell: "dpkg -l postgresql | grep ^ii | awk '/+/ {print $3}' | cut -d'+' -f1"
@@ -79,6 +81,14 @@
                 regexp='^data_directory.*'
                 line="data_directory = '/results/postgresql/{{ psql_version.stdout }}/main'"
   when: S5_virtual_guest|bool == True
+
+# On 18.04 postgres needs to delay start so /results is mounted first
+- name: Update postgresql systemd service on TSVM
+  lineinfile: dest=/lib/systemd/system/postgresql@.service
+                  regexp='^After='
+                  insertafter='^Before='
+                  line='After=network-online.target ionMountExternal.service'
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
 
 # TS-10551.  Stock max connections of 100 is too low.
 - name: 'postgresql.conf: Customize max_connections value'

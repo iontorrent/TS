@@ -193,6 +193,7 @@ common_syspkg_list:
     - timelimit
     - dkms
     - expect
+    - bc
 
 ion_services_list:
     - rabbitmq-server

@@ -8,15 +8,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 USER = "ionadmin"
+TIMEOUT_CMD = "/usr/bin/timeout"
 
 
-def connect_nodetest(node):
+def connect_nodetest(node, timeout_sec=120):
     """
     # Runs /usr/sbin/grp_connect_nodetest to test node connection
     # node status on any failure is 'error'
+
+    grp_connect_nodetest takes another params: timeout in sec, which is used to terminate the remote
+    command, so pad more seconds to ensure remote process will timeout after parent one.
     """
     script = "/usr/sbin/grp_connect_nodetest"
-    command = ["sudo", "-u", USER, script, node]
+    command = ["sudo", "-u", USER, TIMEOUT_CMD, str(timeout_sec), script, node, str(timeout_sec * 1.5)]
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
 
@@ -35,7 +39,7 @@ def connect_nodetest(node):
     return status_dict
 
 
-def config_nodetest(node, head_versions):
+def config_nodetest(node, head_versions, timeout_sec=120):
     """
     # Runs /usr/sbin/grp_config_nodetest to test node configurations
     # node status on any failure is 'warning'
@@ -53,7 +57,7 @@ def config_nodetest(node, head_versions):
         )
 
     script = "/usr/sbin/grp_config_nodetest"
-    command = ["sudo", "-u", USER, script, node]
+    command = ["sudo", "-u", USER, TIMEOUT_CMD, str(timeout_sec), script, node, str(timeout_sec * 1.5)]
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
 

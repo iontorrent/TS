@@ -252,7 +252,7 @@ $(".configure_plugin").click(function(){
         save_plugin_config();
 
     iframe.attr('data-plugin_pk',pluginId);
-    var src = "/configure/plugins/plugin/XXX/configure/plan/".replace('XXX',pluginId);
+    var src = plugin_config_url.replace('XXX',pluginId);
     $("#plugin_config").show();
     
     // restore saved configuration, if any

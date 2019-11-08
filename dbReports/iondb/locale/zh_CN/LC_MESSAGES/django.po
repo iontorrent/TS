@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-02-13 11:34-0800\n"
+"POT-Creation-Date: 2019-05-13 17:57+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -59,19 +59,19 @@ msgstr "安装插件时发生错误。请联系客户支持寻求帮助。"
 msgid "entity.Plugin.messages.uninstall.errormsg"
 msgstr "卸载插件(%(id)s)时发生错误。请联系客户支持寻求帮助。"
 
-#: rundb/api.py:6498 rundb/configure/views.py:926
+#: rundb/api.py:6528 rundb/configure/views.py:930
 msgid "entity.IonMeshNode.fields.status.choices.connection_error.description"
 msgstr "无法与远程服务器建立连接"
 
-#: rundb/api.py:6503 rundb/configure/views.py:930
+#: rundb/api.py:6533 rundb/configure/views.py:934
 msgid "entity.IonMeshNode.fields.status.choices.timeout.description"
 msgstr "尝试从远程服务器获取响应时超时"
 
-#: rundb/api.py:6515
+#: rundb/api.py:6545
 msgid "entity.IonMeshNode.fields.status.choices.incompatible.description"
 msgstr "远程服务器有不兼容的软件版本"
 
-#: rundb/api.py:6531 rundb/configure/views.py:935
+#: rundb/api.py:6561 rundb/configure/views.py:939
 msgid "entity.IonMeshNode.fields.status.choices.unauthorized.description"
 msgstr "用户凭据无效"
 
@@ -1053,7 +1053,7 @@ msgstr "加载插件时发生以下错误：{exceptionMsg}"
 msgid "Cannot install this plugin because the it would be a downgrade from version {oldVersion} to {newVersion}. "
 msgstr "无法将插件从版本 {oldVersion} 降级安装到版本 {newVersion}"
 
-#: rundb/models.py:6003
+#: rundb/models.py:6006
 #, python-brace-format
 msgid "Error upgrading plugin: {exceptionMsg}"
 msgstr "插件升级错误： {exceptionMsg}"
@@ -1159,8 +1159,8 @@ msgstr "是，安装!"
 
 #: rundb/configure/views.py:449 rundb/configure/views.py:485
 #: rundb/configure/views.py:529 rundb/configure/views.py:580
-#: rundb/configure/views.py:745 rundb/configure/views.py:2794
-#: rundb/plan/views.py:1772 rundb/sample/views.py:1445
+#: rundb/configure/views.py:749 rundb/configure/views.py:2798
+#: rundb/plan/views.py:1772 rundb/sample/views.py:1438
 #: templates/rundb/configure/account.html:253
 #: templates/rundb/configure/account.html:267
 #: templates/rundb/configure/modal_configure_edit_email.html:23
@@ -1173,7 +1173,7 @@ msgstr "是，安装!"
 #: templates/rundb/plan/plan_templates.html:284
 #: templates/rundb/plan/plan_templates.html:299
 #: templates/rundb/sample/modal_add_sample_attribute.html:106
-#: templates/rundb/sample/modal_add_sampleset.html:146
+#: templates/rundb/sample/modal_add_sampleset.html:158
 #: templates/rundb/sample/modal_add_samplesetitem.html:81
 #: templates/rundb/sample/modal_plan_run.html:27
 msgid "global.action.modal.cancel"
@@ -1192,13 +1192,13 @@ msgid "configure_plugins_plugin_install.fields.pickfile.label"
 msgstr "上传插件文件"
 
 #: rundb/configure/views.py:475 rundb/configure/views.py:519
-#: rundb/configure/views.py:2784
+#: rundb/configure/views.py:2788
 #: templates/rundb/ion_publisher_content_add.html:33
 msgid "global.fields.pickfile.select"
 msgstr "选择文件"
 
 #: rundb/configure/views.py:478 rundb/configure/views.py:522
-#: rundb/configure/views.py:2787
+#: rundb/configure/views.py:2791
 msgid "global.fields.pickfile.helptext"
 msgstr "文件上传需要HTML5兼容的浏览器以提供更好的上传体验 .您可能需要与本地系统管理员联系以获取帮助."
 
@@ -1250,39 +1250,39 @@ msgstr "是，升级!"
 msgid "configure_plugins_plugin_upgrade.messages.submitmsg"
 msgstr "现在正在升级，请稍候."
 
-#: rundb/configure/views.py:733
+#: rundb/configure/views.py:737
 msgid "configure_plugins_plugin_uninstall.title"
 msgstr "确认卸载插件"
 
-#: rundb/configure/views.py:736
+#: rundb/configure/views.py:740
 msgid "configure_plugins_plugin_uninstall.messages.confirmmsg.singular"
 msgstr "您确定要卸载 %(versionedName)s 版本的插件(%(id)s)?"
 
-#: rundb/configure/views.py:743
+#: rundb/configure/views.py:747
 msgid "configure_plugins_plugin_uninstall.action.submit"
 msgstr "是，卸载!"
 
-#: rundb/configure/views.py:747
+#: rundb/configure/views.py:751
 msgid "configure_plugins_plugin_uninstall.messages.submitmsg"
 msgstr "现在正在卸载，请稍候."
 
-#: rundb/configure/views.py:940 rundb/configure/views.py:971
+#: rundb/configure/views.py:944 rundb/configure/views.py:975
 msgid "configure_mesh.setup.messages.error"
 msgstr "无法设置Mesh链接.请确保远程服务器与此服务器的Torrent Suite版本相同."
 
-#: rundb/configure/views.py:949
+#: rundb/configure/views.py:953
 msgid "configure_mesh.setup.messages.system_id.localhost"
 msgstr "禁止将自己的本地主机添加到Mesh中.请检查您的主机名/地址."
 
-#: rundb/configure/views.py:954
+#: rundb/configure/views.py:958
 msgid "configure_mesh.setup.messages.exists"
 msgstr "此系统已在mesh中设置为'%(mesh_node_name)s'. "
 
-#: rundb/configure/views.py:1226
+#: rundb/configure/views.py:1230
 msgid "references_TF_edit.edit.title"
 msgstr "编辑测试片段"
 
-#: rundb/configure/views.py:1228 rundb/configure/views.py:1245
+#: rundb/configure/views.py:1232 rundb/configure/views.py:1249
 #: templates/rundb/ion_publisher_upload_status.html:64
 #: templates/rundb/configure/account.html:188
 #: templates/rundb/configure/edit_reference.html:223
@@ -1292,128 +1292,128 @@ msgstr "编辑测试片段"
 msgid "global.action.save"
 msgstr "保存"
 
-#: rundb/configure/views.py:1243
+#: rundb/configure/views.py:1247
 msgid "references_TF_edit.add.title"
 msgstr "添加新测试片段"
 
-#: rundb/configure/views.py:1271
+#: rundb/configure/views.py:1275
 msgid "testfragment.modal_confirm_delete.title.singular"
 msgstr "确认删除测试片段"
 
-#: rundb/configure/views.py:1274
+#: rundb/configure/views.py:1278
 msgid "testfragment.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此测试片段 <b>%(testFragmentName)s</ b>（%(testFragmentId)s）?"
 
-#: rundb/configure/views.py:1277
+#: rundb/configure/views.py:1281
 msgid "testfragment.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/configure/views.py:1278
+#: rundb/configure/views.py:1282
 msgid "testfragment.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/configure/views.py:1295
+#: rundb/configure/views.py:1299
 msgid "references_barcodeset.title"
 msgstr "{barCodeSetName}中的Barcode"
 
-#: rundb/configure/views.py:1354
+#: rundb/configure/views.py:1358
 msgid "references_barcodeset_add.messages.error.barcoderequired"
 msgstr "错误：必须至少有一个Barcode！ 请重新加载页面，然后用更多Barcode重试."
 
-#: rundb/configure/views.py:1409
+#: rundb/configure/views.py:1413
 msgid "references_barcodeset_add.messages.success"
 msgstr "Barcode已上传！Barcode集将列在参考页面上."
 
-#: rundb/configure/views.py:1462
+#: rundb/configure/views.py:1466
 msgid "barcodeset.modal_confirm_delete.title.singular"
 msgstr "确认删除Barcode集"
 
-#: rundb/configure/views.py:1465
+#: rundb/configure/views.py:1469
 msgid "barcodeset.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此Barcode集<b>%(barCodeSetName)s</b>?"
 
-#: rundb/configure/views.py:1468
+#: rundb/configure/views.py:1472
 msgid "barcodeset.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/configure/views.py:1469
+#: rundb/configure/views.py:1473
 msgid "barcodeset.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/configure/views.py:1500
+#: rundb/configure/views.py:1504
 msgid "references_barcode_edit.title"
 msgstr "编辑在<strong>{barCodeSetName}</strong>集中的Barcode"
 
-#: rundb/configure/views.py:1509
+#: rundb/configure/views.py:1513
 msgid "references_barcode_add.title"
 msgstr "在<strong>{barCodeSetName}</strong>集中添加新Barcode"
 
-#: rundb/configure/views.py:1551
+#: rundb/configure/views.py:1555
 msgid "barcode.modal_confirm_delete.title.singular"
 msgstr "确认删除Barcode"
 
-#: rundb/configure/views.py:1554
+#: rundb/configure/views.py:1558
 msgid "barcode.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此Barcode <b>%(barCodeIdStr)s</b>（%(barCodePk)s）?"
 
-#: rundb/configure/views.py:1557
+#: rundb/configure/views.py:1561
 msgid "barcode.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/configure/views.py:1558
+#: rundb/configure/views.py:1562
 msgid "barcode.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/configure/views.py:1851
+#: rundb/configure/views.py:1855
 msgid "configure_configure.email.add_email.title"
 msgstr "添加邮件"
 
-#: rundb/configure/views.py:1859
+#: rundb/configure/views.py:1863
 msgid "configure_configure.email.edit_email.title"
 msgstr "编辑邮件"
 
-#: rundb/configure/views.py:1886
+#: rundb/configure/views.py:1890
 msgid "emailaddress.modal_confirm_delete.title.singular"
 msgstr "确认删除邮件地址"
 
-#: rundb/configure/views.py:1889
+#: rundb/configure/views.py:1893
 msgid "emailaddress.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此电子邮件地址 <b>%(emailAddress)s</b>（%(emailId)s）?"
 
-#: rundb/configure/views.py:1892
+#: rundb/configure/views.py:1896
 msgid "emailaddress.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/configure/views.py:1893
+#: rundb/configure/views.py:1897
 msgid "emailaddress.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/configure/views.py:2438 rundb/data/views.py:473
+#: rundb/configure/views.py:2442 rundb/data/views.py:473
 #: rundb/data/views.py:1760 rundb/data/views.py:1781
 msgid "eventlog.messages.empty"
 msgstr "未找到 %(title)s 的日志."
 
-#: rundb/configure/views.py:2776
+#: rundb/configure/views.py:2780
 msgid "configure_offline_bundle.title"
 msgstr "安装更新"
 
-#: rundb/configure/views.py:2781
+#: rundb/configure/views.py:2785
 msgid "configure_offline_bundle.fields.pickfile.label"
 msgstr "上传更新文件"
 
-#: rundb/configure/views.py:2792
+#: rundb/configure/views.py:2796
 msgid "configure_offline_bundle.action.submit"
 msgstr "上传并安装"
 
-#: rundb/configure/views.py:2796
+#: rundb/configure/views.py:2800
 msgid "configure_offline_bundle.messages.submitmsg"
 msgstr "安装过程可能需要几分钟才能完成..."
 
-#: rundb/configure/views.py:2799
+#: rundb/configure/views.py:2803
 msgid "configure_offline_bundle.messages.submitsuccessmsg"
 msgstr "启动安装更新"
 
-#: rundb/configure/views.py:2802
+#: rundb/configure/views.py:2806
 msgid "configure_offline_bundle.messages.submitprocessingmsg"
 msgstr "正在安装，请稍候 ..."
 
@@ -1714,12 +1714,12 @@ msgstr "确认删除计划运行"
 msgid "plannedrun.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "是否确定要删除这些计划运行?"
 
-#: rundb/plan/views.py:881 rundb/sample/views.py:1764
+#: rundb/plan/views.py:881 rundb/sample/views.py:1757
 msgid "samplesets.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/plan/views.py:882 rundb/sample/views.py:1718
-#: rundb/sample/views.py:1765
+#: rundb/plan/views.py:882 rundb/sample/views.py:1711
+#: rundb/sample/views.py:1758
 msgid "samplesets.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
@@ -1831,7 +1831,7 @@ msgstr "传输"
 #: templates/rundb/data/modal_report_log.html:10
 #: templates/rundb/plan/modal_plannedexperiment_detail.html:500
 #: templates/rundb/plan/plan_templates.html:301
-#: templates/rundb/reports/blocks/barcodes.html:132
+#: templates/rundb/reports/blocks/barcodes.html:141
 #: templates/rundb/reports/blocks/basecaller.html:112
 #: templates/rundb/reports/blocks/beadfind.html:34
 #: templates/rundb/reports/blocks/beadfind.html:46
@@ -2118,27 +2118,27 @@ msgstr "对照序列"
 msgid "workflow.step.kits.fields.samplePreparationKit.label"
 msgstr "样本制备试剂盒"
 
-#: rundb/report/views.py:1178
+#: rundb/report/views.py:1195
 msgid "report.section.unaligned.beadfind.fields.keysignal.details"
 msgstr "您的质量阈值为<strong>%(key_signal_threshold)s</strong>.<br/>库密钥中的平均1-mer信号<br/>彩色条表示您的计划中设置的质量阈值，蓝色在上，红色在下."
 
-#: rundb/report/views.py:1196
+#: rundb/report/views.py:1213
 msgid "report.section.unaligned.beadfind.fields.bead_loading.details"
 msgstr "您的质量阈值为<strong>%(bead_loading_threshold)s%%\t</strong>.<br/>彩色条表示您的计划中设置的质量阈值，蓝色在上，红色在下."
 
-#: rundb/report/views.py:1235
+#: rundb/report/views.py:1252
 msgid "report.section.unaligned.basecaller.fields.usable_sequence.details"
 msgstr "您的质量阈值为<strong>%(usable_sequence_threshold)s%%</strong>.<br/>彩色条表示您的计划中设置的质量阈值，蓝色在上，红色在下."
 
-#: rundb/report/views.py:1395
+#: rundb/report/views.py:1412
 msgid "report.section.aligned.messages.noalignmentstatsshown"
 msgstr "对于RNA测序，请参阅RNASeq分析插件输出以获得比对统计信息 "
 
-#: rundb/report/views.py:1470
+#: rundb/report/views.py:1487
 msgid "report.section.summary.messages.no_live_beads_status"
 msgstr "（运行完成%(status)s!)"
 
-#: rundb/report/views.py:1582
+#: rundb/report/views.py:1599
 msgid "report.classic.name"
 msgstr "经典报告"
 
@@ -2240,7 +2240,7 @@ msgstr "偶联ID"
 msgid "samplesets.samplesetitem.fields.embryoId.label"
 msgstr "胚胎ID"
 
-#: rundb/sample/sample_validator.py:979 rundb/sample/views.py:1903
+#: rundb/sample/sample_validator.py:979 rundb/sample/views.py:1896
 #: templates/rundb/sample/modal_add_sample_attribute.html:27
 msgid "samplesets.sampleattributes.fields.displayedName.label"
 msgstr "属性名称"
@@ -2274,142 +2274,142 @@ msgstr " "
 msgid "samplesets.addedit.fields.groupType.tooltip.disabled"
 msgstr "由于此样本集状态为%(status)s，因此组类型不能更改"
 
-#: rundb/sample/views.py:376
+#: rundb/sample/views.py:371
 msgid "samplesets.addedit.fields.libraryPrepType.tooltip"
 msgstr " "
 
-#: rundb/sample/views.py:379 templates/rundb/sample/modal_add_sampleset.html:66
+#: rundb/sample/views.py:374
 msgid "samplesets.addedit.fields.libraryPrepType.tooltip.disabled"
 msgstr "由于此样本集状态为%(status)s，因此无法更改库制备类型"
 
-#: rundb/sample/views.py:388
+#: rundb/sample/views.py:383
 msgid "samplesets.addedit.fields.libraryPrepKit.tooltip"
 msgstr " "
 
-#: rundb/sample/views.py:391 templates/rundb/sample/modal_add_sampleset.html:91
+#: rundb/sample/views.py:386
 msgid "samplesets.addedit.fields.libraryPrepKit.tooltip.disabled"
 msgstr "由于此样本集状态为%(status)s，因此无法更改库制备试剂盒"
 
-#: rundb/sample/views.py:426
+#: rundb/sample/views.py:421
 msgid "samplesets.messages.sampleset_plan_run.validationerrors"
 msgstr "无法从%(sampleSetNames)s 计划运行. "
 
-#: rundb/sample/views.py:445
+#: rundb/sample/views.py:440
 msgid "samplesets.messages.sampleset_plan_run.warnings.SampleGroupType_CV.multiple"
 msgstr "%(errorPrefix)s %(warningPrefix)s 已选择多个组类型：%(sampleGroupTypes)s."
 
-#: rundb/sample/views.py:842
+#: rundb/sample/views.py:837
 #: templates/rundb/sample/modal_save_samplesetitems.html:23
 msgid "samplesets.input_samples.save.fields.sampleset.label"
 msgstr "样本集"
 
-#: rundb/sample/views.py:919
+#: rundb/sample/views.py:912
 msgid "samplesets.input_samples.save.error"
 msgstr "保存手工输入的样本集到数据库时发生错误。"
 
-#: rundb/sample/views.py:1013
+#: rundb/sample/views.py:1006
 msgid "import_samples.messages.failure"
 msgstr "导入样本验证失败. 样本尚未导入. 请更正错误并再次尝试或选择不同的样本文件进行导入 "
 
-#: rundb/sample/views.py:1060
+#: rundb/sample/views.py:1053
 msgid "import_samples.messages.file_contains_non_ascii_characters"
 msgstr "系统只支持ASCII字符，请检查并确保文件中只包含ASCII字符。包含非ASCII字符的文件: %(files)s。"
 
-#: rundb/sample/views.py:1099 rundb/sample/views.py:1120
-#: rundb/sample/views.py:1184 templates/rundb/sample/import_samples.html:66
+#: rundb/sample/views.py:1092 rundb/sample/views.py:1113
+#: rundb/sample/views.py:1177 templates/rundb/sample/import_samples.html:66
 msgid "import_samples.fields.file.label"
 msgstr "样本文件"
 
-#: rundb/sample/views.py:1200 rundb/sample/views.py:1226
-#: rundb/sample/views.py:1236 rundb/sample/views.py:1249
+#: rundb/sample/views.py:1193 rundb/sample/views.py:1219
+#: rundb/sample/views.py:1229 rundb/sample/views.py:1242
 #: templates/rundb/sample/import_samples.html:90
 #: templates/rundb/sample/import_samples.html:135
 msgid "import_samples.fields.sampleset.label"
 msgstr "样本集"
 
-#: rundb/sample/views.py:1281 templates/rundb/sample/import_samples.html:50
+#: rundb/sample/views.py:1274 templates/rundb/sample/import_samples.html:50
 #: templates/rundb/sample/import_samples.html:58
 msgid "import_samples.title"
 msgstr "导入样本"
 
-#: rundb/sample/views.py:1291
+#: rundb/sample/views.py:1284
 msgid "import_samples.messages.success"
 msgstr "导入样本已成功完成！ 样本集将在样本集页面上列出."
 
-#: rundb/sample/views.py:1442
+#: rundb/sample/views.py:1435
 #: templates/rundb/sample/modal_add_samplesetitem.html:36
 msgid "samplesets.samplesetitem.edit.title"
 msgstr "编辑样本"
 
-#: rundb/sample/views.py:1443
+#: rundb/sample/views.py:1436
 msgid "samplesets.samplesetitem.edit.pending.messages.invalidid"
 msgstr "所选样本(%(pendingSampleSetItemId)s)不再可用于此会话."
 
-#: rundb/sample/views.py:1620
+#: rundb/sample/views.py:1613
 msgid "samplesets.sampleattribute.modal_confirm_delete.title.singular"
 msgstr "确认删除样本属性"
 
-#: rundb/sample/views.py:1622
+#: rundb/sample/views.py:1615
 msgid "samplesets.sampleattribute.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此样本属性<b>%(sampleAttributeName)s</b>（%(sampleAttributeId)s）?"
 
-#: rundb/sample/views.py:1625
+#: rundb/sample/views.py:1618
 msgid "samplesets.sampleattribute.modal_confirm_delete.title.plural"
 msgstr "确认删除样本属性和%(sampleAttributeSamplesCount)d 相关样本属性值"
 
-#: rundb/sample/views.py:1629
+#: rundb/sample/views.py:1622
 msgid "samplesets.sampleattribute.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "是否确定要删除此样本属性<b>%(sampleAttributeName)s</b>（%(sampleAttributeId)s）和%(sampleAttributeSamplesCount)d 相关样本属性值?"
 
-#: rundb/sample/views.py:1650
+#: rundb/sample/views.py:1643
 msgid "samplesets.sampleattribute.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/sample/views.py:1653
+#: rundb/sample/views.py:1646
 msgid "samplesets.sampleattribute.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/sample/views.py:1679
+#: rundb/sample/views.py:1672
 msgid "samplesets.modal_confirm_delete.title.singular"
 msgstr "确认删除样本集"
 
-#: rundb/sample/views.py:1680
+#: rundb/sample/views.py:1673
 msgid "samplesets.modal_confirm_delete.messages.confirmmsg.singular"
 msgstr "是否确定要删除此样本集<b>%(sampleSetName)s </b>（%(sampleSetId)s）?"
 
-#: rundb/sample/views.py:1685
+#: rundb/sample/views.py:1678
 msgid "samplesets.modal_confirm_delete.title.plural"
 msgstr "确认删除样本集和%(sampleSetItemsCount)d相关样本关联"
 
-#: rundb/sample/views.py:1688
+#: rundb/sample/views.py:1681
 msgid "samplesets.modal_confirm_delete.messages.confirmmsg.plural"
 msgstr "是否确定要删除此样本集?<b>%(sampleSetName)s</b>（%(sampleSetId)s) 和 %(sampleSetItemsCount)d相关样本关联?"
 
-#: rundb/sample/views.py:1704
+#: rundb/sample/views.py:1697
 msgid "samplesets.messages.delete.usedbyplantemplatesorplannedruns"
 msgstr "错误，样本集%(sampleSetName)s 由%(plannedRunsCount)d 计划运行和 %(planTemplatesCount)d 计划模板使用. 样本集%(sampleSetName)s 不能被删除."
 
-#: rundb/sample/views.py:1800
+#: rundb/sample/views.py:1793
 msgid "samplesets.samplesetitem.modal_confirm_delete.title.singular"
 msgstr "确认删除样本属性"
 
-#: rundb/sample/views.py:1812
+#: rundb/sample/views.py:1805
 msgid "samplesets.samplesetitem.messages.delete.usedbyplantemplatesorplannedruns"
 msgstr "错误，样本%(sampleName)s属于%(plannedRunsCount)d计划运行和%(planTemplatesCount)d计划模板使用的样本集%(sampleSetName)s. 无法从样本集%(sampleSetName)s中删除样本%(sampleName)s."
 
-#: rundb/sample/views.py:1826 rundb/sample/views.py:1865
+#: rundb/sample/views.py:1819 rundb/sample/views.py:1858
 msgid "samplesets.samplesetitem.modal_confirm_delete.action.cancel"
 msgstr "取消"
 
-#: rundb/sample/views.py:1854
+#: rundb/sample/views.py:1847
 msgid "samplesets.samplesetitem.modal_confirm_delete.messages.confirmmsg"
 msgstr "是否确定要从样本集%(sampleSetName)s 中删除此样本<b> %(sampleName)s </b>（%(sampleId)s）?"
 
-#: rundb/sample/views.py:1862
+#: rundb/sample/views.py:1855
 msgid "samplesets.samplesetitem.modal_confirm_delete.action.submit"
 msgstr "是，删除!"
 
-#: rundb/sample/views.py:1924
+#: rundb/sample/views.py:1917
 #: templates/rundb/sample/modal_add_sample_attribute.html:43
 msgid "samplesets.sampleattributes.fields.dataType.dataType.label"
 msgstr "属性类型"
@@ -5501,12 +5501,10 @@ msgstr "从Zip档案上传Panel"
 msgid "template.fields.note.label"
 msgstr "注释"
 
-#: templates/rundb/plan/plan_templates.html:362
 #: templates/rundb/plan/plan_templates.html:367
 msgid "template.fields.targetRegionBedFile.label"
 msgstr "目标"
 
-#: templates/rundb/plan/plan_templates.html:362
 #: templates/rundb/plan/plan_templates.html:370
 msgid "template.fields.hotSpotRegionBedFile.label"
 msgstr "热点"
@@ -6917,57 +6915,62 @@ msgstr "每个Barcode文件"
 msgid "report.section.output.barcodes.files.label"
 msgstr "文件"
 
-#: templates/rundb/reports/blocks/barcodes.html:47
-#: templates/rundb/reports/blocks/barcodes.html:55
+#: templates/rundb/reports/blocks/barcodes.html:49
+#, fuzzy
+msgid "report.section.output.barcodes.filtered.tooltip"
+msgstr "每个Barcode文件"
+
+#: templates/rundb/reports/blocks/barcodes.html:51
+#: templates/rundb/reports/blocks/barcodes.html:62
 msgid "report.section.output.barcodes.messages.barcode_name.none"
 msgstr "无Barcode"
 
-#: templates/rundb/reports/blocks/barcodes.html:48
+#: templates/rundb/reports/blocks/barcodes.html:53
 msgid "report.section.output.barcodes.messages.sample.none"
 msgstr "无"
 
-#: templates/rundb/reports/blocks/barcodes.html:59
-#: templates/rundb/reports/blocks/barcodes.html:61
+#: templates/rundb/reports/blocks/barcodes.html:68
+#: templates/rundb/reports/blocks/barcodes.html:70
 #: templates/rundb/reports/blocks/output.html:27
 msgid "report.section.output.unaligned.basecaller_bam.tooltip"
 msgstr "在未比对的BAM中修整读序"
 
-#: templates/rundb/reports/blocks/barcodes.html:59
-#: templates/rundb/reports/blocks/barcodes.html:61
+#: templates/rundb/reports/blocks/barcodes.html:68
+#: templates/rundb/reports/blocks/barcodes.html:70
 #: templates/rundb/reports/blocks/output.html:27
 #: templates/rundb/reports/blocks/output.html:29
 msgid "report.section.output.unaligned.basecaller_bam.label"
 msgstr "UBAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:64
-#: templates/rundb/reports/blocks/barcodes.html:66
+#: templates/rundb/reports/blocks/barcodes.html:73
+#: templates/rundb/reports/blocks/barcodes.html:75
 #: templates/rundb/reports/blocks/output.html:35
 #: templates/rundb/reports/blocks/output.html:37
 msgid "report.section.output.aligned.bam.tooltip"
 msgstr "比对读序按参考位置排序."
 
-#: templates/rundb/reports/blocks/barcodes.html:64
-#: templates/rundb/reports/blocks/barcodes.html:66
+#: templates/rundb/reports/blocks/barcodes.html:73
+#: templates/rundb/reports/blocks/barcodes.html:75
 #: templates/rundb/reports/blocks/output.html:35
 #: templates/rundb/reports/blocks/output.html:37
 msgid "report.section.output.aligned.bam.label"
 msgstr "BAM"
 
-#: templates/rundb/reports/blocks/barcodes.html:69
-#: templates/rundb/reports/blocks/barcodes.html:71
+#: templates/rundb/reports/blocks/barcodes.html:78
+#: templates/rundb/reports/blocks/barcodes.html:80
 #: templates/rundb/reports/blocks/output.html:41
 #: templates/rundb/reports/blocks/output.html:43
 msgid "report.section.output.aligned.bai.tooltip"
 msgstr "BAM索引文件"
 
-#: templates/rundb/reports/blocks/barcodes.html:69
-#: templates/rundb/reports/blocks/barcodes.html:71
+#: templates/rundb/reports/blocks/barcodes.html:78
+#: templates/rundb/reports/blocks/barcodes.html:80
 #: templates/rundb/reports/blocks/output.html:41
 #: templates/rundb/reports/blocks/output.html:43
 msgid "report.section.output.aligned.bai.label"
 msgstr "BAI"
 
-#: templates/rundb/reports/blocks/barcodes.html:126
+#: templates/rundb/reports/blocks/barcodes.html:135
 msgid "report.section.output.barcodes.read_len_histogram.details.title"
 msgstr "Barcode读长"
 
@@ -7466,42 +7469,42 @@ msgstr "需要的"
 msgid "samplesets.addedit.fields.groupType.label"
 msgstr "组类型"
 
-#: templates/rundb/sample/modal_add_sampleset.html:61
+#: templates/rundb/sample/modal_add_sampleset.html:67
 #: templates/rundb/sample/sampleset_input_section.html:31
 #: templates/rundb/sample/sampleset_input_section.html:38
 msgid "samplesets.addedit.fields.libraryPrepType.label"
 msgstr "库制备类型"
 
-#: templates/rundb/sample/modal_add_sampleset.html:86
+#: templates/rundb/sample/modal_add_sampleset.html:93
 #: templates/rundb/sample/sampleset_input_section.html:69
 #: templates/rundb/sample/sampleset_input_section.html:77
 msgid "samplesets.addedit.fields.libraryPrepKit.label"
 msgstr "库制备试剂盒"
 
-#: templates/rundb/sample/modal_add_sampleset.html:129
+#: templates/rundb/sample/modal_add_sampleset.html:141
 #: templates/rundb/sample/sampleset_input_section.html:90
 #: templates/rundb/sample/sampleset_input_section.html:93
 msgid "samplesets.addedit.fields.pcrPlateSerialNum.label"
 msgstr "PCR板序列号"
 
-#: templates/rundb/sample/modal_add_sampleset.html:131
+#: templates/rundb/sample/modal_add_sampleset.html:143
 #: templates/rundb/sample/sampleset_input_section.html:91
 #: templates/rundb/sample/sampleset_input_section.html:94
 msgid "samplesets.addedit.fields.pcrPlateSerialNum.placeholder"
 msgstr "可选"
 
-#: templates/rundb/sample/modal_add_sampleset.html:135
+#: templates/rundb/sample/modal_add_sampleset.html:147
 #: templates/rundb/sample/sampleset_input_section.html:118
 #: templates/rundb/sample/sampleset_input_section.html:121
 msgid "samplesets.addedit.fields.sampleSetDescription.label"
 msgstr "描述"
 
-#: templates/rundb/sample/modal_add_sampleset.html:137
+#: templates/rundb/sample/modal_add_sampleset.html:149
 #: templates/rundb/sample/sampleset_input_section.html:122
 msgid "samplesets.addedit.fields.sampleSetDescription.placeholder"
 msgstr "可选"
 
-#: templates/rundb/sample/modal_add_sampleset.html:147
+#: templates/rundb/sample/modal_add_sampleset.html:159
 msgid "samplesets.addedit.action.submit"
 msgstr "完成"
 

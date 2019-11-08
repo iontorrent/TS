@@ -1,61 +1,63 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-import xmlrpclib
-import multiprocessing
-import subprocess
-import socket
+import codecs
+import datetime
+import json
 import logging
 import os
-import json
-import traceback
-import stat
-import csv
-import codecs
 import re
-import httplib2
+import socket
+import stat
+import subprocess
+import traceback
 import urlparse
-import psutil
-import datetime
-import requests
-from django.utils import timezone
+import xmlrpclib
+
 import celery.exceptions
+import ion.utils.TSversion
+import psutil
+import requests
 from django.conf import settings
+from django.contrib.auth.decorators import permission_required
+from django.contrib.auth.models import User
+from django.core import urlresolvers
 from django.core.cache import cache
-from django.contrib.auth.decorators import login_required, permission_required
-from django.utils.encoding import force_unicode
-from django.views.decorators.http import require_POST
-from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
-from django.template import RequestContext, Context
-from django.http import (
-    Http404,
-    HttpResponsePermanentRedirect,
-    HttpResponse,
-    HttpResponseRedirect,
-    HttpResponseNotFound,
-    HttpResponseBadRequest,
-    HttpResponseNotAllowed,
-    HttpResponseServerError,
-)
+
+# Handles serialization of decimal and datetime objects
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.servers.basehttp import FileWrapper
 from django.core.urlresolvers import reverse
 from django.forms.models import model_to_dict
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    HttpResponseNotFound,
+    HttpResponseServerError,
+)
+from django.shortcuts import render_to_response, get_object_or_404
+from django.template import RequestContext
+from django.template.loader import get_template
+from django.utils import timezone
 from django.utils.translation import ugettext as _, ugettext_lazy
-import ion.utils.TSversion
+from django.views.decorators.http import require_POST
+from ion.plugin.remote import call_pluginStatus
+from ion.utils import makeSSA
 
-from iondb.rundb.json_lazy import LazyJSONEncoder
-from iondb.utils import validation, i18n_errors
-
-from iondb.rundb.forms import EmailAddress as EmailAddressForm, UserProfileForm
-from iondb.rundb import tasks, publishers, publisher_types, labels
 from iondb.anaserve import client
-from iondb.plugins.manager import pluginmanager
-from django.contrib.auth.models import User
+from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager, getLocalComputer
 from iondb.product_integration.models import ThermoFisherCloudAccount
+from iondb.rundb import tasks, publishers, publisher_types, labels
+from iondb.rundb.configure import ampliseq_design_parser
+from iondb.rundb.configure import updateProducts
+from iondb.rundb.configure.genomes import search_for_genomes
+from iondb.rundb.configure.util import plupload_file_upload
+from iondb.rundb.data import rawDataStorageReport
+from iondb.rundb.forms import EmailAddress as EmailAddressForm, UserProfileForm
+from iondb.rundb.json_lazy import LazyJSONEncoder
 from iondb.rundb.models import (
     dnaBarcode,
     Plugin,
-    PluginResult,
     PluginResultJob,
-    GlobalConfig,
     Chip,
     AnalysisArgs,
     EmailAddress,
@@ -73,37 +75,25 @@ from iondb.rundb.models import (
     ReferenceGenome,
     GlobalConfig,
 )
-from iondb.rundb.data import rawDataStorageReport
-from iondb.rundb.configure.genomes import search_for_genomes
-from iondb.rundb.plan import ampliseq
-from iondb.rundb.plan.ampliseq import AmpliSeqPanelImport
-
-# Handles serialization of decimal and datetime objects
-from django.core.serializers.json import DjangoJSONEncoder
-from iondb.rundb.configure.util import plupload_file_upload
-from ion.utils import makeCSA, makeSSA
-from django.core import urlresolvers
-from django.template.loader import get_template
-from iondb.utils.raid import get_raid_status, load_raid_status_json
 from iondb.servelocation import serve_wsgi_location
-from ion.plugin.remote import call_pluginStatus
-from iondb.utils.utils import convert, cidr_lookup, service_status, services_views
-from iondb.bin.IonMeshDiscoveryManager import IonMeshDiscoveryManager, getLocalComputer
-from iondb.rundb.configure import updateProducts
+from iondb.utils import validation, i18n_errors
 from iondb.utils.nexenta_nms import (
     this_is_nexenta,
     get_all_torrentnas_data,
     has_nexenta_cred,
     load_torrentnas_status_json,
 )
-from iondb.rundb.configure import ampliseq_design_parser
-from iondb.product_integration.models import ThermoFisherCloudAccount
+from iondb.utils.raid import load_raid_status_json
+from iondb.utils.utils import ManagedPool
+from iondb.utils.utils import cidr_lookup, service_status, services_views
 
 logger = logging.getLogger(__name__)
 
 from json import encoder
 
 encoder.FLOAT_REPR = lambda x: format(x, ".15g")
+
+TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
 
 
 def configure(request):
@@ -641,18 +631,25 @@ def configure_plugins_plugin_configure(request, action, pk):
             },
             cls=DjangoJSONEncoder,
         )
-
-    applicationGroup = request.GET.get("applicationGroup", "")
-    runTypeId = request.GET.get("runTypeId", "")
-    runType = ""
-    plan_json = {}
-    if runTypeId:
-        runType_obj = get_object_or_404(RunType, pk=runTypeId)
-        runType = runType_obj.runType
-    plan_json = json.dumps(
-        {"applicationGroup": applicationGroup, "runType": runType},
-        cls=DjangoJSONEncoder,
-    )
+        applicationGroup = results_obj.experiment.plan.applicationGroup
+        plan_json = json.dumps(
+            {
+                "applicationGroup": applicationGroup.name if applicationGroup else "",
+                "runType": results_obj.experiment.plan.runType,
+            }
+        )
+    else:
+        applicationGroup = request.GET.get("applicationGroup", "")
+        runTypeId = request.GET.get("runTypeId", "")
+        runType = request.GET.get("runType", "")
+        plan_json = {}
+        if runTypeId:
+            runType_obj = get_object_or_404(RunType, pk=runTypeId)
+            runType = runType_obj.runType
+        plan_json = json.dumps(
+            {"applicationGroup": applicationGroup, "runType": runType},
+            cls=DjangoJSONEncoder,
+        )
 
     ctxd = {
         "plugin": plugin_json,
@@ -2125,14 +2122,18 @@ def configure_ampliseq_local(request):
         "rundb/configure/ampliseq.html", ctx, context_instance=RequestContext(request)
     )
 
+
 def get_ctx_ampliseq(request, panelTab="on-demand"):
-    tfc_account = None
-    http_error = False
+    http_error = ""
     # get the thermo fisher cloud account model
     tfc_account = get_ampliseq_act_info(request)
     ampliseq_url = settings.AMPLISEQ_URL
 
-    ctx = {"designs": None, "tfc_account_setup": tfc_account is None, "panelTab" : panelTab}
+    ctx = {
+        "designs": None,
+        "tfc_account_setup": tfc_account is None,
+        "panelTab": panelTab,
+    }
 
     if tfc_account:
         # Get the list of ampliseq designs panels both custom and fixed for display
@@ -2140,30 +2141,36 @@ def get_ctx_ampliseq(request, panelTab="on-demand"):
         password = tfc_account.get_ampliseq_password()
         try:
             response = requests.head(
-                ampliseq_url + "ws/design/list", auth=(username, password)
+                ampliseq_url + "ws/design/list",
+                auth=(username, password),
+                timeout=TIMEOUT_LIMIT_SEC,
+            )
+            response.raise_for_status()
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as err:
+            tfc_account = None
+            logger.error(
+                "There was a connection error when contacting ampliseq: %s" % err
             )
             if response.status_code == 401:
                 http_error = (
                     "Your user name or password is invalid.<br> You may need to log in to "
                     '<a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 )
-                fixed = None
                 tfc_account.delete()
-                tfc_account = None
             elif response.status_code == 500:
-                tfc_account = None
                 http_error = "Error Code-500 : Internal Server Error"
-        except requests.ConnectionError as err:
+            else:
+                http_error = "Could not connect to AmpliSeq.com"
+        except Exception as err:
             tfc_account = None
-            logger.error(
-                "There was a connection error when contacting ampliseq: %s" % err
-            )
+            logger.error("Unknown error: %s" % str(err))
             http_error = "Could not connect to AmpliSeq.com"
-            fixed = None
+
         ctx["ampliseq_account_update"] = timezone.now() < timezone.datetime(
             2013, 11, 30, tzinfo=timezone.utc
         )
         ctx["ampliseq_url"] = settings.AMPLISEQ_URL
+
     if http_error or not tfc_account:
         ctx = {
             "designs": None,
@@ -2180,6 +2187,7 @@ def get_ctx_ampliseq(request, panelTab="on-demand"):
 
     return ctx
 
+
 def configure_ampliseq(request):
     """View for ampliseq.com importing stuff"""
 
@@ -2188,6 +2196,7 @@ def configure_ampliseq(request):
     return render_to_response(
         "rundb/configure/ampliseq.html", ctx, context_instance=RequestContext(request)
     )
+
 
 def get_ampliseq_act_info(request):
     # get the thermo fisher cloud account model
@@ -2225,8 +2234,8 @@ def get_ampliseq_HD_panels(request):
     ]
 
     # query the api concurrently and get the response
-    pool = multiprocessing.Pool(processes=len(api_endpoints_list))
-    results = pool.map(get_all_AS_panels, api_endpoints_list)
+    with ManagedPool(processes=len(api_endpoints_list)) as pool:
+        results = pool.map(get_all_AS_panels, api_endpoints_list)
 
     solutions = []
 
@@ -2243,8 +2252,15 @@ def get_ampliseq_HD_panels(request):
 
 def get_local_designs(panelType="ampliseq_local_data"):
     jsonPath = "/opt/ion/iondb/rundb/fixtures/" + panelType + ".json"
+
+    panelDict = {}
     with open(jsonPath, "r") as fh:
-        panelDict = json.load(fh)
+        try:
+            panelDict = json.load(fh)
+        except ValueError:
+            logger.exception(
+                "Unable to load %s. Probably not a valid JSON file." % jsonPath
+            )
 
     return panelDict
 
@@ -2333,7 +2349,7 @@ def configure_ampliseq_download(request):
     ctx = get_ctx_ampliseq(request, panelTab=redirect_panel_tab)
 
     return render_to_response(
-            "rundb/configure/ampliseq.html", ctx, context_instance=RequestContext(request)
+        "rundb/configure/ampliseq.html", ctx, context_instance=RequestContext(request)
     )
 
 

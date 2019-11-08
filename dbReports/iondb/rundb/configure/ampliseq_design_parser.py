@@ -1,47 +1,58 @@
 # Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved
-import logging
 import json
-import httplib2
-import urlparse
-from django.conf import settings
-from iondb.rundb.plan.ampliseq import AmpliSeqPanelImport
-from iondb.utils.utils import convert
-from iondb.rundb.models import FileMonitor, ContentUpload
+import logging
 import os
 import re
+
 import requests
+import urlparse
+from django.conf import settings
+
+from iondb.rundb.models import FileMonitor, ContentUpload
+from iondb.rundb.plan.ampliseq import AmpliSeqPanelImport
+from iondb.utils.utils import convert
 
 logger = logging.getLogger(__name__)
 
+TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
+
 """
- This parses all the existing designs, both user created(logged in User) panesls
+ This parses all the existing designs, both user created(logged in User) panels
  and fixed designs panels available in AmpliSeq.com
  The related panels will be displayed on Grid with required filter to import
 """
 
 
-def _get_all_ampliseq_designs(api_url, user, password, chemistryType):
-    # Get all the ampliseq design panels including Ampliseq HD
-    # "ampliseq-hd=true" filter is used to get the HD panels
+def _get_all_ampliseq_designs(api_url, user, password):
+    """Get all the ampliseq design panels including Ampliseq HD
+    "ampliseq-hd=true" filter is used to get the HD panels
+    """
+
     url = urlparse.urljoin(settings.AMPLISEQ_URL, api_url)
     response = {}
     errMsg = None
     all_ampseq_designs = []
+
     try:
-        response = requests.get(url, auth=(user, password))
-        if response.status_code == 200:
-            design_data = response.json()
-            designs = design_data.get("AssayDesigns", [])
-            return response, designs
-        else:
-            return response, {}
-    except requests.ConnectionError as serverError:
-        errMsg = (
-            str(serverError) + ". Please check your network connection and try again."
+        response = requests.get(url, auth=(user, password), timeout=TIMEOUT_LIMIT_SEC)
+        response.raise_for_status()
+        design_data = response.json()
+        all_ampseq_designs = design_data.get("AssayDesigns", [])
+    except ValueError as decodeError:
+        errMsg = "Unable to parse the response from {url}: {err}".format(
+            url=url, err=str(decodeError)
+        )
+    except (
+        requests.ConnectionError,
+        requests.Timeout,
+        requests.HTTPError,
+    ) as serverError:
+        errMsg = "%s. Please check your network connection and try again." % str(
+            serverError
         )
     except Exception as err:
         errMsg = (
-            "There was a unknown error when contacting Ampliseq.com for Design Panels: %s"
+            "There was an unknown error when contacting Ampliseq.com for Design Panels: %s"
             % str(err)
         )
 
@@ -89,9 +100,7 @@ def get_ampliseq_designs(user, password, api_url):
     if "hd" in api_url:
         chemistryType = "AmpliseqHD"
 
-    response, designs = _get_all_ampliseq_designs(
-        api_url, user, password, chemistryType
-    )
+    response, designs = _get_all_ampliseq_designs(api_url, user, password)
     if designs:
         ctx["unordered_solutions"] = []
         ctx["ordered_solutions"] = []
@@ -255,17 +264,30 @@ def get_ampliseq_fixed_designs(user, password, api_url):
     ctx = {}
     try:
         url = urlparse.urljoin(settings.AMPLISEQ_URL, api_url)
-        response = requests.get(url, auth=(user, password))
-        if response.status_code == 200:
-            fixed_design_data = response.json()
-            fixed_solutions, ordered_solutions, fixed_ids_choices = get_fixed_designs_list(
-                fixed_design_data
-            )
-            ctx["fixed_ids_choices"] = fixed_ids_choices
-            ctx["fixed_solutions"] = fixed_solutions
-        else:
-            ctx["http_error"] = "Problem in geting asmpliseq fixed solutions"
-            logger.debug("Problem ins geting asmpliseq fixed solutions")
+        response = requests.get(url, auth=(user, password), timeout=TIMEOUT_LIMIT_SEC)
+        response.raise_for_status()
+        fixed_design_data = response.json()
+        fixed_solutions, ordered_solutions, fixed_ids_choices = get_fixed_designs_list(
+            fixed_design_data
+        )
+        ctx["fixed_ids_choices"] = fixed_ids_choices
+        ctx["fixed_solutions"] = fixed_solutions
+    except ValueError as decodeError:
+        ctx["http_error"] = "Could not parse the responses from AmpliSeq.com."
+        errMsg = "Unable to parse the response from {url}: {err}".format(
+            url=url, err=str(decodeError)
+        )
+        logger.error(errMsg)
+    except (
+        requests.ConnectionError,
+        requests.Timeout,
+        requests.HTTPError,
+    ) as serverError:
+        ctx["http_error"] = "Could not connect to AmpliSeq.com."
+        errMsg = "%s. Please check your network connection and try again." % str(
+            serverError
+        )
+        logger.error(errMsg)
     except Exception as Err:
         ctx["http_error"] = "Could not connect to AmpliSeq.com."
         logger.error("There was a unknown error when contacting ampliseq: %s" % Err)

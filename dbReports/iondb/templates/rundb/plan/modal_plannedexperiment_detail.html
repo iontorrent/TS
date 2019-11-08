@@ -185,13 +185,13 @@
 								<td><b>{% trans "reviewplan.fields.eas.hotSpotRegionBedFile.label" %}:</b></td>
 								<td class="word-break-all">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
 							</tr>
-							{% if runType.0.runType == "AMPS_DNA_RNA" or runType.0.runType == "MIXED" %}
+							{% if runType.0.nucleotideType == "dna_rna" %}
 							<tr>
-								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label.AMPS_DNA_RNA" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label" %}{% endif%} :</b></td>
-								<td>{{ eas.mixedTypeRNA_reference }}</td>
+								<td><b>{%if runType.0.runType == "MIXED" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_reference.label.AMPS_DNA_RNA" %}{% endif%} :</b></td>
+								<td>{{ eas.mixedTypeRNA_reference|default:'' }}</td>
 							</tr>
 							<tr>
-								<td><b>{%if runType.0.runType == "AMPS_DNA_RNA" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label.AMPS_DNA_RNA" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label" %}{% endif%}:</b></td>
+								<td><b>{%if runType.0.runType == "MIXED" %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label" %}{% else %}{% trans "reviewplan.fields.eas.mixedTypeRNA_targetRegionBedFile.label.AMPS_DNA_RNA" %}{% endif%}:</b></td>
 								<td class="word-break-all">{{ eas.mixedTypeRNA_targetRegionBedFile|default:''|basename }}</td>
 							</tr>
 							{% endif %}					

@@ -186,7 +186,7 @@ class PluginsStepData(AbstractStepData):
                     else json.loads(values[PluginFieldNames.CONFIG])
                 )
                 plugin_validation_errors = Plugin.validate(
-                    plugin_id, configuration, "Automatic"
+                    plugin_id, configuration
                 )
 
                 if plugin_validation_errors:

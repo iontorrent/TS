@@ -542,8 +542,8 @@
       "displayedValue": "Carrier Seq",
       "description": "Carrier Seq",
       "isDefault": false,
-      "isActive": false,
-      "isVisible": false,
+      "isActive": true,
+      "isVisible": true,
       "categories": "AMPS",
       "samplePrep_instrumentType": "",
       "sequencing_instrumentType": "",
@@ -565,6 +565,23 @@
       "samplePrep_instrumentType": "",
       "sequencing_instrumentType": "",
       "uid": "APPCAT0010"
+    }
+  },
+  {
+    "pk": 16,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "p4o",
+      "displayedValue": "P4O",
+      "description": "Oncomine Tumor Specific Panels",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0011"
     }
   },
   {
@@ -5043,6 +5060,34 @@
       "value": "Rectal Cancer",
       "iRValue": "Rectal Cancer",
       "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 89,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "16s_markers",
+      "uid": "SAMPLEANNOTATE_CV_0089",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "16S rRNA Gene",
+      "iRValue": "16S rRNA Gene",
+      "iRAnnotationType": "16S_Markers",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 90,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "16s_markers",
+      "uid": "SAMPLEANNOTATE_CV_0090",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Target Species",
+      "iRValue": "Target Species",
+      "iRAnnotationType": "16S_Markers",
       "isActive": true
     }
   },

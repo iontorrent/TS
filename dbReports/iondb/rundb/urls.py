@@ -48,7 +48,7 @@ v1_api.register(api.TemplateResource())
 
 v1_api.register(api.MessageResource())
 v1_api.register(api.MonitorDataResource())
-
+v1_api.register(api.GetSoftwareInfo())
 v1_api.register(api.TorrentSuite())
 v1_api.register(api.NetworkResource())
 v1_api.register(api.IonReporter())

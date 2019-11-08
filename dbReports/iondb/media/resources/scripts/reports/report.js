@@ -34,7 +34,7 @@ function resizeiFrames() {
             if ($(this).height() != height) $(this).height(height);
             if ($(this).width() != width) $(this).width(width);
         } catch (e) {
-            console.warn("Could not resize plugin iframe: " + e.message)
+            console.info("Could not resize plugin iframe: " + e.message)
         }
     });
 }
@@ -861,6 +861,8 @@ $(document).ready(function () {
                     schema: {
                         model: {
                             fields: {
+                                read_len_histogram_full_link: { type: "string" },
+                                read_len_histogram_sparkline_link: { type: "string" },
                                 barcode_name: { type: "string" },
                                 sample: { type: "string" },
                                 total_bases: { type: "integer" },
@@ -868,6 +870,7 @@ $(document).ready(function () {
                                 read_count: { type: "integer" },
                                 mean_read_length: { type: "string" },
                                 filtered: { type: "boolean" },
+                                warning: { type: "boolean" },
                                 file_prefix: { type: "string"},
                                 bam_link: { type: "string"},
                                 bai_link: { type: "string"},

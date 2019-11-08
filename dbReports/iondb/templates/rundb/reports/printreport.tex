@@ -2,6 +2,7 @@
 {% load pagetools %}
 {% load ion_readable %}
 \documentclass[letterpaper,10pt]{article}
+\usepackage{longtable}
 \usepackage{geometry}
 \geometry{tmargin=0.7in,bmargin=.7in,lmargin=0.8in,rmargin=0.8in,includehead,headheight=35pt, headsep=35pt}
 \geometry{tmargin=0.7in,bmargin=.7in,lmargin=0.8in,rmargin=0.8in,includefoot,footskip=15pt}
@@ -359,7 +360,7 @@ Run Report for {{report.resultsName|latexsafe}}
 }
 
 \section*{Analysis Details}
-	\begin{tabular}{E{38mm}|E{125mm}}
+	\begin{longtable}{E{38mm}|E{125mm}}
 	\bf Run Name & {{experiment.expName|latexsafe}} \\
 	\bf Run Date & {{experiment.date}} \\
 	\bf Run Flows & {{experiment.flows}} \\ 
@@ -370,8 +371,10 @@ Run Report for {{report.resultsName|latexsafe}}
 				{{project.name|latexsafe}}
 			{% endfor %}
 			{% endspaceless %} \\
-	\bf Sample & {{experiment.samples.all|join:", "|latexsafe}} \\
-	\bf Reference & {{report.corollary|latexsafe}} \\ 
+	{% for chunk in chunked_sample_names %}
+	\bf {% if forloop.first %} Samples {% else %} Samples (cont.) {% endif %} & {{chunk|join:", "|latexsafe}} \\
+	{% endfor %}
+	\bf Reference & {{report.corollary|latexsafe}} \\
 	\bf Instrument & {{experiment.pgmName|latexsafe}} \\
 	\bf Operation Mode & {{operationMode|latexsafe}} \\	
     \bf Flow Order & \seqbreak{5in}{ {{experiment.flowsInOrder}} } \\
@@ -407,7 +410,7 @@ Run Report for {{report.resultsName|latexsafe}}
     {% endif %}
     \bf Analysis Parameters & {{report.eas.custom_args|yesno:"custom,default"}} \\
 
-\end{tabular}%
+\end{longtable}%
 
  
 %%%%%%%%%%top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -10,12 +10,13 @@
     - apache2
     - apache2-utils
     - libapache2-mod-wsgi
+  when: has_network_access
 
 - name: Install additional apache packages for 18.04
   apt: name={{ item }} state=present force=yes
   with_items:
     - libapache2-mod-php
-  when: ansible_distribution_version == "18.04"
+  when: ansible_distribution_version == "18.04" and has_network_access
   notify: restart apache
 
 - name: Install additional apache packages for 14.04
@@ -23,7 +24,7 @@
   with_items:
     - apache2-mpm-prefork
     - libapache2-mod-php5
-  when: ansible_distribution_version == "14.04"
+  when: ansible_distribution_version == "14.04" and has_network_access
   notify: restart apache
 
 - name: Install php configuration for 18.04 (php7.2)

@@ -6,3 +6,12 @@
   service: name=ionPlugin state=restarted
 - name: restart ionCrawler
   service: name=ionCrawler state=restarted
+- name: update grub
+  command: /usr/sbin/update-grub
+  when: not docker_image
+
+- name: reload systemd daemon
+  command: systemctl daemon-reload
+
+- name: restart systemd-udevd
+  command: service systemd-udevd --full-restart

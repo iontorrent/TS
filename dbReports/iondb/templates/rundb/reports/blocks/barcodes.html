@@ -43,8 +43,13 @@
             </tbody>
        </table>
         <script id="barcodesRowTemplate" type="text/x-kendo-tmpl">
-            <tr>
-                <td> #= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #</td>
+            <tr class="# if (read_count === 0) { #muted# } #">
+                <td>
+                    # if (warning) { #
+                        <i class="fa fa-exclamation-triangle muted" rel="tooltip" title="{% trans "report.section.output.barcodes.filtered.tooltip" %}"></i>
+                    # } #
+                    #= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #
+                </td>
                 <td> #= (barcode_name) ? sample : "{% trans "report.section.output.barcodes.messages.sample.none" %}" #</td>
                 <td> #=numberWithCommas(total_bases)# </td>
                 # if (isToShowExtraStats) { #
@@ -52,7 +57,11 @@
                 # } #
                 <td> #=numberWithCommas(read_count)# </td>
                 <td> ${mean_read_length} </td>
-                <td><img name="read_len_histogram" onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
+                <td>
+                    # if (read_len_histogram_sparkline_link) { #
+                        <img name="read_len_histogram" onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "{% trans "report.section.output.barcodes.messages.barcode_name.none" %}" #', '#=read_len_histogram_full_link#')" src="#=read_len_histogram_sparkline_link#">
+                    # } #
+                </td>
                 <td>
                     <span class="btn-group">
                         # if (basecaller_bam_link) { #

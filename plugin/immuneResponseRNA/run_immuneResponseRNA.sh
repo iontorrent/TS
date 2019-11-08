@@ -255,7 +255,7 @@ if [ $TRACK -eq 1 ]; then
 fi
 
 # basic read mappings from samtools
-read TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
+read -d '' TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
 ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
 echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
 echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"

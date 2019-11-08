@@ -524,10 +524,10 @@ void realign_read
     {
         // extract packed cigar and it's length
         tmap_map_sam_t* match = sams->sams + matchidx;
-        // check if we need to re-align this match
 
-        if (  (match->param_ovr && match->param_ovr->do_realign.over && !match->param_ovr->do_realign.value)
-            ||(!match->param_ovr && !stage_opt->do_realign))
+        // check if we need to re-align this match
+        if ( (!stage_opt->do_realign && (!match->param_ovr || !match->param_ovr->do_realign.over || !match->param_ovr->do_realign.value)) ||
+             ( match->param_ovr && match->param_ovr->do_realign.over && !match->param_ovr->do_realign.value) )
                 continue;
 
         // check if parameters are overriden
@@ -762,8 +762,8 @@ void context_align_read
         tmap_map_sam_t* match = sams->sams + matchidx;
 
         // check if we need to context-align this match
-        if (  (match->param_ovr && match->param_ovr->do_hp_weight.over && !match->param_ovr->do_hp_weight.value)
-            ||(!match->param_ovr && !stage_opt->do_hp_weight))
+        if ( (!stage_opt->do_hp_weight && (!match->param_ovr || !match->param_ovr->do_hp_weight.over || !match->param_ovr->do_hp_weight.value)) ||
+             ( match->param_ovr && match->param_ovr->do_hp_weight.over && !match->param_ovr->do_hp_weight.value) )
                 continue;
 
         uint32_t* orig_cigar = match->cigar;
@@ -1947,6 +1947,32 @@ tmap_map_driver_thread_io_worker (void *arg)
 #endif
 
 
+uint8_t fill_sw_overrides (tmap_refseq_t* refseq, tmap_map_driver_t *driver)
+{
+    if (refseq->bed_exist)
+    {
+        tmap_map_locopt_t *locopt, *locopt_sent;
+        for (locopt = refseq->parmem, locopt_sent = refseq->parmem + refseq->parmem_used;
+             locopt != locopt_sent;
+             ++locopt)
+        {
+            uint32_t stage_ord;
+            for (stage_ord = 0;
+                 stage_ord != driver->num_stages;
+                 ++stage_ord)
+            {
+                tmap_map_driver_stage_t* stage = driver->stages [stage_ord];
+                if (stage->opt->use_param_ovr)
+                {
+                    cache_sw_overrides (locopt, stage_ord, stage->opt, &(stage->sw_param));
+                }
+            }
+        }
+    }
+    return 1;
+}
+
+
 void 
 tmap_map_driver_core (tmap_map_driver_t *driver)
 {
@@ -2033,6 +2059,9 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 
   if (local_ovrs && !driver->opt->realign_log)
     tmap_warning ("Amplicon-specific logging will have no effect since log file is not specified on command line (%s option)", "--log");
+
+  // cache sw parameters overrides here - do not defer to read mapping to avoid access synchronization from different threads
+  fill_sw_overrides (index->refseq, driver);
 
   // allocate the buffer
   if(-1 == driver->opt->reads_queue_size) {

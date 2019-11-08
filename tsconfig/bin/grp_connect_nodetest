@@ -5,6 +5,10 @@
 #
 set -u
 nodename=$1
+timeout_sec=$2
+if [[ -z $timeout_sec ]]; then
+   timeout_sec=120
+fi
  
 #==============================================================================
 # Include function definition file
@@ -18,4 +22,4 @@ source ${TSCONFIG_SRC_DIR}/grp_functions
 set -e
 address_test $nodename
 network_test $nodename
-access_test $nodename
+access_test $nodename $timeout_sec

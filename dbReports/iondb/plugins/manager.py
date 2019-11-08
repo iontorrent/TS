@@ -8,7 +8,6 @@ import os
 import re
 import json
 import apt
-import iondb.rundb.models
 from distutils.version import LooseVersion
 from iondb.utils.utils import getPackageName
 import iondb.plugins.tasks
@@ -19,7 +18,6 @@ import subprocess
 logger = logging.getLogger(__name__)
 
 LEGACY_PLUGIN_SCRIPT = "launch.sh"
-
 
 class PluginManager(object):
     """Class for managing plugin installation and versioning activities.
@@ -65,9 +63,11 @@ class PluginManager(object):
         has been deleted.  In any case, one cannot execute the plugin if the plugin
         folder has been removed.
         """
+        from iondb.rundb.models import Plugin
+
         if not plugins:
             # Review all currently installed/active plugins
-            plugins = iondb.rundb.models.Plugin.objects.filter(active=True)
+            plugins = Plugin.objects.filter(active=True)
 
         # for each record, test for corresponding folder
         count = 0
@@ -267,6 +267,7 @@ class PluginManager(object):
 
         TODO - handle embedded version number in path
         """
+        from iondb.rundb.models import Plugin
 
         # Cleanup, normalize and validate inputs
         pname = pname.strip()
@@ -315,7 +316,7 @@ class PluginManager(object):
             "Plugin Install/Upgrade checking for plugin: %s %s", pname, version
         )
         # needs_save is aka created. Tracks if anything changed.
-        p, needs_save = iondb.rundb.models.Plugin.objects.get_or_create(
+        p, needs_save = Plugin.objects.get_or_create(
             name=pname, version=version, defaults=plugin_defaults
         )
 
@@ -394,7 +395,7 @@ class PluginManager(object):
             )
 
             # uninstall the plugin
-            iondb.rundb.models.Plugin.Uninstall(p.id)
+            Plugin.Uninstall(p.id)
 
             # And restore with full_path
             self.enable(p, full_path)
@@ -454,12 +455,14 @@ class PluginManager(object):
             Currently deactivates old versions of plugins to avoid version conflicts.
             Pass in the new plugin object - the one you want to keep.
         """
+        from iondb.rundb.models import Plugin
+
         # Some behavior here is just to disable old versions during upgrade.
         count = 0
         oldplugin = None
 
         # Get all plugins with the same name and different version
-        for oldp in iondb.rundb.models.Plugin.objects.filter(name=plugin.name).exclude(
+        for oldp in Plugin.objects.filter(name=plugin.name).exclude(
             version=plugin.version
         ):
             # FIXME - multi-version support needs new behavior here
@@ -478,7 +481,7 @@ class PluginManager(object):
             current_path = current_path or plugin.path
             if oldp.path and oldp.path != current_path:
                 # farm the uninstall off to the plugin daemon
-                iondb.rundb.models.Plugin.Uninstall(oldp.id)
+                Plugin.Uninstall(oldp.id)
             else:
                 oldp.path = ""
             if oldp.active:

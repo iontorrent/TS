@@ -669,16 +669,13 @@ class BarcodeBySampleStepData(AbstractStepData):
                                 sample_name
                             ][SavePlanFieldNames.DUAL_BARCODES_DB_KEY].append(id_str)
 
-        # logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));
 
     def _get_nucleotideType_barcodedSamples(self, appGroup=None, runType=None):
+        value = ""
         runTypeObjs = RunType.objects.filter(runType=runType)
         if runTypeObjs:
-            runTypeObj = runTypeObjs[0]
-            if runType != "AMPS_DNA_RNA" and runTypeObj.nucleotideType:
-                return runTypeObj.nucleotideType.upper()
-            else:
-                value = appGroup
-                return value if value in ["DNA", "RNA"] else ""
+            value = runTypeObjs[0].nucleotideType.upper()
+        if value not in ["DNA", "RNA"] and appGroup:
+            value = appGroup
+        return value if value in ["DNA", "RNA"] else ""
 
-        return ""

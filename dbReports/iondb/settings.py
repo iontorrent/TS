@@ -29,6 +29,8 @@ TEMPLATE_DEBUG = DEBUG
 AMPLISEQ_URL = "https://ampliseq.com/"
 NEWS_FEED = "http://updates.iontorrent.com/news/ion_news_feed.xml"
 
+REQUESTS_TIMEOUT_LIMIT_SEC = 30
+
 # Set ADMINS in local_settings
 ADMINS = ()
 MANAGERS = ADMINS
@@ -368,8 +370,8 @@ SUPPORTED_INSTALL_PACKAGES = [("ion-chefupdates", "Ion Chef scripts")]
 
 EULA_TEXT_URL = "products/LICENSE.txt"
 
-PLAN_CSV_VERSION = "2.1"
-SUPPORTED_PLAN_CSV_VERSION = ["1.0", "2.0", "2.1"]
+PLAN_CSV_VERSION = "2.2"
+SUPPORTED_PLAN_CSV_VERSION = ["1.0", "2.0", "2.1", "2.2"]
 SAMPLE_CSV_VERSION = "2.0"
 SUPPORTED_SAMPLE_CSV_VERSION = ["1.0", "2.0"]
 

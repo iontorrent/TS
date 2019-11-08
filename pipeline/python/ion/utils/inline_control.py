@@ -173,9 +173,9 @@ def inline_control(bcDir, ctrlRef, outDir):
         if os.path.exists(del_target_file):
             os.remove(del_target_file)
 
-        with open(del_target_file, "w") as tmpfile:
-            for target, control in map_ctrl.items():
-                tmpfile.write(target + "\n")
+        # with open(del_target_file, "w") as tmpfile:
+        #     for target, control in map_ctrl.items():
+        #         tmpfile.write(target + "\n")
 
                 # ref_hk = parse_fasta(hkRef)
 
@@ -201,20 +201,21 @@ def inline_control(bcDir, ctrlRef, outDir):
             )
             subprocess.call(cmd, shell=True)
             bamCtrl_sorted = os.path.join(
-                outDir, os.path.splitext(bamfile)[0] + ".control.sorted"
+                outDir, os.path.splitext(bamfile)[0] + ".control.sorted.bam"
             )
-            cmd = "samtools sort %s %s" % (bamCtrl_output, bamCtrl_sorted)
+            cmd = "samtools sort -o {out_bam} {in_bam}".format(
+                in_bam=bamCtrl_output, out_bam=bamCtrl_sorted
+            )
             subprocess.call(cmd, shell=True)
-            cmd = "samtools index %s" % bamCtrl_sorted + ".bam"
+            cmd = "samtools index %s" % bamCtrl_sorted
             subprocess.call(cmd, shell=True)
 
             printtime("Counting reads bam file: " + bam)
             stats_bam[bamfile] = {}
             stats_bam[bamfile]["counts"] = {}
             for ref in ref_ctrl:
-                cmd = "samtools view -q 10 %s | grep %s | wc -l" % (
-                    bamCtrl_sorted + ".bam",
-                    ref,
+                cmd = "samtools view -q 10 {sort_bam} | grep {ref_seq} | wc -l".format(
+                    sort_bam=bamCtrl_sorted, ref_seq=ref
                 )
                 (status, count) = commands.getstatusoutput(cmd)
                 if status == 0:
@@ -232,12 +233,18 @@ def inline_control(bcDir, ctrlRef, outDir):
                     stats_bam[bamfile]["ratio"][control + "/" + spike] = "NA"
 
             # Remove control reads from the original unmapped bam
-            cmd = "samtools view -h %s | grep -vf %s | samtools view -h -bS -o %s -" % (
-                bam,
-                del_target_file,
-                os.path.join(outDir, os.path.splitext(bamfile)[0] + ".filtered.bam"),
-            )
-            subprocess.call(cmd, shell=True)
+            try:
+                cmd = "samtools view %s | cut -f 1 > %s" %(bamCtrl_sorted, del_target_file)
+                subprocess.call(cmd, shell=True)
+                cmd = "samtools view -h %s | grep -vf %s | samtools view -h -bS -o %s -" % (
+                    bam,
+                    del_target_file,
+                    os.path.join(outDir, os.path.splitext(bamfile)[0] + ".filtered.bam"),
+                )
+                subprocess.call(cmd, shell=True)
+            except:
+                print "Error in removing reads from bam"
+                pass
 
         if os.path.exists(del_target_file):
             os.remove(del_target_file)

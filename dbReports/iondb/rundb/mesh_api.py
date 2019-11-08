@@ -2,27 +2,27 @@
 # Custom Tastypie APIs to support the TS Mesh
 # Wiki page @ https://confluence.amer.thermo.com/x/SwnCBQ
 
-import requests
-import multiprocessing
 import datetime
 import json
 import logging
 
-from tastypie.resources import ModelResource, Resource
-from tastypie.http import HttpNotImplemented, HttpCreated
-from tastypie.exceptions import InvalidSortError, BadRequest
-from django.utils.dateparse import parse_datetime
+import requests
 from django.conf import settings
 from django.core.cache import cache
-
+from django.utils.dateparse import parse_datetime
 from ion.utils.TSversion import findVersions
-from iondb.rundb.models import IonMeshNode
+from tastypie.exceptions import InvalidSortError, BadRequest
+from tastypie.http import HttpNotImplemented, HttpCreated
+from tastypie.resources import ModelResource, Resource
+
 from iondb.rundb.api import (
     CompositeExperimentResource,
     IonAuthentication,
     DjangoAuthorization,
 )
 from iondb.rundb.labels import IonMeshNodeStatus
+from iondb.rundb.models import IonMeshNode
+from iondb.utils.utils import ManagedPool
 
 
 def fetch_remote_version_process(new_options):
@@ -119,8 +119,8 @@ class MeshPrefetchResource(ModelResource):
                 "system_id": settings.SYSTEM_UUID,
             }
             job_arguments.append({"address": mesh_node.hostname, "params": params})
-        job_pool = multiprocessing.Pool(processes=len(job_arguments))
-        job_output = job_pool.map(fetch_remote_version_process, job_arguments)
+        with ManagedPool(processes=len(job_arguments)) as job_pool:
+            job_output = job_pool.map(fetch_remote_version_process, job_arguments)
         objects_per_host = {}
         for address, object, exceptions in job_output:
             objects_per_host[address] = {"object": {}, "warnings": []}
@@ -171,8 +171,8 @@ class MeshPrefetchResource(ModelResource):
                     "params": params,
                 }
             )
-        job_pool = multiprocessing.Pool(processes=len(job_arguments))
-        job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
+        with ManagedPool(processes=len(job_arguments)) as job_pool:
+            job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
         objects_per_host = {}
         for address, objects, fetched_all_objects, exceptions in job_output:
             objects_per_host[address] = {"objects": [], "warnings": []}
@@ -467,8 +467,8 @@ class MeshCompositeExperimentResource(CompositeExperimentResource):
                     "params": params,
                 }
             )
-        job_pool = multiprocessing.Pool(processes=len(job_arguments))
-        job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
+        with ManagedPool(processes=len(job_arguments)) as job_pool:
+            job_output = job_pool.map(fetch_remote_resource_list_process, job_arguments)
 
         # Now that we have lists from all the servers we need to check if any had to many objects.
         # If they did, truncate all the lists to the same date range and display it as a warning.

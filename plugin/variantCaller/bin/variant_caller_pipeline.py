@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
 import sys
@@ -10,7 +11,20 @@ import numpy
 import csv
 from optparse import OptionParser
 
+def utf8_decoder(s):
+    try:
+        return s.decode('utf-8')
+    except:
+        return s
+
+def utf8_encoder(s):
+    try:
+        return s.encode('utf-8')
+    except:
+        return s
+
 def printtime(message, *args):
+    message = utf8_encoder(message)
     if args:
         message = message % args
     print "[ " + time.strftime('%a %Y-%m-%d %X %Z') + " ] " + message
@@ -613,4 +627,5 @@ def main():
 # =======================================================================================
 
 if __name__ == '__main__':
+    sys.argv = map(utf8_decoder, sys.argv)
     main()

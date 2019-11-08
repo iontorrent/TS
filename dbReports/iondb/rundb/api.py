@@ -33,7 +33,7 @@ from tastypie.validation import Validation, FormValidation
 
 # auth
 from tastypie.authorization import DjangoAuthorization
-from iondb.rundb.authn import IonAuthentication
+from iondb.rundb.authn import IonAuthentication, Authentication
 
 # plugins
 from ion.plugin import remote
@@ -2731,7 +2731,7 @@ class PluginResource(ModelResource):
         issues = models.Plugin.validate(
             kwargs["pk"],
             data.get("configuration", dict()),
-            data.get("run_mode", "Manual"),
+            data.get("run_mode", "manual") == "manual",
         )
 
         # return a list of all of the information
@@ -3991,6 +3991,36 @@ class PlanTemplateBasicInfoResource(ModelResource):
 
         allowed_methods = ["get"]
         check_files_allowed_methods = ["get"]
+
+
+class GetSoftwareInfo(ModelResource):
+    """ Common multi-platform API, read-only and no Auth """
+    def prepend_urls(self):
+        return [
+            url(
+                r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view("dispatch_softwareinfo"),
+                name="api_dispatch_softwareinfo",
+            ),
+        ]
+
+    def dispatch_softwareinfo(self, request, **kwargs):
+        return self.dispatch("softwareinfo", request, **kwargs)
+
+    def get_softwareinfo(self, request, **kwargs):
+        from ion import version
+        info = {
+            "site_name": models.GlobalConfig.get().site_name,
+            "software_release_version": version,
+            "server_mode": "ruo",
+            "software_platform": "TS"
+        }
+        return self.create_response(request, info)
+
+    class Meta:
+        authentication = Authentication() # no-op
+        authorization = DjangoAuthorization()
+        softwareinfo_allowed_methods = ["get"]
 
 
 class TorrentSuite(ModelResource):
@@ -6561,10 +6591,12 @@ class IonMeshNodeResource(ModelResource):
                 "IonMeshNodeResource: processing exchange keys request from %s"
                 % data["hostname"]
             )
-            node, _created = models.IonMeshNode.create(data["system_id"])
-            node.hostname = data["hostname"]
+            node, created = models.IonMeshNode.create(data["system_id"])
             node.apikey_remote = data["apikey"]
-            node.name = data.get("name") or node.hostname
+            if created or not node.hostname:
+                node.hostname = data["hostname"]
+                node.name = data.get("name") or node.hostname
+
             # handle edge case: host was entered previously via SharedServer migration
             duplicate = models.IonMeshNode.objects.filter(
                 hostname=node.hostname

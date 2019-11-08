@@ -8,53 +8,35 @@ Note : This does not perform any Insert operation, only Update.
        Also, No Schema changes.
 """
 
-import logging
+import glob
 import json
-import httplib2
-import urllib2
+import logging
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+import time
+import traceback
+from distutils.version import StrictVersion, LooseVersion
+
+import requests
+from django.conf import settings
+from django.db.models import get_model
 from ion import version as TS_version
+
+
 from iondb.bin.add_or_update_systemPlanTemplates import (
     add_or_updateSystemTemplate_OffCycleRelease,
 )
-import re
-import xmlrpclib
-import iondb.utils
-import traceback
-import subprocess
-import os
-import glob
-import time
-import shutil
-import tempfile
-from iondb.rundb import tasks
-
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render_to_response, get_object_or_404
-from django.http import (
-    HttpResponse,
-    HttpResponsePermanentRedirect,
-    HttpResponseRedirect,
-)
-from django.template import RequestContext
-from django.conf import settings
-from django.core import urlresolvers
-from django.contrib.auth.models import User
-
-from iondb.rundb.ajax import render_to_json
-from iondb.rundb.models import (
-    ReferenceGenome,
-    FileMonitor,
-    dnaBarcode,
-    Plugin,
-    GlobalConfig,
-)
-from iondb.utils.utils import GetChangeLog, VersionChange, get_apt_cache
-from django.db.models import get_model
-from distutils.version import StrictVersion, LooseVersion
 from iondb.plugins.manager import pluginmanager
+from iondb.rundb import tasks
+from iondb.rundb.models import FileMonitor, dnaBarcode, Plugin, GlobalConfig
+from iondb.utils.utils import GetChangeLog, VersionChange, get_apt_cache
 
 logger = logging.getLogger(__name__)
 
+TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
 
 errorCode = {
     "E001": "TS version({0}) not supported",
@@ -67,6 +49,8 @@ errorCode = {
     "E008": "{0}. Please check the network and try again",
     "E009": "System Template Add/Update Failed",
     "E010": "Duplicate product entry found ({0}). Check your product info.",
+    "E011": "Invalid JSON file or response ({0}}",
+    "E012": "Unknown system error: {0}",
 }
 
 PRODUCT_UPDATE_PATH_LOCAL = os.path.join(
@@ -101,34 +85,40 @@ def validate_for_unique_product(productContents):
 
 
 def get_productUpdateList(url=None, offcycle_type="online"):
-    h = httplib2.Http()
-    isValid = True
-    productContents = []
-    errorMsg = ""
     PRODUCT_UPDATE_LIST_URL = os.path.join(
         settings.PRODUCT_UPDATE_BASEURL.strip("\/"),
         settings.PRODUCT_UPDATE_PATH.strip("\/"),
     )
     product_local_main = os.path.join(PRODUCT_UPDATE_PATH_LOCAL, "main.json")
+
+    productContents = []
     try:
-        response, content = h.request(PRODUCT_UPDATE_LIST_URL)
-        if response["status"] == "200":
-            productJson = json.loads(content)
-            productContents = productJson["contents"]
-        if response["status"] == "404":
-            isValid = False
-            # errorMsg = "Product Information not available. Stay Tuned for New Products"
-    except httplib2.ServerNotFoundError as err:
-        isValid = False
-        errorMsg = err
+        resp = requests.get(PRODUCT_UPDATE_LIST_URL, timeout=TIMEOUT_LIMIT_SEC)
+        resp.raise_for_status()
+        productContents = resp.json().get("contents", [])
+    except ValueError as err:
         logger.debug(
-            "httplib2.ServerNotFoundError: iondb.rundb.configure.updateProducts.get_productUpdateList %s",
-            err,
+            "Unable to decode response in JSON from {url}: {err_str}".format(
+                url=PRODUCT_UPDATE_LIST_URL, err_str=str(err)
+            )
+        )
+    except requests.Timeout as err:
+        logger.debug(
+            "Timeout in accessing {url}: {err_str}".format(
+                url=PRODUCT_UPDATE_LIST_URL, err_str=str(err)
+            )
+        )
+    except (requests.ConnectionError, requests.HTTPError) as err:
+        logger.debug(
+            "Unable to connect {url}: {err_str)".format(
+                url=PRODUCT_UPDATE_LIST_URL, err_str=str(err)
+            )
         )
     except Exception as err:
         logger.debug(
-            "urllib2.HTTPError: iondb.rundb.configure.updateProducts.get_productUpdateList %s",
-            err,
+            "Unknown error while trying to connect {url}: {err_str}".format(
+                url=PRODUCT_UPDATE_LIST_URL, err_str=str(err)
+            )
         )
 
     # Handle the users with and without internet connection
@@ -272,43 +262,34 @@ def validate_product_fixture(productjsonURL):
     product_individual_local = os.path.join(PRODUCT_UPDATE_PATH_LOCAL, productjsonURL)
     if "http://" in productjsonURL:
         try:
-            product = urllib2.urlopen(productjsonURL)
-            productInfo = json.loads(product.read())
-        except urllib2.HTTPError as err:
-            if err.code == 404:
-                logger.debug(
-                    "Missing Product Fixture{0}. Try again later".format(productjsonURL)
-                )
-                error = errorCode["E002"].format(err)
-            else:
-                error = errorCode["E003"].format(err)
-                logger.debug(
-                    "urllib2.HTTPError: iondb.rundb.configure.updateProducts.validate_product_fixture %s",
-                    err,
-                )
-        except urllib2.URLError as err:
+            resp = requests.get(productjsonURL, timeout=TIMEOUT_LIMIT_SEC)
+            resp.raise_for_status()
+            productInfo = resp.json()
+        except ValueError as err:
+            error = errorCode["E011"].format(err)
+            logger.debug(error)
+        except requests.HTTPError as err:
+            error = errorCode["E003"].format(err)
+            logger.debug(error)
+        except requests.ConnectionError as err:
             error = errorCode["E007"].format(err)
-            logger.debug(
-                "urllib2.URLError: iondb.rundb.configure.updateProducts.validate_product_fixture %s",
-                err,
-            )
+            logger.debug(error)
         except Exception as err:
-            error = errorCode["E008"].format(err)
-            logger.debug(
-                "Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s",
-                err,
-            )
+            error = errorCode["E012"].format(err)
+            logger.debug(error)
     elif os.path.exists(product_individual_local):  # validate for the offline product
         try:
-            productInfo = json.loads(open(product_individual_local).read())
+            with open(product_individual_local, "r") as jid:
+                productInfo = json.load(jid)
+        except ValueError as err:
+            error = errorCode["E011"].format(err)
+            logger.debug(error)
         except Exception as err:
             error = errorCode["E005"].format(err)
-            logger.debug(
-                "Error: iondb.rundb.configure.updateProducts.validate_product_fixture %s",
-                err,
-            )
+            logger.debug(error)
     else:
         error = errorCode["E006"]
+        logger.debug(error)
 
     return productInfo, error
 

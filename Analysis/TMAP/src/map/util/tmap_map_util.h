@@ -689,5 +689,15 @@ tmap_map_get_amplicon
     uint32_t strand
 );
 
+uint8_t
+cache_sw_overrides 
+(
+    tmap_map_locopt_t* locopt,
+    int32_t stage_ord,
+    tmap_map_opt_t* stage_opt,
+    tmap_sw_param_t* def_sw_par
+);
+
+
 
 #endif // TMAP_MAP_UTIL_H

@@ -1685,7 +1685,7 @@ def _get_IR_userInputInfo_obj(
                 selectedIrWorkflow, sampleDisplayedName, sampleId, ""
             )
         )
-    else:
+    elif barcodedSampleJson:
         barcodedSamples = list(barcodedSampleJson.keys())
         for barcodedSample in barcodedSamples:
             value = barcodedSampleJson[barcodedSample]
@@ -1985,8 +1985,7 @@ def _parse_barcodedSamples_from_plan_csv(
                     # If NO keyword is provided, use the template value to substitute
                     # If keyword is provided but it is blank, DO NOT use the template value to substitute
                     if (
-                        runType == "AMPS_DNA_RNA"
-                        and sampleDict["nucleotideType"].upper() == "RNA"
+                        RunType.is_dna_rna(runType) and sampleDict["nucleotideType"].upper() == "RNA"
                     ):
                         if not foundSampleRefKeyword:
                             sampleDict[

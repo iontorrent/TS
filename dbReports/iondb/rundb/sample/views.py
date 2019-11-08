@@ -862,7 +862,7 @@ def save_input_samples_for_sampleset(request):
                 pending_sampleSetItem_list = views_helper.assign_tube_postion_pcr_plates(
                     categoryDict
                 )
-            """ TS-17723:Allow user to manually assign the PCR plate for Ampliseq on Chef
+            """ TS-17723, TS-17910:Allow user to manually assign the PCR plate for Ampliseq on Chef and manual libPrep Type
             else:
                 pending_sampleSetItem_list = views_helper.assign_pcr_plate_rows(
                     parsedSamplesetitems
@@ -1249,8 +1249,11 @@ def save_import_samplesetitems(request):
                 sampleSetItemList = views_helper.assign_tube_postion_pcr_plates(
                     categoryDict
                 )
+            """
+            CSV Import: TS-17723, TS-17910:Allow user to manually assign the PCR plate for Ampliseq on Chef and manual libPrep Type
             else:
                 sampleSetItemList = views_helper.assign_pcr_plate_rows(samplesetitems)
+            """
             if index > 0:
                 index_process = index
                 for sampleData in sampleSetItemList:

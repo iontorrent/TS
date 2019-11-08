@@ -15,6 +15,7 @@
   with_items:
     - gridengine-client
     - gridengine-exec
+  when: has_network_access
 
 - name: enable gridengine log rotation
   template: src=templates/sge.logrotate.j2 dest=/etc/logrotate.d/sge mode=0644 owner=root group=root

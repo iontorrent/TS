@@ -9,6 +9,7 @@ from iondb.rundb.sample.sample_validator import (
     validate_sampleCollectionDate,
     validate_sampleReceiptDate,
 )
+from iondb.rundb.plan.plan_validator import validate_16s_markers
 from plan_csv_writer import PlanCSVcolumns, get_irSettings
 from iondb.rundb.models import Plugin
 from traceback import format_exc
@@ -48,6 +49,7 @@ def get_userInfoDict(row, workflowObj, rowCount, setid_suffix, other_row_setIds)
     if not other_row_setIds or newSetID:
         userInput_setid = csv_setid + "__" + setid_suffix
 
+    sampleName = row.get(PlanCSVcolumns.COLUMN_SAMPLE) or row.get(PlanCSVcolumns.COLUMN_SAMPLE_NAME, "")
     nucleotideType = row.get(PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE) or ""
     sampleCollectionDate = row.get(PlanCSVcolumns.COLUMN_SAMPLE_COLLECTION_DATE) or ""
     if sampleCollectionDate:
@@ -62,7 +64,7 @@ def get_userInfoDict(row, workflowObj, rowCount, setid_suffix, other_row_setIds)
 
     userInputInfoDict = {
         "ApplicationType": workflowObj.get("ApplicationType"),
-        "sample": row.get(PlanCSVcolumns.COLUMN_SAMPLE_NAME, "").strip(),
+        "sample": sampleName.strip(),
         "Relation": workflowObj.get("RelationshipType"),
         "RelationRole": row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_RELATION),
         "Gender": row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_GENDER),
@@ -78,6 +80,8 @@ def get_userInfoDict(row, workflowObj, rowCount, setid_suffix, other_row_setIds)
         "cellNum": row.get(PlanCSVcolumns.COLUMN_SAMPLE_CELL_NUM),
         "coupleID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID),
         "embryoID": row.get(PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID),
+        "BacterialMarkerType": row.get(PlanCSVcolumns.COLUMN_SAMPLE_BACTERIAL_MARKER_TYPE, ""),
+        "Witness": row.get(PlanCSVcolumns.COLUMN_SAMPLE_WITNESS, ""),
         "Workflow": row.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW),
         "nucleotideType": "RNA"
         if nucleotideType.upper() == "FUSIONS"
@@ -113,45 +117,6 @@ def irWorkflowNotValid(workflow, USERINPUT):
     return notValid, workflowObj
 
 
-def get_samples_content_single_csv(csvPlanDict):
-    samples_contents = []
-    single_csv_samplesDict = {
-        PlanCSVcolumns.COLUMN_SAMPLE: csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE),
-        PlanCSVcolumns.COLUMN_SAMPLE_DESCRIPTION: csvPlanDict.get(
-            PlanCSVcolumns.COLUMN_SAMPLE_DESCRIPTION
-        ),
-        PlanCSVcolumns.COLUMN_REF: csvPlanDict.get(PlanCSVcolumns.COLUMN_REF),
-        PlanCSVcolumns.COLUMN_TARGET_BED: csvPlanDict.get(
-            PlanCSVcolumns.COLUMN_TARGET_BED
-        ),
-        PlanCSVcolumns.COLUMN_HOTSPOT_BED: csvPlanDict.get(
-            PlanCSVcolumns.COLUMN_HOTSPOT_BED
-        ),
-    }
-
-    irSetings = get_irSettings()
-    for param in irSetings:
-        single_csv_samplesDict[param] = csvPlanDict.get(param)
-
-    annotations = [
-        PlanCSVcolumns.COLUMN_SAMPLE_COLLECTION_DATE,
-        PlanCSVcolumns.COLUMN_SAMPLE_RECEIPT_DATE,
-        PlanCSVcolumns.COLUMN_SAMPLE_CANCER_TYPE,
-        PlanCSVcolumns.COLUMN_SAMPLE_CELLULARITY,
-        PlanCSVcolumns.COLUMN_SAMPLE_BIOPSY_DAYS,
-        PlanCSVcolumns.COLUMN_SAMPLE_CELL_NUM,
-        PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
-        PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID,
-    ]
-    for param in annotations:
-        if param in csvPlanDict:
-            single_csv_samplesDict[param] = csvPlanDict[param]
-
-    samples_contents.append(single_csv_samplesDict)
-
-    return samples_contents
-
-
 def check_selected_values(planObj, samples_contents, csvPlanDict):
     userInput = []
     errorMsg = []
@@ -170,7 +135,7 @@ def check_selected_values(planObj, samples_contents, csvPlanDict):
     if csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE):
         isSingleCSV = True
         sampleName = csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE)
-        samples_contents = get_samples_content_single_csv(csvPlanDict)
+        samples_contents = [csvPlanDict]
     else:
         # Validate the main plan csv IR chevron workflow
         ir_chevron_workflow = csvPlanDict.get(PlanCSVcolumns.COLUMN_SAMPLE_IR_WORKFLOW)
@@ -182,8 +147,7 @@ def check_selected_values(planObj, samples_contents, csvPlanDict):
     if not samples_contents:
         msg = errorDict["E001"]
         errorMsgDict[PlanCSVcolumns.COLUMN_SAMPLE] = msg
-
-    if samples_contents:
+    else:
         for index, row in enumerate(samples_contents):
             setid_suffix = str(uuid.uuid4())
             errors = []
@@ -242,6 +206,12 @@ def check_selected_values(planObj, samples_contents, csvPlanDict):
             if mouseStrains:
                 isValid, err, _ = validate_mouseStrains(mouseStrains)
                 if not isValid:
+                    errors.append(err)
+
+            markers = row.get(PlanCSVcolumns.COLUMN_SAMPLE_BACTERIAL_MARKER_TYPE)
+            if markers:
+                err, _ = validate_16s_markers(markers, PlanCSVcolumns.COLUMN_SAMPLE_BACTERIAL_MARKER_TYPE)
+                if err:
                     errors.append(err)
 
             # TS-16335 : Validate Gender and Cancer Type
@@ -387,7 +357,6 @@ def validate_iruConfig_process_userInputInfo(
 
     if selectedPlugins and "variantCaller" in list(selectedPlugins.keys()):
         is_vcSelected = True
-        print(selectedPlugins)
 
     errorMsg = None
 

@@ -23,6 +23,7 @@ www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, \
                              /usr/sbin/grp_connect_nodetest, \
                              /usr/sbin/grp_config_nodetest, \
                              /usr/bin/qmod, \
+                             /usr/bin/timeout, \
                              /usr/bin/ion_raidinfo, \
                              /usr/bin/ion_raidinfo_json, \
                              /usr/bin/timedatectl, \

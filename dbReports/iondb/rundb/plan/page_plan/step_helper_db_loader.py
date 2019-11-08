@@ -401,7 +401,10 @@ class StepHelperDbLoader:
 
         isOncoSameSample = False
 
-        if planned_experiment.runType == "AMPS_DNA_RNA":
+        if (
+            RunType.is_dna_rna(planned_experiment.runType)
+            and planned_experiment.runType != "MIXED"
+        ):
             sample_count = planned_experiment.get_sample_count()
             barcode_count = getPlanBarcodeCount(planned_experiment)
             isOncoSameSample = sample_count * 2 == barcode_count
@@ -1642,7 +1645,10 @@ class StepHelperDbLoader:
 
         isOncoSameSample = False
 
-        if planned_experiment.runType == "AMPS_DNA_RNA":
+        if (
+            RunType.is_dna_rna(planned_experiment.runType)
+            and planned_experiment.runType != "MIXED"
+        ):
             if existing_plan:
                 sample_count = planned_experiment.get_sample_count()
                 barcode_count = getPlanBarcodeCount(planned_experiment)
@@ -1809,7 +1815,7 @@ class StepHelperDbLoader:
                     "sampleName": item.sample.displayedName,
                     "sampleExternalId": item.sample.externalId,
                     "sampleDescription": item.description,
-                    "nucleotideType": item.nucleotideType.upper(),
+                    "nucleotideType": item.get_nucleotideType_for_planning(),
                     "controlSequenceType": "",
                     "reference": "",
                     "targetRegionBedFile": "",
@@ -2038,7 +2044,7 @@ class StepHelperDbLoader:
                                 "",
                             )
 
-                            if runType != "AMPS_DNA_RNA":
+                            if not RunType.is_dna_rna(runType):
                                 if (
                                     not sampleReference
                                     and not step_helper.isReferenceBySample()
@@ -2047,22 +2053,16 @@ class StepHelperDbLoader:
                                         sampleReference = (
                                             planned_experiment.get_library()
                                         )
-                                    # else:
-                                    #    logger.debug("step_helper_db_loader._getSamplesTable_from_plan() SKIP SETTING sampleReference to planReference")
 
                                     if not sampleHotSpotRegionBedFile:
                                         sampleHotSpotRegionBedFile = (
                                             planned_experiment.get_regionfile()
                                         )
-                                    # else:
-                                    #    logger.debug("step_helper_db_loader._getSamplesTable_from_plan() SKIP SETTING sampleHotSpotRegionBedFile")
 
                                     if not sampleTargetRegionBedFile:
                                         sampleTargetRegionBedFile = (
                                             planned_experiment.get_bedfile()
                                         )
-                                    # else:
-                                    #    logger.debug("step_helper_db_loader._getSamplesTable_from_plan() SKIP SETTING sampleTargetRegionBedFile")
 
                             endBarcode = self._getEndBarcode_for_matching_startBarcode(
                                 dualBarcodes, barcode
@@ -2162,13 +2162,17 @@ class StepHelperDbLoader:
             # sort barcoded samples table
             samplesTable.sort(key=lambda item: item["orderKey"])
             # if same sample for dual nuc type want to order by the DNA/RNA sample pair
-            if runType == "AMPS_DNA_RNA" and multibarcode_samples:
-                samplesTable.sort(
-                    key=lambda item: (
-                        item["sampleName"],
-                        item[SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE],
+            if multibarcode_samples:
+                if (
+                    RunType.is_dna_rna(planned_experiment.runType)
+                    and planned_experiment.runType != "MIXED"
+                ):
+                    samplesTable.sort(
+                        key=lambda item: (
+                            item["sampleName"],
+                            item[SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE],
+                        )
                     )
-                )
 
         else:
             # when we load a non-barcoded run for editing/copying we know it will only have a single sample.

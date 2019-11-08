@@ -208,12 +208,12 @@ protected:
 class EndBarcodeClassifier {
 
   struct EndBarcode {
-    bool          end_barcode;
     string        barcode_name;
     string        barcode_sequence;
     string        barcode_adapter;
     int           bc_start_hp;
     int           adapter_start_hp;
+    bool          analyze_as_single;
 
     EndBarcode();
   };
@@ -221,7 +221,6 @@ class EndBarcodeClassifier {
   bool                      enable_barcodes_;
   bool                      have_end_barcodes_;
   bool                      trim_barcodes_;
-  bool                      keep_nomatch_reads_;
 
   int                       nomatch_read_group_;
   vector<EndBarcode>        read_group_;
@@ -259,13 +258,13 @@ public:
 
   void AddBarcode(EndBarcode& barcode,
                   const string& bc_sequence,
-                  const string& bc_adapter);
+                  const string& bc_adapter,
+                  bool          as_single);
 
-  bool LoadBarcodesFromDatasets(BarcodeDatasets& datasets);
 
   bool LoadBarcodesFromCSV(string filename);
 
-  bool CreateBarcodeListFromDatasets(BarcodeDatasets& datasets);
+  bool CreateBarcodeListFromDatasets(BarcodeDatasets& datasets, bool enable_rna_barcodes);
 
   void LoadHandlesFromArgs(OptArgs& opts, const Json::Value& structure);
 
@@ -331,7 +330,7 @@ public:
            int&  best_distance,
            int&  best_read_bases);
 
-  int NumEndBarcodes() { return (demux_barcode_list_ ? num_end_barcodes_ : 0); };
+  int NumEndBarcodes() { return num_end_barcodes_; };
   int NoMatchReadGroup() { return nomatch_read_group_; }
 
   const vector<string>& EndBarcodeNames() { return end_barcode_names_; }

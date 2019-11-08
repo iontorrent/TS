@@ -14,7 +14,19 @@
 
 # - debug: var=S5_virtual_guest
 
+# Define no_network variable from environmental variable
+- name: has_network_access default to true
+  set_fact:
+    has_network_access: true
+    tsconfig_no_network: "{{ lookup('env', 'TSCONFIG_NO_NETWORK') }}"
 
+- name: update has_network_access boolean value based on environmental variables
+  set_fact:
+    has_network_access: false
+  when: tsconfig_no_network == "1"
+
+- debug:
+    msg: "has_network_access -> {{ has_network_access }}, tsconfig_no_network -> {{ tsconfig_no_network }}"
 
 # Test if this install is off a USB
 # Define temporary extension used by tsusb/runme script
@@ -42,6 +54,10 @@
 # ...if its a T630 S5 with >128G memory, load PowerEdge T630 v2
 - include_vars: "group_vars/PowerEdge T630 v2"
   when: ansible_product_name == "PowerEdge T630" and ansible_memtotal_mb|int > 130000
+
+# ... if its a T640 S5 with >128G memory, load PowerEdge T640 S5
+- include_vars: "group_vars/PowerEdge T640 S5"
+  when: ansible_product_name == "PowerEdge T640" and ansible_memtotal_mb|int > 130000
 
 # ...or if its an S5 TSVM, load the S5 variables
 - include_vars: "group_vars/S5"

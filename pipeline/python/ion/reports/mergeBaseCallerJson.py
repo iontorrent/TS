@@ -67,11 +67,13 @@ def merge_filtering(block_dirs):
     # BaseDetails
     bd = {
         "adapter_trim": 0,
+        "barcode_trim": 0,
         "extra_trim": 0,
         "failed_keypass": 0,
         "final": 0,
         "high_residual": 0,
         "initial": 0,
+        "key_trim" : 0,
         "quality_filter": 0,
         "quality_trim": 0,
         "short": 0,
@@ -87,6 +89,7 @@ def merge_filtering(block_dirs):
     # ReadDetails/lib
     rd_lib = {
         "adapter_trim": 0,
+        "barcode_trim" : 0,
         "bkgmodel_high_ppf": 0,
         "bkgmodel_keypass": 0,
         "bkgmodel_polyclonal": 0,
@@ -206,6 +209,9 @@ def merge_filtering(block_dirs):
             bd["adapter_trim"] += (
                 block_json["Filtering"].get("BaseDetails", {}).get("adapter_trim", 0)
             )
+            bd["barcode_trim"] += (
+                block_json["Filtering"].get("BaseDetails", {}).get("barcode_trim", 0)
+            )
             bd["extra_trim"] += (
                 block_json["Filtering"].get("BaseDetails", {}).get("extra_trim", 0)
             )
@@ -220,6 +226,9 @@ def merge_filtering(block_dirs):
             )
             bd["initial"] += (
                 block_json["Filtering"].get("BaseDetails", {}).get("initial", 0)
+            )
+            bd["key_trim"] += (
+                block_json["Filtering"].get("BaseDetails", {}).get("key_trim", 0)
             )
             bd["quality_filter"] += (
                 block_json["Filtering"].get("BaseDetails", {}).get("quality_filter", 0)
@@ -260,6 +269,12 @@ def merge_filtering(block_dirs):
                 .get("ReadDetails", {})
                 .get("lib", {})
                 .get("adapter_trim", 0)
+            )
+            rd_lib["barcode_trim"] += (
+                block_json["Filtering"]
+                .get("ReadDetails", {})
+                .get("lib", {})
+                .get("barcode_trim", 0)
             )
             rd_lib["bkgmodel_high_ppf"] += (
                 block_json["Filtering"]

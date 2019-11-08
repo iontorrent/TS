@@ -202,7 +202,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_id):
     sampleGender = csvSampleDict.get("gender", "")
     sampleControlType = csvSampleDict.get("controlType", "")
     relationshipRole = csvSampleDict.get("relationshipRole", "")
-    sampleGroup = csvSampleDict.get("sampleGroup", "") or 0
+    sampleGroup = csvSampleDict.get("relationshipGroup", "") or 0
     sampleDescription = csvSampleDict.get("sampleDescription", "")
     barcodeKit = csvSampleDict.get("barcodeKit", "")
     barcodeAssignment = csvSampleDict.get("barcodeAssignment", "")

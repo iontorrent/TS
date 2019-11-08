@@ -935,6 +935,25 @@ def validate_sampleControlType(value, field_label):
     return errors, value
 
 
+def validate_16s_markers(value, field_label):
+    errors = []
+    if not value or value == "none":
+        value = ""
+    else:
+        value = value.strip().lower() if value else ""
+        annotations = SampleAnnotation_CV.objects.filter(
+            annotationType="16s_markers"
+        )
+        annotationObj = annotations.filter(value__iexact=value) or annotations.filter(iRValue__iexact=value)
+        if annotationObj:
+            value = annotationObj[0].value
+        else:
+            choices = annotations.order_by("value").values_list("value", flat=True)
+            errors.append(validation.invalid_choice(field_label, value, choices))
+
+    return errors, value
+
+
 def validate_reference_for_fusions(
     value, field_label, runType, applicationGroupName, application_label
 ):
@@ -1160,7 +1179,7 @@ def validate_plugin_configurations(selected_plugins):
             )
             if plugin_model.requires_configuration:
                 validation_messages += Plugin.validate(
-                    plugin_model.id, configuration, "pipeline"
+                    plugin_model.id, configuration
                 )
         except Exception as exc:
             validation_messages += [str(exc)]

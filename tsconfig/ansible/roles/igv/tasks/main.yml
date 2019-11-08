@@ -16,7 +16,9 @@
   with_items:
     - tomcat7
     - tomcat7-admin
-  when: ansible_distribution_version == "14.04"
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
 
 - name: Install tomcat 8 server on 18.04
   apt:
@@ -26,7 +28,9 @@
   with_items:
     - tomcat8
     - tomcat8-admin
-  when: ansible_distribution_version == "18.04"
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
 
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for igv
@@ -40,7 +44,9 @@
   with_items:
     - ion-jk=5.2.0
     - ion-igv=5.2.0
-  when: ansible_distribution_version == "14.04"
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
 
 # ion-jk and ion-igv 5.12.0 is built for 18.04 only
 - name: Install packages for igv node in 18.04
@@ -51,4 +57,6 @@
   with_items:
     - ion-jk=5.12.0
     - ion-igv=5.12.0
-  when: ansible_distribution_version == "18.04"
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access

@@ -249,8 +249,8 @@ void NullInfoFields(vcf::Variant &var, bool use_position_bias, bool use_molecula
     int num_alt = (int) var.alt.size();
 	clearInfoTags(var);
 	const vector<string> num_alt_tags_to_zero =
-   	   {"AO", "SAF", "SAR", "AF", "FSAF", "FSAR", "HRUN", "RBI",
-   	    "FWDB", "REVB", "REFB", "VARB", "SSSB", "SSEN", "SSEP", "MLLD", "AF"};
+   	   {"AO", "SAF", "SAR", "AF", "FAO", "FSAF", "FSAR", "HRUN", "RBI",
+   	    "FWDB", "REVB", "REFB", "VARB", "SSSB", "SSEN", "SSEP", "MLLD"};
 	for (vector<string>::const_iterator tag_it = num_alt_tags_to_zero.begin(); tag_it != num_alt_tags_to_zero.end(); ++tag_it){
 		var.info[*tag_it] = vector<string>(num_alt, "0");
 	}

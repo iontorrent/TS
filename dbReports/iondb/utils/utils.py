@@ -1,23 +1,23 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 
 import collections
+import csv
 import datetime
 import logging
-from django.conf import settings
-from distutils.version import StrictVersion
-import csv
-import re
-import os
 import math
-import subprocess
-import apt
-import traceback
+import os
 import pwd
-
-from dateutil.parser import parse as parse_date
+import re
+import subprocess
+import traceback
 import types
-from django.utils.translation import ugettext as _, ugettext_lazy, ugettext
+from contextlib import contextmanager
+from multiprocessing import Pool
 
+import apt
+from dateutil.parser import parse as parse_date
+from django.conf import settings
+from django.utils.translation import ugettext_lazy
 
 logger = logging.getLogger(__name__)
 
@@ -573,3 +573,15 @@ def update_telemetry_services(is_on=True, fpath=TELEMETRY_FPATH):
     www_data_uid = pwd.getpwnam("www-data").pw_uid
     os.chown(temp_fp.name, www_data_uid, www_data_uid)
     os.rename(temp_fp.name, TELEMETRY_FPATH)
+
+
+@contextmanager
+def ManagedPool(*args, **kwargs):
+    """ We need a context manager for multiprocessing.Pool that will always call Pool.close()
+        python3 has one, but we need one for python 2 to prevent leaving Pools open and running out of pids.
+    """
+    pool = Pool(*args, **kwargs)
+    try:
+        yield pool
+    finally:
+        pool.close()

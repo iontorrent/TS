@@ -170,7 +170,8 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
         // Only write header sk tags if we process the samples as dual barcoded.
         // If we de-mulitplex and emulate single sided barcodes, we don't output the sk tag.
         // In this case end-barcodes are part of the YK tag.
-        if (read_group_json.isMember("end_barcode") and read_group_end_barcode_counts_.size()==0) {
+        if (read_group_json.isMember("end_barcode") and not
+            read_group_json["end_barcode"].get("analyze_as_single", false).asBool()) {
           string full_end_barcode;
           full_end_barcode  = read_group_json["end_barcode"].get("barcode_adapter","").asString();
           full_end_barcode += read_group_json["end_barcode"].get("barcode_sequence","").asString();

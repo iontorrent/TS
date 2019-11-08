@@ -52,8 +52,8 @@ if [ -n "$ANALYSIS_PKG_VERSION" ]; then
     # make sure gpu installs first, Analysis might depend on a specific version
     if [ ! "ii ion-gpu $GPU_PKG_VERSION" = "`dpkg -l | grep ion-gpu | awk '{print $1, $2, $3}'`" ];
     then
-        # stop lightdm server
-        service lightdm stop
+#        # stop lightdm server
+#        service lightdm stop
     
         # stop ganglia-monitor server (which might monitor the GPU)
         service ganglia-monitor stop

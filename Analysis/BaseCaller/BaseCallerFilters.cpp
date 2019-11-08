@@ -529,6 +529,8 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
     json["Filtering"]["BaseDetails"]["initial"]             = (Json::Int64)num_bases_initial_;
     json["Filtering"]["BaseDetails"]["short"]               = (Json::Int64)num_bases_removed_short_;
     json["Filtering"]["BaseDetails"]["failed_keypass"]      = (Json::Int64)num_bases_removed_keypass_;
+    json["Filtering"]["BaseDetails"]["key_trim"]            = (Json::Int64)num_bases_removed_key_trim_;
+    json["Filtering"]["BaseDetails"]["barcode_trim"]        = (Json::Int64)num_bases_removed_barcode_trim_;
     json["Filtering"]["BaseDetails"]["high_residual"]       = (Json::Int64)num_bases_removed_residual_;
     json["Filtering"]["BaseDetails"]["quality_filter"]      = (Json::Int64)num_bases_removed_quality_filt_;
     json["Filtering"]["BaseDetails"]["adapter_trim"]        = (Json::Int64)num_bases_removed_adapter_trim_;

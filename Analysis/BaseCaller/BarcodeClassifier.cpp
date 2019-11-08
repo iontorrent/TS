@@ -1082,7 +1082,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 
 
 EndBarcodeClassifier::EndBarcode::EndBarcode()
-  : end_barcode(false), bc_start_hp(0), adapter_start_hp(0)
+  : bc_start_hp(0), adapter_start_hp(0), analyze_as_single(false)
 {
 };
 
@@ -1091,11 +1091,11 @@ void EndBarcodeClassifier::PrintHelp()
 {
   cout << "End Barcode classification options:" << endl;
   cout << "     --end-barcodes                BOOL       Activates/Deactivates end barcode classification [on]" << endl;
+  cout << "     --rna-end-barcodes            BOOL       Activates/Deactivates RNA end barcode classification [end-barcodes]" << endl;
   cout << "     --end-barcode-mode            INT        Selects barcode classification algorithm [1]" << endl;
   cout << "     --end-barcode-cutoff          INT        Maximum score to call a barcode [2]" << endl;
   cout << "     --end-barcode-separation      INT        Minimum difference between best and second best scores [2]" << endl;
   cout << "     --end-bc-adapter-cutoff       INT        Maximum score to accept barcode adapter [2]" << endl;
-  cout << "     --end-bc-keep-nomatch         BOOL       Keeps reads that would normally be filtered in BAM [false]" << endl;
   // Handle options are listed in the start barcode classifier
   cout << endl;
 }
@@ -1114,11 +1114,12 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
     return;
 
   enable_barcodes_            = opts.GetFirstBoolean('-', "end-barcodes", true);
+  bool enable_rna_barcodes    = opts.GetFirstBoolean('-', "rna-end-barcodes", enable_barcodes_);
+
   score_mode_                 = opts.GetFirstInt    ('-', "end-barcode-mode", 1);
   score_cutoff_               = opts.GetFirstInt    ('-', "end-barcode-cutoff", 2);
   score_separation_           = opts.GetFirstInt    ('-', "end-barcode-separation", 2);
   adapter_cutoff_             = opts.GetFirstInt    ('-', "end-bc-adapter-cutoff", 2);
-  keep_nomatch_reads_         = opts.GetFirstBoolean('-', "end-bc-keep-nomatch", false);
   trim_barcodes_              = opts.GetFirstBoolean('-', "trim-barcodes", true);
 
   // TS 5.10 development option to demultiplex barcodes that are read from a csv list
@@ -1129,9 +1130,11 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
   // Verbose classifier options
   cout << "End Barcode Classifier:" << endl;
   cout << "  end-barcodes          : " << enable_barcodes_ << endl;
+  cout << "  rna-end-barcodes      : " << enable_rna_barcodes << endl;
   cout << "  end-barcode-mode      : " << score_mode_     << endl;
   cout << "  end-barcode-cutoff    : " << score_cutoff_   << endl;
   cout << "  end-bc-adapter-cutoff : " << adapter_cutoff_ << endl;
+
   if (demux_barcode_list_){
     cout << "  end-barcode-list      : " << end_barcode_list << endl;
   }
@@ -1139,19 +1142,8 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
   // Load PCR handle information
   LoadHandlesFromArgs(opts, structure);
 
-  if (enable_barcodes_){
-    // Load dual barcode info from barcodes datasets &/| determine no-match read group
-    LoadBarcodesFromDatasets(datasets);
-  }
-  else{
-    if (demux_barcode_list_){
-      cerr << "EndBarcodeClassifier: It makes no sense to jointly use an end-barcode-list and the option end-barcodes=false." << endl;
-      cout << "EndBarcodeClassifier: It makes no sense to jointly use an end-barcode-list and the option end-barcodes=false." << endl;
-      exit(EXIT_FAILURE);
-    }
-    // Create a list and demultiplex all end barcodes found in datasets
-    CreateBarcodeListFromDatasets(datasets);
-  }
+  // Load dual barcode info from barcodes datasets
+  CreateBarcodeListFromDatasets(datasets, enable_rna_barcodes);
 
   // Add classifier options to datasets meta information
 
@@ -1173,62 +1165,16 @@ EndBarcodeClassifier::EndBarcodeClassifier(OptArgs& opts, BarcodeDatasets& datas
 
 // ----------------------------------------------------------------------------
 
-bool EndBarcodeClassifier::LoadBarcodesFromDatasets(BarcodeDatasets& datasets)
-{
-  // --- Loop loading individual barcode informations from json
-  read_group_.resize(datasets.num_read_groups());
-
-  for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
-
-    Json::Value& read_group = datasets.read_group(rg_idx);
-
-    // Setting no-match read group
-    if (not read_group.isMember("barcode_sequence") and
-      not read_group.isMember("barcode") and
-      datasets.read_group_name(rg_idx).find("nomatch") != std::string::npos)
-    {
-      nomatch_read_group_ = rg_idx;
-      //cout << "EndBarcodeClassifier:: Set nomatch read group to " << nomatch_read_group_ << endl;
-      continue;
-    }
-
-    // The command line argument to de-multiplex a barcode list takes precedence over set end barcodes.
-    if (demux_barcode_list_){
-      read_group_[rg_idx].end_barcode = false;
-      continue;
-    }
-
-    if (read_group.isMember("end_barcode")){
-
-      AddBarcode(read_group_[rg_idx],
-          read_group["end_barcode"].get("barcode_sequence", "").asString(),
-          read_group["end_barcode"].get("barcode_adapter", "").asString());
-
-      read_group_[rg_idx].barcode_name = read_group["end_barcode"].get("barcode_name", "").asString();
-    }
-
-  }
-  // Verbose
-  if (demux_barcode_list_)
-    cout << "  Loaded " << num_end_barcodes_ << " end barcodes from external file." << endl << endl;
-  else
-    cout << "  Found " << num_end_barcodes_ << " read groups with end barcodes." << endl << endl;
-
-  return have_end_barcodes_;
-}
-
-// ----------------------------------------------------------------------------
-
 void EndBarcodeClassifier::AddBarcode(EndBarcode& barcode,
                                       const string& bc_sequence,
-                                      const string& bc_adapter)
+                                      const string& bc_adapter,
+                                      bool          as_single)
 {
   barcode.barcode_sequence = bc_sequence;
   barcode.barcode_adapter  = bc_adapter;
 
   if (bc_sequence.length() >0) {
 
-    barcode.end_barcode = true;
     have_end_barcodes_ = true;
     ++num_end_barcodes_;
 
@@ -1241,6 +1187,7 @@ void EndBarcodeClassifier::AddBarcode(EndBarcode& barcode,
     // Add start HPs
     barcode.bc_start_hp      = GetStartHP(bc_sequence);
     barcode.adapter_start_hp = GetStartHP(bc_adapter);
+    barcode.analyze_as_single = as_single;
 
   }
 };
@@ -1308,27 +1255,20 @@ bool EndBarcodeClassifier::LoadBarcodesFromCSV(string filename)
 
     // Add barcode information
     end_barcodes_.push_back(EndBarcode());
-    AddBarcode(end_barcodes_.back(), csv_line.at(seq_idx), csv_line.at(adapter_idx));
+    AddBarcode(end_barcodes_.back(), csv_line.at(seq_idx), csv_line.at(adapter_idx), !enable_barcodes_);
     end_barcodes_.back().barcode_name = csv_line.at(name_idx);
     end_barcode_names_.push_back(end_barcodes_.back().barcode_name);
   }
+  cout << "  Successfully loaded list with " << num_end_barcodes_ << " end-barcodes from " << filename << endl << endl;
   return true;
 };
 
 // ----------------------------------------------------------------------------
-// The closest we can get to emulating a single sided barcodes anlysis
+// Loadind barcode information from  datasets structure
 
-bool EndBarcodeClassifier::CreateBarcodeListFromDatasets(BarcodeDatasets& datasets)
+bool EndBarcodeClassifier::CreateBarcodeListFromDatasets(BarcodeDatasets& datasets, bool enable_rna_barcodes)
 {
-  end_barcodes_.clear();
-  end_barcode_names_.clear();
   read_group_.resize(datasets.num_read_groups());
-
-  demux_barcode_list_ = true;
-  if (not keep_nomatch_reads_){
-    keep_nomatch_reads_ = true;
-    cout << "EndBarcodeClassifier INFO: Setting end-bc-keep-nomatch=true." << endl;
-  }
 
   for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
 
@@ -1342,21 +1282,48 @@ bool EndBarcodeClassifier::CreateBarcodeListFromDatasets(BarcodeDatasets& datase
       continue;
     }
 
+    // The command line argument to de-multiplex a barcode list takes precedence over datasets end-barcodes.
+    if (demux_barcode_list_){
+      read_group_.at(rg_idx).analyze_as_single = !enable_barcodes_;
+      // Make sure we overwrite potential end-barcode info in the set
+      if (read_group.isMember("end_barcode")){
+        read_group["end_barcode"]["barcode_sequence"] = "";
+        read_group["end_barcode"]["barcode_adapter"]  = "";
+      }
+      continue;
+    }
+
     if (read_group.isMember("end_barcode")){
+
+      // Reconcile pipeline options with explicitly specified command line arguments
+      // non-default command line settings take precedence over pipeline settings
+      bool as_single = !enable_barcodes_;
+      // Command line default - use pipeline settings
+      if (enable_barcodes_ and enable_rna_barcodes ){
+        as_single = read_group["end_barcode"].get("analyze_as_single", false).asBool();
+      }
+      // RNA sample
+      else if (read_group.get("nucleotide_type", "") == "RNA"){
+        as_single = !enable_rna_barcodes;
+      }
+      // And update datasets strcture to reflect what we're actually doing
+      read_group["end_barcode"]["analyze_as_single"] = as_single;
 
       // Add barcode information to end barcodes list
       end_barcodes_.push_back(EndBarcode());
       AddBarcode(end_barcodes_.back(),
           read_group["end_barcode"].get("barcode_sequence", "").asString(),
-          read_group["end_barcode"].get("barcode_adapter", "").asString());
+          read_group["end_barcode"].get("barcode_adapter", "").asString(),
+          as_single);
 
       end_barcodes_.back().barcode_name = read_group["end_barcode"].get("barcode_name", "").asString();
       end_barcode_names_.push_back(end_barcodes_.back().barcode_name);
-      read_group_[rg_idx] = end_barcodes_.back();
+      read_group_.at(rg_idx) = end_barcodes_.back();
     }
   }
   // Verbose
-  cout << "  Created list with " << num_end_barcodes_ << " end barcodes from datasets." << endl << endl;
+  if (not demux_barcode_list_)
+    cout << "  Created list with " << num_end_barcodes_ << " end-barcodes from datasets." << endl << endl;
   return have_end_barcodes_;
 }
 
@@ -1381,13 +1348,17 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
     return;
   }
 
-  // *** No end barcode to trim but we need to investigate handles & propagate a valid 3' trimming point
+  // Some read group/ read property flags
 
+  bool have_end_bc= not read_group_.at(processed_read.read_group_index).barcode_sequence.empty();
+  bool process_as_single = read_group_.at(processed_read.read_group_index).analyze_as_single;
   bool have_adapter = processed_read.filter.n_bases_after_adapter_trim > 0 and
-        processed_read.filter.n_bases_after_adapter_trim < processed_read.filter.n_bases;
+         processed_read.filter.n_bases_after_adapter_trim < processed_read.filter.n_bases;
+
+  // *** No end barcode to trim but we need to investigate handles & propagate a valid 3' trimming point
   int best_handle, handle_start_flow, n_bases_handle = 0;
 
-  if (not demux_barcode_list_ and not read_group_.at(processed_read.read_group_index).end_barcode) {
+  if (not demux_barcode_list_ and not have_end_bc) {
 
     if (have_handles_){
       if (have_adapter and TrimHandle(
@@ -1402,7 +1373,7 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
       }
       else {
         processed_read.end_handle_filtered = true;
-        if (not keep_nomatch_reads_)
+        if (enable_barcodes_)
           PushReadToNomatch(read_index, processed_read);
         return;
       }
@@ -1424,7 +1395,7 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
 
   if (have_adapter) {
 
-    // -- End barcode classification
+    // --- End barcode classification
 
     switch (score_mode_){
       case 1: // In/Del Error tolerant flow alignment
@@ -1438,20 +1409,16 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
                                  basecaller_read, base_to_flow);
     }
 
-    // -- Barcode adapter trimming
+    // --- Barcode adapter trimming
 
-    int adapter_start_hp = read_group_.at(processed_read.read_group_index).adapter_start_hp;
+    int adapter_start_hp = 0;
 
     if (best_barcode >= 0){
 
       n_bases_trimmed = n_bases_barcode; // Log barcode trimming
-      int start_hp = read_group_.at(processed_read.read_group_index).bc_start_hp;
-      string trim_adapter(read_group_.at(processed_read.read_group_index).barcode_adapter);
-      if (demux_barcode_list_) {
-        trim_adapter = end_barcodes_[best_barcode].barcode_adapter;
-        start_hp = end_barcodes_[best_barcode].bc_start_hp;
-        adapter_start_hp = end_barcodes_[best_barcode].adapter_start_hp;
-      }
+      string trim_adapter(end_barcodes_[best_barcode].barcode_adapter);
+      int start_hp = end_barcodes_[best_barcode].bc_start_hp;
+      adapter_start_hp = end_barcodes_[best_barcode].adapter_start_hp;
 
       if (trim_adapter.length()>0){
 
@@ -1475,7 +1442,7 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
 
     }
 
-    // -- Barcode handle trimming
+    // --- Barcode handle trimming
 
     if (have_handles_ and best_barcode >= 0){
 
@@ -1499,30 +1466,36 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
     }
   }
 
+  // --- Done with classification
+
   // Push to nomatch if no barcode assignment occurred
   if (best_barcode < 0) {
-    if (not keep_nomatch_reads_)
+    if (not process_as_single)
       PushReadToNomatch(read_index, processed_read);
     return;
   }
   processed_read.end_barcode_index = best_barcode;
 
+  // Move clearly identified barcode contamination to no-match, i.e.,
+  // reads where we identified an end barcode and it was the wrong one
+  if (have_end_bc and end_barcodes_.at(best_barcode).barcode_sequence !=
+      read_group_.at(processed_read.read_group_index).barcode_sequence){
+    PushReadToNomatch(read_index, processed_read);
+  }
+
+  // we're done if trimming is not desired
   if (not trim_barcodes_) {
     processed_read.filter.n_bases_after_barcode_trim = -1;
     return;
   }
 
-  // If we demultiplex, add the end barcode sequence to YK field.
-  if (demux_barcode_list_){
+  // If we process as single barcode, or demultiplex an external list
+  // we add the end barcode sequence to the YK field.
+  if (process_as_single or demux_barcode_list_) {
     my_YK_tag += end_barcodes_.at(best_barcode).barcode_adapter;
     my_YK_tag += end_barcodes_.at(best_barcode).barcode_sequence;
-    // Remove clearly identified barcode contamination
-    if (read_group_[processed_read.read_group_index].end_barcode and
-        read_group_.at(processed_read.read_group_index).barcode_sequence !=
-        end_barcodes_.at(best_barcode).barcode_sequence){
-      PushReadToNomatch(read_index, processed_read);
-    }
   }
+
   UpdateReadTrimming(processed_read, n_bases_trimmed, my_YK_tag);
 };
 
@@ -1566,32 +1539,19 @@ int EndBarcodeClassifier::BaseSpaceClassification(ProcessedRead &processed_read,
 {
   int best_barcode = -1;
 
-  // Matching the single end barcode specified in the read group
-  if (end_barcodes_.size()==0){
-
-    if (BaseSpaceMatch(processed_read.filter.n_bases_prefix, processed_read.filter.n_bases_filtered,
-            basecaller_read, read_group_.at(processed_read.read_group_index).barcode_sequence)){
-      best_barcode = processed_read.read_group_index;
-      processed_read.end_bc_n_errors = 0;
-      n_bases_barcode    = read_group_.at(processed_read.read_group_index).barcode_sequence.length();
-      bc_start_flow = base_to_flow.at(processed_read.filter.n_bases_filtered-n_bases_barcode);
-    }
-
+  // Matching the sequences in the end barcode vector
+  unsigned int bci = 0;
+  while (bci < end_barcodes_.size() and not BaseSpaceMatch(
+      processed_read.filter.n_bases_prefix, processed_read.filter.n_bases_filtered,
+         basecaller_read, end_barcodes_[bci].barcode_sequence))
+    ++bci;
+  if (bci < end_barcodes_.size()){
+    best_barcode = bci;
+    processed_read.end_bc_n_errors = 0;
+    n_bases_barcode    = end_barcodes_[bci].barcode_sequence.length();
+    bc_start_flow = base_to_flow.at(processed_read.filter.n_bases_filtered-n_bases_barcode);
   }
-  else{
-    // Matching the sequences in the end barcode vector
-    unsigned int bci = 0;
-    while (bci < end_barcodes_.size() and not BaseSpaceMatch(
-        processed_read.filter.n_bases_prefix, processed_read.filter.n_bases_filtered,
-           basecaller_read, end_barcodes_[bci].barcode_sequence))
-      ++bci;
-    if (bci < end_barcodes_.size()){
-      best_barcode = bci;
-      processed_read.end_bc_n_errors = 0;
-      n_bases_barcode    = end_barcodes_[bci].barcode_sequence.length();
-      bc_start_flow = base_to_flow.at(processed_read.filter.n_bases_filtered-n_bases_barcode);
-    }
-  }
+
   return best_barcode;
 }
 
@@ -1608,49 +1568,33 @@ int EndBarcodeClassifier::FlowAlignClassification(ProcessedRead &processed_read,
   int second_best_distance = 1000;
 
   // Matching the sequences in the end barcode vector
-  if (demux_barcode_list_){
 
-    for (unsigned int bci=0; bci < end_barcodes_.size(); ++bci){
-      ReverseFlowAlignDistance(base_to_flow,
-             end_barcodes_[bci].barcode_sequence,
-             base_to_flow.at(processed_read.filter.n_bases_prefix),
-             base_to_flow.at(processed_read.filter.n_bases_filtered),
-             adapter_hp,
-             my_start_flow, my_distance, my_bases);
-      if (my_distance < best_bc_distance ){
-        second_best_distance = best_bc_distance;
-        best_bc_distance = my_distance;
-        best_barcode = bci;
-        n_bases_barcode = my_bases;
-        best_bc_start_flow = my_start_flow;
-      }
-      else if (my_distance < second_best_distance){
-        second_best_distance = my_distance;
-      }
-    }
-
-    if (second_best_distance - best_bc_distance < score_separation_){
-      best_barcode = -1;
-    }
-    else if (best_barcode >= 0){
-      processed_read.end_bc_n_errors = best_bc_distance;
-    }
-
-  }
-  // Matching the single end barcode specified in the read group
-  else{
-
+  for (unsigned int bci=0; bci < end_barcodes_.size(); ++bci){
     ReverseFlowAlignDistance(base_to_flow,
-           read_group_.at(processed_read.read_group_index).barcode_sequence,
+           end_barcodes_[bci].barcode_sequence,
            base_to_flow.at(processed_read.filter.n_bases_prefix),
            base_to_flow.at(processed_read.filter.n_bases_filtered),
-           1,
-           best_bc_start_flow, best_bc_distance, n_bases_barcode);
-    if (best_bc_distance <= score_cutoff_){
-      processed_read.end_bc_n_errors = best_bc_distance;
-      best_barcode = processed_read.read_group_index;
+           adapter_hp,
+           my_start_flow, my_distance, my_bases);
+    if (my_distance < best_bc_distance ){
+      second_best_distance = best_bc_distance;
+      best_bc_distance = my_distance;
+      best_barcode = bci;
+      n_bases_barcode = my_bases;
+      best_bc_start_flow = my_start_flow;
+    }
+    else if (my_distance < second_best_distance){
+      second_best_distance = my_distance;
     }
   }
+
+  if (second_best_distance - best_bc_distance < score_separation_){
+    best_barcode = -1;
+  }
+  else if (best_barcode >= 0){
+    processed_read.end_bc_n_errors = best_bc_distance;
+  }
+
   return best_barcode;
 }
 

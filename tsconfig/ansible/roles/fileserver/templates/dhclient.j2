@@ -7,7 +7,11 @@ option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
 
 send host-name = gethostname();
 
+{% if S5_virtual_guest|bool and enable_tap_interface|bool %}
+interface "eth2"
+{% else %}
 interface "{{default_interface}}"
+{% endif %}
 {
 request subnet-mask, broadcast-address, time-offset, routers,
         domain-name, domain-name-servers, domain-search, host-name,

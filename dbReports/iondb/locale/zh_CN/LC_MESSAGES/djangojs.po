@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2019-02-12 14:31-0800\n"
+"POT-Creation-Date: 2019-05-13 18:01+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -75,9 +75,9 @@ msgstr "隐藏"
 #: media/resources/scripts/reports/report.js:482
 #: media/resources/scripts/reports/report.js:516
 #: media/resources/scripts/sample/input_samples.js:60
-#: media/resources/scripts/sample/input_samples.js:105
-#: media/resources/scripts/sample/input_samples.js:141
-#: media/resources/scripts/sample/input_samples.js:182
+#: media/resources/scripts/sample/input_samples.js:111
+#: media/resources/scripts/sample/input_samples.js:147
+#: media/resources/scripts/sample/input_samples.js:196
 #: media/resources/scripts/sample/sampleattributes.js:51
 #: media/resources/scripts/sample/sampleattributes.js:91
 #: media/resources/scripts/sample/sampleattributes.js:133
@@ -113,9 +113,9 @@ msgstr "报告只有在其始发端Torrent Browser上才能被标记为代表."
 #: media/resources/scripts/reports/report.js:493
 #: media/resources/scripts/sample/input_samples.js:15
 #: media/resources/scripts/sample/input_samples.js:40
-#: media/resources/scripts/sample/input_samples.js:73
-#: media/resources/scripts/sample/input_samples.js:121
-#: media/resources/scripts/sample/input_samples.js:162
+#: media/resources/scripts/sample/input_samples.js:79
+#: media/resources/scripts/sample/input_samples.js:127
+#: media/resources/scripts/sample/input_samples.js:175
 #: media/resources/scripts/sample/sampleattributes.js:5
 #: media/resources/scripts/sample/sampleattributes.js:30
 #: media/resources/scripts/sample/sampleattributes.js:70
@@ -585,108 +585,108 @@ msgstr "启动插件%(pluginName)s"
 msgid "report.section.plugins.execute.messages.failureexecuting"
 msgstr "错误: 插件启动失败 %(pluginName)s"
 
-#: media/resources/scripts/reports/report.js:892
+#: media/resources/scripts/reports/report.js:895
 msgid "report.section.output.barcodes.fields.barcode_name.label"
 msgstr "Barcode名称"
 
-#: media/resources/scripts/reports/report.js:896
+#: media/resources/scripts/reports/report.js:899
 msgid "report.section.output.barcodes.fields.sample.label"
 msgstr "样本"
 
-#: media/resources/scripts/reports/report.js:900
+#: media/resources/scripts/reports/report.js:903
 msgid "report.section.output.barcodes.fields.total_bases.label"
 msgstr "碱基"
 
-#: media/resources/scripts/reports/report.js:904
+#: media/resources/scripts/reports/report.js:907
 msgid "report.section.output.barcodes.fields.Q20_bases.label"
 msgstr ">=Q20碱基"
 
-#: media/resources/scripts/reports/report.js:908
+#: media/resources/scripts/reports/report.js:911
 msgid "report.section.output.barcodes.fields.read_count.label"
 msgstr "读序（reads）"
 
-#: media/resources/scripts/reports/report.js:912
+#: media/resources/scripts/reports/report.js:915
 msgid "report.section.output.barcodes.fields.mean_read_length.label"
 msgstr "平均读长（read length）"
 
-#: media/resources/scripts/reports/report.js:915
+#: media/resources/scripts/reports/report.js:918
 msgid "report.section.output.barcodes.read_len_histogram.label"
 msgstr "读序长度直方图"
 
-#: media/resources/scripts/reports/report.js:919
+#: media/resources/scripts/reports/report.js:922
 msgid "report.section.output.barcodes.files.label"
 msgstr "文件"
 
-#: media/resources/scripts/sample/input_samples.js:347
+#: media/resources/scripts/sample/input_samples.js:388
 msgid "samplesets.PendingSampleSetItemInfo.fields.displayedName.label"
 msgstr "样本名称"
 
-#: media/resources/scripts/sample/input_samples.js:351
+#: media/resources/scripts/sample/input_samples.js:392
 msgid "samplesets.PendingSampleSetItemInfo.fields.externalId.label"
 msgstr "样本ID"
 
-#: media/resources/scripts/sample/input_samples.js:355
+#: media/resources/scripts/sample/input_samples.js:396
 msgid "samplesets.PendingSampleSetItemInfo.fields.pcrPlateRow.label"
 msgstr "translate: PCR Plate Position"
 
-#: media/resources/scripts/sample/input_samples.js:363
+#: media/resources/scripts/sample/input_samples.js:404
 msgid "samplesets.PendingSampleSetItemInfo.fields.barcode.label"
 msgstr "Barcode"
 
-#: media/resources/scripts/sample/input_samples.js:367
+#: media/resources/scripts/sample/input_samples.js:408
 msgid "samplesets.PendingSampleSetItemInfo.fields.description.label"
 msgstr "描述"
 
-#: media/resources/scripts/sample/input_samples.js:371
+#: media/resources/scripts/sample/input_samples.js:412
 msgid "samplesets.PendingSampleSetItemInfo.fields.sampleCollectionDate.label"
 msgstr "translate: Sample Collection Date"
 
-#: media/resources/scripts/sample/input_samples.js:375
+#: media/resources/scripts/sample/input_samples.js:416
 msgid "samplesets.PendingSampleSetItemInfo.fields.sampleReceiptDate.label"
 msgstr "translate: Sample Receipt Date"
 
-#: media/resources/scripts/sample/input_samples.js:392
+#: media/resources/scripts/sample/input_samples.js:433
 msgid "samplesets.PendingSampleSetItemInfo.fields.gender.label"
 msgstr "性别"
 
-#: media/resources/scripts/sample/input_samples.js:396
+#: media/resources/scripts/sample/input_samples.js:437
 msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipRole.label"
 msgstr "类型"
 
-#: media/resources/scripts/sample/input_samples.js:400
+#: media/resources/scripts/sample/input_samples.js:441
 msgid "samplesets.PendingSampleSetItemInfo.fields.relationshipGroup.label"
 msgstr "组"
 
-#: media/resources/scripts/sample/input_samples.js:404
+#: media/resources/scripts/sample/input_samples.js:445
 msgid "samplesets.PendingSampleSetItemInfo.fields.cancerType.label"
 msgstr "癌症类型"
 
-#: media/resources/scripts/sample/input_samples.js:408
+#: media/resources/scripts/sample/input_samples.js:449
 msgid "samplesets.PendingSampleSetItemInfo.fields.cellularityPct.label"
 msgstr "细胞性%"
 
-#: media/resources/scripts/sample/input_samples.js:412
+#: media/resources/scripts/sample/input_samples.js:453
 msgid "samplesets.PendingSampleSetItemInfo.fields.biopsyDays.label"
 msgstr "活检天数"
 
-#: media/resources/scripts/sample/input_samples.js:416
+#: media/resources/scripts/sample/input_samples.js:457
 msgid "samplesets.PendingSampleSetItemInfo.fields.cellNum.label"
 msgstr "细胞数量"
 
-#: media/resources/scripts/sample/input_samples.js:420
+#: media/resources/scripts/sample/input_samples.js:461
 msgid "samplesets.PendingSampleSetItemInfo.fields.coupleId.label"
 msgstr "偶联ID"
 
-#: media/resources/scripts/sample/input_samples.js:424
+#: media/resources/scripts/sample/input_samples.js:465
 msgid "samplesets.PendingSampleSetItemInfo.fields.embryoId.label"
 msgstr "胚胎ID"
 
-#: media/resources/scripts/sample/input_samples.js:428
+#: media/resources/scripts/sample/input_samples.js:469
 #, fuzzy
 msgid "samplesets.PendingSampleSetItemInfo.fields.population.label"
 msgstr "描述"
 
-#: media/resources/scripts/sample/input_samples.js:432
+#: media/resources/scripts/sample/input_samples.js:473
 #, fuzzy
 msgid "samplesets.PendingSampleSetItemInfo.fields.mouseStrains.label"
 msgstr "描述"

@@ -8,6 +8,10 @@
 #
 set -u
 nodename=$1
+timeout_sec=$2
+if [[ -z $timeout_sec ]]; then
+   timeout_sec=120
+fi
 
 #==============================================================================
 # Include function definition file
@@ -18,7 +22,7 @@ source ${TSCONFIG_SRC_DIR}/grp_functions
 #==============================================================================
 # Verify access before proceeding
 #==============================================================================
-if ! access_test $nodename >/dev/null; then
+if ! access_test $nodename $timeout_sec >/dev/null; then
     echo $nodename:failure>&1
     echo "Cannot access node">&2
     exit 1
@@ -27,7 +31,7 @@ fi
 #==============================================================================
 # Verify script exists before proceeding
 #==============================================================================
-if ! ssh $USER@$nodename 'which /usr/sbin/grp_mount_test >/dev/null'; then
+if ! ssh $USER@$nodename "timeout $timeout_sec which /usr/sbin/grp_mount_test >/dev/null"; then
     echo $nodename:failure>&1
     echo "grp_mount_test script is unavailable">&2
 else
@@ -40,7 +44,7 @@ else
     failed=false
     echo -n nfs_mount_test:>&1
     for mntpoint in ${sorted[@]}; do
-        if ! ssh $USER@$nodename /usr/sbin/grp_mount_test $mntpoint; then
+        if ! ssh $USER@$nodename "timeout $timeout_sec /usr/sbin/grp_mount_test $mntpoint"; then
             failed=true
             # failure string will be written by grp_mount_test
         fi
@@ -51,7 +55,7 @@ fi
 #==============================================================================
 # Verify script exists before proceeding
 #==============================================================================
-if ! ssh $USER@$nodename 'which /usr/sbin/grp_configuration_test >/dev/null'; then
+if ! ssh $USER@$nodename "timeout $timeout_sec which /usr/sbin/grp_configuration_test >/dev/null"; then
     echo $nodename:failure>&1
     echo "grp_configuration_test script is unavailable">&2
 else
@@ -59,7 +63,7 @@ else
     # Configuration Tests
     # Executes a script on the compute node
     #==============================================================================
-    if ! ssh $USER@$nodename /usr/sbin/grp_configuration_test; then
+    if ! ssh $USER@$nodename "timeout $timeout_sec /usr/sbin/grp_configuration_test"; then
         echo $nodename:failure>&1
         echo "grp_configuration_test script execution failed">&2
         exit 1

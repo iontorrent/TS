@@ -13,12 +13,16 @@
 
 - name: Install ion-protonupdates
   apt: name=ion-protonupdates state=present force=yes
-  when: proton.stat.exists
+  when:
+    - proton.stat.exists
+    - has_network_access
 
 # Install ion-s5updates if this is S5VM
 - name: Install ion-s5updates
   apt: name=ion-s5updates state=present force=yes
-  when: proton.stat.exists or S5_virtual_guest|bool
+  when:
+    - proton.stat.exists or S5_virtual_guest|bool
+    - has_network_access
 
 # Check for existence of previous install of ion-pgmupdates
 - stat: path=/results/pgm/updates
@@ -26,7 +30,9 @@
 
 - name: Install ion-pgmupdates
   apt: name=ion-pgmupdates state=present force=yes
-  when: pgm.stat.exists
+  when:
+    - pgm.stat.exists
+    - has_network_access
 
 #-----------------------------------------------------------------------------
 # Install Chef and OT Update Packages (always)
@@ -36,3 +42,4 @@
   with_items:
     - ion-chefupdates
     - ion-onetouchupdater
+  when: has_network_access

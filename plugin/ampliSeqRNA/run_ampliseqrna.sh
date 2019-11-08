@@ -284,7 +284,12 @@ fi
 #read MAPPED_READS ONTRG_READS <<< `awk 'NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
 #TOTAL_READS=`samtools view -c "$BAMFILE"`
 #
-read TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
+# work-around for read command change on Ubuntu 18
+SFSTMP=samtools_flagstat.tmp
+samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}' > $SFSTMP
+read -d '' TOTAL_READS MAPPED_READS < $SFSTMP
+rm $SFSTMP
+
 ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
 #
 echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
@@ -351,7 +356,7 @@ fi
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Analyzing depth of $TARGETTYPE coverage..." >&2
 fi
-COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -r -M $MAPPED_READS \"$TARGETCOVFILE\""
+COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl -r -M \"$MAPPED_READS\" \"$TARGETCOVFILE\""
 eval "$COVERAGE_ANALYSIS >> \"$STATSFILE\"" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: targetReadStats.pl failed." >&2

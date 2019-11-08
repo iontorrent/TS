@@ -6,6 +6,7 @@ ioncompute_syspkg_list:
     - python-httplib2
     - openipmi
     - ipmitool
+    - bc
 
 ioncompute_ionpkg_list:
     - ion-gpu

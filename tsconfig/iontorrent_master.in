@@ -33,6 +33,8 @@ ionmaster_syspkg_list:
     - coreutils
     - debconf
     - debconf-utils
+    - resolvconf
+    - bc
 
 ionmaster_ionpkg_list:
     - ion-dbreports

@@ -13,7 +13,7 @@ import dateutil.parser
 import math
 import shlex
 import copy
-import pandas
+import pandas as pd
 from collections import defaultdict
 
 from ion.utils.blockprocessing import isbadblock
@@ -209,7 +209,7 @@ def merge_barcoded_basecaller_bams(BASECALLER_RESULTS, basecaller_datasets, meth
 # -------------------------------------------------------------------------
 
 
-def merge_EndBarcodeReadCounts(dirs, BASECALLER_RESULTS):
+def merge_EndBarcodeReadCounts(dirs, BASECALLER_RESULTS, from_rawdata=False):
 
     try:
         block_dir_counter = 0
@@ -219,9 +219,16 @@ def merge_EndBarcodeReadCounts(dirs, BASECALLER_RESULTS):
         for dir in dirs:
 
             block_dir_counter += 1
+            # original format (RUO): block + outdir
             my_csv_path = os.path.join(
                 dir, BASECALLER_RESULTS, "EndBarcodeReadCounts.csv"
             )
+            if from_rawdata:
+                # alternative format: outdir + block
+                my_csv_path = os.path.join(
+                    BASECALLER_RESULTS, dir, "EndBarcodeReadCounts.csv"
+                )
+
             if not os.path.isfile(my_csv_path):
                 continue
 
@@ -696,6 +703,7 @@ def generate_datasets_json(
                         ch for ch in notes if ch.isalnum() or ch == " "
                     ),
                     "platform_unit": "%s/%s" % (pu_base_str, start_barcode_name),
+                    "nucleotide_type": barcode_info.get("nucleotideType", ""),
                 }
                 # Start barcode information
                 datasets["read_groups"][runID + "." + start_barcode_name]["barcode"] = {
@@ -711,6 +719,7 @@ def generate_datasets_json(
                         "barcode_name": barcode_info["endBarcode"]["id_str"],
                         "barcode_sequence": barcode_info["endBarcode"]["sequence"],
                         "barcode_adapter": barcode_info["endBarcode"]["adapter"],
+                        "analyze_as_single": barcode_info["endBarcode"].get("analyze_as_single", False),
                     }
                     # Update name
                     datasets["read_groups"][runID + "." + start_barcode_name][

@@ -62,6 +62,8 @@ class SavePlanFieldNames:
     CELL_NUM = "cellNum"
     COUPLE_ID = "coupleID"
     EMBRYO_ID = "embryoID"
+    BACTERIAL_MARKER_TYPE = "BacterialMarkerType"
+    WITNESS = "Witness"
     NUCLEOTIDE_TYPE = "NucleotideType"
     RELATIONSHIP_TYPE = "Relation"
     RELATION_ROLE = "RelationRole"
@@ -110,6 +112,8 @@ class SavePlanFieldNames:
     IR_CELL_NUM = "ircellNum"
     IR_COUPLE_ID = "ircoupleID"
     IR_EMBRYO_ID = "irembryoID"
+    IR_BACTERIAL_MARKER_TYPE = "irBacterialMarkerType"
+    IR_WITNESS = "irWitness"
 
     IR_WORKFLOW = "irWorkflow"
     IR_ISFACTORY = "tag_isFactoryProvidedWorkflow"
@@ -236,6 +240,8 @@ def update_ir_plugin_from_samples_table(samplesTable):
                 SavePlanFieldNames.EMBRYO_ID: row.get(
                     SavePlanFieldNames.IR_EMBRYO_ID, ""
                 ),
+                SavePlanFieldNames.BACTERIAL_MARKER_TYPE: row.get(SavePlanFieldNames.IR_BACTERIAL_MARKER_TYPE, ""),
+                SavePlanFieldNames.WITNESS: row.get(SavePlanFieldNames.IR_WITNESS, ""),
                 SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(
                     SavePlanFieldNames.IR_APPLICATION_TYPE, ""
                 ),

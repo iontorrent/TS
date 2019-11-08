@@ -1,7 +1,8 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from iondb.rundb.models import Project, PlannedExperiment
+import json
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 
 from iondb.rundb.models import (
     PlannedExperiment,
@@ -57,6 +58,7 @@ class PlanCSVcolumns:
     COLUMN_HOTSPOT_BED = "Hotspot regions BED file"
 
     COLUMN_PLUGINS = "Plugins"
+    COLUMN_PLUGIN_CONFIG = "Plugin configuration: %s"
     COLUMN_PROJECTS = "Project names"
     COLUMN_EXPORT = "Export"
     COLUMN_NOTES = "Notes"
@@ -89,6 +91,8 @@ class PlanCSVcolumns:
     COLUMN_SAMPLE_IR_GENDER = "IR Gender"
     COLUMN_SAMPLE_IR_WORKFLOW = "IR Workflow"
     COLUMN_SAMPLE_IR_SET_ID = "IR Set ID"
+    COLUMN_SAMPLE_BACTERIAL_MARKER_TYPE = "Bacterial Marker Type"
+    COLUMN_SAMPLE_WITNESS = "Witness"
 
     # obsolete?
     COLUMN_IR_V1_0_WORKFLOW = "IR_v1_0_workflow"
@@ -258,6 +262,7 @@ def _get_fusions_target_regions_bed_file(template):
 
 def _get_plugins(template, delimiter):
     plugins = ""
+    configurations = {}
 
     planPlugins = template.get_selectedPlugins()
 
@@ -269,14 +274,13 @@ def _get_plugins(template, delimiter):
             if pluginName:
                 plugins += pluginName
                 plugins += delimiter
+                if planPlugin.get("userInput"):
+                    configurations[pluginName] = planPlugin["userInput"]
 
     if template.isSystem:
         default_selected_plugins = Plugin.objects.filter(
             active=True, selected=True, defaultSelected=True
         ).order_by("name")
-
-        if not default_selected_plugins:
-            return plugins
 
         for default_plugin in default_selected_plugins:
             if planPlugins and default_plugin.name in list(planPlugins.keys()):
@@ -291,9 +295,7 @@ def _get_plugins(template, delimiter):
                         plugins += default_plugin.name
                         plugins += delimiter
 
-    # logger.info("EXIT plan_csv_writer._get_plugins() plugins=%s" %(plugins))
-
-    return plugins
+    return plugins, configurations
 
 
 def _get_export(template, delimiter):
@@ -506,6 +508,7 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
             PlanCSVcolumns.COLUMN_REF,
             PlanCSVcolumns.COLUMN_TARGET_BED,
             PlanCSVcolumns.COLUMN_HOTSPOT_BED,
+            PlanCSVcolumns.COLUMN_NUCLEOTIDE_TYPE,
             PlanCSVcolumns.COLUMN_PLUGINS,
             PlanCSVcolumns.COLUMN_PROJECTS,
             PlanCSVcolumns.COLUMN_EXPORT,
@@ -535,7 +538,8 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
             _get_reference(template),
             _get_target_regions_bed_file(template),
             _get_hotspot_regions_bed_file(template),
-            _get_plugins(template, ";"),
+            template.get_default_nucleotideType(),
+            _get_plugins(template, ";")[0],
             _get_projects(template, ";"),
             _get_export(template, ";"),
             _get_notes(template),
@@ -617,6 +621,11 @@ def get_sampleAnnotations(template):
             PlanCSVcolumns.COLUMN_SAMPLE_COUPLE_ID,
             PlanCSVcolumns.COLUMN_SAMPLE_EMBRYO_ID,
         ]
+    if "16s" in template.categories:
+        annotations.append(PlanCSVcolumns.COLUMN_SAMPLE_BACTERIAL_MARKER_TYPE)
+    if "repro" in template.categories:
+        annotations.append(PlanCSVcolumns.COLUMN_SAMPLE_WITNESS)
+
     return annotations
 
 
@@ -801,7 +810,7 @@ def get_template_data_for_export(templateId):
     ]
 
     # add fusions reference for DNA/Fusions application
-    if runType.runType == "AMPS_DNA_RNA":
+    if RunType.is_dna_rna(runType):
         data.extend(
             [
                 (PlanCSVcolumns.FUSIONS_REF, template.get_mixedType_rna_library()),
@@ -812,12 +821,13 @@ def get_template_data_for_export(templateId):
             ]
         )
 
+    plugins, configurations = _get_plugins(template, TOKEN_DELIMITER)
     data.extend(
         [
             (PlanCSVcolumns.COLUMN_BEAD_LOAD_PCT, _get_bead_loading_qc(template)),
             (PlanCSVcolumns.COLUMN_KEY_SIGNAL_PCT, _get_key_signal_qc(template)),
             (PlanCSVcolumns.COLUMN_USABLE_SEQ_PCT, _get_usable_seq_qc(template)),
-            (PlanCSVcolumns.COLUMN_PLUGINS, _get_plugins(template, TOKEN_DELIMITER)),
+            (PlanCSVcolumns.COLUMN_PLUGINS, plugins),
             (PlanCSVcolumns.COLUMN_PROJECTS, _get_projects(template, TOKEN_DELIMITER)),
             (PlanCSVcolumns.CATEGORIES, template.categories),
             (PlanCSVcolumns.COLUMN_NOTES, _get_notes(template)),
@@ -825,10 +835,20 @@ def get_template_data_for_export(templateId):
         ]
     )
 
+    # add plugin configurations
+    if configurations:
+        for pluginName, config in configurations.items():
+            data.append(
+                (
+                    PlanCSVcolumns.COLUMN_PLUGIN_CONFIG % pluginName,
+                    json.dumps(config, cls=DjangoJSONEncoder),
+                )
+            )
+
     # add custom analysis args
     if template.latestEAS.custom_args:
         args = template.latestEAS.get_cmdline_args()
         data.append((PlanCSVcolumns.CUSTOM_ARGS, True))
         data.extend([(key, args[key]) for key in sorted(args)])
 
-    return zip(*data)
+    return data

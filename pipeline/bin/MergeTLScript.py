@@ -204,7 +204,7 @@ if __name__ == "__main__":
                                     "sigproc_results",
                                     "analysis_return_code.txt",
                                 ),
-                                "r",
+                                "r"
                             ) as g:
                                 return_code_text = g.read()
                                 # TODO

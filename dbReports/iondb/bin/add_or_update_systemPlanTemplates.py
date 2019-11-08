@@ -12,7 +12,7 @@ import copy
 from traceback import format_exc
 
 # django package
-from djangoinit import *
+from iondb.bin.djangoinit import *
 from django.db import transaction
 from iondb.rundb import models
 
@@ -1085,15 +1085,17 @@ def add_or_update_metagenomics_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams)
 
     LIBRARY_READ_LENGTH = 200
-    BARCODE_KIT_NAME = "IonXpress"
+    BARCODE_KIT_NAME = "IonCode"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
     templateParams = TemplateParams(
-        "Ion 16S AmpliSeq Health Research Template", S5, "TARS_16S"
+        "Ion AmpliSeq Microbiome Health Research Panel", S5, "TARS_16S"
     )
     PLUGINS = {
-        "AmpliSeqMicrobiomeAnalysis": _get_plugin_dict("AmpliSeqMicrobiomeAnalysis")
+        "AmpliSeq_Microbiome_Health_Analysis": _get_plugin_dict(
+            "AmpliSeq_Microbiome_Health_Analysis"
+        )
     }
 
     templateParams.update(
@@ -1106,9 +1108,10 @@ def add_or_update_metagenomics_system_templates():
             "templatingKitName": TEMPLATE_KIT_NAME,
             "sampleGrouping": "Self",
             "sequencekitname": SEQ_KIT_NAME,
-            "libraryKitName": "IonPlusFragmentLibKit",
+            "libraryKitName": "Ion AmpliSeq Library Kit Plus",
             "categories": "16s",
             "planStatus": PLAN_STATUS,
+            "reference": "Microbiome_health_panel_reference",
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1805,8 +1808,8 @@ def add_or_update_oncomine_childhood_cancer_system_templates():
 
 def add_or_update_oncomine_ondemand_530_system_templates():
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES_8 = "Oncomine;onco_solidTumor;barcodes_8"
-    CATEGORIES_16 = "Oncomine;onco_solidTumor;barcodes_16"
+    CATEGORIES_8 = "Oncomine;onco_solidTumor;barcodes_8;p4o"
+    CATEGORIES_16 = "Oncomine;onco_solidTumor;barcodes_16;p4o"
     CHIP_NAME_S5 = "530"
     FLOWS = 500
     LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -1819,10 +1822,11 @@ def add_or_update_oncomine_ondemand_530_system_templates():
     # pre-select plugins
     plugins = {}
     plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
+    plugins["coverageAnalysis"]["userInput"] = {"sampleid": "Yes"}
     plugins["sampleID"] = _get_plugin_dict("sampleID")
 
     # AMPS: DNA / AMPS_DNA_RNA: DNA + RNA / AMPS_RNA: RNA
-    templateParams = TemplateParams("Oncomine On-Demand DNA for 530", S5, "AMPS")
+    templateParams = TemplateParams("Oncomine Tumor Specific DNA", S5, "AMPS")
     templateParams.update(
         {
             "applicationGroup": "DNA",
@@ -1843,7 +1847,7 @@ def add_or_update_oncomine_ondemand_530_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     templateParams = TemplateParams(
-        "Oncomine On-Demand DNA and Fusions for 530", S5, "AMPS_DNA_RNA"
+        "Oncomine Tumor Specific DNA and Fusions", S5, "AMPS_DNA_RNA"
     )
     templateParams.update(
         {
@@ -1865,7 +1869,7 @@ def add_or_update_oncomine_ondemand_530_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     templateParams = TemplateParams(
-        "Oncomine On-Demand Fusions for 530", S5, "AMPS_RNA"
+        "Oncomine Tumor Specific Fusions", S5, "AMPS_RNA"
     )
     templateParams.update(
         {
@@ -2569,7 +2573,8 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
 
     # pre-select plugins
     plugins = {}
-    plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
+    plugins["molecularCoverageAnalysis"] = get_mca_plugin_dict("ampliseq_hd_cfdna")
+    plugins["sampleID"] = _get_plugin_dict("sampleID")
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD DNA for 550", S5, "AMPS_HD_DNA"
@@ -2618,7 +2623,7 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     templateParams = TemplateParams(
-        "Oncomine Myeloid MRD DNA and Fusions for 550", S5, "AMPS_HD_DNA_RNA"
+        "Oncomine Myeloid MRD DNA and Fusions for 550", S5, "AMPS_HD_DNA_RNA_1"
     )
     templateParams.update(
         {
@@ -2659,7 +2664,8 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
 
     # pre-select plugins
     plugins = {}
-    plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
+    plugins["molecularCoverageAnalysis"] = get_mca_plugin_dict("ampliseq_hd_cfdna")
+    plugins["sampleID"] = _get_plugin_dict("sampleID")
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD DNA for 540", S5, "AMPS_HD_DNA"
@@ -2708,7 +2714,7 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
     templateParams = TemplateParams(
-        "Oncomine Myeloid MRD DNA and Fusions for 540", S5, "AMPS_HD_DNA_RNA"
+        "Oncomine Myeloid MRD DNA and Fusions for 540", S5, "AMPS_HD_DNA_RNA_1"
     )
     templateParams.update(
         {
@@ -3026,6 +3032,7 @@ def add_or_update_tagseq_cfdna_s5_540_chef_system_template(templateName):
 def add_or_update_immune_repertoire_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Select BC Set-1"
+    BARCODE_KIT_NAME_DUAL = "Ion Dual Barcode Kit 1-96"
     CATEGORIES = "onco_immune;immunology"
     CHIP = "530"
     FLOWS = 850
@@ -3063,29 +3070,7 @@ def add_or_update_immune_repertoire_s5_system_templates():
     templateParams.update(
         {
             "applicationGroup": APPLICATION_GROUP,
-            "barcodeKitName": BARCODE_KIT_NAME,
-            "categories": CATEGORIES,
-            "chipType": CHIP,
-            "flows": FLOWS,
-            "libraryKitName": LIBRARY_KIT_NAME,
-            "libraryReadLength": LIBRARY_READ_LENGTH,
-            "reference": REFERENCE,
-            "sampleGrouping": SAMPLE_GROUPING,
-            "sequencekitname": SEQ_KIT_NAME,
-            "templatingKitName": TEMPLATE_KIT_NAME,
-            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
-            "planStatus": PLAN_STATUS,
-        }
-    )
-
-    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams)
-
-    templateParams = TemplateParams("Oncomine IGH-LR for S5", S5, "AMPS_RNA")
-    templateParams.update(
-        {
-            "applicationGroup": APPLICATION_GROUP,
-            "barcodeKitName": BARCODE_KIT_NAME,
+            "barcodeKitName": BARCODE_KIT_NAME_DUAL,
             "categories": CATEGORIES,
             "chipType": CHIP,
             "flows": FLOWS,
@@ -3106,17 +3091,17 @@ def add_or_update_immune_repertoire_s5_system_templates():
 
 def add_or_update_immune_repertoire_long_igh_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
-    BARCODE_KIT_NAME = "Ion Select BC Set-1"
+    BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
     CATEGORIES = "onco_immune;immunology"
     CHIP = "530"
-    FLOWS = 1000
+    FLOWS = 1100
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
     LIBRARY_READ_LENGTH = 400
     REFERENCE = ""
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
     SAMPLE_PREP_PROTOCOL = "pcr400bp"
 
     templateParams = TemplateParams("Oncomine IGH-LR for S5", S5, "AMPS_RNA")
@@ -3285,13 +3270,13 @@ def add_or_update_immune_repertoire_short_igh_mouse_s5_system_templates():
     SAMPLE_GROUPING = "Self"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
 
     # the follow templates will be create with same settings.
     template_names = [
         "Oncomine IGH-SR for S5",
-        "Oncomine Mouse TCRB-SR for S5",
-        "Oncomine Mouse IGH-SR for S5",
+        "Ion Ampliseq Mouse BCR IGH-SR for S5",
+        "Ion Ampliseq Mouse TCRB-SR for S5",
     ]
 
     for template_name in template_names:
@@ -3676,7 +3661,7 @@ def add_or_update_viralseq_system_templates():
     VIRALSEQ_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     VIRALSEQ_TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
     VIRALSEQ_LIBRARY_KIT_NAME = "Ampliseq DNA V1"
-    VIRALSEQ_STATUS = "inactive"
+    VIRALSEQ_STATUS = "planned"
 
     # ViralSeq, a.k.a project milkyway
     templateParams = TemplateParams(
@@ -3703,17 +3688,18 @@ def add_or_update_viralseq_system_templates():
 
 def add_or_update_carrierseq_system_templates():
     # CarrierSeq
-    BARCODE_KIT_S5 = "Ion SingleSeq Barcode set 1-96"
+    BARCODE_KIT_S5 = "IonCode"
     CATEGORIES = "carrierSeq;repro"
-    LIBRARY_KIT = "IonPicoPlex"
+    LIBRARY_KIT = "Ion Torrent CarrierSeq ECS Kit with Ion 540 Chips"
     LIBRARY_READ_LENGTH = 0
     REFERENCE = "GRCh38.p2.mask1"
     RUN_TYPE = "AMPS"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
 
     # pre-select plugins
     plugins = {}
     plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
+    plugins["coverageAnalysis"]["userInput"] = {"sampleid": "Yes"}
     plugins["sampleID"] = _get_plugin_dict("sampleID")
 
     # **** is S5 System Default Template
@@ -3726,7 +3712,7 @@ def add_or_update_carrierseq_system_templates():
     templateParams.update(
         {
             "chipType": "540",
-            "flows": 250,
+            "flows": 550,
             "templatingKitName": "Ion Chef S540 V1",
             "sampleGrouping": "Self",
             "sequencekitname": "Ion S5 Sequencing Kit",
@@ -3747,7 +3733,7 @@ def add_or_update_oncomine_ocav4_550_system_templates():
     # OCAv4 550
     OCAV4_BARCODE_KIT_NAME = "IonXpress"
     OCAV4_CATEGORIES = "Oncomine;onco_solidTumor;onco_immune;ocav4"
-    OCAV4_CATEGORIES_2 = "Oncomine;barcodes_16;onco_solidTumor;onco_immune;ocav4"
+    OCAV4_CATEGORIES_2 = "Oncomine;barcodes_8;onco_solidTumor;onco_immune;ocav4"
     OCAV4_CHIP_NAME = "550"
     OCAV4_FLOWS = 500
     OCAV4_FUSION_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3828,7 +3814,7 @@ def add_or_update_oncomine_ocav4_550_system_templates():
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams)
 
 
 def add_or_update_pan_bacteria_540_system_templates():
@@ -3995,6 +3981,15 @@ def clean_up_obsolete_templates():
             "Oncomine Comprehensive v4 DNA for 550",
             "Oncomine Comprehensive v4 DNA and Fusions for 550",
             "Oncomine Comprehensive v4 Fusions for 550",
+            "Oncomine Mouse TCRB-SR for S5",
+            "Oncomine Mouse IGH-SR for S5",
+            "Oncomine On-Demand DNA for 530"
+            "Oncomine On-Demand DNA and Fusions for 530"
+            "Oncomine On-Demand Fusions for 530",
+            "Ion 16S AmpliSeq Health Research Template",
+            "Oncomine Tumor Specific DNA for 530",
+            "Oncomine Tumor Specific DNA and Fusions for 530",
+            "Oncomine Tumor Specific Fusions for 530",
         ]
 
         templates = models.PlannedExperiment.objects.filter(

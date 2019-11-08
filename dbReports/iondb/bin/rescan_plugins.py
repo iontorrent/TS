@@ -5,4 +5,4 @@
 import iondb.bin.djangoinit
 import iondb.plugins.tasks as tasks
 
-tasks.add_remove_plugins.apply_async()
+tasks.add_remove_plugins()

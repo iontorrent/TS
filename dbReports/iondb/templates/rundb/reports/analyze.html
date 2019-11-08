@@ -383,6 +383,9 @@
     var WARNINGS = {{warnings|safe}};
     var _save_barcoded_reference = false;
     var _barcode_set = $('#id_barcodeKitName').val();
+    var plugin_config_url = "/configure/plugins/plugin/XXX/configure/plan/" +
+        "?runType=" + "{{exp.plan.runType}}" + "&applicationGroup=" + "{{exp.plan.applicationGroup.name}}";
+
     var ANALYSISARGS = {};
     {% for args in analysisargs %}
         ANALYSISARGS["{{args.name}}"] = JSON.parse("{{ args.args_json|escapejs }}")

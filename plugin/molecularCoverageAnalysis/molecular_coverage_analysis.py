@@ -424,10 +424,9 @@ class FamilyManager:
         return all_fam_dict
 
     def reads_group_by_fam_size(self,fam_size): # roughly group reads based on fam size
-	
         if fam_size >=1 and fam_size <=2 : return 'small' #  read depth is not enough if this group is high
-	if fam_size >=3 and fam_size <=30 : return 'median' #  read depth is good if this group is high
-	return 'large' #  read depth is over if this group is high, and suggest NO more real families can be found with higher read depth
+        if fam_size >=3 and fam_size <=30 : return 'median' #  read depth is good if this group is high
+        return 'large' #  read depth is over if this group is high, and suggest NO more real families can be found with higher read depth
 
     def gen_stats_one_region(self, all_fam_dict, region_dict=None):
         my_stats_dict = {
@@ -798,7 +797,7 @@ def get_default_tvc_param_dict():
         'torrent_variant_caller':{
             'tag_trim_method': 'sloppy-trim',
             'min_tag_fam_size': 3, 
-            'min_fam_per_strand_cov': 1,
+            'min_fam_per_strand_cov': 0,
             'hotspot_min_variant_score': 3.0,
             'hotspot_min_allele_freq': 0.0005,
             'hotspot_min_var_coverage': 3,

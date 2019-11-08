@@ -1452,7 +1452,7 @@
       "instrumentType": "",
       "isActive": true,
       "description": "Ion AmpliSeq Library Kit Plus",
-      "applicationType" : "AMPS_ANY;MIXED"
+      "applicationType" : ""
     }
   },
   {
@@ -2216,7 +2216,7 @@
       "flowCount": 0,
       "uid": "LIB0028",
       "instrumentType": "",
-      "isActive": false,
+      "isActive": true,
       "chipTypes" : "530",
       "description": "Ion Torrent CarrierSeq ECS Kit with Ion 530 Chips",
       "categories" : "carrierSeq",
@@ -2234,7 +2234,7 @@
       "flowCount": 0,
       "uid": "LIB0029",
       "instrumentType": "",
-      "isActive": false,
+      "isActive": true,
       "chipTypes" : "540",
       "description": "Ion Torrent CarrierSeq ECS Kit with Ion 540 Chips",
       "categories" : "carrierSeq",
@@ -2252,7 +2252,7 @@
       "flowCount": 0,
       "uid": "LIB0030",
       "instrumentType": "",
-      "isActive": false,
+      "isActive": true,
       "chipTypes" : "550",
       "description": "Ion Torrent CarrierSeq ECS Kit with Ion 550 Chips",
       "categories" : "carrierSeq",

@@ -73,7 +73,8 @@
             });
             
             // edit existing record
-            function setupEdit(hostname, name){
+            function setupEdit(hostname, name, id){
+                form.data("editNode", id);
                 inputHostname.val(hostname);
                 inputHostname.prop('disabled', true);
                 inputName.val(name);
@@ -83,12 +84,24 @@
 
             // setup modal clearing
             modalSetupComputer.on('hidden', function () {
+                form.data("editNode", false);
                 clearModalSetupComputer();
             });
 
             // do the exchange!
             submitButton.on('click', function () {
-                if (!jQuery.fn.uniform.isValid(form, jQuery.fn.uniform.defaults)) {
+                if (form.data("editNode")) {
+                    $.ajax({
+                        type: "PATCH",
+                        url: '/rundb/api/v1/ionmeshnode/' + form.data("editNode"),
+                        data: JSON.stringify({"name":inputName.val()}),
+                        contentType: 'application/json'
+                    }).done(function(){
+                        $("#mesh-table").data("kendoGrid").dataSource.read();
+                        modalSetupComputer.modal('hide');
+                    });
+                    return true;
+                } else if (!jQuery.fn.uniform.isValid(form, jQuery.fn.uniform.defaults)) {
                     return false;
                 }
                 
@@ -248,7 +261,7 @@
             $("#mesh-table tbody").on("click", ".edit", function (e) {
                 var grid = $("#mesh-table").data("kendoGrid");
                 var dataItem = grid.dataItem($(e.target).closest("tr"));
-                setupEdit(dataItem.hostname, dataItem.name);
+                setupEdit(dataItem.hostname, dataItem.name, dataItem.id);
                 $('#modal_setup_computer').modal('show');
             });
         });

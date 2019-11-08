@@ -8,7 +8,7 @@ import subprocess
 from ion.plugin import *
 
 class variantCaller(IonPlugin):
-    version = '5.12.0.2'
+    version = '5.12.0.3'
     envDict = dict(os.environ)
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     requires_configuration = True # The user can not run the plugin w/o clicking the configuration button (exception: TS-16890).

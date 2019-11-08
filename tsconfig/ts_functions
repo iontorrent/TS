@@ -45,7 +45,7 @@ function print_help_1404()
     echo
     echo "Usage: TSconfig [options]"
     echo -e "\t--configure-server                Configure this server as a head node (Without updating the Torrent Suite)"
-    echo -e "\t--reconfigure                     Re-run Configuration steps (Without updating the Torrent Suite)"
+    echo -e "\t--reconfigure                     Re-run Configuration steps (Without updating the Torrent Suite nor requiring network connection)"
     echo -e "\t--update-torrent-suite, -s        Update installed software packages"
     echo -e "\t--change-hostname, -r [hostname]  Change the server's hostname. Include optional hostname to avoid interactive prompts"
     echo -e "\t--configure-timezone, -z          Set timezone."
@@ -3603,33 +3603,41 @@ function install_prerequisites()
     # Install ansible and customize ansible configuration and keep existing configuration
     apt-get install -o Dpkg::Options::="--force-confold" -y --allow-unauthenticated ansible
 
+    ansible_cfg="/etc/ansible/ansible.cfg"
+
     # Add hostname to ansible hosts definition file
     sed -i "s/LOCALHEADNODE.*/$HOSTNAME ansible_connection=local/g" /usr/share/ion-tsconfig/ansible/torrentsuite_hosts
 
     # Enable Ansible logging
-    sed -i "s:.*log_path.*:log_path = /var/log/ion/tsconfig_debug.log:" /etc/ansible/ansible.cfg
+    sed -i "s:.*log_path.*:log_path = /var/log/ion/tsconfig_debug.log:" $ansible_cfg
 
     # Disable strict host key checking
-    sed -i "s:.*host_key_checking.*:host_key_checking = False:" /etc/ansible/ansible.cfg
+    sed -i "s:.*host_key_checking.*:host_key_checking = False:" $ansible_cfg
 
     # Set the default remote user
-    sed -i "s:.*remote_user.*:remote_user = ionadmin:" /etc/ansible/ansible.cfg
+    sed -i "s:.*remote_user.*:remote_user = ionadmin:" $ansible_cfg
 
     # Set the private key file
-    sed -i "s:.*private_key_file.*:private_key_file = /home/ionadmin/.ssh/ansible_rsa_key:" /etc/ansible/ansible.cfg
+    sed -i "s:.*private_key_file.*:private_key_file = /home/ionadmin/.ssh/ansible_rsa_key:" $ansible_cfg
 
     # Set the default host file
-    sed -i "s:.*hostfile.*:hostfile = /usr/share/ion-tsconfig/ansible/torrentsuite_hosts:" /etc/ansible/ansible.cfg
+    sed -i "s:.*hostfile.*:hostfile = /usr/share/ion-tsconfig/ansible/torrentsuite_hosts:" $ansible_cfg
 
     # Set the default roles path
-    sed -i "s:.*roles_path.*:roles_path = /usr/share/ion-tsconfig/ansible/roles:" /etc/ansible/ansible.cfg
+    sed -i "s:.*roles_path.*:roles_path = /usr/share/ion-tsconfig/ansible/roles:" $ansible_cfg
 
     # Enable pipelining to speed up ssh
-    sed -i "s:#pipelining.*:pipelining = True:" /etc/ansible/ansible.cfg
-    sed -i "s:^pipelining.*:pipelining = True:" /etc/ansible/ansible.cfg
+    sed -i "s:#pipelining.*:pipelining = True:" $ansible_cfg
+    sed -i "s:^pipelining.*:pipelining = True:" $ansible_cfg
 
     # Edit {{ansible_managed}} variable.  We don't want the date stamp
-    sed -i "s/^ansible_managed.*/ansible_managed = Ansible managed: {file}/" /etc/ansible/ansible.cfg
+    sed -i "s/^ansible_managed.*/ansible_managed = Ansible managed: {file}/" $ansible_cfg
+
+    # disable ansible deprecation warning when it is not already set in the configuration
+    if ! grep -q ^deprecation_warnings $ansible_cfg; then
+        # adding deprecation_warnings after [defaults] section
+        sed -i "/\[defaults\]/a deprecation_warnings=False" $ansible_cfg
+    fi
 
     # Edit contents of all_local
     if ! /usr/share/ion-tsconfig/ansible/files/update_all_local.sh; then

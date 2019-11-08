@@ -1,0 +1,842 @@
+@import "roundedcorners.css";
+
+/* base styles */
+/*
+a {
+    text-decoration:none;
+    color:#0000FF;
+}
+a:hover {
+    border-bottom:1px dotted #0000FF;
+}*/
+/*a:visited {
+    color:#4682B4;
+}*/
+
+.all_width {
+    width: 100%;
+}
+
+.all {
+    /*    padding-left:10px;
+    padding-right:10px;*/
+    font-family: /*Tahoma,georgia,times;*/ Verdana, Arial, sans-serif;
+    font-size: 11pt;
+    margin: 0px;
+    min-width: 1024px;
+    /*overflow:auto;*/
+}
+
+.progressbox_holder {
+    /*nothing in here yet*/
+}
+
+.progressbox {
+    float: left;
+    height: 10px; /*Specify Height*/
+    width: 10px; /*Specify Width*/
+    border: 1px solid black; /*Add 1px solid border, use any color you want*/
+    background-color: grey; /*Add a background color to the box*/
+    text-align: center; /*Align the text to the center*/
+    margin-left: 5px;
+    margin-right: 5px;
+    cursor: help;
+}
+
+.topbar {
+    width: 100%;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 10px;
+    padding-right: 10px;
+    height: 75px;
+    clear: both;
+    color: #FFF
+}
+
+.rtopbar {
+    width: 100%;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 10px;
+    padding-right: 10px;
+    height: 35px;
+    clear: both;
+    color: #FFF
+}
+
+.darkline {
+    height: 2px;
+    font-size: 1px;
+    color: #000;
+    width: 100%;
+    background-color: #000;
+    position: relative;
+    z-index: 0;
+}
+
+.left_heading {
+    font-size: 14pt;
+    margin-left: 6px;
+    float: left;
+}
+
+.right_heading {
+    font-size: 14pt;
+    margin-right: 6px;
+    float: right;
+}
+
+.icon_link {
+    border: none;
+    float: left;
+}
+
+.dropbutton {
+    float: left;
+}
+
+.star {
+    margin-left: 3px;
+}
+
+.sortables {
+    /*    height:16px;*/
+}
+
+.sortables .sortkey {
+    display: none;
+}
+
+.sortheading {
+    float: left;
+}
+
+.sort_icon, .sort_rev_icon {
+    /*    visibility:hidden;*/
+    float: left;
+    margin-left: 2px;
+    /*    margin-right:16px;*/
+    /*   margin-left:-16px;*/
+}
+
+.sort_rev_icon {
+    /*    margin-right:-16px;*/
+}
+
+/* taken from http://www.filamentgroup.com/examples/buttonFrameworkCSS/ */
+.fg-button {
+    outline: 0;
+    margin: 0 4px 0 0;
+    padding: 2px 4px;
+    text-decoration: none !important;
+    cursor: pointer;
+    position: relative;
+    text-align: center;
+    zoom: 1;
+}
+
+.fg-button .ui-icon {
+    position: absolute;
+    top: 50%;
+    margin-top: -8px;
+    left: 50%;
+    margin-left: -8px;
+}
+
+a.fg-button {
+    float: left;
+}
+
+/* remove extra button width in IE */
+button.fg-button {
+    width: auto;
+    overflow: visible;
+}
+
+.fg-button-icon-left {
+    padding-left: 2.1em;
+}
+
+.fg-button-icon-right {
+    padding-right: 20px;
+}
+
+.fg-button-icon-left .ui-icon {
+    right: auto;
+    left: .2em;
+    margin-left: 0;
+}
+
+.fg-button-icon-right .ui-icon {
+    left: auto;
+    right: .2em;
+    margin-left: 0;
+}
+
+/* solo icon buttons must have block properties for the text-indent to work */
+.fg-button-icon-solo {
+    display: block;
+    width: 8px;
+    text-indent: -9999px;
+}
+
+.fg-buttonset {
+    float: left;
+}
+
+.fg-buttonset .fg-button {
+    float: left;
+}
+
+.fg-buttonset-single .fg-button, .fg-buttonset-multi .fg-button {
+    margin-right: -1px;
+}
+
+.fg-toolbar {
+    padding: .5em;
+    margin: 0;
+}
+
+.fg-toolbar .fg-buttonset {
+    margin-right: 1.5em;
+    padding-left: 1px;
+}
+
+.fg-toolbar .fg-button {
+    font-size: 1em;
+}
+
+/* end taken */
+
+.small_indent {
+    position: relative;
+    left: 40%;
+}
+
+.big_indent {
+    position: relative;
+    left: 55%;
+}
+
+.extra_big_indent {
+    position: relative;
+    left: 65%;
+}
+
+/* tabs */
+.tabholder {
+    position: absolute;
+    left: 8px;
+    float: left;
+    height: 75px;
+}
+
+.tab {
+    position: relative;
+    float: left;
+    height: 100%;
+    font-weight: bold;
+    font-variant: small-caps;
+    font-size: 9pt;
+    margin-right: 8px;
+    text-align: center;
+    width: 88px;
+}
+
+.tabtext {
+    height: 26px;
+    background-color: #cccccc;
+    position: absolute;
+    bottom: -2px;
+    left: 0px;
+    width: 100%;
+    text-align: center;
+    border: 2px solid black;
+    z-index: 100;
+}
+
+.tab span {
+    color: #000;
+    border-bottom: 1px dotted black;
+    text-decoration: none;
+}
+
+.selected {
+    background-color: #FFF;
+    border-bottom: 2px solid white;
+}
+
+.selected span {
+    border-bottom: none;
+}
+
+.logoholder {
+    position: relative;
+    float: right;
+    margin-top: 0px;
+    margin-left: 12px;
+}
+
+#sitename {
+    margin: 0;
+    padding-left: 4px;
+    color: #000000;
+    text-align: left;
+}
+
+.centered {
+    position: relative;
+    padding-top: 12px;
+    margin-top: 4px;
+    width: 100%;
+    /*padding-left:10px;
+    padding-right:10px;*/
+    /*margin-left:-12px;
+    margin-right:-12px;*/
+}
+
+.centered_ie6 {
+    margin-left: 0px;
+    margin-right: 0px;
+}
+
+.controlholder {
+
+}
+
+.searchbox {
+    width: 160px;
+}
+
+.searchholder {
+    width: 208px;
+}
+
+.relative {
+    position: relative;
+}
+
+.clear {
+    clear: both;
+}
+
+.contentarea {
+    /* min-height:640px;*/
+}
+
+.footer {
+    color: #BBB;
+    width: 80%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    margin-top: 16px;
+}
+
+.footer a {
+    color: #BBB;
+    text-decoration: none;
+}
+
+.footer a:hover {
+    border-bottom: 1px dotted #BBB;
+}
+
+.hidden {
+    display: none;
+}
+
+.margins {
+    margin: 16px;
+}
+
+.side_margins {
+    margin-left: 16px;
+    margin-right: 16px;
+}
+
+.left_margin {
+    margin-left: 4px;
+}
+
+.right_margin {
+    margin-right: 4px;
+}
+
+.jq_button_text {
+    margin-left: 4px;
+}
+
+/* pagination */
+.paginator {
+    width: 160px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    height: 16px;
+    margin-top: -16px;
+    padding-top: 16px;
+}
+
+.current {
+    width: 128px;
+    /*margin-top:6px;*/
+    float: left;
+    height: 16px;
+    overflow: hidden;
+    text-align: center;
+}
+
+.larrow {
+    float: left;
+}
+
+.rarrow {
+    float: right;
+}
+
+.larrow, .rarrow {
+    width: 16px;
+    font-size: 20pt;
+    margin: 0px;
+    color: #555;
+    height: 32px;
+    overflow: hidden;
+}
+
+.larrow a, .rarrow a, .current a {
+    text-decoration: none;
+    border-bottom: 1px dotted black;
+}
+
+.downloadlink {
+    position: relative;
+    font-size: 10pt;
+    /*    margin-top:8px;
+    margin-bottom:8px;*/
+}
+
+/* misc */
+.left {
+    float: left;
+}
+
+.right {
+    float: right;
+}
+
+.big {
+    font-size: 16pt;
+}
+
+.medium {
+    font-size: 12pt;
+}
+
+.doublewide {
+    width: 240px;
+}
+
+.centered_message {
+    width: 512px;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 14pt;
+}
+
+.centered_link {
+    width: 512px;
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 12pt;
+}
+
+/* controls */
+
+.controls {
+}
+
+.controls form {
+    margin-bottom: -6px;
+}
+
+.controls table {
+    border-collapse: collapse;
+    margin: 0px;
+}
+
+.controls input, .controls select, .controls button {
+    font-size: 8pt;
+}
+
+.controls select {
+    width: 80px;
+}
+
+.controls th, .controls td {
+    font-size: 9pt;
+    margin-left: 8px;
+    /*width: 108px;*/
+}
+
+.controls #id_date_start_day, .controls #id_date_end_day {
+    width: 44px;
+}
+
+.controls #id_date_start_year, .controls #id_date_end_year {
+    width: 60px;
+}
+
+.controls #id_date_start_month, .controls #id_date_end_month {
+    width: 108px;
+}
+
+.clearholder {
+    margin-bottom: -8px;
+    margin-top: 8px;
+    margin-right: 8px;
+    margin-left: -4px;
+    width: 32px;
+}
+
+.clearbutton {
+    width: 72px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 0px;
+}
+
+.clearbutton input {
+    width: 72px;
+    font-size: 9pt;
+}
+
+.clearcirc {
+    color: #FFF;
+    background-image: url('/site_media/images/circ.png');
+    background-repeat: no-repeat;
+    height: 32px;
+    width: 32px;
+    position: relative;
+}
+
+.clearx {
+    color: #FFF;
+    position: absolute;
+    top: 0px;
+    left: -1px;
+    z-index: 100;
+    width: 32px;
+    height: 32px;
+}
+
+.clearx a img {
+    text-decoration: none;
+    border: none;
+}
+
+.clearholder {
+    color: #cccccc;
+    width: 32px;
+    height: 32px;
+}
+
+.global_help {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+}
+
+/* tables */
+
+th {
+    text-align: left;
+    font-weight: bold;
+}
+
+table, tbody, thead, tr {
+    width: 100%;
+}
+
+.run_start_table input {
+    width: 320px;
+}
+
+.run_start_table td {
+    max-width: 352px;
+}
+
+.run_start_table th {
+    width: 128px;
+}
+
+.run_start_table .error {
+    color: red;
+}
+
+.row1 {
+    background-color: #ffffff;
+    /*background-color:#888;
+    color: #EEE;*/
+}
+
+.row2 {
+    background-color: #E1EFFA;
+}
+
+.row1, .row2 {
+    padding: 0 12px -0 12px;
+}
+
+td, th {
+    padding-left: 6px;
+}
+
+.centertd {
+    text-align: center;
+}
+
+tr, td, table {
+    overflow: hidden;
+}
+
+.innertable {
+    margin-left: 25px;
+    font-size: 9pt;
+}
+
+.innertable td {
+    text-align: left;
+}
+
+.innerholder {
+    width: 100%;
+    display: none;
+}
+
+table {
+    border-collapse: collapse;
+    margin: 0;
+    table-layout: auto;
+}
+
+.bounded_container {
+    overflow: hidden;
+    width: 100%;
+}
+
+/* job control */
+
+#cancel_button_holder {
+    float: right;
+    position: relative;
+    bottom: -90px;
+}
+
+#term_button_holder {
+    float: left;
+    position: relative;
+    bottom: -90px;
+}
+
+#control_button_holder {
+    clear: both;
+}
+
+#job_name {
+    font-weight: bold;
+}
+
+.control_button input {
+    width: 128px;
+}
+
+.control_dialogue, .control_status_dialogue {
+    width: 320px;
+    display: none;
+    text-align: center;
+}
+
+/* jquery stuff */
+
+.ui-tabs .ui-tabs-hide {
+    display: none;
+}
+
+/* graphs */
+.graph_holder {
+    /*width:760px;*/
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.plugin_link {
+    color: #000099;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.libLink {
+    text-decoration: underline;
+    color: #0000FF;
+    cursor: pointer;
+}
+
+#barcodeTable {
+    width: 85%;
+}
+
+.inlineGraph {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-left: -5px;
+    width: 950px;
+    height: 350px;
+}
+
+.hasTip {
+    border-bottom: 1px dotted #A9A9A9;
+    cursor: help;
+}
+
+#storageBarHolder {
+    height: 15px;
+    width: 10px;
+    background-color: #D1D7DF;
+    position: relative;
+    margin-left: -15px;
+    margin-top: 0px;
+    border: 1px;
+    border-color: black;
+    border-style: solid;
+    cursor: pointer;
+}
+
+#storageBar {
+    background-color: green;
+    width: 100%;
+    height: 20%;
+    bottom: 0;
+    position: absolute;
+}
+
+.expNote {
+    left: 30px;
+    top: -10px;
+    position: relative;
+    font-size: 13px;
+}
+
+.tablePad {
+    padding-bottom: 15px;
+}
+
+.ui-progressbar-value {
+    width: 100%;
+    float: left;
+    text-align: center;
+    font-size: 12px;
+}
+
+.ui-progressbar-value .progress-number {
+    float: left;
+    width: 150px;
+    text-align: center;
+    font-size: 12px;
+}
+
+.clearfix {
+    *zoom: 1;
+}
+.clearfix:before, .clearfix:after {
+    display: table;
+    content: "";
+}
+.clearfix:after {
+    clear: both;
+}
+.alert {
+    padding: 8px 35px 8px 14px;
+    margin-bottom: 18px;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+    background-color: #fcf8e3;
+    border: 1px solid #fbeed5;
+    -webkit-border-radius: 4px;
+    -moz-border-radius: 4px;
+    border-radius: 4px;
+}
+.alert, .alert-heading {
+    color: #c09853;
+}
+.alert .close {
+    position: relative;
+    top: -2px;
+    right: -21px;
+    line-height: 18px;
+}
+.close {
+    float: right;
+    font-size: 20px;
+    font-weight: bold;
+    line-height: 18px;
+    color: #000000;
+    text-shadow: 0 1px 0 #ffffff;
+    opacity: 0.2;
+    filter: alpha(opacity=20);
+}
+.close:hover {
+    color: #000000;
+    text-decoration: none;
+    opacity: 0.4;
+    filter: alpha(opacity=40);
+    cursor: pointer;
+}
+.alert-success {
+    background-color: #dff0d8;
+    border-color: #d6e9c6;
+}
+.alert-success, .alert-success .alert-heading {
+    color: #468847;
+}
+.alert-danger, .alert-error {
+    background-color: #f2dede;
+    border-color: #eed3d7;
+}
+.alert-danger,
+.alert-error,
+.alert-danger .alert-heading,
+.alert-error .alert-heading {
+    color: #b94a48;
+}
+.alert-info {
+    background-color: #d9edf7;
+    border-color: #bce8f1;
+}
+.alert-info, .alert-info .alert-heading {
+    color: #3a87ad;
+}
+.alert-block {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+.alert-block > p, .alert-block > ul {
+    margin-bottom: 0;
+}
+.alert-block p + p {
+    margin-top: 5px;
+}
+#global_messages > div.alert{
+    margin: 10px 0 6px 0;
+}
+#bound_messages div:first-child{
+    margin-top: 18px;
+}
+
+#underconstruction{
+    position: absolute;
+    right: 200px;
+    top: 10px;
+}

@@ -42,3 +42,6 @@ fi
 
 # Flag file to enable apache2 maintenance page display
 MAINTENANCE_WEB=/var/www/maintenance.enable
+
+# system service restart script
+CHECK_SYSTEM_SERVICES_PY='/opt/ion/iondb/bin/check_system_services.py'

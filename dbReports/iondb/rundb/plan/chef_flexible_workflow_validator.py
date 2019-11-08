@@ -1,8 +1,10 @@
 # Copyright (C) 2017 Ion Torrent Systems, Inc. All Rights Reserved
 # Design doc @ https://confluence.amer.thermo.com/display/TS/Tech+design+proposal+%3A+TS-API+for+Flexible+Chef+Workflow+Design+Proposal
-from iondb.rundb.models import Chip, KitInfo
 import logging
+
 from django.db.models import Q
+
+from iondb.rundb.models import KitInfo
 
 logger = logging.getLogger(__name__)
 from dateutil.parser import parse as parse_date
@@ -10,7 +12,7 @@ import requests
 import math
 import datetime
 import logging
-import multiprocessing
+from iondb.utils.utils import ManagedPool
 import re
 
 logger = logging.getLogger(__name__)
@@ -391,8 +393,8 @@ class ChefFlexibleWorkflowValidator(object):
                 mesh_ids = [node["id"] for node in data["objects"]]
                 if len(mesh_ids):
                     # validate the each mesh nodes in parallel
-                    pool = multiprocessing.Pool(processes=len(mesh_ids))
-                    results = pool.map(validate_remote_mesh, mesh_ids)
+                    with ManagedPool(processes=len(mesh_ids)) as pool:
+                        results = pool.map(validate_remote_mesh, mesh_ids)
                     all_error_codes = [
                         "".join(res["errorCodes"])
                         for res in results

@@ -19,9 +19,11 @@
 - name: Install system packages for master node
   apt: name={{ item }} state=present force=yes
   with_items: "{{ ionmaster_syspkg_list }}"
+  when: has_network_access
 
 - name: Install pdftk, skip if not available
   apt: name=pdftk state=present
+  when: has_network_access
   ignore_errors: yes
 
 #-----------------------------------------------------------------------------
@@ -30,6 +32,7 @@
 #-----------------------------------------------------------------------------
 - name: Install libapache2-mod-gnutls
   apt: name=libapache2-mod-gnutls state=present
+  when: has_network_access
 
 - name: Disable conflicting apache modules - gnutls
   shell: /usr/sbin/a2dismod gnutls
@@ -46,11 +49,16 @@
 - name: Install packages for head node
   apt: name={{ item }} state=present force=yes
   with_items: "{{ ionmaster_ionpkg_list }}"
-  when: item != ''
+  when:
+    - item != ''
+    - has_network_access
+
 - name: Install 3rd party plugin packages
   apt: name={{ item }} state=present force=yes
   with_items: "{{ ionmaster_pluginpkg_list }}"
-  when: item != ''
+  when:
+    - item != ''
+    - has_network_access
   ignore_errors: yes
 
 # Install or remove OEM packages
@@ -63,6 +71,7 @@
   when:
     - item != ''
     - is_oem
+    - has_network_access
 
 - name: Remove OME packages if "is_oem" is {{ is_oem }}
   apt:
@@ -73,7 +82,26 @@
   when:
     - item != ''
     - not is_oem
-    
+    - has_network_access
+
+
+# Restarting apache2 cleanly prior to update
+- name: Stopping apache2
+  service:
+    name: apache2
+    state: stopped
+  ignore_errors: yes
+
+- name: Force kill apache2 if necessary
+  command: pkill -9 apache2
+  ignore_errors: yes
+
+- name: Starting apache2
+  service:
+    name: apache2
+    state: started
+
+
 # Ensure Ion system daemons are running
 - name: Ion Daemons
   service: name={{ item }} state=restarted enabled=yes
@@ -218,3 +246,25 @@
 
 - name: Starting celery tasks to rescan for new plugins
   command: /usr/bin/python /opt/ion/iondb/bin/rescan_plugins.py
+
+# support USB automount
+- name: create systemd-udevd.service.d on 18.04
+  file:
+    path: /etc/systemd/system/systemd-udevd.service.d
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  when: ansible_distribution_version == "18.04"
+
+- name: add USB automount configuration on 18.04
+  copy:
+    src: usboverride.conf
+    dest: /etc/systemd/system/systemd-udevd.service.d/
+    mode: '0755'
+    owner: root
+    group: root
+  when: ansible_distribution_version == "18.04"
+  notify:
+    - reload systemd daemon
+    - restart systemd-udevd

@@ -14,3 +14,4 @@
     - ion-sampledata
     - ion-rsmts
     - ion-usbmount
+  when: has_network_access

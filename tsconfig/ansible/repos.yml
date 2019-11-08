@@ -84,8 +84,17 @@
 #-----------------------------------------------------------------------------
 # Refresh cache and then clean stale cache
 #-----------------------------------------------------------------------------
-- name:
+- name: Refreshing apt cache
   apt: update_cache=yes
+  register: aptcache
+  ignore_errors: yes
+
+- name: Fail when updating apt cache has failed in network environment
+  fail:
+    msg: "apt-get update has failed"
+  when:
+    - aptcache.failed
+    - has_network_access
 
 # TS-17303: autoclean is added in 2.4
 - name: sudo apt-get autoclean

@@ -71,6 +71,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsco
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/pre_migration.sh" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/post_migration.sh" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/resetqhost.sh" DESTINATION sbin )
 
 # TS-17140: move these PERL modules to common/task/main.yml
 

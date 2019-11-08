@@ -48,6 +48,7 @@
     state: present
     force: yes
     dpkg_options: 'force-confold,force-confdef'
+  when: has_network_access
 
 - name: set grub related packages to hold to prevent non-interactive updates
   command: apt-mark hold {{ item }}
@@ -71,6 +72,7 @@
     state: present
     force: yes
   with_items: "{{ common_syspkg_list }}"
+  when: has_network_access
 
 #=============================================================================
 # Install Perl modules
@@ -89,6 +91,7 @@
     - libreadonly-perl
     - libstatistics-descriptive-perl
     - libstatistics-linefit-perl
+  when: has_network_access
 
 #-----------------------------------------------------------------------------
 #    named_core_files
