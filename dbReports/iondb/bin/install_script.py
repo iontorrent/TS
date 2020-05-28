@@ -427,7 +427,16 @@ def load_dbData(file_name):
     print("Loading data to iondb...")
     management.call_command("loaddata", file_name)
 
-
+def add_support_users(username, password, title):
+    user, is_newly_added = add_user(username, password)
+    if user:
+        try:
+            user.userprofile.title = title
+            user.userprofile.save()
+            user.set_unusable_password()
+        except Exception:
+            print("Failed during add_support_users() : %s" % username)
+            print(traceback.format_exc())
 if __name__ == "__main__":
     print("Install Script run with command args %s" % " ".join(sys.argv))
     try:
@@ -445,29 +454,25 @@ if __name__ == "__main__":
         user, is_newly_added = add_user("ionuser", "ionuser")
         if user:
             try:
+                user.is_active = False
                 group = Group.objects.get(name="ionusers")
                 if group and user.groups.count() == 0:
                     user.groups.add(group)
-                    user.save()
+                user.save()
             except Exception:
                 print("Assigning user group to ionuser failed")
                 print(traceback.format_exc())
 
         create_user_profiles()
 
-        # for these users, set_unusable_password()
+        user.userprofile.needs_activation = True
+        user.userprofile.save()
+
+        # Added set_unusable_password() for these users
         # These users exists only to uniformly store records of their contact
         # information for customer support.
-        lab, is_newly_added = add_user("lab_contact", "lab_contact")
-        if lab is not None:
-            lab_profile = lab.userprofile
-            lab_profile.title = "Lab Contact"
-            lab_profile.save()
-        it, is_newly_added = add_user("it_contact", "it_contact")
-        if it is not None:
-            it_profile = it.userprofile
-            it_profile.title = "IT Contact"
-            it_profile.save()
+        add_support_users("lab_contact", "lab_contact", "Lab Contact")
+        add_support_users("it_contact", "it_contact", "IT Contact")
 
         # try to add PGMs
         models.Rig.objects.get_or_create(

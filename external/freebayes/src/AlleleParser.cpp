@@ -2063,6 +2063,7 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   unsigned int common_ref_length = 1;
   int i;
   init_al(i, it, alist);
+  vector<AlleleDetails*> alleles_this;
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
     if (check_allele_filter(allele, i, it, alist)) {
@@ -2095,10 +2096,35 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   init_al(i, it, alist);
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
-    if (check_allele_filter(allele, i, it, alist) and allele.ref_length < common_ref_length) {
-      allele.alt_sequence += ref_reader_->substr(position_ticket->chr, allele.position+allele.ref_length,
-          common_ref_length-allele.ref_length);
-      allele.ref_length = common_ref_length;
+    if (check_allele_filter(allele, i, it, alist)) {
+        if (allele.ref_length < common_ref_length) {
+            allele.alt_sequence += ref_reader_->substr(position_ticket->chr, allele.position+allele.ref_length,
+                common_ref_length-allele.ref_length);
+            allele.ref_length = common_ref_length;
+        }
+        // check redundant
+        unsigned int i;
+        for (i = 0; i < alleles_this.size(); i++) {
+            if (allele.alt_sequence == alleles_this[i]->alt_sequence) {
+		// IR-42901
+                alleles_this[i]->coverage += allele.coverage;
+                alleles_this[i]->coverage_rev += allele.coverage_rev;
+                alleles_this[i]->coverage_fwd += allele.coverage_fwd;
+		for (int sample_idx = 0; sample_idx < num_samples_; ++sample_idx) {
+		    alleles_this[i]->samples[sample_idx].coverage += allele.samples[sample_idx].coverage; 
+		    alleles_this[i]->samples[sample_idx].coverage_rev += allele.samples[sample_idx].coverage_rev;
+		    alleles_this[i]->samples[sample_idx].coverage_fwd += allele.samples[sample_idx].coverage_fwd;
+		    allele.samples[sample_idx].coverage = allele.samples[sample_idx].coverage_rev = allele.samples[sample_idx].coverage_fwd = 0;
+		}
+		allele.coverage = allele.coverage_rev = allele.coverage_fwd = 0; // set all zero, but cannot set filtered. will screw up order
+		// end IR-42901
+                if (allele.is_hotspot) alleles_this[i]->is_hotspot = true;
+                if (alleles_this[i]->raw_cigar.size() == 0 and allele.raw_cigar.size() > 0) alleles_this[i]->raw_cigar = allele.raw_cigar;
+                cerr << "Warning duplicate allele: " <<  allele.alt_sequence << " at " << allele.position << endl;
+                break;
+            }
+        }
+        if (i >= alleles_this.size()) alleles_this.push_back(&(I->second));
     }
   }
 
@@ -2110,10 +2136,14 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   bool first = true;
   bool hotspot_present = false; // recheck
   init_al(i, it, alist);
+  /*
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
     if (not check_allele_filter(allele, i, it, alist))
       continue;
+  */
+  for (unsigned i = 0; i < alleles_this.size(); i++) {
+    AlleleDetails& allele = *(alleles_this[i]);
     if (allele.is_hotspot) hotspot_present = true;
 
     int current_start_pos = 0;
@@ -2234,12 +2264,16 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     total_cov += I->second.coverage;
   }
+  /*
   init_al(i, it, alist);
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
 
     if (not check_allele_filter(allele, i, it, alist))
       continue;
+  */
+  for (unsigned i = 0; i < alleles_this.size(); i++) {
+    AlleleDetails& allele = *(alleles_this[i]);
 
     if (common_prefix or common_suffix)
       candidate.variant.alt.push_back(allele.alt_sequence.substr(common_prefix, allele.alt_sequence.size() - common_suffix - common_prefix));

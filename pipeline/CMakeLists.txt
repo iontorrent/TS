@@ -47,8 +47,8 @@ install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
     PATTERN "*.in" EXCLUDE
 )
 
-set(PICARD_PATH "/opt/picard/picard-tools-current/picard.jar")
-set(REFERENCE_BASE_PATH "/results/referenceLibrary/tmap-f3/")
+set(PICARD_PATH "${ION_PICARD_PREFIX}/picard-toosl-current/picard.jar" CACHE PATH "Picard Path")
+set(REFERENCE_BASE_PATH "/results/referenceLibrary/tmap-f3/" CACHE PATH "Reference library base path")
 
 install(FILES "${PROJECT_SOURCE_DIR}/cluster_settings.py" DESTINATION /etc/torrentserver )
 # We are copying an existing __init__.py, they are all the same.

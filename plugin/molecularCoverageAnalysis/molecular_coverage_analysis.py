@@ -125,10 +125,10 @@ class FamilyManager:
         self.set_tvc_param(None)
         
         # Handle the deprecated pysam.AlignedRead attributes
-        self.__get_overlap = (lambda bam_read, pos_start, pos_end : (bam_read.get_overlap(pos_start, pos_end))) if hasattr(pysam.AlignedRead, 'get_overlap') else (lambda bam_read, pos_start, pos_end : (bam_read.overlap(pos_start, pos_end)))
         self.__get_tag = (lambda bam_read, key : (bam_read.get_key(key))) if hasattr(pysam.AlignedRead, 'get_key') else (lambda bam_read, key : (bam_read.opt(key)))
         self.__reference_start = (lambda bam_read : (bam_read.reference_start)) if hasattr(pysam.AlignedRead, 'reference_start') else (lambda bam_read : (bam_read.pos))
         self.__reference_end = (lambda bam_read : (bam_read.reference_end)) if hasattr(pysam.AlignedRead, 'reference_end') else (lambda bam_read : (bam_read.aend))
+        self.__reference_name = (lambda bam_read : bam_read.reference_name) if hasattr(pysam.AlignedRead, 'reference_name') else (lambda bam_read : self.__f_bam.getrname(bam_read.tid))
         self.__has_tag = (lambda bam_read, key : (bam_read.has_tag(key))) if hasattr(pysam.AlignedRead, 'has_tag') else has_tag_by_try
         self.__mapping_quality = (lambda bam_read : (bam_read.mapping_quality)) if hasattr(pysam.AlignedRead, 'mapping_quality') else (lambda bam_read : (bam_read.mapq))
         self.__cigartuples = (lambda bam_read : (bam_read.cigartuples)) if hasattr(pysam.AlignedRead, 'cigartuples') else (lambda bam_read : (bam_read.cigar))
@@ -320,17 +320,17 @@ class FamilyManager:
         # Skip checking search_around_idx since it should be covered.
         for target_idx in xrange(search_around_idx - 1, -1, -1):
             # Trivial case first
-            if self.__reference_start(bam_read) >= region_list[target_idx]['chromEnd']:
+            if self.__reference_name(bam_read) != region_list[target_idx]['chrom'] or self.__reference_start(bam_read) >= region_list[target_idx]['chromEnd']:
                 break
-            elif self.is_bam_read_cover_the_region(bam_read, region_list[target_idx]):
+            elif self.is_bam_read_cover_the_region(bam_read, region_list[target_idx], False):
                 covered_target_idx_list.append(target_idx)
             else:
                  break        
         for target_idx in xrange(search_around_idx + 1, len(region_list)):
             # Trivial case first
-            if self.__reference_end(bam_read) <= region_list[target_idx]['chromStart']:
+            if self.__reference_name(bam_read) != region_list[target_idx]['chrom'] or self.__reference_end(bam_read) <= region_list[target_idx]['chromStart']:
                 break
-            if self.is_bam_read_cover_the_region(bam_read, region_list[target_idx]):
+            if self.is_bam_read_cover_the_region(bam_read, region_list[target_idx], False):
                 covered_target_idx_list.append(target_idx)
             else:
                 break
@@ -369,10 +369,24 @@ class FamilyManager:
         
         # All pass. I am a functional family.
         return True
+        
+    def get_overlap(self, bam_read, region_dict, is_check_chrom=True):
+        '''    
+        return the number of bases that the aligned read overlaps with the amplicon
+        The target region is [region_dict['chromStart'], region_dict['chromEnd']), a left-close, right-open interval in 0-based genome coordination.
+        The BAM read is aligned to [self.__reference_start(bam_read), self.__reference_end(bam_read)), a left-close, right-open interval in 0-based genome coordination.
+        Note that the pysam.AlignedSegment.get_overlap method doesn't count DEL, but this method does.
+        '''
+        if is_check_chrom:
+            if self.__reference_name(bam_read) != region_dict['chrom']:
+                return 0
 
+        overlap_start = max(region_dict['chromStart'], self.__reference_start(bam_read))
+        overlap_end = min(region_dict['chromEnd'], self.__reference_end(bam_read))
+        return max(overlap_end - overlap_start, 0)
 
-    def is_bam_read_cover_the_region(self, bam_read, region_dict):
-        target_overlap = int(self.__get_overlap(bam_read, region_dict['chromStart'], region_dict['chromEnd']))
+    def is_bam_read_cover_the_region(self, bam_read, region_dict, is_check_chrom=True):
+        target_overlap = self.get_overlap(bam_read, region_dict, is_check_chrom)
         return (target_overlap >= self.__tvc_param_dict['min_cov_fraction']['value'] * region_dict['region_len']) and target_overlap    
 
     def gen_fam_dict_one_region(self, region_dict, region_list=None, search_around_idx=None):
@@ -382,8 +396,8 @@ class FamilyManager:
         all_fam_dict = {'B': {}, 'R': {}, 'F': {}, 'miss_tag': {'fwd': 0, 'rev': 0}}
         for bam_read in self.__f_bam.fetch(region_dict['chrom'], region_dict['chromStart'], region_dict['chromEnd']):
             # Must cover a certain portion of the region
-            if not self.is_bam_read_cover_the_region(bam_read, region_dict):
-                continue            
+            if not self.is_bam_read_cover_the_region(bam_read, region_dict, False):
+                continue
 
             # Generate fam_key
             fam_key = self.get_fam_key(bam_read, region_list, search_around_idx)
