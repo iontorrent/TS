@@ -86,6 +86,7 @@ from iondb.utils.nexenta_nms import (
 from iondb.utils.raid import load_raid_status_json
 from iondb.utils.utils import ManagedPool
 from iondb.utils.utils import cidr_lookup, service_status, services_views
+from iondb.utils.utils import authenticate_fetch_url
 
 logger = logging.getLogger(__name__)
 
@@ -631,11 +632,11 @@ def configure_plugins_plugin_configure(request, action, pk):
             },
             cls=DjangoJSONEncoder,
         )
-        applicationGroup = results_obj.experiment.plan.applicationGroup
+        applicationGroup = results_obj.experiment.plan.applicationGroup if results_obj.experiment.plan else None
         plan_json = json.dumps(
             {
                 "applicationGroup": applicationGroup.name if applicationGroup else "",
-                "runType": results_obj.experiment.plan.runType,
+                "runType": results_obj.experiment.plan.runType if results_obj.experiment.plan else "",
             }
         )
     else:
@@ -2140,31 +2141,25 @@ def get_ctx_ampliseq(request, panelTab="on-demand"):
         username = tfc_account.username
         password = tfc_account.get_ampliseq_password()
         try:
-            response = requests.head(
-                ampliseq_url + "ws/design/list",
-                auth=(username, password),
-                timeout=TIMEOUT_LIMIT_SEC,
-            )
-            response.raise_for_status()
-        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as err:
-            tfc_account = None
-            logger.error(
-                "There was a connection error when contacting ampliseq: %s" % err
-            )
-            if response.status_code == 401:
+            base_url = os.path.join(settings.AMPLISEQ_URL, "ws/design/list")
+            response = authenticate_fetch_url(username=username, password=password, base_url=base_url)
+        except Exception as exc:
+            if exc.message == 401:
                 http_error = (
                     "Your user name or password is invalid.<br> You may need to log in to "
                     '<a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 )
                 tfc_account.delete()
-            elif response.status_code == 500:
-                http_error = "Error Code-500 : Internal Server Error"
+            elif exc.message == 500:
+                http_error = (
+                    "Error Code-500 : Internal Server Error when contacting ampliseq.com"
+                )
             else:
-                http_error = "Could not connect to AmpliSeq.com"
-        except Exception as err:
-            tfc_account = None
-            logger.error("Unknown error: %s" % str(err))
-            http_error = "Could not connect to AmpliSeq.com"
+                tfc_account = None
+                logger.error("Unknown error: %s" % str(exc))
+                http_error = (
+                    "Could not connect to ampliseq.com"
+                )
 
         ctx["ampliseq_account_update"] = timezone.now() < timezone.datetime(
             2013, 11, 30, tzinfo=timezone.utc
@@ -2342,7 +2337,7 @@ def configure_ampliseq_download(request):
                 meta["choice"] = request.POST.get(
                     design_id + "_instrument_choice", "None"
                 )
-                meta["reference"] = reference.lower()
+                meta["reference"] = reference
                 start_ampliseq_fixed_solution_download(
                     design_id, json.dumps(meta), (username, password)
                 )

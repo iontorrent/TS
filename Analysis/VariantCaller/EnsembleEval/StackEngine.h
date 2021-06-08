@@ -145,7 +145,7 @@ public:
     };
 
     //! @brief Set the parameters of the evaluator
-    void SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params);
+    void SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager);
     //! @brief Generate the base space hypotheses for each read
     void SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
                                 const ExtendParameters &parameters, const ReferenceReader &ref_reader);
@@ -159,7 +159,7 @@ public:
     //------------------------------------------------------------------
     // Functions for molecular tagging
     //! @brief Set the min family size that will be used in the evaluator.
-    void SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params);
+    void SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager);
     //! @brief Calculate the tag similarity for molecular tagging
     void CalculateTagSimilarity(const MolecularTagManager& mol_tag_manager, int max_alt_cov, int sample_idx);
     //! @brief Calculate the variant family histogram

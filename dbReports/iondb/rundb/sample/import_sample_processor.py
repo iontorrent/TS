@@ -802,7 +802,6 @@ def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
             barcodeKit = None
 
         for sampleset_id in sampleset_ids:
-
             sampleset = models.SampleSet.objects.get(pk=sampleset_id)
             samplesetitems = sampleset.samples.all()
 

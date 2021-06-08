@@ -690,7 +690,15 @@ void CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_cho
 			float my_delta = fabs(predictions_all_flows[0][flow_idx] - predictions_all_flows[i_hyp][flow_idx]);
 			// Is it an informative flow to accept/reject i_hyp vs. null?
 			if (my_delta >= threshold){
-				my_delta_vec.push_back(pair<float, unsigned int>(my_delta, win_idx));
+				// Handle outlier flows (TS-17983)
+				if ((int) flow_idx < splice_end_flow){
+					// I take the flows of large diff within splicing window in flow space.
+					// Large residual (vs. the OL hyp) is fine (e.g., HP-INDEL on a high HP)
+					my_delta_vec.push_back(pair<float, unsigned int>(my_delta, win_idx));
+				}else if (fabs(normalized_all_flows[flow_idx] - predictions_all_flows[0][flow_idx]) < 0.5f){
+					// For the flows outside of the splicing window, I don't want to take the flow if the residual (vs. the OL hyp) is too large.
+					my_delta_vec.push_back(pair<float, unsigned int>(my_delta, win_idx));
+				}
 			}
 		}
 
@@ -788,7 +796,8 @@ void EvalFamily::InitializeFamilyResponsibility(){
 }
 
 void EvalFamily::ComputeFamilyLogLikelihoods(const vector<CrossHypotheses> &my_hypotheses){
-	my_family_cross_.log_likelihood[0] = -999999.9f;
+	// Let the log-likelihood of the OL hypothesis approach log(0).
+	my_family_cross_.log_likelihood[0] = -1.0E16;
 	// accumulate the log-likelihood from the reads of the family for not null hypotheses
 	for (unsigned int i_hyp = 1 ; i_hyp < my_family_cross_.log_likelihood.size(); i_hyp++) {
 		my_family_cross_.log_likelihood[i_hyp] = 0.0f;
@@ -796,6 +805,9 @@ void EvalFamily::ComputeFamilyLogLikelihoods(const vector<CrossHypotheses> &my_h
 			unsigned int i_read = valid_family_members[i_member];
 			my_family_cross_.log_likelihood[i_hyp] += ((1.0f - my_hypotheses[i_read].responsibility[0]) * my_hypotheses[i_read].log_likelihood[i_hyp]);
 		}
+		// Make sure log-likelihood of the OL hypothesis << the log-likelihood of every hypothesis.
+		// Do not compare with (my_family_cross_.log_likelihood[i_hyp] subtract something) in case floating point accuracy problem.
+		my_family_cross_.log_likelihood[0] = min(my_family_cross_.log_likelihood[0], my_family_cross_.log_likelihood[i_hyp] * 2.0f);
 	}
 	my_family_cross_.ComputeScaledLikelihood();
 }
@@ -860,6 +872,7 @@ int EvalFamily::CountFamSizeFromValid()
 // Since Resp(OL family) >= min Resp(OL read), I use the lower bound to approximate Resp(OL family) for some extreme cases.
 // Otherwise, I calculate Resp(OL family) via Monte-Carlo simulation.
 // (Note 1): my_cross_.responsibility is not derived from my_cross_.log_likelihood in this function.
+// @TODO: Ugly if conditions that need improvement.
 void EvalFamily::ComputeFamilyOutlierResponsibility(const vector<CrossHypotheses> &my_hypotheses, unsigned int min_fam_size)
 {
 	float family_ol_resp = 1.0f;
@@ -940,7 +953,7 @@ void EvalFamily::ComputeFamilyOutlierResponsibility(const vector<CrossHypotheses
 		sum_of_resp += my_family_cross_.responsibility[i_hyp];
 	}
 	family_responsibility = my_family_cross_.responsibility;
-	assert(sum_of_resp > 0.9999f and sum_of_resp < 1.0001f);
+	assert(abs(sum_of_resp - 1.0f) < 0.0001f);
 }
 
 
@@ -1133,10 +1146,9 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 // If I can not find any non-null hypothesis which is not flow-disruptive with the null hypothesis, I claim the read is an outluer and return true.
 // return true if I am an outlier else false.
 // stringency_level = 0: disable the filter
-// stringency_level = 1: not OL if at least one Hyp vs. Hyp(OL) is FD-10 (flow disrupted)
-// stringency_level = 2: not OL if at least one Hyp vs. Hyp(OL) is FD-5
-// stringency_level = 3: not OL if at least one Hyp vs. Hyp(OL) is FD-0 (HP-INDEL)
-// stringency_level = 4: not OL if at least one Hyp is the same as Hyp(OL)
+// stringency_level = 1: not OL if at least one Hyp vs. Hyp(OL) is FD-5
+// stringency_level = 2: not OL if at least one Hyp vs. Hyp(OL) is FD-0 (HP-INDEL)
+// stringency_level = 3: not OL if at least one Hyp is the same as Hyp(OL)
 bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level) const {
 	if ((not success) or local_flow_disruptiveness_matrix.empty()){
 		return true;
@@ -1146,15 +1158,19 @@ bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level)
 	if (stringency_level == 0 or at_least_one_same_as_null){
 		return false;
 	}
-	else if (stringency_level >= 4){
+	else if (stringency_level >= 3){
 		// Claime OL because none of the Hyp is the same as Hyp(OL).
 		return true;
 	}
 
 	int min_fd_code = -1;
 	for (unsigned int i_hyp = 1; i_hyp < local_flow_disruptiveness_matrix[0].size(); ++i_hyp){
-		if (local_flow_disruptiveness_matrix[0][i_hyp] >= 0 and local_flow_disruptiveness_matrix[0][i_hyp] < min_fd_code){
-			min_fd_code = local_flow_disruptiveness_matrix[0][i_hyp];
+		if (local_flow_disruptiveness_matrix[0][i_hyp] >= 0){
+			if (min_fd_code < 0){
+				min_fd_code = local_flow_disruptiveness_matrix[0][i_hyp];
+			}else{
+				min_fd_code = min(min_fd_code, local_flow_disruptiveness_matrix[0][i_hyp]);
+			}
 		}
 	}
 
@@ -1169,8 +1185,6 @@ bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level)
 		return min_fd_code >= 2;
 	case 2:
 		return min_fd_code >= 1;
-	case 3:
-		return min_fd_code >= 0;
 	}
 	*/
 	// The above switch is equivalent to the following return value.

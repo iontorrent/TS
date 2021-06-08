@@ -707,12 +707,22 @@ tmap_map_sams_print
     unsigned q_len_cigar, r_len_cigar;
     seq_lens_from_bin_cigar (sams->sams [i].cigar, sams->sams [i].n_cigar, &q_len_cigar, &r_len_cigar);
     int8_t mapped = 1;
+#define FINAL_FILTER_QUICKFIX
+#if defined (FINAL_FILTER_QUICKFIX) // fix for TS-18040
+    if (mapped && min_al_len != MIN_AL_LEN_NOCHECK_SPECIAL && r_len_cigar < min_al_len)
+        mapped = 0;
+    if (mapped && min_coverage != MIN_AL_COVERAGE_NOCHECK_SPECIAL && seq->data.sam->seq->l != 0 && ((double) r_len_cigar) / seq->data.sam->seq->l < min_coverage)
+        mapped = 0;
+    if (mapped && min_identity != MIN_AL_IDENTITY_NOCHECK_SPECIAL && r_len_cigar != 0 && match_score != 0 && ((double) sams->sams [i].score) / (r_len_cigar*match_score) < min_identity )
+        mapped = 0;
+#else 
     if (mapped && r_len_cigar < min_al_len)
         mapped = 0;
     if (mapped && seq->data.sam->seq->l != 0 && ((double) r_len_cigar) / seq->data.sam->seq->l < min_coverage)
         mapped = 0;
     if (mapped && r_len_cigar != 0 && match_score != 0 && ((double) sams->sams [i].score) / (r_len_cigar*match_score) < min_identity )
         mapped = 0;
+#endif
     passed [i] = mapped;
     if (mapped)
        ++ mapped_cnt;
@@ -1039,180 +1049,209 @@ tmap_map_util_remove_duplicates (tmap_map_sams_t *sams, int32_t dup_window, tmap
 inline int32_t
 tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, int32_t n_best_subo, int32_t best_subo_score, tmap_map_opt_t *opt)
 {
-  int32_t mapq;
+    int32_t mapq;
 
-  if(0 == n_best_subo) {
-      n_best_subo = 1;
-      best_subo_score = opt->score_thr;
-  }
-  if (opt->use_new_QV == 1)
-  {
-	int32_t x = 11*opt->score_match;
-	if (best_subo_score < x) {best_subo_score = x; n_best_subo= 1;}
-	double sf = (double) (best_score - best_subo_score + 1 );
-	if (sf < 0) return 1.0;
-	sf /= ((double)opt->score_match+opt->pen_mm);
-	sf *= 7.3;
-	sf -= log(n_best_subo);
-	mapq = (int32_t) (sf+0.9999);
-	if (mapq < 0) return 0;
-	return mapq;
-  }
-  /*
-     fprintf(stderr, "n_best=%d n_best_subo=%d\n",
-     n_best, n_best_subo);
-     fprintf(stderr, "best_score=%d best_subo_score=%d\n",
-     best_score, best_subo_score);
-     */
-  // Note: this is the old calculationg, based on BWA-long
-  //mapq = (int32_t)((n_best / (1.0 * n_best_subo)) * (best_score - best_subo) * (250.0 / best_score + 0.03 / opt->score_match) + .499);
-  //
-  double sf = 0.4; // initial scaling factor.  Note: 250 * sf is the maximum mapping quality.
-  sf *= 250.0 / ((double)opt->score_match * seq_len); // scale based on the best possible alignment score
-  sf *= (n_best / (1.0 * n_best_subo)); // scale based on number of sub-optimal mappings
-  sf *= (double)(best_score - best_subo_score + 1 ); // scale based on distance to the sub-optimal mapping
-  //sf *= (seq_len < 10) ? 1.0 : log10(seq_len); // scale based on longer reads having more information content
-  mapq = (int32_t)(sf + 0.99999);
-  if(mapq > 250) mapq = 250;
-  if(mapq <= 0) mapq = 1;
-  return mapq;
+    if(0 == n_best_subo) 
+    {
+        n_best_subo = 1;
+        best_subo_score = opt->score_thr;
+    }
+    if (opt->use_new_QV == 1)
+    {
+        int32_t x = 11*opt->score_match;
+        if (best_subo_score < x) {best_subo_score = x; n_best_subo= 1;}
+        double sf = (double) (best_score - best_subo_score + 1 );
+        if (sf < 0) return 1.0;
+        sf /= ((double)opt->score_match+opt->pen_mm);
+        sf *= 7.3;
+        sf -= log(n_best_subo);
+        mapq = (int32_t) (sf+0.9999);
+        if (mapq < 0) 
+            return 0;
+        return mapq;
+    }
+    /*
+        fprintf(stderr, "n_best=%d n_best_subo=%d\n",
+        n_best, n_best_subo);
+        fprintf(stderr, "best_score=%d best_subo_score=%d\n",
+        best_score, best_subo_score);
+        */
+    // Note: this is the old calculationg, based on BWA-long
+    //mapq = (int32_t)((n_best / (1.0 * n_best_subo)) * (best_score - best_subo) * (250.0 / best_score + 0.03 / opt->score_match) + .499);
+    //
+    double sf = 0.4; // initial scaling factor.  Note: 250 * sf is the maximum mapping quality.
+    sf *= 250.0 / ((double)opt->score_match * seq_len); // scale based on the best possible alignment score
+    sf *= (n_best / (1.0 * n_best_subo)); // scale based on number of sub-optimal mappings
+    sf *= (double)(best_score - best_subo_score + 1 ); // scale based on distance to the sub-optimal mapping
+    //sf *= (seq_len < 10) ? 1.0 : log10(seq_len); // scale based on longer reads having more information content
+    mapq = (int32_t)(sf + 0.99999);
+    if(mapq > 250) mapq = 250;
+    if(mapq <= 0) mapq = 1;
+    return mapq;
 }
 
 inline int32_t
 tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
-  int32_t i;
-  int32_t n_best = 0, n_best_subo = 0;
-  int32_t best_score, cur_score, best_subo_score, best_subo_score2;
-  int32_t mapq;
-  int32_t algo_id = TMAP_MAP_ALGO_NONE;
-  int32_t best_repetitive = 0;
+    int32_t i;
+    int32_t n_best = 0, n_best_subo = 0;
+    int32_t best_score, cur_score, best_subo_score, best_subo_score2;
+    int32_t mapq;
+    int32_t algo_id = TMAP_MAP_ALGO_NONE;
+    int32_t best_repetitive = 0;
 
-  // estimate mapping quality TODO: this needs to be refined
-  best_score = INT32_MIN;
-  best_subo_score = best_subo_score2 = opt->score_thr;
-  n_best = n_best_subo = 0;
-  for(i=0;i<sams->n;i++) {
-      cur_score = sams->sams[i].score;
-      if(best_score < cur_score) {
-          // save sub-optimal
-          best_subo_score = best_score;
-          n_best_subo = n_best;
-          // update
-          best_score = cur_score;
-          n_best = 1;
-          algo_id = (algo_id == TMAP_MAP_ALGO_NONE) ? sams->sams[i].algo_id : -1;
-          if(sams->sams[i].algo_id == TMAP_MAP_ALGO_MAP2 && 1 == sams->sams[i].aux.map2_aux->flag) {
-              best_repetitive = 1;
-          }
-          else {
-              best_repetitive = 0;
-          }
-      }
-      else if(cur_score == best_score) { // qual
-          if(sams->sams[i].algo_id == TMAP_MAP_ALGO_MAP2 && 1 == sams->sams[i].aux.map2_aux->flag) {
-              best_repetitive = 1;
-          }
-          n_best++;
-      }
-      else {
-          if(best_subo_score < cur_score) {
-              best_subo_score = cur_score;
-              n_best_subo = 1;
-          }
-          else if(best_subo_score == cur_score) {
-              n_best_subo++;
-          }
-      }
-      // get the best subo-optimal score
-      cur_score = sams->sams[i].score_subo;
-      if(INT32_MIN == cur_score) {
-          // ignore
-      }
-      else if(best_subo_score < cur_score) {
-          best_subo_score2 = cur_score;
-      }
-  }
-  if(best_subo_score < best_subo_score2) {
-      best_subo_score = best_subo_score2;
-      if(0 == n_best_subo) n_best_subo = 1;
-  }
-  if(1 < n_best || best_score < best_subo_score || 0 < best_repetitive) {
-      mapq = 0;
-  }
-  else {
-      mapq = tmap_map_util_mapq_score(seq_len, n_best, best_score, n_best_subo, best_subo_score, opt);
-  }
-  for(i=0;i<sams->n;i++) {
-      cur_score = sams->sams[i].score;
-      if(cur_score == best_score) {
-          sams->sams[i].mapq = mapq;
-      }
-      else {
-          sams->sams[i].mapq = 0;
-      }
-  }
+    // estimate mapping quality TODO: this needs to be refined
+    best_score = INT32_MIN;
+    best_subo_score = best_subo_score2 = opt->score_thr;
+    n_best = n_best_subo = 0;
+    for(i=0;i<sams->n;i++) 
+    {
+        cur_score = sams->sams[i].score;
+        if(best_score < cur_score) 
+        {
+            // save sub-optimal
+            best_subo_score = best_score;
+            n_best_subo = n_best;
+            // update
+            best_score = cur_score;
+            n_best = 1;
+            algo_id = (algo_id == TMAP_MAP_ALGO_NONE) ? sams->sams[i].algo_id : -1;
+            if(sams->sams[i].algo_id == TMAP_MAP_ALGO_MAP2 && 1 == sams->sams[i].aux.map2_aux->flag) 
+            {
+                best_repetitive = 1;
+            }
+            else 
+            {
+                best_repetitive = 0;
+            }
+        }
+        else if(cur_score == best_score) 
+        { // qual
+            if(sams->sams[i].algo_id == TMAP_MAP_ALGO_MAP2 && 1 == sams->sams[i].aux.map2_aux->flag) 
+            {
+                best_repetitive = 1;
+            }
+            n_best++;
+        }
+        else 
+        {
+            if(best_subo_score < cur_score) 
+            {
+                best_subo_score = cur_score;
+                n_best_subo = 1;
+            }
+            else if(best_subo_score == cur_score) 
+            {
+                n_best_subo++;
+            }
+        }
+        // get the best subo-optimal score
+        cur_score = sams->sams[i].score_subo;
+        if(INT32_MIN == cur_score) 
+        {
+            // ignore
+        }
+        else if(best_subo_score < cur_score) 
+        {
+            best_subo_score2 = cur_score;
+        }
+    }
+    if(best_subo_score < best_subo_score2) 
+    {
+        best_subo_score = best_subo_score2;
+        if(0 == n_best_subo) n_best_subo = 1;
+    }
+    if(1 < n_best || best_score < best_subo_score || 0 < best_repetitive) 
+    {
+        mapq = 0;
+    }
+    else 
+    {
+        mapq = tmap_map_util_mapq_score(seq_len, n_best, best_score, n_best_subo, best_subo_score, opt);
+    }
+    for(i=0;i<sams->n;i++) 
+    {
+        cur_score = sams->sams[i].score;
+        if(cur_score == best_score) 
+        {
+            sams->sams[i].mapq = mapq;
+        }
+        else 
+        {
+            sams->sams[i].mapq = 0;
+        }
+    }
 
-  if (mapq == 0 && refseq->bed_exist && opt->use_bed_in_mapq) {
+    if (mapq == 0 && refseq->bed_exist && opt->use_bed_in_mapq) 
+    {
     int j = -1;
     // int overlap_s = 0, sec = 0;
     int sh_dis = 10000, sec_dis = 10000;
-    for (i=0; i <sams->n; i++) {
-      tmap_map_sam_t tmp_sam = sams->sams[i];
-      uint32_t start = tmp_sam.pos+1;
-      uint32_t end = start+tmp_sam.target_len-1;
-      uint32_t ampl_start, ampl_end;
-      if (tmp_sam.score != best_score) continue;
-      if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start, end, &ampl_start, &ampl_end, NULL, NULL, tmp_sam.strand)) {
-	/*
-	if (abs(ampl_start-start) < 15 && abs(ampl_end-end) < 15) {
-	    fprintf(stderr, "%d %d %d %d %d\n", ampl_start, start, ampl_end, end, tmp_sam.seqid);
-	    if (j < 0) j = i;
-	    else {
-		fprintf(stderr, "second one\n");
-		return 0; // more than one hits match to an amplicon well
-	    }
-	}
-	*/
-	// use overlap to determine which amplicon to pick
-	/*
- 	int ll = start;
-	if (ll < ampl_start) ll = ampl_start;	
-	int rr = end;
-	if (rr > ampl_end) rr = ampl_end;
-	int ov = rr -ll;
-	if (ov > overlap_s) {
-	    sec = overlap_s;
-	    overlap_s = ov;
-	    j = i;
-	} else if (ov > sec) {
-	    sec = ov;
-	}
-	*/
-	// Use the distance to 5' end start
-	//fprintf(stderr, "found %d %d\n", ampl_start, ampl_end);
-	int dis;
-	if (tmp_sam.strand == 0) dis = abs (((int32_t) ampl_start) - ((int32_t) start));  // DK unsigned subtraction of greater from smaller wraps by MAX_VALUE modulo ...
-	else dis = abs (((int32_t) ampl_end) - ((int32_t) end));
-	if (dis < sh_dis) {
-	    sec_dis = sh_dis;
-	    sh_dis = dis;
-	    j = i;
-	} else if (dis < sec_dis) {
-	    sec_dis = dis;
-	}
-      }
+    for (i=0; i <sams->n; i++) 
+    {
+        tmap_map_sam_t tmp_sam = sams->sams[i];
+        uint32_t start = tmp_sam.pos+1;
+        uint32_t end = start+tmp_sam.target_len-1;
+        uint32_t ampl_start, ampl_end;
+        if (tmp_sam.score != best_score) continue;
+        if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start, end, &ampl_start, &ampl_end, NULL, NULL, tmp_sam.strand)) 
+        {
+            /*
+            if (abs(ampl_start-start) < 15 && abs(ampl_end-end) < 15) {
+                fprintf(stderr, "%d %d %d %d %d\n", ampl_start, start, ampl_end, end, tmp_sam.seqid);
+                if (j < 0) j = i;
+                else {
+                fprintf(stderr, "second one\n");
+                return 0; // more than one hits match to an amplicon well
+                }
+            }
+            */
+            // use overlap to determine which amplicon to pick
+            /*
+            int ll = start;
+            if (ll < ampl_start) ll = ampl_start;	
+            int rr = end;
+            if (rr > ampl_end) rr = ampl_end;
+            int ov = rr -ll;
+            if (ov > overlap_s) {
+                sec = overlap_s;
+                overlap_s = ov;
+                j = i;
+            } else if (ov > sec) {
+                sec = ov;
+            }
+            */
+            // Use the distance to 5' end start
+            //fprintf(stderr, "found %d %d\n", ampl_start, ampl_end);
+            int dis;
+            if (tmp_sam.strand == 0) 
+                dis = abs (((int32_t) ampl_start) - ((int32_t) start));  // DK unsigned subtraction of greater from smaller wraps by MAX_VALUE modulo ...
+            else 
+                dis = abs (((int32_t) ampl_end) - ((int32_t) end));
+            if (dis < sh_dis) 
+            {
+                sec_dis = sh_dis;
+                sh_dis = dis;
+                j = i;
+            } 
+            else if (dis < sec_dis) 
+            {
+                sec_dis = dis;
+            }
+        }
     } // for
-    if (j >= 0 && /*overlap_s - sec > 5*/ sec_dis - sh_dis > 1) {
-	//fprintf(stderr, "Bump to 12 %d\n", j);
-	sams->sams[j].mapq = 12;
-	// make the j unique best hit
-	for (i = 0; i < sams->n; i++) {
-	    if (i != j && sams->sams[i].score == best_score)  sams->sams[i].score = best_score-2;
-	}
+    if (j >= 0 && /*overlap_s - sec > 5*/ sec_dis - sh_dis > 1) 
+    {
+        //fprintf(stderr, "Bump to 12 %d\n", j);
+        sams->sams[j].mapq = 12;
+        // make the j unique best hit
+        for (i = 0; i < sams->n; i++) 
+        {
+            if (i != j && sams->sams[i].score == best_score)  sams->sams[i].score = best_score-2;
+        }
     }
-  }
-  return 0;
+    }
+    return 0;
 }
 
 // ACGTNBDHKMRSVWYN
@@ -2416,15 +2455,18 @@ tmap_map_util_one_gap
         qini = tini = 0;
         inc = 1;
     }
+    /*  can still push the indel to middle
     if (qlen < min_size || tlen < min_size)
         return 0;
+    */
     if (qlen - min_size < max_q)
         max_q = qlen - min_size;
-    if (tlen - min_size < max_t)
-        max_t = tlen - min_size;
+    //if (tlen - min_size < max_t)
+        //max_t = tlen - min_size;   // allow less anchor to find duplicate
     //if (qlen*3 < max_indel) max_indel = qlen*3;
     if (/*max_MM > 1 &&*/ qlen - max_q + 1 < 8 * max_MM)
         max_MM = (qlen - max_q + 1) / 8; // 7-14 bp allow 1 MM, 15 allow 2 etc.
+    //fprintf(stderr, "qt=%d %d max_t=%d max_indel=%d MM=%d\n", qlen, tlen, max_t, max_indel, max_MM); 
     if (qlen - tlen > max_indel)
         return 0;
     if (tlen - max_t - qlen > max_indel)
@@ -2444,6 +2486,11 @@ tmap_map_util_one_gap
     {
         int last_M = -1;  // last_mismatch
         int nM = 0;       // number_of_mismatches
+	if (tlen-i < 5) {max_q = 0; max_MM = 0;}
+	else if (tlen-i-max_q < 8*max_MM) { 
+	    max_MM = (tlen-i-max_q)/8;
+	}
+	    
         for (j = i, q = 0, qq = qini, tt = t; j < tlen && q < qlen; j++, q++, qq += inc, tt+= inc)
         {
             if (query [qq] == target [tt])
@@ -2488,7 +2535,9 @@ tmap_map_util_one_gap
                     break;
                 (*extra_match) += 1;
             }
-            if (*indel_size > 3 * (qlen + (*extra_match))) // reject indels 3 or more times longer than query + matching 'pad'
+	    int total_anchor = ((qlen < tlen-i)? qlen: tlen-i)  + (*extra_match);
+	    if (total_anchor < min_size) continue;
+            if (total_anchor < 15 && *indel_size > 3 * (qlen + (*extra_match)))  // reject indels 3 or more times longer than query + matching 'pad'
                 return 0;
             return 1;
         }
@@ -3006,8 +3055,9 @@ tmap_map_util_end_repair
                     pad = pad_e;
                 }
                 tlen = end - start + 1;
-                //fprintf(stderr, "%d %d \n", start, end);
-                if (tlen >= min_anchor)
+                //fprintf(stderr, "%d %d %d %d %d\n", start, end, tlen, min_anchor, pad);
+                //if (tlen >= min_anchor)
+		if (tlen >= 1) 
                 {
                     if (target_mem < tlen + pad)
                     { // more memory?
@@ -3659,7 +3709,6 @@ int find_alignment_start
     tmp_sam.result.target_end -= tmp_sam.result.target_start;
     tmp_sam.result.target_start = 0;
     tmp_sam.target_len = tmp_sam.result.target_end;
-
 
     *dest_sam = tmp_sam;
 
@@ -4686,7 +4735,7 @@ void tmap_map_util_salvage_edge_indels
             if (dest_sam->param_ovr->gapl_len.over)
                 gapl_len = dest_sam->param_ovr->gapl_len.value;
         }
-        if (pen_gapl < 0) // disabled globally (and not overriden to enabled), or overriden to disabled
+        if (pen_gapl < 0) // disabled globally (and not overriden to enabled) or overriden to disabled
             continue;
         salvage_long_indel_at_edges (
             dest_sam,      // destination: refined (aligned) mapping
@@ -5032,15 +5081,8 @@ tmap_map_util_fsw
     {
         tmap_map_sam_t *s = &sams->sams [i];
         if (!stage_fsw_use)
-        {
             if (!use_param_ovr || !(s->param_ovr && s->param_ovr->aln_flowspace.over && s->param_ovr->aln_flowspace.value))
                 continue;
-        }
-        else
-        {
-            if (use_param_ovr && s->param_ovr && s->param_ovr->aln_flowspace.over && !s->param_ovr->aln_flowspace.value)
-                continue;
-        }
 
         uint32_t ref_start, ref_end;
         // get the reference end position
@@ -5306,29 +5348,26 @@ int32_t tmap_map_util_remove_5_prime_softclip
 )
 {
     // check if we need to proceed at all
-    uint32_t proceed = 0;
+    uint32_t allow_5prime_softclip = 0;
+    allow_5prime_softclip = (opt->end_repair_5_prime_softclip || opt->softclip_type == 0 || opt->softclip_type == 1);
     if (dest_sam->param_ovr)
     {
         if (dest_sam->strand) // reverse => 5' on high coordinate (right) end
         {
             if (dest_sam->param_ovr->end_repair_5_prime_softclip_he.over)
-                proceed = dest_sam->param_ovr->end_repair_5_prime_softclip_he.value;
+                allow_5prime_softclip = dest_sam->param_ovr->end_repair_5_prime_softclip_he.value;
             else if (dest_sam->param_ovr->end_repair_5_prime_softclip.over)
-                proceed = dest_sam->param_ovr->end_repair_5_prime_softclip.value;
+                allow_5prime_softclip = dest_sam->param_ovr->end_repair_5_prime_softclip.value;
         }
         else // forward => 5' on low coordinate (left) end
         {
             if (dest_sam->param_ovr->end_repair_5_prime_softclip_le.over)
-                proceed = dest_sam->param_ovr->end_repair_5_prime_softclip_le.value;
+                allow_5prime_softclip = dest_sam->param_ovr->end_repair_5_prime_softclip_le.value;
             else if (dest_sam->param_ovr->end_repair_5_prime_softclip.over)
-                proceed = dest_sam->param_ovr->end_repair_5_prime_softclip.value;
+                allow_5prime_softclip = dest_sam->param_ovr->end_repair_5_prime_softclip.value;
         }
     }
-    else
-    {
-        proceed = (opt->end_repair_5_prime_softclip && (opt->softclip_type == 2 || opt->softclip_type == 3));
-    }
-    if (!proceed) 
+    if (allow_5prime_softclip)
         return 0;
 
     if (dest_sam->strand == 0 && (dest_sam->n_cigar == 0 || TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) != BAM_CSOFT_CLIP))

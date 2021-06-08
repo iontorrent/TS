@@ -53,7 +53,8 @@ from iondb.rundb.models import (
     GlobalConfig,
     SamplePrepData,
     KitInfo,
-)
+    common_CV,
+    ChefPcrPlateconfig)
 from iondb.rundb.labels import (
     Sample as _Sample,
     SampleAttribute as _SampleAttribute,
@@ -277,7 +278,7 @@ def show_import_samplesetitems(request):
     sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
     libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
     libraryPrepKits = KitInfo.objects.filter(kitType="LibraryPrepKit", isActive=True)
-    cyclingProtocols_choices = views_helper._get_cyclingProtocols_choices(request)
+    libraryPrepProtocol_choices = views_helper._get_libraryPrepProtocol_choices(request)
     additionalCycles_choices = views_helper._get_additionalCycles_choices(request)
 
     ctxd = {
@@ -285,7 +286,7 @@ def show_import_samplesetitems(request):
         "sampleGroupType_list": sampleGroupType_list,
         "libraryPrepType_choices": libraryPrepType_choices,
         "libraryPrepKits": libraryPrepKits,
-        "cyclingProtocols_choices": cyclingProtocols_choices,
+        "libraryPrepProtocol_choices": libraryPrepProtocol_choices,
         "additionalCycles_choices": additionalCycles_choices,
         "rowErrorsFormat": ugettext_lazy(
             "global.messages.validation.format.row.errors"
@@ -326,7 +327,7 @@ def show_edit_sampleset(request, _id=None):
 
     sampleGroupType_list = _get_sample_groupType_CV_list(request)
     libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
-    cyclingProtocols_choices = views_helper._get_cyclingProtocols_choices(request)
+    libraryPrepProtocol_choices = views_helper._get_libraryPrepProtocol_choices(request)
     additionalCycles_choices = views_helper._get_additionalCycles_choices(request)
 
     if editable:
@@ -340,7 +341,7 @@ def show_edit_sampleset(request, _id=None):
         "sampleSet": sampleSet,
         "sampleGroupType_list": sampleGroupType_list,
         "libraryPrepType_choices": libraryPrepType_choices,
-        "cyclingProtocols_choices": cyclingProtocols_choices,
+        "libraryPrepProtocol_choices": libraryPrepProtocol_choices,
         "additionalCycles_choices": additionalCycles_choices,
         "libraryPrepKits": libraryPrepKits,
         "intent": intent,
@@ -401,18 +402,47 @@ def show_edit_sampleset(request, _id=None):
         mimetype="text/html",
     )
 
-
 def show_plan_run(request, ids):
     """
     show the plan run popup
     """
     warnings = []
+    multiLibraryPoolPlanData = {}
     sampleset_ids = ids.split(",")
     sampleSets = SampleSet.objects.filter(pk__in=sampleset_ids)
     if len(sampleSets) < 1:
         raise Http404(
             validation.invalid_not_found_error(_SampleSet.verbose_name, sampleset_ids)
         )
+    isMultiPoolSupport = sampleSets.filter(categories__contains="multiPoolSupport").values_list("categories", flat=True)
+    # Validate for  multiPoolSupport protocol for all the selected sampleSets
+    if isMultiPoolSupport and len(sampleSets) != isMultiPoolSupport.count():
+        libraryPrepProtocolsDisplayed = common_CV.objects.filter(categories__in=isMultiPoolSupport).values_list(
+            "displayedValue", flat=True
+        )
+        msg = validation.format(
+            ugettext_lazy("samplesets.messages.sampleset_plan_run.validationerrors"),
+            {
+                "sampleSetNames": ", ".join(
+                    sampleSets.values_list("displayedName", flat=True)
+                )
+            },
+        )
+        return HttpResponseServerError("%s<br>Missing %s protocol in one of the Sampleset" % (msg, ", ".join(libraryPrepProtocolsDisplayed)))
+
+    if isMultiPoolSupport:
+        multiLibraryPoolPlanData = views_helper.processMultiPoolPlanSupport(sampleSets)
+        if multiLibraryPoolPlanData:
+            if multiLibraryPoolPlanData.get('errors', None):
+                msg = validation.format(
+                    ugettext_lazy("samplesets.messages.sampleset_plan_run.validationerrors"),
+                    {
+                        "sampleSetNames": ", ".join(
+                            sampleSets.values_list("displayedName", flat=True)
+                        )
+                    },
+                )  # "Cannot Plan Run from %s<br>" % ', '.join(sampleSets.values_list('displayedName', flat=True))
+                return HttpResponseServerError("%s<br>%s" % (msg, "<br>".join(multiLibraryPoolPlanData['errors'])))
 
     # validate
     errors = sample_validator.validate_sampleSets_for_planning(sampleSets)
@@ -444,24 +474,35 @@ def show_plan_run(request, ids):
             )
         )  # 'Warning: multiple Group Types selected: %s' % ', '.join(sampleGroupTypes))
 
+    # categories to filter available Templates
+    sampleSetCategories = []
+    categories = sampleSets.exclude(categories="").values_list("categories", flat=True).distinct()
+    if categories:
+        for category in categories:
+            sampleSetCategories.extend(category.split(";"))
+
     all_templates = _get_all_userTemplates(request)
     all_templates_params = list(
-        all_templates.values("pk", "planDisplayedName", "sampleGrouping__displayedName")
+        all_templates.values(
+            "pk", "planDisplayedName", "sampleGrouping__displayedName", "categories",
+        )
     )
 
     # we want to display the system templates last
     all_systemTemplates = _get_all_systemTemplates(request)
     all_systemTemplates_params = list(
         all_systemTemplates.values(
-            "pk", "planDisplayedName", "sampleGrouping__displayedName"
+            "pk", "planDisplayedName", "sampleGrouping__displayedName", "categories",
         )
     )
 
     ctxd = {
         "sampleSet_ids": ids,
         "sampleGroupTypes": sampleGroupTypes,
+        "sampleSetCategories": sampleSetCategories,
         "template_params": all_templates_params + all_systemTemplates_params,
         "warnings": warnings,
+        "multiLibraryPoolPlanData": multiLibraryPoolPlanData
     }
     logger.debug("show_plan_run Contenxt.dicts = %s", ctxd)
     ctx = RequestContext(request, ctxd)
@@ -475,179 +516,28 @@ def save_sampleset(request):
     create or edit a new sample set (with no contents)
     """
     if request.method == "POST":
-        intent = request.POST.get("intent", None)
+        queryDict = request.POST.dict()
+        logger.debug("save_sampleset POST save_sampleset queryDict=%s" % queryDict)
 
-        # TODO: validation (including checking the status again!!
-        queryDict = request.POST
-        isValid, errorMessage = sample_validator.validate_sampleSet(queryDict)
-
-        if errorMessage:
-            # return HttpResponse(errorMessage, mimetype="text/html")
-            return HttpResponse(
-                json.dumps([errorMessage], cls=LazyJSONEncoder),
-                mimetype="application/json",
-            )
-
-        if isValid:
-            userName = request.user.username
-            user = User.objects.get(username=userName)
-
-            logger.debug(
-                "views.save_sampleset POST save_sampleset queryDict=%s" % (queryDict)
-            )
-
-            sampleSetName = queryDict.get("sampleSetName", "").strip()
-            sampleSetDesc = queryDict.get("sampleSetDescription", "").strip()
-
-            sampleSet_groupType_id = queryDict.get("groupType", None)
-            if sampleSet_groupType_id == "0":
-                sampleSet_groupType_id = None
-
-            libraryPrepType = queryDict.get("libraryPrepType", "").strip()
-            if libraryPrepType and "chef" in libraryPrepType.lower():
-                libraryPrepInstrument = "chef"
-            else:
-                libraryPrepInstrument = ""
-
-            libraryPrepKitName = queryDict.get("libraryPrepKit", "").strip()
-            pcrPlateSerialNum = queryDict.get("pcrPlateSerialNum", "").strip()
-            additionalCycles = queryDict.get("additionalCycles", "").strip()
-            cyclingProtocols = queryDict.get("cyclingProtocols", "").strip()
-
-            sampleSet_id = queryDict.get("id", None)
-            currentDateTime = timezone.now()  # datetime.datetime.now()
-
-            try:
-                if intent == "add":
-                    sampleSetStatus = "created"
-                    if SampleSet.libraryPrepInstrument == "chef":
-                        libraryPrepInstrumentData_obj = SamplePrepData.objects.create(
-                            samplePrepDataType="lib_prep"
-                        )
-                        sampleSetStatus = "libPrep_pending"
-                    else:
-                        libraryPrepInstrumentData_obj = None
-
-                    sampleSet_kwargs = {
-                        "displayedName": sampleSetName,
-                        "description": sampleSetDesc,
-                        "status": sampleSetStatus,
-                        "SampleGroupType_CV_id": sampleSet_groupType_id,
-                        "libraryPrepType": libraryPrepType,
-                        "libraryPrepKitName": libraryPrepKitName,
-                        "pcrPlateSerialNum": pcrPlateSerialNum,
-                        "cyclingProtocols": cyclingProtocols,
-                        "additionalCycles": additionalCycles,
-                        "libraryPrepInstrument": libraryPrepInstrument,
-                        "libraryPrepInstrumentData": libraryPrepInstrumentData_obj,
-                        "creator": user,
-                        "creationDate": currentDateTime,
-                        "lastModifiedUser": user,
-                        "lastModifiedDate": currentDateTime,
-                    }
-
-                    sampleSet = SampleSet(**sampleSet_kwargs)
-                    sampleSet.save()
-
-                    logger.debug(
-                        "views - save_sampleset - ADDED sampleSet.id=%d"
-                        % (sampleSet.id)
-                    )
-                else:
-                    orig_sampleSet = get_object_or_404(SampleSet, pk=sampleSet_id)
-
-                    if (
-                        orig_sampleSet.displayedName == sampleSetName
-                        and orig_sampleSet.description == sampleSetDesc
-                        and orig_sampleSet.SampleGroupType_CV
-                        and str(orig_sampleSet.SampleGroupType_CV.id)
-                        == sampleSet_groupType_id
-                        and orig_sampleSet.libraryPrepType == libraryPrepType
-                        and orig_sampleSet.libraryPrepKitName == libraryPrepKitName
-                        and orig_sampleSet.pcrPlateSerialNum == pcrPlateSerialNum
-                        and orig_sampleSet.additionalCycles == additionalCycles
-                        and orig_sampleSet.cyclingProtocols == cyclingProtocols
-                    ):
-
-                        logger.debug(
-                            "views.save_sampleset() - NO UPDATE NEEDED!! sampleSet.id=%d"
-                            % (orig_sampleSet.id)
-                        )
-                    else:
-                        sampleSetStatus = orig_sampleSet.status
-                        libraryPrepInstrumentData_obj = (
-                            orig_sampleSet.libraryPrepInstrumentData
-                        )
-                        # clean up the associated object if the sample set used to be "amps_on_chef" and now is not
-                        if libraryPrepInstrumentData_obj and not libraryPrepType:
-                            logger.debug(
-                                "views - GOING TO DELETE orig_sampleSet orig_sampleSet.libraryPrepInstrumentData.id=%d"
-                                % (orig_sampleSet.libraryPrepInstrumentData.id)
-                            )
-                            libraryPrepInstrumentData_obj.delete()
-                            if sampleSetStatus == "libPrep_pending":
-                                sampleSetStatus = "created"
-                        elif libraryPrepType and not libraryPrepInstrumentData_obj:
-                            libraryPrepInstrumentData_obj = SamplePrepData.objects.create(
-                                samplePrepDataType="lib_prep"
-                            )
-                            logger.debug(
-                                "views - orig_sampleSet.id=%d; GOING TO ADD libraryPrepInstrumentData_obj.id=%d"
-                                % (orig_sampleSet.id, libraryPrepInstrumentData_obj.id)
-                            )
-                            if sampleSetStatus == "created":
-                                sampleSetStatus = "libPrep_pending"
-
-                        sampleSet_kwargs = {
-                            "displayedName": sampleSetName,
-                            "description": sampleSetDesc,
-                            "SampleGroupType_CV_id": sampleSet_groupType_id,
-                            "libraryPrepType": libraryPrepType,
-                            "libraryPrepKitName": libraryPrepKitName,
-                            "pcrPlateSerialNum": pcrPlateSerialNum,
-                            "additionalCycles": additionalCycles,
-                            "cyclingProtocols": cyclingProtocols,
-                            "libraryPrepInstrument": libraryPrepInstrument,
-                            "libraryPrepInstrumentData": libraryPrepInstrumentData_obj,
-                            "status": sampleSetStatus,
-                            "lastModifiedUser": user,
-                            "lastModifiedDate": currentDateTime,
-                        }
-                        for field, value in sampleSet_kwargs.items():
-                            setattr(orig_sampleSet, field, value)
-
-                        orig_sampleSet.save()
-                        logger.debug(
-                            "views.save_sampleset - UPDATED sampleSet.id=%d"
-                            % (orig_sampleSet.id)
-                        )
-                if "edit_amp_sampleSet" in queryDict:
-                    return True
-
-                return HttpResponse("true")
-            except Exception:
-                logger.exception(format_exc())
-
-                # return HttpResponse(json.dumps({"status": "Error saving sample set info to database!"}, cls=LazyJSONEncoder), mimetype="text/html")
-                message = i18n_errors.fatal_internalerror_during_save(
-                    _SampleSet.verbose_name
-                )  # "Cannot save sample set to database. "
-                if settings.DEBUG:
-                    message += format_exc()
+        sampleSet_id = queryDict.get("id", None)
+        try:
+            isValid, errorMessage, _ = views_helper.create_or_update_sampleSet(queryDict, request.user, sampleSet_id)
+            if errorMessage:
                 return HttpResponse(
-                    json.dumps([message], cls=LazyJSONEncoder),
+                    json.dumps([errorMessage], cls=LazyJSONEncoder),
                     mimetype="application/json",
                 )
-        else:
+            else:
+                return HttpResponse("true")
+        except:
+            logger.error(format_exc())
+            message = i18n_errors.fatal_internalerror_during_save(
+                _SampleSet.verbose_name
+            )  # "Cannot save sample set to database. "
+            if settings.DEBUG:
+                message += format_exc()
             return HttpResponse(
-                json.dumps(
-                    [
-                        i18n_errors.validationerrors_cannot_save(
-                            _SampleSet.verbose_name, include_error_prefix=True
-                        )
-                    ],
-                    cls=LazyJSONEncoder,
-                ),
+                json.dumps([message], cls=LazyJSONEncoder),
                 mimetype="application/json",
             )
 
@@ -812,18 +702,14 @@ def save_input_samples_for_sampleset(request):
             pending_sampleSetItem_list = []
 
         try:
-            # create new sample set, if any
-            isEdit_amp_sampleSet = False
-            if "edit_amp_sampleSet" in queryDict:
-                isEdit_amp_sampleSet = True
-                isValid = save_sampleset(request)
-            isValid, errorMessage, new_sampleSet_id = views_helper._get_or_create_sampleSet(
-                queryDict, request.user
+            # edit or create new sample set, if any
+            isValid, errorMessage, new_sampleSet_id = views_helper.create_or_update_sampleSet(
+                queryDict, request.user, queryDict.get("id")
             )
             if not isValid:
                 return rollback_and_return_error(errorMessage)
 
-            if new_sampleSet_id:
+            if new_sampleSet_id and new_sampleSet_id not in sampleSet_ids:
                 sampleSet_ids.append(new_sampleSet_id)
 
             # must select at least one sampleSet to process
@@ -852,6 +738,7 @@ def save_input_samples_for_sampleset(request):
                 return rollback_and_return_error(errorMessage)
 
             # validate new and existing sample set items as a group
+            isEdit_amp_sampleSet = "edit_amp_sampleSet" in queryDict
             isValid, errorMessage, categoryDict, parsedSamplesetitems = views_helper.validate_for_existing_samples(
                 pending_sampleSetItem_list, sampleSet_ids, isEdit_amp_sampleSet
             )
@@ -1186,7 +1073,7 @@ def save_import_samplesetitems(request):
         queryDict = request.POST.dict()
         sampleSet_ids = request.POST.getlist("sampleset", [])
 
-        isValid, errorMessage, new_sampleSet_id = views_helper._get_or_create_sampleSet(
+        isValid, errorMessage, new_sampleSet_id = views_helper.create_or_update_sampleSet(
             queryDict, user
         )
         if not isValid:
@@ -1488,14 +1375,14 @@ def get_sampleset_meta_data(request):
     sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
     libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
     libraryPrepKits = KitInfo.objects.filter(kitType="LibraryPrepKit", isActive=True)
-    cyclingProtocols_choices = views_helper._get_cyclingProtocols_choices(request)
+    libraryPrepProtocol_choices = views_helper._get_libraryPrepProtocol_choices(request)
     additionalCycles_choices = views_helper._get_additionalCycles_choices(request)
     ctxd = {
         "sampleSet_list": sampleSet_list,
         "sampleGroupType_list": sampleGroupType_list,
         "libraryPrepType_choices": libraryPrepType_choices,
         "libraryPrepKits": libraryPrepKits,
-        "cyclingProtocols_choices": cyclingProtocols_choices,
+        "libraryPrepProtocol_choices": libraryPrepProtocol_choices,
         "additionalCycles_choices": additionalCycles_choices,
     }
     return ctxd

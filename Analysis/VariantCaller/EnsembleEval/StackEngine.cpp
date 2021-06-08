@@ -9,6 +9,12 @@ bool compare_best_response(pair<int,float> a, pair<int,float> b){
   return (a.second>b.second);
 }
 
+// The class is simply used for random_shuffle
+class MyRandSchrange : private RandSchrange{
+public:
+    MyRandSchrange(int seed = 1) {SetSeed(seed);} ;
+    int operator()(int upper_lim) {return Rand() % upper_lim;}; // return a random number between 0 and upper_lim-1
+};
 
 void LatentSlate::PropagateTuningParameters(EnsembleEvalTuningParameters &my_params, int num_hyp_no_null) {
   // prior reliability for outlier read frequency
@@ -338,6 +344,19 @@ float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp, bool apply_
 	  cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << (apply_site_specific_signal_adjustment? " and site-specific signal adjustment " : " ") << "done"<< endl
 	       << "  - params_ll = "<< tmp_state.cur_posterior.params_ll << endl
 	       << "  - ref_vs_all.max_ll + params_ll = "<< restart_LL << " @ allele_freq = " << PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end()) << (tmp_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl;
+	  double most_resp_squared_error = 0.0;
+	  int num_reads = 0;
+	  for (vector<CrossHypotheses>::const_iterator hyp_it = total_theory.my_hypotheses.begin(); hyp_it != total_theory.my_hypotheses.end(); ++hyp_it){
+        int most_resp_idx = hyp_it->MostResponsible();
+		if ((not hyp_it->success) or (most_resp_idx == 0)){
+			continue;
+		}
+		for (vector<float>::const_iterator res_it = hyp_it->residuals[most_resp_idx].begin(); res_it != hyp_it->residuals[most_resp_idx].end(); ++res_it){
+		  most_resp_squared_error += (double)((*res_it)*(*res_it));
+		}
+		++num_reads;
+	  }
+	  cout << "  - Most responsible mean squared-error per read = " << most_resp_squared_error / (double) num_reads << " from " << num_reads << " reads"<< endl;
   }
 
   if (cur_state.cur_posterior.ReturnMaxLL() <restart_LL) {
@@ -990,82 +1009,130 @@ void EnsembleEval::MultiAlleleGenotype(float af_cutoff_rej, float af_cutoff_gt, 
 }
 
 // Rules of setting the effective min fam size:
-// If override requested by HS, then effective_min_family_size = the maximum one among all overrides.
-// If not override by HS, effective_min_family_size = min_family_size +
-void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params){
+// 1) Priority: HS override > amplicon override > global parameters
+// 2) If override requested, then effective_min_family_size = the maximum one among all overrides.
+// 3) If not override by HS, effective_min_family_size = min_family_size + indel_func_size_offset for HP-INDEL.
+void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager){
+	bool min_family_size_override_in_hs = false;
+	bool min_family_size_override_in_region = false;
+	bool min_fam_per_strand_cov_override_in_hs = false;
+	bool min_fam_per_strand_cov_override_in_region = false;
+
 	assert(allele_identity_vector.size() > 0);
+
 	allele_eval.total_theory.effective_min_family_size = (unsigned int) parameters.tag_trimmer_parameters.min_family_size;
 	allele_eval.total_theory.effective_min_fam_per_strand_cov = (unsigned int) parameters.tag_trimmer_parameters.min_fam_per_strand_cov;
 
-	// Override min_tag_fam_size
-	bool min_tag_fam_size_override = false;
+	// (Step 1): Override in Hotspot
+	// Override min_tag_fam_size by HS
 	for (unsigned int i_alt = 0; i_alt < variant_specific_params.size(); ++i_alt){
 		if (variant_specific_params[i_alt].min_tag_fam_size_override){
 			if (variant_specific_params[i_alt].min_tag_fam_size < 1){
 				cerr << "WARNING: Fail to override the parameter min_tag_fam_size by " << variant_specific_params[i_alt].min_tag_fam_size << " < 1." << endl;
 				continue;
 			}
-			if (not min_tag_fam_size_override){
-				// This is the first override.
-				allele_eval.total_theory.effective_min_family_size = (unsigned int) variant_specific_params[i_alt].min_tag_fam_size;
-			}else{
-				allele_eval.total_theory.effective_min_family_size = max(allele_eval.total_theory.effective_min_family_size, (unsigned int) variant_specific_params[i_alt].min_tag_fam_size);
-			}
-			min_tag_fam_size_override = true;
+			// Take the largest (most stringent) min_family_size if multiple override
+			allele_eval.total_theory.effective_min_family_size = min_family_size_override_in_hs?
+			    max(allele_eval.total_theory.effective_min_family_size, (unsigned int) variant_specific_params[i_alt].min_tag_fam_size) : (unsigned int) variant_specific_params[i_alt].min_tag_fam_size;
+			min_family_size_override_in_hs = true;
 		}
 	}
-	if (min_tag_fam_size_override){
+	if (min_family_size_override_in_hs){
+		if ((int) allele_eval.total_theory.effective_min_family_size < parameters.tag_trimmer_parameters.min_family_size){
+			cerr << "WARNING: Overriding to smaller min_family_size in Hotspot may not work properly (unless similar override in amplicon), since reads in smaller families might be filtered out in Consensus." <<endl;
+		}
 		if (DEBUG){
-			cout << "+ Override min_fam_size to " << allele_eval.total_theory.effective_min_family_size << endl;
+			cout << "+ (Hotspot) Override min_fam_size to " << allele_eval.total_theory.effective_min_family_size << endl;
 		}
 	}
-	// Override min_fam_per_strand_cov
-	bool min_fam_per_strand_cov_override = false;
+
+	// Override min_fam_per_strand_cov by HS
 	for (unsigned int i_alt = 0; i_alt < variant_specific_params.size(); ++i_alt){
 		if (variant_specific_params[i_alt].min_fam_per_strand_cov_override){
 			if (variant_specific_params[i_alt].min_fam_per_strand_cov < 0){
 				cerr << "WARNING: Fail to override the parameter min_fam_per_strand_cov by " << variant_specific_params[i_alt].min_fam_per_strand_cov << " < 0." << endl;
 				continue;
 			}
-			if (not min_fam_per_strand_cov_override){
-				// This is the first override.
-				allele_eval.total_theory.effective_min_fam_per_strand_cov = (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov;
-			}else{
-				allele_eval.total_theory.effective_min_fam_per_strand_cov = max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov);
-			}
-			min_fam_per_strand_cov_override = true;
-		}
-	}
-	if (min_fam_per_strand_cov_override){
-		if (DEBUG){
-			cout << "+ Override min_fam_per_strand_cov to " << allele_eval.total_theory.effective_min_fam_per_strand_cov << endl;
+			// Take the largest (most stringent) min_family_size if multiple override
+			allele_eval.total_theory.effective_min_fam_per_strand_cov = min_fam_per_strand_cov_override_in_hs?
+			    max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov) : (unsigned int) variant_specific_params[i_alt].min_fam_per_strand_cov;
+			min_fam_per_strand_cov_override_in_hs = true;
 		}
 	}
 
-	if (min_fam_per_strand_cov_override or min_tag_fam_size_override){
+	if (min_fam_per_strand_cov_override_in_hs){
+		if ((int) allele_eval.total_theory.effective_min_fam_per_strand_cov < parameters.tag_trimmer_parameters.min_fam_per_strand_cov){
+			cerr << "WARNING: Overriding to smaller min_fam_per_strand_cov in Hotspot may not work properly, since reads in smaller families might be filtered out in Consensus." <<endl;
+		}
+		if (DEBUG){
+			cout << "+ (Hotspot) Override min_fam_per_strand_cov to " << allele_eval.total_theory.effective_min_fam_per_strand_cov << endl;
+		}
+	}
+
+	// (Step 2): Override in Region BED
+	// I suppose no [seq_context.position0, seq_context.position0 + seq_context.reference_allele.size()) must covered by only one merged region.
+	// TODO: Maybe make it become a utility in TargetsManager
+	int merged_idx = targets_manager->FindMergedTargetIndex(seq_context.chr_idx, seq_context.position0);
+	if (merged_idx >= 0){
+		// end_unmerged_idx - 1 is the last unmerged idx covered by merged[merged_idx]
+		int end_unmerged_idx = merged_idx == (int) targets_manager->merged.size() - 1? (int) targets_manager->unmerged.size() : targets_manager->merged[merged_idx + 1].first_unmerged;
+		for (int unmerged_idx = targets_manager->merged[merged_idx].first_unmerged; unmerged_idx < end_unmerged_idx; ++unmerged_idx){
+			// unmerged are sorted by begin. break if exceed the end of the variant.
+			if (targets_manager->unmerged[unmerged_idx].begin >= seq_context.position0 + (long) seq_context.reference_allele.size()){
+				break;
+			}
+			if (not targets_manager->IsOverlapWithUnmerged(unmerged_idx, seq_context.chr_idx, seq_context.position0, seq_context.position0 + (long) seq_context.reference_allele.size())){
+				continue;
+			}
+			// Now the variant overlaps with targets_manager->unmerged[unmerged_idx]
+			if ((not min_family_size_override_in_hs) and targets_manager->unmerged[unmerged_idx].min_tag_fam_size_override){
+				allele_eval.total_theory.effective_min_family_size = min_family_size_override_in_region?
+				    max(allele_eval.total_theory.effective_min_family_size, (unsigned int) targets_manager->unmerged[unmerged_idx].min_tag_fam_size) : (unsigned int) targets_manager->unmerged[unmerged_idx].min_tag_fam_size;
+				min_family_size_override_in_region = true;
+			}
+			if ((not min_fam_per_strand_cov_override_in_hs) and targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov_override){
+				allele_eval.total_theory.effective_min_fam_per_strand_cov = min_fam_per_strand_cov_override_in_region?
+				    max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov;
+				min_fam_per_strand_cov_override_in_region = true;
+			}
+		}
+		if (DEBUG){
+			if (min_family_size_override_in_region){
+				cout << "+ (Amplicon) Override min_fam_size to " << allele_eval.total_theory.effective_min_family_size << endl;
+			}
+			if (min_fam_per_strand_cov_override_in_region){
+				cout << "+ (Amplicon) Override min_fam_per_strand_cov to " << allele_eval.total_theory.effective_min_fam_per_strand_cov << endl;
+			}
+		}
+	}
+
+	// (Step 3): Handle indel_func_size_offset
+    // Increase min_fam_size if I found an allele is HP-INDEL.
+	if (parameters.tag_trimmer_parameters.indel_func_size_offset <= 0
+			or min_family_size_override_in_hs
+			or min_family_size_override_in_region
+			or min_fam_per_strand_cov_override_in_hs
+			or min_fam_per_strand_cov_override_in_region){
 		return;
 	}
 
-    // Increase min_fam_size if I found an allele is HP-INDEL.
-	if (parameters.tag_trimmer_parameters.indel_func_size_offset > 0){
-		for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
-			if (allele_identity_vector[i_alt].status.isHPIndel){
-				allele_eval.total_theory.effective_min_family_size += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
-				allele_eval.total_theory.effective_min_fam_per_strand_cov += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
-				if (DEBUG){
-					cout << "+ Found allele "<< i_alt + 1 << " is HP-INDEL." << endl
-						 << "  - Increase min_fam_size from " << parameters.tag_trimmer_parameters.min_family_size << " to " << allele_eval.total_theory.effective_min_family_size  << endl
-						 << "  - Increase min_fam_per_strand_cov from " << parameters.tag_trimmer_parameters.min_fam_per_strand_cov << " to " << allele_eval.total_theory.effective_min_fam_per_strand_cov  << endl;
-				}
-				return;
+	for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
+		if (allele_identity_vector[i_alt].status.isHPIndel){
+			allele_eval.total_theory.effective_min_family_size += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
+			allele_eval.total_theory.effective_min_fam_per_strand_cov += (unsigned int) parameters.tag_trimmer_parameters.indel_func_size_offset;
+			if (DEBUG){
+				cout << "+ Found allele "<< i_alt + 1 << " is HP-INDEL." << endl
+					 << "  - Increase min_fam_size from " << parameters.tag_trimmer_parameters.min_family_size << " to " << allele_eval.total_theory.effective_min_family_size  << endl
+					 << "  - Increase min_fam_per_strand_cov from " << parameters.tag_trimmer_parameters.min_fam_per_strand_cov << " to " << allele_eval.total_theory.effective_min_fam_per_strand_cov  << endl;
 			}
+			return;
 		}
 	}
 }
 
 
 
-void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params){
+void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager){
     allele_eval.my_params = parameters->my_eval_control;
 	// Set debug level
 	DEBUG = parameters->program_flow.DEBUG;
@@ -1077,7 +1144,9 @@ void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool 
     allele_eval.cur_state.cur_posterior.gq_pair.SetTargetMinAlleleFreq(*parameters, variant_specific_params);
     // Set molecular tag related parameters
     allele_eval.total_theory.SetIsMolecularTag(use_molecular_tag);
-    SetEffectiveMinFamilySize(*parameters, variant_specific_params);
+    if (use_molecular_tag){
+    	SetEffectiveMinFamilySize(*parameters, variant_specific_params, targets_manager);
+    }
     // only rich_json_diagnostic needs full data
     allele_eval.total_theory.preserve_full_data = parameters->program_flow.rich_json_diagnostic;
     // Site-specific signal adjustment
@@ -2332,7 +2401,7 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
 
   // Initialize random number generator for each stack -> ensure reproducibility
   RandSchrange RandGen(parameters.my_controls.RandSeed);
-
+  MyRandSchrange my_rand_schrange(parameters.my_controls.RandSeed);
   int read_counter = 0;
   total_read_counts = 0;
   bool is_suppress_mol_tags = parameters.tag_trimmer_parameters.suppress_mol_tags;
@@ -2397,7 +2466,7 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
   // Do strategic downsampling if I suppress mol tags.
   // (a): Pick up the reads with higher read counts.
   // (b): If I can't pick up all reads of the same read counts, then randomly pick the reads until the read stack is full.
-  random_shuffle(read_stack.begin(), read_stack.end());
+  random_shuffle(read_stack.begin(), read_stack.end(), my_rand_schrange);
   sort(read_stack.begin(), read_stack.end(), CompareReadCounts);
   read_stack.resize(parameters.my_controls.downSampleCoverage);
   total_read_counts = 0;
@@ -2405,13 +2474,6 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
 	total_read_counts += (*read_stack_it)->read_count;
   }
 }
-
-// The class is simply used for random_shuffle
-class MyRandSchrange : private RandSchrange{
-public:
-    MyRandSchrange(int seed = 1) {SetSeed(seed);} ;
-    int operator()(int upper_lim) {return Rand() % upper_lim;}; // return a random number between 0 and upper_lim-1
-};
 
 
 // Contains the information I need for downsampling with mol tagging

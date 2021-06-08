@@ -45,12 +45,13 @@ public:
   //! @param    comments_json       basecaller bam comments json
   //! @param    flow_order          Flow order object, also stores number of flows
   //! @param    keys                Key sequences in use
-  //! @param    mask                Mask object
+  //! @param    num_wells_chip      Number of wells in this chip section
+  //! @param    num_wells_files     Number of wells files to be averaged
   BaseCallerFilters(OptArgs& opts,
                     Json::Value &comments_json,
                     const ion::FlowOrder& flow_order,
                     const vector<KeySequence>& keys,
-                    const Mask& mask);
+                    int num_wells_chip, int num_wells_files);
 
   //! @brief    Print usage
   static void PrintHelp();
@@ -61,7 +62,7 @@ public:
   //! @param    wells               Wells file reader object, source of filter training reads
   //! @param    max_sample_size     Max number of reads to sample for training
   //! @param    mask                Mask for determining which reads are eligible for training set
-  void TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask);
+  void TrainClonalFilter(const string& output_directory, RawWells *wells, Mask& mask);
 
   //! @brief    Once filtering is complete, transfer filtering outcomes to Mask object.
   //!
@@ -91,7 +92,7 @@ public:
   //! @param    read_index          Read index
   void SetValid                     (int read_index);
 
-  void SetFiltered                  (int read_index, int read_class, ReadFilteringHistory& filter_history);
+  void SetFilteredShort             (int read_index, ReadFilteringHistory& filter_history);
 
   //! @brief    Unconditionally mark a valid read as polyclonal, as determined in background model.
   //! @param    read_index          Read index

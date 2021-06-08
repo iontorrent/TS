@@ -1529,7 +1529,7 @@ class SampleSetValidation(Validation):
             "sampleGroupTypeName": bundle.data.get("sampleGroupTypeName") or "",
             "libraryPrepType": bundle.data.get("libraryPrepType", ""),
             "additionalCycles": bundle.data.get("additionalCycles", ""),
-            "cyclingProtocols": bundle.data.get("cyclingProtocols", ""),
+            "libraryPrepProtocol": bundle.data.get("libraryPrepProtocol", ""),
             "status": bundle.data.get("status", ""),
             "sampleBarcodeMapping": bundle.data.get("sampleBarcodeMapping", ""),
             "samplesetID": bundle.obj.id,
@@ -1650,6 +1650,16 @@ class SampleSetResource(ModelResource):
             bundle.data["sampleCount"] > 0
         ) and bundle.obj.status not in ["libPrep_pending", "voided"]
 
+        bundle.data["libraryPrepProtocolName"] = ""
+        if bundle.data["libraryPrepProtocol"]:
+            try:
+                protocol = models.common_CV.objects.get(
+                    cv_type="libraryPrepProtocol", value=bundle.data["libraryPrepProtocol"]
+                )
+                bundle.data["libraryPrepProtocolName"] = protocol.displayedValue
+            except Exception as Err:
+                logger.error(Err)
+
         return bundle
 
     def hydrate_libraryPrepInstrumentData(self, bundle):
@@ -1712,18 +1722,30 @@ class SampleSetResource(ModelResource):
 
         return bundle
 
+    def hydrate_categories(self, bundle):
+        if "libraryPrepProtocol" in bundle.data:
+            libraryPrepProtocol = bundle.data.get("libraryPrepProtocol")
+        else:
+            libraryPrepProtocol = bundle.obj.libraryPrepProtocol
+
+        protocol = models.common_CV.objects.filter(value=libraryPrepProtocol)
+        if protocol and protocol[0].categories:
+            bundle.data["categories"] = protocol[0].categories
+
+        return bundle
+
     def hydrate(self, bundle):
         if "sampleGroupTypeName" in bundle.data:
             sampleGroupTypeName = bundle.data.get("sampleGroupTypeName")
             if sampleGroupTypeName:
                 try:
-                    groupType = models.SampleGroupType_CV.objects.get(
-                        displayedName__iexact=sampleGroupTypeName
-                    )
+                    groupType = models.SampleGroupType_CV.objects.get(displayedName__iexact=sampleGroupTypeName)
                     if groupType:
                         bundle.data["SampleGroupType_CV"] = groupType
                 except Exception as Err:
-                    logger.error("Error SampleGroupType doesn't exists '%s'", Err)
+                    logger.error(
+                        "Error SampleGroupType doesn't exists '%s'", Err
+                    )
         return bundle
 
     def obj_update(self, bundle, **kwargs):
@@ -1816,7 +1838,7 @@ class SampleSetResource(ModelResource):
             "libraryPrepType",
             "sampleGroupTypeName",
             "additionalCycles",
-            "cyclingProtocols",
+            "libraryPrepProtocol",
         ]:
             value = bundle.data.get(key)
 
@@ -1835,14 +1857,18 @@ class SampleSetResource(ModelResource):
                     value, field_label=key
                 )
             elif key == "additionalCycles":
-
                 isValid, err, cvValue = sample_validator.validate_additionalCycles(
                     value, field_label=key
                 )
-            elif key == "cyclingProtocols":
-                isValid, err, cvValue = sample_validator.validate_cyclingProtocols(
+            elif key == "libraryPrepProtocol":
+                isValid, err, cvValue = sample_validator.validate_libraryPrepProtocol(
                     value, field_label=key
                 )
+                if isValid:
+                    err = sample_validator.validate_libraryPrepProtocol_for_kit(
+                        value,
+                        bundle.data.get("libraryPrepKitName")
+                    )
             if err:
                 errors[key] = err
 
@@ -3342,6 +3368,23 @@ class common_CVResource(ModelResource):
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+
+
+class ChefPcrPlateconfigResource(ModelResource):
+    # parent kit
+    kit = fields.ToOneField("iondb.rundb.api.KitInfoResource", "kit", full=False)
+
+    class Meta:
+        queryset = models.ChefPcrPlateconfig.objects.all()
+
+        # allow ordering and filtering by all fields
+        field_list = models.ChefPcrPlateconfig._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
 
 
 class dnaBarcodeResource(ModelResource):

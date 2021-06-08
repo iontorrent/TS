@@ -101,6 +101,7 @@ AlleleParser::~AlleleParser()
     flushblackpos(black_chr+1, 0);
     if (blacked_var_.is_open()) blacked_var_.close();
     if (candidate_list_.is_open()) candidate_list_.close();
+    clean_heap_chars();
 }
 
 // -----------------------------------------------------------------------------
@@ -117,16 +118,8 @@ bool AlleleParser::GetNextHotspotLocation(int& chr, long& position) const
 
 // -------------------------------------------------------------------------
 
-bool AlleleParser::BasicFilters(Alignment& ra) const
+bool AlleleParser::BasicFilters(Alignment& ra, const TargetsManager * const targets_manager) const
 {
-  if (not ra.alignment.BuildCharData()) {
-    cerr << "ERROR: Failed to parse read data for BAM Alignment " << ra.alignment.Name << endl;
-    exit(1);
-  }
-  ra.original_position = ra.alignment.Position;
-  ra.original_end_position = ra.alignment.GetEndPosition();
-  ra.end = ra.alignment.GetEndPosition();
-
   // Basic read filters
 
   if (!sample_manager_->IdentifySample(ra.alignment, ra.sample_index, ra.primary_sample)) {
@@ -145,7 +138,20 @@ bool AlleleParser::BasicFilters(Alignment& ra) const
     ra.filtered = true;
     return false;
   }
-  if (ra.alignment.MapQuality < min_mapping_qv_) {
+
+  // Filter on mapping_qv
+  int eff_min_mapping_qv = min_mapping_qv_;
+  bool is_min_mapping_qv_override = false;
+
+  for (vector<int>::iterator target_idx_it = ra.target_coverage_indices.begin(); target_idx_it != ra.target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
+    if (targets_manager->unmerged[*target_idx_it].min_mapping_qv_override){
+      // Take the largest override (most stringent) if the read covers multiple amplicons.
+      eff_min_mapping_qv = is_min_mapping_qv_override? max(eff_min_mapping_qv, targets_manager->unmerged[*target_idx_it].min_mapping_qv) : targets_manager->unmerged[*target_idx_it].min_mapping_qv;
+      is_min_mapping_qv_override = true;
+	}
+  }
+
+  if ((int) ra.alignment.MapQuality < eff_min_mapping_qv) {
     ra.filtered = true;
     return false;
   }
@@ -154,7 +160,7 @@ bool AlleleParser::BasicFilters(Alignment& ra) const
 
 // -------------------------------------------------------------------------
 
-void AlleleParser::UnpackReadAlleles(Alignment& ra) const
+void AlleleParser::UnpackReadAlleles(Alignment& ra, const TargetsManager * const targets_manager) const
 {
   // No need to waste time if the read is filtered
   if (ra.filtered)
@@ -285,10 +291,22 @@ void AlleleParser::UnpackReadAlleles(Alignment& ra) const
   ra.refmap_start.push_back(read_ptr);
   ra.refmap_code.push_back('N');
 
+  // read_snp_limit override
+  int eff_read_snp_limit = read_snp_limit_;
+  bool is_read_snp_limit_override = false;
+
+  for (vector<int>::iterator target_idx_it = ra.target_coverage_indices.begin(); target_idx_it != ra.target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
+    if (targets_manager->unmerged[*target_idx_it].read_snp_limit_override){
+      // Take the minimum override (most stringent) if the read covers multiple amplicons.
+      eff_read_snp_limit = is_read_snp_limit_override? min(eff_read_snp_limit, targets_manager->unmerged[*target_idx_it].read_snp_limit) : targets_manager->unmerged[*target_idx_it].read_snp_limit;
+      is_read_snp_limit_override = true;
+	}
+  }
+
   // backtracking if we have too many mismatches or if there are no recorded alleles
   if (alleles.empty() or ra.alignment.QueryBases.size() == 0 or
       (mismatch_count > (int)((float)ra.alignment.QueryBases.size()) * read_max_mismatch_fraction_) or
-      ra.snp_count > read_snp_limit_) {
+      ra.snp_count > eff_read_snp_limit) {
     ra.filtered = true;
     return;
   }
@@ -685,6 +703,7 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
   int max_length = position_ticket->target_end-position_ticket->pos;
   if (max_length > 1000) max_length = 1000; 
   allele_pileup_.clear();
+  clean_heap_chars();
   ref_pileup_.initialize_reference(position_ticket->pos, num_samples_);
   if (new_hotspot_grouping) hotspot_window = max(hotspot_window, haplotype_length-1);
   //cout << "hyplolate length" << haplotype_length << endl; // ZZ
@@ -958,7 +977,7 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
       } //else if (allele.ref_length > haplotype_length) continue; // final stage shall not allow hotspot longer than the haplotype
     }
     //cerr << "haplength " << haplotype_length << " pos "  << opos << " " << old_alt << " " << oref_len << " "  << allele.ref_length << " " << allele.pos << " add hot " << allele.alt << pos_offset << " " <<  suf_offset << endl;
-    allele_pileup_[Allele(allele.type,allele.pos,allele.ref_length,allele.alt.size(),allele.alt.c_str())].add_hotspot(allele, num_samples_, pos_offset, suf_offset);
+    allele_pileup_[Allele(allele.type,allele.pos,allele.ref_length,allele.alt.size(),get_heap_chars(allele.alt.c_str(),allele.alt.size()))].add_hotspot(allele, num_samples_, pos_offset, suf_offset);
     if (changed) {
 	allele.pos = opos; allele.ref_length = oref_len; allele.alt = old_alt; // reset to the old, for future calls
     }
@@ -1829,7 +1848,8 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	    x->second.hotspot_params = &allele;
 	    x->second.filtered = false;
 	    x->second.is_black_listed = '.';
-	    x->second.minimized_prefix = pos_offset; x->second.minimized_suffix = haplotype_length-ref_length;
+	    x->second.minimized_prefix = pos_offset; x->second.minimized_suffix = haplotype_length-allele.ref_length+allele.suffix_padding-pos_offset; //TS-17918
+	    if (x->second.minimized_suffix < 0) x->second.minimized_suffix = 0;
 	    allele.length = -1; 
  	}
 	//save_hotspots.push_back(hotspot);
@@ -2097,34 +2117,32 @@ void AlleleParser::MakeVariant(deque<VariantCandidate>& variant_candidates, list
   for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
     AlleleDetails& allele = I->second;
     if (check_allele_filter(allele, i, it, alist)) {
-        if (allele.ref_length < common_ref_length) {
-            allele.alt_sequence += ref_reader_->substr(position_ticket->chr, allele.position+allele.ref_length,
-                common_ref_length-allele.ref_length);
-            allele.ref_length = common_ref_length;
-        }
-        // check redundant
-        unsigned int i;
-        for (i = 0; i < alleles_this.size(); i++) {
-            if (allele.alt_sequence == alleles_this[i]->alt_sequence) {
-		// IR-42901
-                alleles_this[i]->coverage += allele.coverage;
-                alleles_this[i]->coverage_rev += allele.coverage_rev;
-                alleles_this[i]->coverage_fwd += allele.coverage_fwd;
-		for (int sample_idx = 0; sample_idx < num_samples_; ++sample_idx) {
-		    alleles_this[i]->samples[sample_idx].coverage += allele.samples[sample_idx].coverage; 
-		    alleles_this[i]->samples[sample_idx].coverage_rev += allele.samples[sample_idx].coverage_rev;
-		    alleles_this[i]->samples[sample_idx].coverage_fwd += allele.samples[sample_idx].coverage_fwd;
-		    allele.samples[sample_idx].coverage = allele.samples[sample_idx].coverage_rev = allele.samples[sample_idx].coverage_fwd = 0;
-		}
-		allele.coverage = allele.coverage_rev = allele.coverage_fwd = 0; // set all zero, but cannot set filtered. will screw up order
-		// end IR-42901
-                if (allele.is_hotspot) alleles_this[i]->is_hotspot = true;
-                if (alleles_this[i]->raw_cigar.size() == 0 and allele.raw_cigar.size() > 0) alleles_this[i]->raw_cigar = allele.raw_cigar;
-                cerr << "Warning duplicate allele: " <<  allele.alt_sequence << " at " << allele.position << endl;
-                break;
-            }
-        }
-        if (i >= alleles_this.size()) alleles_this.push_back(&(I->second));
+	if (allele.ref_length < common_ref_length) {
+      	    allele.alt_sequence += ref_reader_->substr(position_ticket->chr, allele.position+allele.ref_length,
+          	common_ref_length-allele.ref_length);
+      	    allele.ref_length = common_ref_length;
+	}
+	// check redundant
+	unsigned int i;
+	for (i = 0; i < alleles_this.size(); i++) {
+	    if (allele.alt_sequence == alleles_this[i]->alt_sequence) {
+		alleles_this[i]->coverage += allele.coverage;
+         	alleles_this[i]->coverage_rev += allele.coverage_rev;
+        	alleles_this[i]->coverage_fwd += allele.coverage_fwd;
+                for (int sample_idx = 0; sample_idx < num_samples_; ++sample_idx) {
+                    alleles_this[i]->samples[sample_idx].coverage += allele.samples[sample_idx].coverage;
+                    alleles_this[i]->samples[sample_idx].coverage_rev += allele.samples[sample_idx].coverage_rev;
+                    alleles_this[i]->samples[sample_idx].coverage_fwd += allele.samples[sample_idx].coverage_fwd;
+                    allele.samples[sample_idx].coverage = allele.samples[sample_idx].coverage_rev = allele.samples[sample_idx].coverage_fwd = 0;
+                }
+                allele.coverage = allele.coverage_rev = allele.coverage_fwd = 0; // set all zero, but cannot set filtered. will screw up order
+		if (allele.is_hotspot) alleles_this[i]->is_hotspot = true;
+		if (alleles_this[i]->raw_cigar.size() == 0 and allele.raw_cigar.size() > 0) alleles_this[i]->raw_cigar = allele.raw_cigar;
+		cerr << "Warning duplicate allele: " <<  allele.alt_sequence << " at " << allele.position << endl;
+		break;
+	    }
+	}
+	if (i >= alleles_this.size()) alleles_this.push_back(&(I->second));
     }
   }
 
@@ -2348,6 +2366,7 @@ void AlleleParser::PileUpAlleles(int pos, int haplotype_length,  list<PositionIn
 {
 
   allele_pileup_.clear();
+  clean_heap_chars();
   ref_pileup_.initialize_reference(pos, num_samples_);
   int haplotypeEnd = pos + haplotype_length;
 
@@ -2476,6 +2495,10 @@ void AlleleParser::FillInHotSpotVariant(deque<VariantCandidate>& variant_candida
     candidate.variant.info["LEN"].push_back(convertToString(hotspot[i].length));
     candidate.variant.info["HRUN"].push_back("0");
     candidate.variant_specific_params.push_back(hotspot[i].params);
+// TS-17918
+    candidate.variant.info["PPD"].push_back("0");
+    candidate.variant.info["SPD"].push_back(convertToString(hotspot[i].suffix_padding));
+//
 
             if (x == allele_pileup_.end()) {
     		candidate.variant.info["AO"].push_back("0");

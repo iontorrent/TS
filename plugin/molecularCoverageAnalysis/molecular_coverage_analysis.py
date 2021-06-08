@@ -63,7 +63,7 @@ def bed_line_to_basic_dict(bed_line):
         split_by_equality = split_info.split('=')
         my_value = split_by_equality[1] if len(split_by_equality) > 1 else None
         try:
-            my_value = float(my_value)
+            my_value = int(my_value) if my_value.isdigit() else float(my_value)
         except ValueError:
             pass
         bed_dict['info_dict'][split_by_equality[0]] = my_value
@@ -150,8 +150,20 @@ class FamilyManager:
         return self.close()
 
     def get_tvc_param(self, key):
-        return self.__tvc_param_dict[key]['value']
-        
+        my_param_dict = self.__tvc_param_dict[key]
+        value = my_param_dict.get('eff_value', None)
+        return my_param_dict['value'] if value is None else value
+    
+    def set_amplicon_overriding(self, region_dict):
+        for key, param_dict in self.__tvc_param_dict.iteritems():
+            param_dict['eff_value'] = None            
+            if key in ('read_mismatch_limit', ):
+                # The parameter that I don't want to override
+                continue
+            overriding_value = region_dict['info_dict'].get(key, None)
+            if overriding_value is not None:
+                param_dict['eff_value'] = param_dict['type'](overriding_value)
+
     def set_tvc_param(self, tvc_param_dict=None):
         if tvc_param_dict is None:
             # Default param dict
@@ -218,7 +230,7 @@ class FamilyManager:
                 },            
             }
         else:
-            for key, one_param_dict  in self.__tvc_param_dict.iteritems():
+            for key, one_param_dict in self.__tvc_param_dict.iteritems():
                 value = tvc_param_dict.get(one_param_dict['section'], {}).get(key, None)
                 if value is not None:
                     one_param_dict['value'] = one_param_dict['type'](value)
@@ -236,7 +248,7 @@ class FamilyManager:
             return True
         
         # Filter on mapq        
-        if self.__mapping_quality(bam_read) < self.__tvc_param_dict['min_mapping_qv']['value']:
+        if self.__mapping_quality(bam_read) < self.get_tvc_param('min_mapping_qv'):
             return True
         
         # Get NM (Number of Mismatches)
@@ -251,14 +263,14 @@ class FamilyManager:
             return False
         
         # Filtering on read_max_mismatch_fraction (usually not used)
-        if self.__tvc_param_dict['read_max_mismatch_fraction']['value'] < 1.0:
+        if self.get_tvc_param('read_max_mismatch_fraction') < 1.0:
             qlen = len(self.__query_alignment_sequence(bam_read)) 
-            if nm > qlen * self.__tvc_param_dict['read_max_mismatch_fraction']['value']:
+            if nm > qlen * self.get_tvc_param('read_max_mismatch_fraction'):
                 return True
         
         # Now deal with read_snp_limit and read_mismatch_limit
-        read_snp_limit = self.__tvc_param_dict['read_snp_limit']['value']
-        read_mismatch_limit = self.__tvc_param_dict['read_mismatch_limit']['value']
+        read_snp_limit = self.get_tvc_param('read_snp_limit')
+        read_mismatch_limit = self.get_tvc_param('read_mismatch_limit')
 
         # Usually a read shall pass
         # Note that read_mismatch_limit = 0 => disable the filter.
@@ -353,12 +365,12 @@ class FamilyManager:
 
     def is_func_fam(self, fam_key, fam_dict, ignore_min_fam_per_strand_cov=False):
         # Check min_tag_fam_size
-        if fam_dict['all'] < self.__tvc_param_dict['min_tag_fam_size']['value']:
+        if fam_dict['all'] < self.get_tvc_param('min_tag_fam_size'):
             return False
         
         # Check min_fam_per_strand_cov for Bi-dir UMT
         if fam_key.startswith('B+') and (not ignore_min_fam_per_strand_cov):
-            if min(fam_dict['fwd'], fam_dict['rev']) < self.__tvc_param_dict['min_fam_per_strand_cov']['value']:
+            if min(fam_dict['fwd'], fam_dict['rev']) < self.get_tvc_param('min_fam_per_strand_cov'):
                 return False
 
         # Finally check strictness if needed
@@ -387,7 +399,7 @@ class FamilyManager:
 
     def is_bam_read_cover_the_region(self, bam_read, region_dict, is_check_chrom=True):
         target_overlap = self.get_overlap(bam_read, region_dict, is_check_chrom)
-        return (target_overlap >= self.__tvc_param_dict['min_cov_fraction']['value'] * region_dict['region_len']) and target_overlap    
+        return (target_overlap >= self.get_tvc_param('min_cov_fraction') * region_dict['region_len']) and target_overlap    
 
     def gen_fam_dict_one_region(self, region_dict, region_list=None, search_around_idx=None):
         """
@@ -447,14 +459,14 @@ class FamilyManager:
             'all_fam_size_hist': dict([(key, {0: 0}) for key in ('fwd_rev', 'fwd_only', 'rev_only', 'all')]),
             'strict_fam_size_hist': dict([(key, {1: 0}) for key in ('fwd_rev', 'fwd_only', 'rev_only', 'all')]),
             'raw_read_cov': dict([(key, 0) for key in ('fwd', 'rev', 'all')]),
-            'func_fam_size_hist': {self.__tvc_param_dict['min_tag_fam_size']['value']: 0},
+            'func_fam_size_hist': {self.get_tvc_param('min_tag_fam_size'): 0},
             'fwd_rev_fam_cov': 0,
 	    'fwd_only_fam_cov':0,
 	    'rev_only_fam_cov':0,
             'strict_func_fam_cov': 0,
             'strict_func_umt_rate': 0.0,
 	    'average_fam_size' : 0.0,
-            'strict_func_fam_size_hist': {self.__tvc_param_dict['min_tag_fam_size']['value']: 0},
+            'strict_func_fam_size_hist': {self.get_tvc_param('min_tag_fam_size'): 0},
             'strict_func_read_cov': {'fwd': 0, 'rev': 0, 'all': 0},
             'func_read_cov': {'fwd': 0, 'rev': 0, 'all': 0},
             'fam_read_cov': {'small': 0, 'median': 0, 'large': 0},
@@ -497,7 +509,7 @@ class FamilyManager:
                     my_stats_dict['%s_fam_size_hist'%strict_key][my_fam_healthiness_key][my_fam_size] += 1
                 except KeyError:
                     my_stats_dict['%s_fam_size_hist'%strict_key][my_fam_healthiness_key][my_fam_size] = 1
-		if (strict_key == 'all' ) and (my_fam_size >= self.__tvc_param_dict['min_tag_fam_size']['value']):
+		if (strict_key == 'all' ) and (my_fam_size >= self.get_tvc_param('min_tag_fam_size')):
 		    my_stats_dict['%s_fam_cov'%my_fam_healthiness_key] +=1
             
                 
@@ -564,7 +576,7 @@ class FamilyManager:
             my_stats_dict.update(region_dict)
 
         # Add parameters
-        my_stats_dict['param'] = dict([(param_key, param_dict['value']) for param_key, param_dict in  self.__tvc_param_dict.iteritems()])
+        my_stats_dict['param'] = dict([(param_key, self.get_tvc_param(param_key)) for param_key in self.__tvc_param_dict.keys()])
 
         return my_stats_dict
 
@@ -938,6 +950,10 @@ def mol_coverage_analysis_worker(input_dict):
         # Iterate over all regions
         for region_idx, region_dict in enumerate(region_list[region_start_idx:region_end_idx]):
             file_prefix_one_region = '%s.%s_%d-%d'%(output_prefix, region_dict['chrom'], region_dict['chromStart'], region_dict['chromEnd'])
+
+            # Set amplicon sepecific overriding parameters
+            umt_manager.set_amplicon_overriding(region_dict)
+
             # Do family classification
             all_fam_dict = umt_manager.gen_fam_dict_one_region(region_dict, region_list, region_idx)
     

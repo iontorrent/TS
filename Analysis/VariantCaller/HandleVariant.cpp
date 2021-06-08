@@ -222,7 +222,7 @@ int EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantCa
   my_ensemble.FilterAllAlleles(vc.parameters->my_controls, candidate_variant.variant_specific_params); // put filtering here in case we want to skip below entries
 
   // set parameters for the evaluator
-  my_ensemble.SetAndPropagateParameters(vc.parameters, use_molecular_tag, candidate_variant.variant_specific_params);
+  my_ensemble.SetAndPropagateParameters(vc.parameters, use_molecular_tag, candidate_variant.variant_specific_params, vc.targets_manager);
 
   // We read in one stack per multi-allele variant
   if (use_molecular_tag){

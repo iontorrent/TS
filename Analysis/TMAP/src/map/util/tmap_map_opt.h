@@ -4,6 +4,7 @@
 
 #include <sys/types.h>
 #include <getopt.h>
+#include <float.h>
 #include "../../sw/tmap_vsw.h"
 #include "../../realign/realign_cliptype.h"
 
@@ -45,6 +46,24 @@
   The maximum read length to consider for mapping differences in map1.
   */
 #define TMAP_MAP_OPT_MAX_DIFF_READ_LENGTH 250
+
+#define TMAP_MAP_OPT_REALIGN_SCORE_MATCH  4
+#define TMAP_MAP_OPT_REALIGN_SCORE_MM    -6
+#define TMAP_MAP_OPT_REALIGN_SCORE_GO    -5
+#define TMAP_MAP_OPT_REALIGN_SCORE_GE    -2
+#define TMAP_MAP_OPT_REALIGN_BW           50
+#define TMAP_MAP_OPT_REALIGN_CLIPTYPE     2
+
+#define TMAP_MAP_OPT_CONTEXT_SCORE_MATCH  ((double) TMAP_MAP_OPT_SCORE_MATCH)
+#define TMAP_MAP_OPT_CONTEXT_SCORE_MM     ((double) -TMAP_MAP_OPT_PEN_MM)
+#define TMAP_MAP_OPT_CONTEXT_SCORE_GO     ((double) -TMAP_MAP_OPT_PEN_GAPO)
+#define TMAP_MAP_OPT_CONTEXT_SCORE_GE     ((double) -TMAP_MAP_OPT_PEN_GAPE)
+#define TMAP_MAP_OPT_CONTEXT_BW_EXTRA     5
+
+#define MIN_AL_LEN_NOCHECK_SPECIAL INT_MIN
+#define MIN_AL_COVERAGE_NOCHECK_SPECIAL -DBL_MAX
+#define MIN_AL_IDENTITY_NOCHECK_SPECIAL -DBL_MAX
+
 
 /*!
   Prints the compression for the input/output.
@@ -274,7 +293,7 @@ typedef struct __tmap_map_opt_t {
     int32_t cigar_sanity_check; /*!< check cigar conformity (detail levels 0(default) to 9(all checks)*/
 
     // DVK: alignment length filtering
-    int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */
+    int32_t min_al_len; /*!< minimal alignment length to report */
     double  min_al_cov; /*!< minimal aligned fraction of the read */
     double  min_identity; /*!< minimal identity (fraction) of the alignment */
 

@@ -290,8 +290,8 @@ def align(
             return
 
         if aligner == "tmap":
-            referenceFastaFile = (
-                ion.referenceBasePath + referenceName + "/" + referenceName + ".fasta"
+            referenceFastaFile = os.path.join(
+                ion.referenceBasePath, referenceName, "%s.fasta" % referenceName
             )
             if blocks:
                 bamdir = "."  # TODO , do we need this ?
@@ -319,7 +319,7 @@ def align(
                     for blockbamfile in block_bam_list:
                         mergecmd = mergecmd + " %s" % blockbamfile
                     """
-                    mergecmd = 'java -Xmx8g -jar ' + ion.picardPath + ' MergeSamFiles'
+                    mergecmd = 'java -Xmx8g -jar %s MergeSamFiles' % ion.picardPath
                     for blockbamfile in block_bam_list:
                         mergecmd = mergecmd + ' I=%s' % blockbamfile
                     mergecmd = mergecmd + ' O=/dev/stdout'
@@ -344,9 +344,7 @@ def align(
                 cmd += " -r %s" % basecaller_bam_filename
             cmd += " -v"
             cmd += " -Y"
-            cmd += (
-                " -u --prefix-exclude 5"
-            )  # random seed based on read name after ignoring first 5 characters
+            cmd += " -u --prefix-exclude 5"  # random seed based on read name after ignoring first 5 characters
             if do_realign:
                 cmd += " --do-realign"
             cmd += " -o 2"  # -o 0: SAM, -o 2: uncompressed BAM

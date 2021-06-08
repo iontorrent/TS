@@ -15,7 +15,7 @@ class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.12.0.0'
+    version = '5.14.0.1'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
     runlevels = [RunLevel.LAST]
     requires_configuration = True
@@ -91,10 +91,10 @@ class DataExport(IonPlugin):
             return True
 
         data_categories = [
-            {self.SIG: False if sigproc == 'off' else True},
-            {self.BASE: False if basecalling == 'off' else True},
-            {self.OUT: False if output == 'off' else True},
-            {self.INTR: False if intermediate == 'off' else True},
+            {self.SIG: False if sigproc == 'off' or sigproc == False  else True},
+            {self.BASE: False if basecalling == 'off' or basecalling == False else True},
+            {self.OUT: False if output == 'off' or output == False else True},
+            {self.INTR: False if intermediate == 'off' or intermediate == False else True},
         ]
 
         # Input validation

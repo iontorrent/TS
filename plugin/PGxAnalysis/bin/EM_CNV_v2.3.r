@@ -86,7 +86,7 @@ exon9CNV <- function(nn_sub, exon9_idx) {
 
 ######################fit gene level; fixed sd for each amplicon in a run
 estepGene <- function(m) {
-  m$pm <- apply(m$v, 2, function(x){temp <- cprobGene(x, m) * m$cw; temp/sum(temp)})
+  m$pm <- apply(m$v, 2, function(x){temp <- cprobGene(x, m) * m$cw; x<-sum(temp); if(x==0){x=0.0001}; temp/x})
   temp <- apply(m$pm, 1, sum)
   m$cw <- temp/sum(temp)   #cluster weight
   return(m)

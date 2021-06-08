@@ -27,6 +27,8 @@ class SavePlanBySampleFieldNames:
 
     TEMPLATE_NAME = "templateName"
     SAMPLESET = "sampleset"
+    SAMPLESET_ITEM = "sampleSetItem"
+    LIBRARY_POOL = "libraryPool"
     WARNING_MESSAGES = "warning_messages"
     ERROR_MESSAGES = "error_messages"
     NOTE = "note"

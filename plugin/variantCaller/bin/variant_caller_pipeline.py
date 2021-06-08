@@ -109,13 +109,18 @@ def get_consensus_tmap_command(options, parameters, input_bam):
     tmap_command  = path_to_tmap + ' ' + tmap_arg_tuples[0][0]
     tmap_command += ' -f "' + options.reference + '"'
     tmap_command += ' -r "' + input_bam + '" -n ' + str(options.numthreads)
+    tmap_command += ' -o 2'
     
     # Strip and update tmap arguments regarding input files, etc.
     for tp in tmap_arg_tuples[1:]:
         # Remove some input gloabl options from command string
-        if tp[0] in ['-r','--fn-reads',    '-s','--fn-sam',
-                     '-n','--num-threads', '-f','--fn-fasta', 
-                     '-k','--shared-memory-key', '--bam-start-vfo', '--bam-end-vfo']:
+        if tp[0] in ['-r','--fn-reads',
+                     '-s','--fn-sam',
+                     '-n','--num-threads',
+                     '-f','--fn-fasta', 
+                     '-k','--shared-memory-key',
+                     '--bam-start-vfo', '--bam-end-vfo',
+                     '-o', '--output-type']:
             continue
         # Change path to bed file in place, if applicable
         elif tp[0] in ['--bed-file']:
@@ -123,7 +128,7 @@ def get_consensus_tmap_command(options, parameters, input_bam):
                 tmap_command += ' --bed-file "' + options.ptrim_bed + '"'
             elif options.bedfile:
                 tmap_command += ' --bed-file "' + options.bedfile + '"'
-        
+            continue
         # And other other options in their original order
         tmap_command += ' ' + ' '.join(tp).rstrip()
     
@@ -139,7 +144,8 @@ def get_consensus_tmap_command(options, parameters, input_bam):
 def consensus_alignment_pipeline(options, parameters, consensus_bam_name, remove_tmp_files):
     
     # 1) Sort "consensus_bam_name".aln_not_needed.bam
-    command  = 'samtools sort -m 1000M -l1 -@' + options.numthreads + ' -T "' + consensus_bam_name + '.sort.tmp"'
+    # In fact, the file is supposed to be sorted. Use samtools sort to guarantee sortedness.
+    command  = 'samtools sort -m 2000M -l0 -@' + options.numthreads + ' -T "' + consensus_bam_name + '.sort.tmp"'
     command += ' -o "' + consensus_bam_name + '.aln_not_needed.sorted.bam" '
     command += '"' + consensus_bam_name + '.aln_not_needed.bam"'
     RunCommand(command,"Sorting first partial consensus BAM.")
@@ -151,7 +157,7 @@ def consensus_alignment_pipeline(options, parameters, consensus_bam_name, remove
     
     # 2) Align and sort "consensus_bam_name".aln_needed.bam
     command  = get_consensus_tmap_command(options, parameters, consensus_bam_name + '.aln_needed.bam')
-    command += ' | samtools sort -m 1000M -l1 -@' + options.numthreads + ' -T "' + consensus_bam_name + '.sort.tmp"'
+    command += ' | samtools sort -m 2000M -l0 -@' + options.numthreads + ' -T "' + consensus_bam_name + '.sort.tmp"'
     command += ' -o "' + consensus_bam_name + '.aligned.sorted.bam" '
     RunCommand(command,"Aligning and sorting second partial consensus BAM.")
     if remove_tmp_files:
@@ -253,7 +259,10 @@ def run_tvcutils_unify(options, parameters):
         unify_command +=    '   --hotspot-annotation-vcf "%s"' % options.hotspot_vcf
     if os.path.isfile(options.outdir + '/tvc_metrics.json'):
         unify_command +=    '   --tvc-metrics "%s/tvc_metrics.json"' % options.outdir
-    if options.bedfile:
+    if options.ptrim_bed:
+        # TS-17940: We use ptrim_bed. Otherwise HS_ONLY tag doesn't work.
+        unify_command +=    '   --target-file "%s"' % options.ptrim_bed    
+    elif options.bedfile:
         unify_command +=    '   --target-file "%s"' % options.bedfile
     if options.generate_gvcf == "on":
         unify_command +=    '    --input-depth "%s/depth.txt"' % options.outdir

@@ -87,7 +87,7 @@ void VariantCallerHelp() {
   printf("     --min-delta-for-flow               FLOAT       minimum prediction delta for scoring flows [0.1]\n");
   printf("     --max-flows-to-test                INT         maximum number of scoring flows [10]\n");
   printf("     --outlier-probability              FLOAT       probability for outlier reads [0.01]\n");
-  printf("     --outlier-pre-filter               INT         filtering out outlier reads before evaluation, range: 0 (disable) - 4 (most stringent) [1 if mol-tag else 0]\n");
+  printf("     --outlier-pre-filter               INT         filtering out outlier reads before evaluation, range: 0 (disable) - 3 (most stringent) [1 if mol-tag else 0]\n");
   printf("     --heavy-tailed                     INT         (2*this value-1) is the Degrees of Freedom (DoF) in t-dist modeling signal residual heavy tail [3]\n");
   printf("     --adjust-sigma                     on/off      It true, use sigma^2=(DoF-2)/Dof*VAR(residual) for calculating the t-dist log-likelihood, else use sigma^2=VAR(residual) [off]\n");
   printf("     --suppress-recalibration           on/off      Suppress homopolymer recalibration [on].\n");
@@ -347,7 +347,7 @@ void EnsembleEvalTuningParameters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("min-delta-for-flow",      min_delta_for_flow,      0.01f, 0.5f);
   CheckParameterLowerBound<float>     ("prediction-precision",    prediction_precision,    0.1f);
   CheckParameterLowerUpperBound<float>("outlier-probability",     outlier_prob,            0.0000001f,  1.0f); // extremely low outlier_prob causes floating exception
-  CheckParameterLowerUpperBound<int>  ("outlier-pre-filter",      outlier_pre_filter,      -1,  4);
+  CheckParameterLowerUpperBound<int>  ("outlier-pre-filter",      outlier_pre_filter,      -1,  3);
   CheckParameterLowerUpperBound<float>("germline-prior-strength", germline_prior_strength, 0.0f,  1000.0f);
   CheckParameterLowerBound<int>       ("heavy-tailed",            heavy_tailed,            1);
 

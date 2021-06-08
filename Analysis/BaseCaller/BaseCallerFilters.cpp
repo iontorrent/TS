@@ -65,7 +65,6 @@ protected:
 
 
 
-
 // ----------------------------------------------------------------------------
 
 int EncodeFilteringDetails(int n_base, int n_prefix)
@@ -548,6 +547,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
                   num_reads_removed_short_ +
                   num_reads_removed_keypass_ +
                   num_reads_removed_residual_ +
+                  num_reads_removed_barcode_trim_ +
                   num_reads_removed_quality_trim_ +
                   num_reads_removed_quality_filt_ +
                   num_reads_removed_tag_trim_ +
@@ -624,17 +624,22 @@ void BaseCallerFilters::PrintHelp()
 // ----------------------------------------------------------------------------
 
 BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
-    const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask)
+    const ion::FlowOrder& flow_order, const vector<KeySequence>& keys,
+    int num_wells_chip, int num_wells_files)
 {
   flow_order_ = flow_order;
   keys_ = keys;
   num_classes_ = keys_.size();
   assert(num_classes_ == 2);
-  filter_mask_.assign(mask.H()*mask.W(), kUninitialized);
+  filter_mask_.assign(num_wells_chip, kUninitialized);
   Json::Value null_json;
 
   cout << "Polyclonal filter settings:" << endl;
   clonal_opts_.SetOpts(false, opts, null_json, flow_order_.num_flows());
+  if (clonal_opts_.enable && num_wells_files > 1){
+    cerr << "Polyclonal filter ERROR: Cannot do polyclonal filtering on multiple wells files." << endl;
+    exit(EXIT_FAILURE);
+  }
 
   // *** Retrieve filter command line options
 
@@ -782,23 +787,23 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, Json::Value &comments_json,
 
 // ----------------------------------------------------------------------------
 
-void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask)
+void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells *wells, Mask& mask)
 {
-
+  // Polyclonal filtering is only allowed if only one wells file is provided
   if (!(clonal_opts_.enable)){
     cout << "Polyclonal filter training disabled." << endl;
     return;
   }
   cout << "Polyclonal filter training." << endl;
 
-  wells.OpenForIncrementalRead();
+  wells->OpenForIncrementalRead();
   vector<int> key_ionogram(keys_[0].flows(), keys_[0].flows()+keys_[0].flows_length());
   filter_counts counts;
   int nlib = mask.GetCount(static_cast<MaskType> (MaskLib));
   counts._nsamp = min(nlib, clonal_opts_.filter_clonal_maxreads);
-  make_filter(clonal_population_, counts, mask, wells, key_ionogram, clonal_opts_);
+  make_filter(clonal_population_, counts, mask, *wells, key_ionogram, clonal_opts_);
   cout << counts << endl;
-  wells.Close();
+  wells->Close();
 }
 
 // ----------------------------------------------------------------------------
@@ -866,7 +871,7 @@ bool BaseCallerFilters::IsPolyclonal(int read_index) const
 // ----------------------------------------------------------------------------
 // Set of function to do accounting for Analysis filters
 
-void BaseCallerFilters::SetFiltered(int read_index, int read_class, ReadFilteringHistory& filter_history)
+void BaseCallerFilters::SetFilteredShort(int read_index, ReadFilteringHistory& filter_history)
 {
   if (filter_history.is_filtered)
     return;

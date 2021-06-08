@@ -40,6 +40,7 @@ configure_file (
     "${PROJECT_SOURCE_DIR}/ansible/group_vars/iontorrent_master" @ONLY
     )
 
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSmake-ssl-cert" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip" DESTINATION sbin )
@@ -72,6 +73,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsco
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/pre_migration.sh" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/post_migration.sh" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/resetqhost.sh" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSswitchRepo.py" DESTINATION share/ion-tsconfig )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSgetPlatform.py" DESTINATION share/ion-tsconfig )
 
 # TS-17140: move these PERL modules to common/task/main.yml
 

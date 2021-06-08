@@ -7,18 +7,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
-<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link rel="stylesheet" media="all" href="css/bootstrap.min.css" />
+<link href="css/kendo.common.min.css" rel="stylesheet" />
+<link href="css/kendo.tb.min.css" rel="stylesheet" />
+<link type="text/css" rel="stylesheet" href="css/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="css/tb-styles.min.css" />
 
-<link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
-<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
-<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="css/stylesheet.css"/>
+<link rel="stylesheet" type="text/css" href="css/print.css" media="print" />
+<link rel="stylesheet" type="text/css" href="css/report.css" media="screen" />
 
-<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
+<script type="text/javascript" src="scripts/js/jquery-1.8.2.min.js"></script>
+<script type="text/javascript" src="scripts/js/kendo.custom.min.js"></script>
 
 {% load humanize %}
 
@@ -38,11 +38,11 @@
 <body>
 
 <div class="container-fluid">
-
-<h1><center>Coverage Analysis Report</center></h1>
-<h3><center>{{run_name}}<center></h3>
-<h2><center>Barcode Summary</center></h2>
-
+{% if not isDx %}
+    <h1><center>Coverage Analysis Report</center></h1>
+    <h3><center>{{run_name}}<center></h3>
+    <h2><center>Barcode Summary</center></h2>
+{% endif %}
 <h4>
 <b>Library type:</b> {{library_type}}<br/>
 {% if target_regions %}
@@ -162,47 +162,49 @@ $(document).ready(function() {
     </script>
   </table>
 </div>
+{% if not isDx %}
+    {% if bctable %}
+    <li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
+    {% endif %}
+    {% if bcmatrix %}
+    <li><a href="{{bcmatrix}}" title='Click to download a table file of {{bcmfield}} individual {{bcmtype}}s for each barcode.'>Download barcode/{{bcmtype}} coverage matrix</a></li>
+    {% endif %}
 
-{% if bctable %}
-<li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
+    {% if not autorefresh %}
+    <li><div id="ziplink">
+    <script type='text/javascript'>
+      var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
+      var a = document.createElement('a');
+      var linkText = document.createTextNode('Download a ZIP report summary.');
+      a.appendChild(linkText);
+      a.title = 'Click to save a compressed version of this report. Unzip coverageAnalysisReport.zip to a local folder on your computer. This will contain PDF images versions of the main reports and primary analysis output files, separated into individual folders for each barcode.';
+      a.href = window.location.protocol+'//'+window.location.host+'/auth'+locpath+'/zipReport.php3';
+      document.getElementById('ziplink').appendChild(a);
+    </script>
+    </div></li>
+    {% endif %}
+
+    {% if autorefresh %}
+    <br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
+    <a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
+    <div style="text-align:center">Click here to refresh</div></a>
+    {% endif %}
+
+    </div>
 {% endif %}
-{% if bcmatrix %}
-<li><a href="{{bcmatrix}}" title='Click to download a table file of {{bcmfield}} individual {{bcmtype}}s for each barcode.'>Download barcode/{{bcmtype}} coverage matrix</a></li>
+{% if not isDx %}
+    <br/>
+    <div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+      <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+      <div class="pull-right">
+        <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+        <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
+
+        <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+      </div>
+    </div> </div> </div> </div>
+    <br/>
 {% endif %}
-
-{% if not autorefresh %}
-<li><div id="ziplink">
-<script type='text/javascript'>
-  var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
-  var a = document.createElement('a');
-  var linkText = document.createTextNode('Download a ZIP report summary.');
-  a.appendChild(linkText);
-  a.title = 'Click to save a compressed version of this report. Unzip coverageAnalysisReport.zip to a local folder on your computer. This will contain PDF images versions of the main reports and primary analysis output files, separated into individual folders for each barcode.';
-  a.href = window.location.protocol+'//'+window.location.host+'/auth'+locpath+'/zipReport.php3';
-  document.getElementById('ziplink').appendChild(a);
-</script>
-</div></li>
-{% endif %}
-
-{% if autorefresh %}
-<br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>
-<a href="javascript:document.location.reload();" ONMOUSEOVER="window.status='Refresh'; return true">
-<div style="text-align:center">Click here to refresh</div></a>
-{% endif %}
-
-</div>
-
-<br/>
-<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
-  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
-  <div class="pull-right">
-    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
-    <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
-
-    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
-  </div>
-</div> </div> </div> </div>
-<br/>
 </body>
 </html>
 

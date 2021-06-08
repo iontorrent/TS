@@ -33,7 +33,7 @@ from iondb.rundb.models import (
 )
 from iondb.utils import devices
 from iondb.utils.files import get_disk_attributes_gb, is_mounted
-from iondb.utils.utils import ManagedPool
+from iondb.utils.utils import ManagedPool, get_deprecation_messages
 
 
 def is_live(ip):
@@ -149,6 +149,23 @@ def format_date(date):
     else:
         return date
 
+def showDeprecationMsg():
+    try:
+        majorPlatform = GlobalConfig.get().majorPlatform
+    except Exception as Err:
+        majorPlatform =  "NOT_AVAILABLE"
+
+    if majorPlatform != "s5_only":
+        try:
+            deprecationMessages = get_deprecation_messages()
+            if deprecationMessages and deprecationMessages.get("enableDeprecationMessage"):
+                for message in deprecationMessages.get("messages"):
+                    if "pgm_or_proton_only" in message.keys():
+                        return message.get("pgm_or_proton_only")["dashboard"]
+        except Exception:
+            pass
+
+    return None
 
 def dashboard_fragments(request, skip_runs=False):
     """ Returns the dashboard sections as html in a json object"""
@@ -238,6 +255,7 @@ def dashboard_fragments(request, skip_runs=False):
         "summary": {
             "ts_version": TS_version,
             "update_status": update_status,
+            "showDeprecationMsg": showDeprecationMsg(),
             "instruments": {
                 "connected": instr_connected,
                 "offline": instr_offline,

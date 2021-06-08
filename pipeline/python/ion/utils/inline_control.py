@@ -8,6 +8,10 @@ import subprocess
 import json
 from Bio import SeqIO
 import commands
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 
 
 def parse_fasta(file):
@@ -62,6 +66,32 @@ def merge(block_dirs, results_dir):
     file.write(json.dumps(combined_json, indent=4))
     file.close()
 
+    # Determine the maximum on ratio plots
+    threshold_ratio = 5.0
+    scale = 5.0
+    for bam, bam_dict in combined_json.iteritems():
+        try: 
+            ratios = bam_dict["ratio"]
+            for amplicon, ratio in ratios.iteritems():
+                if "NA" not in ratio and float(ratio) >= 5.0 and float(ratio) > scale:
+                    splits = amplicon.split("/")
+                    spikeIn = splits[1]
+                    if int(bam_dict["counts"][spikeIn]) >= 100:
+                        scale = float(ratio)
+        except:
+            traceback.print_exc()
+            printtime("Cannot find maximum inline control ratio " + bam)
+            pass
+    printtime("The maximum ratio for this run is: " + str(scale))
+
+    # plot inline control ratios
+    for bam, bam_dict in combined_json.iteritems():
+        try:
+            plot_ilc_ratios(bam_dict, results_dir, str(bam).replace(".basecaller.bam", "") + '.inline_control.png', scale)
+        except Exception:
+            traceback.print_exc()
+            printtime("Plotting inline control ratio failed " + bam)
+            pass
 
 def merge_counts(block_dirs):
     ic = {"counts": {}, "ratio": {}}
@@ -87,10 +117,14 @@ def merge_counts(block_dirs):
 
             # adding the current block
             for bam, bam_dict in block_json.items():
-                if count == 0:
+                if count == 0 or bam not in ic_perbam.keys():
                     ic_perbam[bam] = {}
                     ic_perbam[bam]["ratio"] = {}
                     ic_perbam[bam]["counts"] = {}
+                    if count > 0: # new bam file for the block
+                        for item, temp in bam_dict["counts"].items():
+                            ic_perbam[bam]["counts"][item] = bam_dict["counts"][item]
+
                 for item, temp in bam_dict["counts"].items():
                     if (
                         "NA" not in ic["counts"][item]
@@ -112,13 +146,13 @@ def merge_counts(block_dirs):
 
             file.close()
             count = count + 1
-        except Exception:
-            printtime("merge_inlinecontrol_json.merge_filtering: skipping block " + dir)
+        except Exception as e:
+            printtime("merge_inlinecontrol_json.merge_filtering: skipping block " + dir + str(e))
 
     # ratios
     for bam, bam_dict in ic_perbam.items():
         for item, item_dict in mapping.items():
-            if int(ic_perbam[bam]["counts"][item]) > 0:
+            if bam in ic_perbam.keys() and int(ic_perbam[bam]["counts"][item]) > 0:
                 ic_perbam[bam]["ratio"][item_dict + "/" + item] = str(
                     float(ic_perbam[bam]["counts"][item_dict])
                     / float(ic_perbam[bam]["counts"][item])
@@ -196,7 +230,7 @@ def inline_control(bcDir, ctrlRef, outDir):
             # control reads
             cmd = (
                 "tmap mapall -n 12 -f %s  -r %s -i bam -v -Y stage1 map4 \
-                | samtools view -h -Sb -F 4 -o %s - 2>> /dev/null"
+                | samtools view -h -Sb -q 10 -F 4 -o %s - 2>> /dev/null"
                 % (ctrlRef, bam, bamCtrl_output)
             )
             subprocess.call(cmd, shell=True)
@@ -254,3 +288,63 @@ def inline_control(bcDir, ctrlRef, outDir):
     except Exception:
         printtime("Error: Alignment failed in inline control")
         exit(1)
+
+
+def plot_ilc_ratios(combined, outDir, plotname, scale):
+    plotBarChart(combined, os.path.join(outDir, plotname), scale)
+
+def parsePairs(dict_ratio):
+    mapping = {}
+    for item, temp in dict_ratio.iteritems():
+        splits = item.split("/")
+        mapping[splits[0]] = splits[1]
+    return mapping
+
+def plotBarChart(data, fname, scale):
+    mapping = {"chr5:112216009-112216224/ASC_Siz10:687-902": "266", "chr7:75618964-75618995/ASC_Siz10:51-82":"70",
+    "chr2:10786354-10786673/ASC_Siz10:996-1315":"374",
+    "chr2:10797506-10797568/ASC_Siz10:310-372":"125",
+    "chr5:112222060-112222183/ASC_Siz10:473-596":"178",
+    "chr2:178331262-178331318/ASC_Siz10:154-210":"100",
+    }
+    pairs = parsePairs(data["ratio"])
+    labels = []
+    ratio = []
+    for amplicon in data["ratio"].keys():
+        splits = amplicon.split("/")
+        spikeIn = splits[1]
+        labels.append(mapping[amplicon])
+        if data["ratio"][amplicon] != 'NA' and float(data["ratio"][amplicon]) > 0.000001 and int(data["counts"][spikeIn]) >= 100:
+            ratio.append(float(data["ratio"][amplicon]))
+        else:
+            ratio.append(0.0)
+
+    ratio_reorder = [y for _,y in sorted(zip(map(int,labels),ratio))] 
+    label_reorder = [x for x,_ in sorted(zip(map(int,labels),ratio))]
+    
+    # plot counts
+    bar_w = 0.0
+    index = np.arange(len(ratio_reorder))
+    
+    plt.figure()
+    rects1 = plt.bar(index, ratio_reorder, # bar_w,
+        alpha = 0.95,
+        color = 'b',
+        align='center',
+        width = 0.35, 
+        # linestyle='-',
+        # marker = 'o',
+        )
+    plt.title('Read Ratio for Inline Controls (Endogenous to Spike-ins)')
+    plt.xlabel('In-line Control Amplicon Size (bp)')
+    plt.ylabel('Read Ratio')
+    plt.xticks(index + bar_w, label_reorder)
+    plt.ylim(bottom = 0.0)
+    if scale <= 5.0:
+        plt.yticks(np.arange(0.0, 5.05, 1.0))
+    else:
+        plt.yticks(np.arange(0.0, scale + round(scale/5), round(scale/5)))
+    plt.margins(0.2)
+    plt.subplots_adjust(bottom=0.15)
+    plt.savefig(fname,dpi=1000)
+    plt.close()

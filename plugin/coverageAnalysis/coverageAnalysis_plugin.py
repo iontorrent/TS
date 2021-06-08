@@ -257,13 +257,20 @@ def run_plugin(skiprun=False,barcode=""):
   if pluginParams['cmdOptions'].cmdline: return ({},{})
   printtime("Generating report...")
 
-  # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
-  createlink( os.path.join(plugin_dir,'flot'), output_dir )
-  createlink( os.path.join(plugin_dir,'lifechart'), output_dir )
-  createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
-  createlink( os.path.join(plugin_dir,'scripts','zipReport.php3'), output_dir )
-  if bedfile and annoBed: createlink( annoBed, output_dir )
-   
+  try:
+    # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
+    createlink( os.path.join(plugin_dir,'flot'), output_dir )
+    createlink(os.path.join(plugin_dir, 'scripts'), pluginParams['results_dir'])
+    createlink(os.path.join(plugin_dir, 'css'), pluginParams['results_dir'])
+    createlink( os.path.join(plugin_dir,'lifechart'), output_dir )
+    createlink( os.path.join(plugin_dir,'scripts'), output_dir )
+    createlink( os.path.join(plugin_dir,'css'), output_dir )
+    createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
+    createlink( os.path.join(plugin_dir,'scripts','zipReport.php3'), output_dir )
+    if bedfile and annoBed: createlink( annoBed, output_dir )
+  except Exception as Err:
+    printtime("Symbolic linking Error: %s", Err)
+
   # Optional: Delete intermediate files after successful run. These should not be required to regenerate any of the
   # report if the skip-analysis option. Temporary file deletion is also disabled when the --keep_temp option is used.
   #deleteTempFiles([ '*.bam', '*.bam.bai', '*.tmp' ])
@@ -343,10 +350,11 @@ def run_plugin(skiprun=False,barcode=""):
     "bed_anno" : checkOutputFileURL(os.path.basename(annoBed)),
     "aux_bbc" : checkOutputFileURL('tca_auxiliary.bbc'),
     "aux_ttc" : checkOutputFileURL('tca_auxiliary.ttc.xls'),
-    "file_links" : checkOutputFileURL('filelinks.xls'),
     "bam_link" : checkOutputFileURL(output_prefix+'.bam'),
     "bai_link" : checkOutputFileURL(output_prefix+'.bam.bai')
   }
+  if not pluginParams['cmdOptions'].isDx:
+    reportData["file_links"] = checkOutputFileURL('filelinks.xls')
   return (resultData,reportData)
 
 def checkOutputFileURL(fileURL):
@@ -514,8 +522,11 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
         "uniformity": "100.00%" if errZero else "NA"
       })
     else:
-      detailsLink = "<a target='_parent' href='%s' class='help'><span title='Click to view the detailed report for barcode %s'>%s</span><a>" % (
-        os.path.join(barcode,pluginParams['report_name']), barcode, barcode )
+      target = "_parent"
+      if pluginParams['cmdOptions'].isDx:
+        target = "_blank"
+      detailsLink = "<a href='%s' class='changeMap help' target='%s'><span title='Click to view the detailed report for barcode %s'>%s</span><a>" % (
+        os.path.join(barcode,pluginParams['report_name']), target, barcode, barcode )
       barcodeSummary.append({
         "index" : len(barcodeSummary),
         "barcode_name" : barcode,
@@ -529,6 +540,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
       })
   render_context = {
     "autorefresh" : autoRefresh,
+    "isDx" : pluginParams['cmdOptions'].isDx,
     "run_name" : pluginParams['prefix'],
     "barcode_results" : simplejson.dumps(barcodeSummary),
     "help_dict" : helpDictionary(),
@@ -593,6 +605,7 @@ def createDetailReport(resultData,reportData):
   if pluginParams['cmdOptions'].cmdline: return
   output_dir = pluginParams['output_dir']
   render_context = resultData.copy()
+  reportData["isDx"] = pluginParams['cmdOptions'].isDx
   render_context.update(reportData)
   createReport( os.path.join(output_dir,pluginParams['report_name']), 'report.html', render_context )
 

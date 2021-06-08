@@ -421,7 +421,7 @@ def compute_read_group_averages(combined_readgroup):
 #
 
 
-def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
+def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS, from_rawdata=False):
 
     #
     # Merge datasets_basecaller.json                       #
@@ -431,9 +431,15 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
     combined_datasets_json = {}
 
     for dir in dirs:
+        # original format (RUO): block + output (dir)
         current_datasets_path = os.path.join(
             dir, BASECALLER_RESULTS, "datasets_basecaller.json"
         )
+        if from_rawdata:
+            # alternative format: output (dir) + block
+            current_datasets_path = os.path.join(
+                BASECALLER_RESULTS, dir, "datasets_basecaller.json"
+            )
         try:
             f = open(current_datasets_path, "r")
             block_datasets_json.append(json.load(f))
@@ -525,42 +531,47 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
             ),
         )
 
-        # Doing the actual filtering - exclude no-match read group
+        # Doing the actual filtering
         for read_group in combined_datasets_json["read_groups"]:
-            filter_me = (
-                combined_datasets_json["read_groups"][read_group]["sample"] == "none"
-            )
-
-            if (
-                "barcode" in combined_datasets_json["read_groups"][read_group]
-            ) and filter_me:
-
-                if (
-                    combined_datasets_json["read_groups"][read_group]["read_count"]
-                    <= filter_threshold
-                ):
+            # Skip no-match read group
+            if not "barcode" in combined_datasets_json["read_groups"][read_group]:
+                continue
+            
+            # Default status is "not filtered"
+            combined_datasets_json["read_groups"][read_group]["filtered"] = False
+            
+            # Never filter control barcodes
+            if combined_datasets_json["read_groups"][read_group].get("controlType", ""):
+                continue
+            
+            # Check if adapter failed fraction is too high for conventional barcode sets
+            if "barcode_filters" in combined_datasets_json and (
+                combined_datasets_json["barcode_filters"].get("num_end_barcodes", 0) == 0
+            ):
+                if (5.0 *combined_datasets_json["read_groups"][read_group]["barcode"]["barcode_adapter_filtered"]
+                                   > float(combined_datasets_json["read_groups"][read_group]["read_count"])):
                     combined_datasets_json["read_groups"][read_group]["filtered"] = True
-
-                if (
-                    not combined_datasets_json["read_groups"][read_group]["filtered"]
-                ) and (
-                    combined_datasets_json["barcode_filters"]["filter_errors_hist"] > 0
-                ):
-                    av_errors = (
-                        combined_datasets_json["read_groups"][read_group]["barcode"][
-                            "barcode_errors_hist"
-                        ][1]
-                        + 2
-                        * combined_datasets_json["read_groups"][read_group]["barcode"][
-                            "barcode_errors_hist"
-                        ][2]
-                    ) / combined_datasets_json["read_groups"][read_group]["read_count"]
-                    combined_datasets_json["read_groups"][read_group]["filtered"] = (
-                        av_errors
-                        > combined_datasets_json["barcode_filters"][
-                            "filter_errors_hist"
-                        ]
-                    )
+                    printtime("WARNING: Read group %s is likely to be contaminated and is being filtered." % read_group)
+                    continue
+            
+            # Do not filter samples specified in the run report
+            if combined_datasets_json["read_groups"][read_group]["sample"] != "none":
+                continue
+            
+            # Filter on number of reads
+            if combined_datasets_json["read_groups"][read_group]["read_count"] <= filter_threshold:
+                combined_datasets_json["read_groups"][read_group]["filtered"] = True
+                continue
+            
+            # Legacy: Filter on average number of errors
+            if combined_datasets_json["barcode_filters"]["filter_errors_hist"] > 0:
+                av_errors = (
+                    combined_datasets_json["read_groups"][read_group]["barcode"]["barcode_errors_hist"][1]
+                    + 2 * combined_datasets_json["read_groups"][read_group]["barcode"]["barcode_errors_hist"][2]
+                ) / combined_datasets_json["read_groups"][read_group]["read_count"]
+                is_filtered = av_errors > combined_datasets_json["barcode_filters"]["filter_errors_hist"]
+            
+                combined_datasets_json["read_groups"][read_group]["filtered"] = is_filtered
     # ----------------------------------------------------------------------
 
     try:
@@ -696,6 +707,7 @@ def generate_datasets_json(
                     # "barcode_adapter": barcode_info['adapter'],
                     "barcode": {},
                     "index": barcode_info["index"],
+                    "controlType": barcode_info.get("controlType", ""),
                     "sample": barcode_info["sample"],
                     # "library"           : library,
                     "reference": barcode_info["referenceName"],
@@ -719,7 +731,9 @@ def generate_datasets_json(
                         "barcode_name": barcode_info["endBarcode"]["id_str"],
                         "barcode_sequence": barcode_info["endBarcode"]["sequence"],
                         "barcode_adapter": barcode_info["endBarcode"]["adapter"],
-                        "analyze_as_single": barcode_info["endBarcode"].get("analyze_as_single", False),
+                        "analyze_as_single": barcode_info["endBarcode"].get(
+                            "analyze_as_single", False
+                        ),
                     }
                     # Update name
                     datasets["read_groups"][runID + "." + start_barcode_name][

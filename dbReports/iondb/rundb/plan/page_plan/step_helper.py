@@ -632,3 +632,10 @@ class StepHelper(object):
 
     def getChevronParentLabel(self):
         return self.getSubNavMenuLabel(truncate=1000, verbose=False)
+
+    def getLibraryPrepProtocol(self):
+        if self.isPlanBySample():
+            return self.steps[StepNames.KITS].savedFields.get(
+                KitsFieldNames.LIBRARY_PREP_PROTOCOL, ""
+            )
+        return None

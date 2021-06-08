@@ -1020,7 +1020,6 @@ def add_or_update_rna_system_templates():
     plugins[thirdPartyPluginName] = _get_plugin_dict(thirdPartyPluginName)
 
     finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
-
     # 18
     templateParams = TemplateParams("Ion RNA - Whole Transcriptome", PROTON, "RNA")
     templateParams.update(
@@ -1030,6 +1029,35 @@ def add_or_update_rna_system_templates():
             "flows": 500,
             "libraryKitName": "Ion Total RNA Seq Kit v2",
             "barcodeKitName": "IonXpressRNA",
+            "templatingKitName": "Ion PROTON IC v2 Universal",
+            "samplePrepProtocol": "no10xab"
+
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+
+    # pre-select plugins
+    plugins = {}
+    plugins["RNASeqAnalysis"] = _get_plugin_dict("RNASeqAnalysis")
+
+    thirdPartyPluginName = "PartekFlowUploader"
+    plugins[thirdPartyPluginName] = _get_plugin_dict(thirdPartyPluginName)
+
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+
+
+    # S5 template for RNAseq
+    templateParams = TemplateParams("Ion RNA - Whole Transcriptome - S5", S5, "RNA")
+    templateParams.update(
+        {
+            "applicationGroup": "RNA",
+            "chipType": "540",
+            "flows": 500,
+            "libraryKitName": "Ion Total RNA Seq Kit v2",
+            "barcodeKitName": "IonXpressRNA",
+            "templatingKitName": "Ion Chef S540 V1",
+            "samplePrepProtocol": "no10xab"
+
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1088,7 +1116,7 @@ def add_or_update_metagenomics_system_templates():
     BARCODE_KIT_NAME = "IonCode"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    PLAN_STATUS = "planned"
+    PLAN_STATUS = "active"
     templateParams = TemplateParams(
         "Ion AmpliSeq Microbiome Health Research Panel", S5, "TARS_16S"
     )
@@ -1817,7 +1845,6 @@ def add_or_update_oncomine_ondemand_530_system_templates():
     REFERENCE = "hg19"
     SEQ_KIT_NAME_S5 = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME_S5 = "Ion Chef S530 V2"
-    PLAN_STATUS = "inactive"
 
     # pre-select plugins
     plugins = {}
@@ -1840,7 +1867,6 @@ def add_or_update_oncomine_ondemand_530_system_templates():
             "sampleGrouping": "Self",
             "sequencekitname": SEQ_KIT_NAME_S5,
             "templatingKitName": TEMPLATE_KIT_NAME_S5,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1862,7 +1888,6 @@ def add_or_update_oncomine_ondemand_530_system_templates():
             "sampleGrouping": "DNA and Fusions",
             "sequencekitname": SEQ_KIT_NAME_S5,
             "templatingKitName": TEMPLATE_KIT_NAME_S5,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -1884,7 +1909,6 @@ def add_or_update_oncomine_ondemand_530_system_templates():
             "sampleGrouping": "Single Fusions",
             "sequencekitname": SEQ_KIT_NAME_S5,
             "templatingKitName": TEMPLATE_KIT_NAME_S5,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2593,7 +2617,7 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2616,7 +2640,7 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2639,7 +2663,7 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2684,7 +2708,7 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2707,7 +2731,7 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2730,7 +2754,7 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
+            "planStatus": PLAN_STATUS
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2745,7 +2769,7 @@ def add_or_update_proton_PQ_system_template():
     TEMPLATE_KIT_NAME = "Ion PQ Template OT2 Kit"
     SEQ_KIT_NAME = "IonProtonPQKit"
     BARCODE_KIT_NAME = "IonXpress"
-    PLAN_STATUS = "inactive"
+    PLAN_STATUS = "planned"
 
     # 73
     templateParams = TemplateParams("Ion NIPT template - PQ", PROTON, "WGNM")
@@ -3708,7 +3732,7 @@ def add_or_update_carrierseq_system_templates():
         threePrimeAdapterList[0].sequence if threePrimeAdapterList else ""
     )
 
-    templateParams = TemplateParams("Ion Carrier Seq DNA - Ion S5 System", S5, RUN_TYPE)
+    templateParams = TemplateParams("Ion CarrierSeq DNA - Ion S5 System", S5, RUN_TYPE)
     templateParams.update(
         {
             "chipType": "540",
@@ -3742,7 +3766,7 @@ def add_or_update_oncomine_ocav4_550_system_templates():
     OCAV4_REFERENCE = "hg19"
     OCAV4_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     OCAV4_TEMPLATE_KIT_NAME = "Ion Chef S550 V1"
-    OCAV4_STATUS = "inactive"
+    OCAV4_STATUS = "planned"
 
     # pre-select plugins
     plugins = {}
@@ -3818,12 +3842,12 @@ def add_or_update_oncomine_ocav4_550_system_templates():
 
 
 def add_or_update_pan_bacteria_540_system_templates():
-    LIBRARY_READ_LENGTH = 200
+    LIBRARY_READ_LENGTH = 150
     BARCODE_KIT_NAME = "IonXpress"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    LIBRARY_KTI_NAME = "IonPlusFragmentLibKit"
-    PLAN_STATUS = "inactive"
+    LIBRARY_KTI_NAME = "Ion AmpliSeq Library Kit Plus"
+    PLAN_STATUS = "planned"
     CATEGORIES = "16s"
     REFERENCE = "PanBacterial_ID_Genes_Reference"
 
@@ -3983,13 +4007,14 @@ def clean_up_obsolete_templates():
             "Oncomine Comprehensive v4 Fusions for 550",
             "Oncomine Mouse TCRB-SR for S5",
             "Oncomine Mouse IGH-SR for S5",
-            "Oncomine On-Demand DNA for 530"
-            "Oncomine On-Demand DNA and Fusions for 530"
+            "Oncomine On-Demand DNA for 530",
+            "Oncomine On-Demand DNA and Fusions for 530",
             "Oncomine On-Demand Fusions for 530",
             "Ion 16S AmpliSeq Health Research Template",
             "Oncomine Tumor Specific DNA for 530",
             "Oncomine Tumor Specific DNA and Fusions for 530",
             "Oncomine Tumor Specific Fusions for 530",
+            "Ion Carrier Seq DNA - Ion S5 System"
         ]
 
         templates = models.PlannedExperiment.objects.filter(

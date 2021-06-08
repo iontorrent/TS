@@ -279,6 +279,12 @@ ChunkFlowData* SemQueue::deQueue()
   return item;
 }
 
+RawWells::RawWells()
+{
+  mSaveAsUShort = false;
+  Init ("", "", 0,0,0);
+}
+
 RawWells::RawWells ( const char *experimentPath, const char *rawWellsName, int rows, int cols )
 {
   mSaveAsUShort = false;
@@ -1175,6 +1181,7 @@ bool RawWells::OpenMetaData()
   return true;
 }
 
+
 bool RawWells::OpenForRead ( bool memmap_dummy )
 {
   //  mWriteOnClose = false;
@@ -1417,7 +1424,7 @@ void RawWells::OpenWellsToRead()
                                     if(ret < 0)
                                     {
                                         mWellsCopies2.resize(mRows * mCols, 1.0);
-                                        cerr << "RawWells::OpenWellsToRead() WARNING: failto load dataset wells_copies." << endl;
+                                        cerr << "RawWells::OpenWellsToRead() WARNING: failed to load dataset wells_copies." << endl;
                                     }
                                 }
                             }
@@ -1561,6 +1568,7 @@ void RawWells::OpenResToRead()
 
   InitIndexes();
 }
+
 
 void RawWells::OpenForIncrementalRead()
 {
@@ -1899,6 +1907,27 @@ bool RawWells::WellsInSubset ( uint32_t currentRowStart, uint32_t currentRowEnd,
   }
   return false;
 }
+
+
+float RawWells::GetCopyCount(size_t row, size_t col) const
+{
+  return GetCopyCount( ToIndex ( col,row ));
+}
+
+float RawWells::GetCopyCount(size_t well) const
+{
+  if (not(mSaveAsUShort && mConvertWithCopies)) {
+    cerr << "RawWells::GetCopyCount Wells Copy Count not loaded." << endl;
+    return -1.0;
+  }
+  else if (well >= mWellsCopies2.size()){
+    cerr << "RawWells::GetCopyCount Well index "<< well << " out of bounds: "<< mWellsCopies2.size() << endl;
+    return -1.0;
+  }
+  else
+    return mWellsCopies2.at(well);
+}
+
 
 float RawWells::At ( size_t row, size_t col, size_t flow ) const
 {

@@ -52,12 +52,13 @@
 </head>
 
 <body>
-
-<h1><center>Coverage Analysis Report</center></h1>
-{% if Sample_Name != "" and Sample_Name != "None" %}
-<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% if not isDx %}
+    <h1><center>Coverage Analysis Report</center></h1>
+    {% if Sample_Name != "" and Sample_Name != "None" %}
+        <h3><center>Sample Name: {{Sample_Name}}</center></h3>
+    {% endif %}
+    <h3><center>{{run_name}}</center></h3>
 {% endif %}
-<h3><center>{{run_name}}</center></h3>
 
 <table class="center">
 <tr><td><h4>
@@ -290,18 +291,19 @@
 {% if bas_stats %}
 <div id='ReferenceCoverageChart' {% if wgn_stats %}genome outlieroffscale{% else %}collapse{% endif %} bbcfile='{{output_dir}}/{{aux_bbc}}' annofile='{{output_dir}}/{{bed_anno}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
-<div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
+{% if not isDx %}
+    <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
+    <br/>
+    <div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+      <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+      <div class="pull-right">
+        <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+        <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
 
-<br/>
-<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
-  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
-  <div class="pull-right">
-    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
-    <p><span class="copyright">&copy; 2018 Thermo Fisher Scientific Inc. All Rights Reserved.</span>
-
-    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
-  </div>
-</div> </div> </div> </div>
+        <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+      </div>
+    </div> </div> </div> </div>
+{% endif %}
 <br/>
 </body>
 </html>

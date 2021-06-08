@@ -127,7 +127,7 @@
                             <h3>
                                 {% trans "workflow.summary.title.label" %}
                                 {% if helper.isPlanBySample %}
-                                <h4>{% trans "workflow.step.saveplan.bysample.fields.sampleSets.label" %}: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.all|join:", "}}</h4>
+                                <h4>{% trans "workflow.step.saveplan.bysample.fields.sampleSets.label" %}: {{helper.getStepDict.Save_plan_by_sample.savedObjects.sampleset.all.distinct |join:", "}}</h4>
                                 {% endif %}
                             </h3>
                             <hr class="summary">

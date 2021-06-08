@@ -29,6 +29,7 @@ from iondb.rundb.plan.plan_share import (
 )
 from iondb.rundb.plan import plan_validator
 from iondb.rundb.sample import sample_validator
+from iondb.rundb.sample import views_helper
 from iondb.rundb.api_custom import (
     ModelResource,
     SDKValidationError,
@@ -1245,11 +1246,17 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     "libraryPrepTypeDisplayedName"
                 ] = sampleset.get_libraryPrepType_display()
 
-            if sampleset.combinedLibraryTubeLabel:
-                bundle.data[
-                    "combinedLibraryTubeLabel"
-                ] = sampleset.combinedLibraryTubeLabel
 
+            if sampleset.combinedLibraryTubeLabel:
+                libPoolId = bundle.obj.libraryPool
+                if libPoolId:
+                    bundle.data[
+                        "combinedLibraryTubeLabel"
+                    ] = sampleset.combinedLibraryTubeLabel.split(',')[int(libPoolId)-1]
+                else:
+                    bundle.data[
+                        "combinedLibraryTubeLabel"
+                    ] = sampleset.combinedLibraryTubeLabel
         applicationGroup = bundle.obj.applicationGroup
         bundle.data["applicationGroupDisplayedName"] = (
             applicationGroup.description if applicationGroup else ""
@@ -2042,6 +2049,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         # process SampleSet, if specified
         sampleSetName = data.get("sampleSetName")
+        libraryPoolId = data.get("libraryPool")
         if sampleSetName:
             try:
                 sampleSet = models.SampleSet.objects.get(displayedName=sampleSetName)
@@ -2085,12 +2093,26 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data["sampleSetDisplayedName"] = sampleSet.displayedName
             bundle.data["sampleGroupingName"] = sampleGroupingName
             bundle.data["librarykitname"] = sampleSet.libraryPrepKitName
+            bundle.data["libraryPool"] = libraryPoolId
 
             if not barcodedSamples:
                 # get samples from SampleSet
                 sampleset_samples = []
                 sampleset_barcodeKit = ""
+                libraryPoolPlanData = []
+                if libraryPoolId:
+                    libPool = "pool"+str(libraryPoolId)
+                    multiPoolPlanData = views_helper.processMultiPoolPlanSupport([sampleSet])
+                    if libPool in multiPoolPlanData.keys():
+                        if multiPoolPlanData[libPool]:
+                            libraryPoolPlanData = multiPoolPlanData[libPool].split(",")
+                    else:
+                        raise SDKValidationError(
+                            {"libraryPool": "Invalid library pool id. Valid values are 1 or 2. Libraries should be either Pool: 1(A-D) or 2(E-H): %s" % sampleSetName}
+                        )
                 for item in sampleSet.samples.all():
+                    if libraryPoolPlanData and str(item.id) not in libraryPoolPlanData:
+                        continue
                     sampleset_samples.append(
                         {
                             "sampleName": item.sample.name,
@@ -2109,7 +2131,6 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     )
                     if item.dnabarcode:
                         sampleset_barcodeKit = item.dnabarcode.name
-
                 barcodedSamples = _get_barcodedSamples(
                     sampleset_samples, default_nuctype
                 )

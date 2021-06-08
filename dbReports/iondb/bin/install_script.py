@@ -454,7 +454,8 @@ if __name__ == "__main__":
         user, is_newly_added = add_user("ionuser", "ionuser")
         if user:
             try:
-                user.is_active = False
+                if is_newly_added:
+                    user.is_active = False
                 group = Group.objects.get(name="ionusers")
                 if group and user.groups.count() == 0:
                     user.groups.add(group)
@@ -465,8 +466,9 @@ if __name__ == "__main__":
 
         create_user_profiles()
 
-        user.userprofile.needs_activation = True
-        user.userprofile.save()
+        if is_newly_added:
+            user.userprofile.needs_activation = True
+            user.userprofile.save()
 
         # Added set_unusable_password() for these users
         # These users exists only to uniformly store records of their contact

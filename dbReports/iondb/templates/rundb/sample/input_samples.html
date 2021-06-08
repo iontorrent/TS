@@ -178,6 +178,10 @@
 
         <div>
           <button id="new_SampleSet" type="button" class="btn" data-toggle="collapse" data-target="#add_sample_set_info"  aria-expanded="false" aria-controls="collapseExample">{% if edit_amp_sampleSet  %} Edit sample set... {% else %} Create sample set {% endif  %}</button>
+          <div class="pull-right">
+            <a id="clear_input_samples" href="{% url "clear_input_samples" %}" class="btn btn-danger clear_input_samples">{% trans "samplesets.input_samples.action.clear_input_samples.label" %}</a>
+            <a id="save_samplesetitems" href="{% url "show_save_input_samples" %}" class="btn btn-primary done_save_samplesetitems_btn">{% trans "samplesets.input_samples.action.show_save_input_samples_for_sampleset.label" %}</a>
+		  </div>
             {% include "rundb/sample/sampleset_input_section.html" %}
         </div>
         </div>
@@ -187,7 +191,7 @@
 						<h1 style="margin-bottom:5px;">{% trans "samplesets.input_samples.title" %}</h1>
 					</div>
 					<div class="pull-right">
-		            	<a id="enter_sample" href="{% url "show_add_pending_sample" %}" class="btn btn-primary modal_enter_sample">{% trans "samplesets.input_samples.action.show_add_pending_samplesetitem.label" %}</a>
+                        <a id="enter_sample" href="{% url "show_add_pending_sample" %}" class="btn btn-secondary modal_enter_sample" style="margin-top:15px;">{% trans "samplesets.input_samples.action.show_add_pending_samplesetitem.label" %}</a>
 					</div>
 				</div>
 			</div>
@@ -203,10 +207,6 @@
                         {% endif %}
                     </div>
 					<div id="input_samplesetitem_grid"></div>
-					<div class="pull-right">
-            		<a id="clear_input_samples" href="{% url "clear_input_samples" %}" class="btn btn-danger clear_input_samples">{% trans "samplesets.input_samples.action.clear_input_samples.label" %}</a>
-					<a id="save_samplesetitems" href="{% url "show_save_input_samples" %}" class="btn btn-primary done_save_samplesetitems_btn">{% trans "samplesets.input_samples.action.show_save_input_samples_for_sampleset.label" %}</a>
-					</div>
 				</div>
 			</div>
 </form>
@@ -253,16 +253,10 @@ $(document).ready(function(){
 
             $.post(url, data, function(data) {
                  if (data == "true"){
-                    //$( "#modal_save_samplesetitems_popup" ).modal("hide");
-                    //$('body #modal_save_samplesetitems_popup').remove();
-
                     window.location = SAMPLESET_URL;
                   }else {
-
                     $('#save_samplesetitems_into_ss .workflow-step #error-messages').empty();
-
                     $('#save_samplesetitems_into_ss .workflow-step #error-messages').removeClass('hide');
-
                     for (var i=0;i < data.length;i++) {
                         $('#save_samplesetitems_into_ss .workflow-step #error-messages').append('<p class="error">' + data[i] + '</p>');
                         console.log("error:", data[i]);

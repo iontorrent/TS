@@ -54,7 +54,10 @@ enum {
   @details        throws a command line argument error if the value is not within the bounds
   */
 void
-tmap_error_cmd_check_int(int32_t val, int32_t lower, int32_t upper, char *option);
+tmap_error_cmd_check_int (int32_t val, int32_t lower, int32_t upper, char *option);
+
+void
+tmap_error_cmd_check_int_x (int32_t val, int32_t lower, int32_t upper, int32_t special, char *option);
 
 /*! 
   checks if the 64-bit integer value falls within the bounds
@@ -66,6 +69,15 @@ tmap_error_cmd_check_int(int32_t val, int32_t lower, int32_t upper, char *option
   */
 void
 tmap_error_cmd_check_int64(int64_t val, int64_t lower, int64_t upper, char *option);
+
+void
+tmap_error_cmd_check_int64_x (int64_t val, int64_t lower, int64_t upper, int64_t special, char *option);
+
+void
+tmap_error_cmd_check_double (double val, double lower, double upper, char *option);
+
+void
+tmap_error_cmd_check_double_x (double val, double lower, double upper, double special, char *option);
 
 /*!
   process a bug
@@ -101,20 +113,16 @@ tmap_error_cmd_check_int64(int64_t val, int64_t lower, int64_t upper, char *opti
   @param  action_type    the action to be taken
   @param  error_type     the error type 
   */
-void 
-tmap_error_full (const char *file, const unsigned int line, const char *function_name, const char *variable_name, int action_type, int error_type);
+void tmap_error_full (const char *file, const unsigned int line, const char *function_name, const char *variable_name, int action_type, int error_type);
 
-void 
-tmap_fail (int fail, const char* fname, const char* func_name, int lineno, const char *fmt, ...);
+void tmap_fail (int fail, const char* fname, const char* func_name, int lineno, const char *fmt, ...);
 
-void 
-tmap_warn (const char* fname, const char* func_name, int lineno, const char *fmt, ...);
+void tmap_warn (const char* fname, const char* func_name, int lineno, const char *fmt, ...);
 
-void 
-tmap_user_warning (const char *fmt, ...);
+void tmap_user_warning (const char *fmt, ...);
 
-void 
-tmap_user_fileproc_msg (const char* fname, int lineno, const char *fmt, ...);
+void tmap_user_fileproc_msg (const char* fname, int lineno, const char *fmt, ...);
+
 
 #define tmap_conderr(quit, fmt, args...) \
     tmap_fail (quit, __FILE__, __func__, __LINE__, fmt, args)

@@ -22,7 +22,8 @@ from iondb.rundb.models import (
     SamplePrepData,
     dnaBarcode,
     SampleAnnotation_CV,
-)
+    common_CV,
+    KitInfo, ChefPcrPlateconfig)
 
 from django.contrib.auth.models import User
 from iondb.rundb.sample import sample_validator
@@ -87,82 +88,78 @@ def validate_for_existing_samples(
     return len(errors) == 0, errors, categoryDict, samplesetitems
 
 
-def _get_or_create_sampleSet(queryDict, user):
-    # create new sampleSet
-    new_sampleSetName = queryDict.get("new_sampleSetName", "").strip()
-    if not new_sampleSetName:
+def create_or_update_sampleSet(queryDict, user, sampleSet_id=None):
+    sampleSetName = queryDict.get("sampleSetName", "").strip()
+    if not sampleSetName and not sampleSet_id:
         return True, None, None
 
-    new_sampleSetDesc = queryDict.get("new_sampleSetDescription", "").strip()
-    new_sampleSet_groupType_id = queryDict.get("new_sampleSet_groupType", None)
-    new_sampleSet_libraryPrepType = queryDict.get(
-        "new_sampleSet_libraryPrepType", ""
-    ).strip()
-    new_sampleSet_libraryPrepKitName = queryDict.get(
-        "new_sampleSet_libraryPrepKit", ""
-    ).strip()
-    new_sampleSet_pcrPlateSerialNum = queryDict.get(
-        "new_sampleSet_pcrPlateSerialNum", ""
-    ).strip()
+    kwargs = {
+        "displayedName": sampleSetName,
+        "description": queryDict.get("sampleSetDescription", "").strip(),
+        "SampleGroupType_CV_id": queryDict.get("groupType"),
+        "libraryPrepType": queryDict.get("libraryPrepType", "").strip(),
+        "libraryPrepKitName": queryDict.get("libraryPrepKit", "").strip(),
+        "pcrPlateSerialNum": queryDict.get("pcrPlateSerialNum", "").strip(),
+        "libraryPrepProtocol": queryDict.get("libraryPrepProtocol", "").strip(),
+        "additionalCycles": queryDict.get("additionalCycles", "").strip(),
+        "libraryPrepInstrument": "chef" if "chef" in queryDict.get("libraryPrepType", "") else "",
+        "lastModifiedUser": user,
+        "lastModifiedDate": timezone.now(),
+        "categories": "",
+    }
 
-    # nullify group type if user does not specify a group type
-    if new_sampleSet_groupType_id == "0" or new_sampleSet_groupType_id == 0:
-        new_sampleSet_groupType_id = None
+    if kwargs["SampleGroupType_CV_id"] == "0" or kwargs["SampleGroupType_CV_id"] == 0:
+        kwargs["SampleGroupType_CV_id"] = None
+
+    # copy any categories to SampleSet
+    if kwargs["libraryPrepProtocol"]:
+        kwargs["categories"] = common_CV.objects.get(
+            value=kwargs["libraryPrepProtocol"]
+        ).categories
+
+    if sampleSet_id:
+        isNew = False
+        sampleSet = get_object_or_404(SampleSet, pk=sampleSet_id)
+        kwargs["status"] = sampleSet.status or "created"
+        kwargs["libraryPrepInstrumentData"] = sampleSet.libraryPrepInstrumentData
+    else:
+        isNew = True
+        sampleSet = SampleSet()
+        kwargs["status"] = "created"
+        kwargs["libraryPrepInstrumentData"] = None
+        kwargs["creator"] = user
+
+    # handle Ampliseq on Chef
+    if kwargs["libraryPrepInstrument"] == "chef":
+        if kwargs["status"] == "created":
+            kwargs["status"] = "libPrep_pending"
+        if not kwargs["libraryPrepInstrumentData"]:
+            kwargs["libraryPrepInstrumentData"] = SamplePrepData.objects.create(
+                samplePrepDataType="lib_prep"
+            )
+    else:
+        if kwargs["status"] == "libPrep_pending":
+            kwargs["status"] = "created"
+        if kwargs["libraryPrepInstrumentData"]:
+            kwargs["libraryPrepInstrumentData"].delete()
 
     # validate sampleSet parameters
     isValid, errorMessage = sample_validator.validate_sampleSet_values(
-        new_sampleSetName, new_sampleSetDesc, new_sampleSet_pcrPlateSerialNum, True
+        kwargs["displayedName"],
+        kwargs["description"],
+        kwargs["pcrPlateSerialNum"],
+        isNew,
+        additionalCycles=kwargs["additionalCycles"],
+        libraryPrepProtocol=kwargs["libraryPrepProtocol"],
+        libraryPrepKit=kwargs["libraryPrepKitName"],
     )
     if errorMessage:
         return isValid, errorMessage, None
 
-    if "chef" in new_sampleSet_libraryPrepType.lower():
-        libraryPrepInstrument = "chef"
-        sampleSetStatus = "libPrep_pending"
-    else:
-        libraryPrepInstrument = ""
-        sampleSetStatus = "created"
-
-    sampleSet_kwargs = {
-        "description": new_sampleSetDesc,
-        "pcrPlateSerialNum": new_sampleSet_pcrPlateSerialNum,
-        "libraryPrepKitName": new_sampleSet_libraryPrepKitName,
-        "status": sampleSetStatus,
-        "lastModifiedUser": user,
-    }
-
-    sampleSet, isCreated = SampleSet.objects.get_or_create(
-        displayedName=new_sampleSetName.strip(),
-        SampleGroupType_CV_id=new_sampleSet_groupType_id,
-        libraryPrepType=new_sampleSet_libraryPrepType,
-        libraryPrepInstrument=libraryPrepInstrument,
-        creator=user,
-        defaults=sampleSet_kwargs,
-    )
-
-    if isCreated:
-        if sampleSet.libraryPrepInstrument == "chef":
-            libraryPrepInstrumentData_obj = SamplePrepData.objects.create(
-                samplePrepDataType="lib_prep"
-            )
-            sampleSet.libraryPrepInstrumentData = libraryPrepInstrumentData_obj
-            logger.debug(
-                "views_helper - sampleSet.id=%d; isCreated=%s; GOING TO ADD libraryPrepInstrumentData_obj.id=%d"
-                % (sampleSet.id, str(isCreated), libraryPrepInstrumentData_obj.id)
-            )
-            sampleSet.save()
-    else:
-        if sampleSet.libraryPrepInstrument == "":
-            if sampleSet.libraryPrepInstrumentData:
-                logger.debug(
-                    "views_helper - sampleSet.id=%d; isCreated=%s; GOIGN TO DELETE libraryPrepInstrumentData_obj.id=%d"
-                    % (
-                        sampleSet.id,
-                        str(isCreated),
-                        sampleSet.libraryPrepInstrumentData.id,
-                    )
-                )
-                sampleSet.libraryPrepInstrumentData.delete()
+    # create SampleSet
+    for field, value in kwargs.items():
+        setattr(sampleSet, field, value)
+    sampleSet.save()
 
     return True, None, sampleSet.id
 
@@ -852,15 +849,15 @@ def _get_libraryPrepType_choices(request):
     return choices
 
 
-def _get_cyclingProtocols_choices(request):
-    cyclingProtocols_choices = [
-        cyclingProtocol
-        for cyclingProtocol in SampleAnnotation_CV.objects.filter(
-            isActive=True, annotationType="cyclingProtocols"
+def _get_libraryPrepProtocol_choices(request):
+    libraryPrepProtocol_choices = [
+        libraryPrepProtocol
+        for libraryPrepProtocol in common_CV.objects.filter(
+            isActive=True, cv_type="libraryPrepProtocol"
         ).order_by("id")
     ]
 
-    return cyclingProtocols_choices
+    return libraryPrepProtocol_choices
 
 
 def _get_additionalCycles_choices(request):
@@ -1007,3 +1004,42 @@ def assign_pcr_plate_rows(parsedSamplesetitems):
         upated_pending_sampleSetItem_list.append(item)
 
     return upated_pending_sampleSetItem_list
+
+
+def getChefPcrPlateConfig(sampleSet):
+    libraryPrepKitId = KitInfo.objects.filter(name=sampleSet.libraryPrepKitName)[0].id
+    chefPcrPlateconfig = ChefPcrPlateconfig.objects.get(
+        kit=libraryPrepKitId
+    )
+    return chefPcrPlateconfig.get_chefPlatesConfig(libraryPrepKitId)
+
+def processMultiPoolPlanSupport(sampleSets):
+    allPlatesMapping = []
+    pool1PlanSampleSetItemIds = []
+    pool2PlanSampleSetItemIds = []
+    for sampleSet in sampleSets:
+        plateMapping = {}
+        plateConfiguration = getChefPcrPlateConfig(sampleSet)
+        sampleSetItems = sampleSet.samples.all()
+        for item in sampleSetItems:
+            if item.pcrPlateRow in plateConfiguration['pool1PcrPlateRows']:
+                pool1PlanSampleSetItemIds.append(item.id)
+            else:
+                pool2PlanSampleSetItemIds.append(item.id)
+            if item.dnabarcode:
+                barcode1 = item.dnabarcode.id_str
+                for k in plateConfiguration.keys():
+                    if barcode1 in plateConfiguration[k]:
+                        if k in plateMapping:
+                            plateMapping[k] += 1
+                        else:
+                            plateMapping[k] = 1
+        allPlatesMapping.append(plateMapping)
+    allSamples, errors = sample_validator.validate_multi_pool_support_samples(allPlatesMapping, sampleSets)
+
+    return {
+        'all': allSamples,
+        'pool1': ','.join(str(x) for x in pool1PlanSampleSetItemIds),
+        'pool2': ','.join(str(x) for x in pool2PlanSampleSetItemIds),
+        'errors': errors
+    }

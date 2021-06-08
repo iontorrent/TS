@@ -1,0 +1,6 @@
+key,English-US,Taiwan,img,Taiwan-img
+eval_lot,,,eval_lot.jpg,
+pass,PASS,,pass.jpg,
+fail,FAIL,,fail.jpg,
+key_invalid_option,"\n\nYOU HAVE SELECTED AN INVALID OPTION",,alert.jpg,
+key_invalid_lot,"INVALID LOT",,alert.jpg,

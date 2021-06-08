@@ -100,6 +100,7 @@ readWells <- function(
 	val$nFlow        <- data.wells$nFlow
 	val$flowOrder    <- substr(data.wells$flowOrder,1,data.wells$nFlow)
 	val$rank         <- data.wells$rank
+	val$wellsCopies  <- data.wells$wellsCopies
 	val$signal       <- data.wells$signal
 
 	return(val)

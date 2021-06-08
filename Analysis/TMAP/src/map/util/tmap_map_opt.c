@@ -5,6 +5,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <config.h>
+#include <assert.h>
 #include "../../util/tmap_alloc.h"
 #include "../../util/tmap_error.h"
 #include "../../util/tmap_sort.h"
@@ -45,18 +46,48 @@ static char *tmap_map_opt_input_types[] = {"INT", "FLOAT", "NUM", "FILE", "STRIN
       tmap_file_fprintf(tmap_file_stderr, "%s[%s%d%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
   }
 
-// int64_t print function
+// int32_t or message if default is used print function
+#define __tmap_map_opt_option_print_func_int_or_msg_init(_name, _defval, _defmsg) \
+  static void tmap_map_opt_option_print_func_##_name(void *arg) { \
+      tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
+      if (opt->_name == _defval) \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, _defmsg, KMAG, KNRM); \
+      else \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%d%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
+  }
+
+  // int64_t print function
 #define __tmap_map_opt_option_print_func_int64_init(_name) \
   static void tmap_map_opt_option_print_func_##_name(void *arg) { \
       tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
       tmap_file_fprintf(tmap_file_stderr, "%s[%s%ld%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
   }
 
-// double print function
+// int64_t or message if default is used print function
+#define __tmap_map_opt_option_print_func_int64_or_msg_init(_name, _defval, _defmsg) \
+  static void tmap_map_opt_option_print_func_##_name(void *arg) { \
+      tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
+      if (opt->_name == _defval) \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, _defmsg, KMAG, KNRM); \
+      else \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%ld%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
+  }
+
+  // double print function
 #define __tmap_map_opt_option_print_func_double_init(_name) \
   static void tmap_map_opt_option_print_func_##_name(void *arg) { \
       tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
-      tmap_file_fprintf(tmap_file_stderr, "%s[%s%lf%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
+      tmap_file_fprintf(tmap_file_stderr, "%s[%s%g%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
+  }
+
+// double or message if default is used print function
+#define __tmap_map_opt_option_print_func_double_or_msg_init(_name, _defval, _defmsg) \
+  static void tmap_map_opt_option_print_func_##_name(void *arg) { \
+      tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
+      if (opt->_name == _defval) \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, _defmsg, KMAG, KNRM); \
+      else \
+          tmap_file_fprintf (tmap_file_stderr, "%s[%s%g%s]%s", KMAG, KYEL, opt->_name, KMAG, KNRM); \
   }
 
 // char array print function
@@ -106,6 +137,7 @@ static char *tmap_map_opt_input_types[] = {"INT", "FLOAT", "NUM", "FILE", "STRIN
           tmap_file_fprintf(tmap_file_stderr, "%s[number: %s%d%s]%s", KMAG, KYEL, opt->_name_num, KMAG, KNRM); \
       } \
   }
+
 
 // number/fraction
 #define __tmap_map_opt_option_print_func_nf_init(_name_num, _name_frac) \
@@ -232,9 +264,9 @@ __tmap_map_opt_option_print_func_int_init(debug_log)
 // __tmap_map_opt_option_print_func_int_init(context_noclip)
 
 // alignment length filtering
-__tmap_map_opt_option_print_func_int_init(min_al_len)
-__tmap_map_opt_option_print_func_double_init(min_al_cov)
-__tmap_map_opt_option_print_func_double_init(min_identity)
+__tmap_map_opt_option_print_func_int_or_msg_init(min_al_len, MIN_AL_LEN_NOCHECK_SPECIAL, "Not filtered")
+__tmap_map_opt_option_print_func_double_or_msg_init(min_al_cov, MIN_AL_COVERAGE_NOCHECK_SPECIAL, "Not filtered")
+__tmap_map_opt_option_print_func_double_or_msg_init(min_identity, MIN_AL_IDENTITY_NOCHECK_SPECIAL, "Not filtered")
 
 // flowspace
 __tmap_map_opt_option_print_func_int_init(fscore)
@@ -324,12 +356,12 @@ tmap_map_opt_option_type_length(tmap_map_opt_option_t *opt)
   }
   return type_length;
 }
-          
+
 static void
 tmap_map_opt_option_print(tmap_map_opt_option_t *opt, tmap_map_opt_t *parent_opt)
 {
   int32_t i, j, flag_length, type_length, length_to_description = 0;
-  static char *spacer = "         ";
+  static char *spacer = "    ";
 
   flag_length = tmap_map_opt_option_flag_length(opt);
   type_length = tmap_map_opt_option_type_length(opt);
@@ -778,9 +810,9 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_max_adapter_bases_for_soft_clipping,
                            TMAP_MAP_ALGO_GLOBAL);
-  tmap_map_opt_options_add(opt->options, "er-5clip", no_argument, 0, 0, 
+  tmap_map_opt_options_add(opt->options, "er-no5clip", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
-                           "allow end repair to introduce 5' soft clips",
+                           "disable 5' soft clipping by end-repair",
                            NULL,
                            tmap_map_opt_option_print_func_end_repair_5_prime_softclip,
                            TMAP_MAP_ALGO_GLOBAL);
@@ -915,7 +947,6 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_do_hp_weight,
                            TMAP_MAP_ALGO_GLOBAL);
-
   // hp gap scaling mode
   tmap_map_opt_options_add(opt->options, "gap-scale", required_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_INT,
@@ -1443,7 +1474,7 @@ tmap_map_opt_init(int32_t algo_id)
   opt->min_anchor_large_indel_rescue = 6;
   opt->amplicon_overrun = 6;
   opt->max_adapter_bases_for_soft_clipping = INT32_MAX;
-  opt->end_repair_5_prime_softclip = 0;
+  opt->end_repair_5_prime_softclip = 1;
   opt->shm_key = 0;
   opt->min_seq_len = -1;
   opt->max_seq_len = -1;
@@ -1453,11 +1484,11 @@ tmap_map_opt_init(int32_t algo_id)
   opt->vsw_type = 4;
 
   opt->do_realign = 0;
-  opt->realign_mat_score =  4;
-  opt->realign_mis_score = -6;
-  opt->realign_gip_score = -5;
-  opt->realign_gep_score = -2;
-  opt->realign_bandwidth = 10;
+  opt->realign_mat_score = TMAP_MAP_OPT_REALIGN_SCORE_MATCH;
+  opt->realign_mis_score = TMAP_MAP_OPT_REALIGN_SCORE_MM;
+  opt->realign_gip_score = TMAP_MAP_OPT_REALIGN_SCORE_GO;
+  opt->realign_gep_score = TMAP_MAP_OPT_REALIGN_SCORE_GE;
+  opt->realign_bandwidth = TMAP_MAP_OPT_REALIGN_BW;
   opt->realign_cliptype = 2;
   opt->report_stats = 0;
   opt->realign_log = NULL;
@@ -1470,16 +1501,18 @@ tmap_map_opt_init(int32_t algo_id)
   // context dependent gap scores
   opt->do_hp_weight = 0;
   opt->gap_scale_mode = TMAP_CONTEXT_GAP_SCALE_GEP;
-  opt->context_mat_score =  1.;
-  opt->context_mis_score = -3.;
-  opt->context_gip_score = -5.;
-  opt->context_gep_score = -2.;
-  opt->context_extra_bandwidth = 5;
+  opt->context_mat_score = TMAP_MAP_OPT_CONTEXT_SCORE_MATCH;
+  opt->context_mis_score = TMAP_MAP_OPT_CONTEXT_SCORE_MM;
+  opt->context_gip_score = TMAP_MAP_OPT_CONTEXT_SCORE_GO;
+  opt->context_gep_score = TMAP_MAP_OPT_CONTEXT_SCORE_GE;
+  opt->context_extra_bandwidth = TMAP_MAP_OPT_CONTEXT_BW_EXTRA;
+
   opt->debug_log = 0;
+
   // alignment length filtering
-  opt->min_al_len = 0;
-  opt->min_al_cov = 0.0;
-  opt->min_identity = 0.0;
+  opt->min_al_len = MIN_AL_LEN_NOCHECK_SPECIAL;
+  opt->min_al_cov = MIN_AL_COVERAGE_NOCHECK_SPECIAL;
+  opt->min_identity = MIN_AL_IDENTITY_NOCHECK_SPECIAL;
 
   // flowspace options
   opt->fscore = TMAP_MAP_OPT_FSCORE;
@@ -1986,8 +2019,8 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       } else if(0 == c && 0 == strcmp("max-amplicon-overrun-large-indel-rescue", options[option_index].name)) {
           opt->amplicon_overrun = atoi(optarg);
       }
-      else if (0 == c && 0 == strcmp ("er-5clip", options [option_index].name)) {
-          opt->end_repair_5_prime_softclip = 1;
+      else if (0 == c && 0 == strcmp ("er-no5clip", options [option_index].name)) {
+          opt->end_repair_5_prime_softclip = 0;
       }
       // End of global options
 
@@ -2601,7 +2634,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->output_type, 0, 2, "-o");
   tmap_error_cmd_check_int(opt->end_repair, 0, 100, "--end-repair");
   tmap_error_cmd_check_int(opt->max_adapter_bases_for_soft_clipping, 0, INT32_MAX, "max-adapter-bases-for-soft-clipping");
-  tmap_error_cmd_check_int(opt->end_repair_5_prime_softclip, 0, 1, "--er-5clip");
+  tmap_error_cmd_check_int(opt->end_repair_5_prime_softclip, 0, 1, "--er-no5clip");
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_error_cmd_check_int(opt->sample_reads, 0, 1, "-x");
 #endif
@@ -2672,9 +2705,11 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
       tmap_error ("Debug logging is available only when realign log file is specified", Exit, CommandLineArgument);
 
   // alignment length filtering
-  tmap_error_cmd_check_int (opt->min_al_len, 0, INT32_MAX, "--min-al-len");
-  tmap_error_cmd_check_int (opt->min_al_cov, 0.0, 1.0, "--min-cov");
-  tmap_error_cmd_check_int (opt->min_identity, 0.0, 1.0, "--min-iden");
+  tmap_error_cmd_check_int_x (opt->min_al_len, 0, INT32_MAX, MIN_AL_LEN_NOCHECK_SPECIAL, "--min-al-len");
+  tmap_error_cmd_check_double_x (opt->min_al_cov, 0.0, 1.0, MIN_AL_COVERAGE_NOCHECK_SPECIAL, "--min-cov");
+  assert (MIN_AL_IDENTITY_NOCHECK_SPECIAL == -DBL_MAX); // if this does not hold, next line should be un-commented instead of subsequenct one
+  // tmap_error_cmd_check_double_x (opt->min_identity, -DBL_MAX, 1.0, MIN_AL_IDENTITY_NOCHECK_SPECIAL, "--min-iden");
+  tmap_error_cmd_check_double (opt->min_identity, -DBL_MAX, 1.0, "--min-iden");
 
 
   // stage/algorithm options

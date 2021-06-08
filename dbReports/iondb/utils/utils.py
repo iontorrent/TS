@@ -13,14 +13,21 @@ import traceback
 import types
 from contextlib import contextmanager
 from multiprocessing import Pool
+import requests
+import json
+import urlparse
+import urllib2
+import base64
 
 import apt
 from dateutil.parser import parse as parse_date
 from django.conf import settings
 from django.utils.translation import ugettext_lazy
+from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
 
+TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
 
 def convert(data):
     if isinstance(data, str):
@@ -585,3 +592,96 @@ def ManagedPool(*args, **kwargs):
         yield pool
     finally:
         pool.close()
+
+def get_instrument_info(rig):
+    instr = {
+        "name": rig.name,
+        "type": rig.type or "PGM"
+    }
+    if instr["type"] == "Raptor":
+        instr["type"] = "S5"
+
+    return instr
+
+def update_platform():
+    print("Updating major platform...")
+    from iondb.rundb.models import Rig, GlobalConfig
+    instruments = []
+    rigs = Rig.objects.exclude(host_address="")
+
+    if len(rigs) > 0:
+        instruments = [get_instrument_info(rig) for rig in rigs]
+        instruments = [inst['type'] for inst in instruments]
+
+    if "S5" not in instruments:
+        GlobalConfig.objects.update(majorPlatform="pgm_or_proton_only")
+    elif "PGM" in instruments or "Proton" in instruments:
+        GlobalConfig.objects.update(majorPlatform="mixed")# S5/PGM/Proton
+    elif "S5" in instruments:
+        GlobalConfig.objects.update(majorPlatform="s5_only")
+
+def get_deprecation_messages():
+    try:
+        depreOffcyleLocal = os.path.join(settings.OFFCYCLE_UPDATE_PATH_LOCAL, "deprecation_data.json")
+        if os.path.exists(depreOffcyleLocal):
+            with open(depreOffcyleLocal, 'r') as fh:
+                return json.load(fh)
+        else:
+            return get_deprecation_json_from_url()
+    except:
+        return None
+
+def get_deprecation_json_from_url():
+    try:
+        resp = requests.get(settings.OFFCYLE_DEPRECATION_MSG, timeout=TIMEOUT_LIMIT_SEC)
+        resp.raise_for_status()
+        return resp.json()
+    except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as err:
+        logger.error(
+            "get_deprecation_messages timeout or connection errors for {u}: {e}".format(
+                e=str(err), u=settings.OFFCYLE_DEPRECATION_MSG
+            )
+        )
+        return None
+    except ValueError as decode_err:
+        logger.error("get_deprecation_messages JSON decode error: {}".format(str(decode_err)))
+        return None
+
+def authenticate_using_urllib2(**kwargs):
+    """This method uses urllib2 to handle SSL cert failure, this is mainly for 14.04"""
+    try:
+        request = urllib2.Request(kwargs.get('base_url'))
+        base64string = base64.b64encode('%s:%s' % (kwargs.get('username'), kwargs.get('password')))
+        request.add_header("Authorization", "Basic %s" % base64string)
+        response = urllib2.urlopen(request, timeout=TIMEOUT_LIMIT_SEC)
+        return json.load(response)
+    except urllib2.HTTPError as exc:
+        raise Exception(exc.code)
+    except Exception as Error:
+        logger.exception(Error)
+        raise Exception("Unknown Error")
+
+def exerted_url_authentication(func):
+    """ Decorator to authenticate any url link, handles SSL cert issues"""
+    def wrapper(**kwargs):
+        try:
+            return func(**kwargs)
+        except requests.exceptions.SSLError:
+            return authenticate_using_urllib2(**kwargs)
+        except (
+                requests.ConnectionError,
+                requests.Timeout,
+                requests.HTTPError,
+        ) as serverError:
+            logger.exception(serverError)
+            raise Exception(serverError.response.status_code)
+        except Exception as exc:
+            logger.exception(exc)
+            raise Exception("Unknown Error")
+    return wrapper
+
+@exerted_url_authentication
+def authenticate_fetch_url(**kwargs):
+    response = requests.get(kwargs.get('base_url'), auth=(kwargs.get('username'), kwargs.get('password')), timeout=TIMEOUT_LIMIT_SEC)
+    response.raise_for_status()
+    return response.json()

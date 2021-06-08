@@ -26,6 +26,7 @@ EXECUTE=0
 OPTARGS="$@"
 CONF_HEAD_NODE=0        # Enables SGE qmaster,postgres,apache2,/results sharing
 UPDATE_SOFTWARE=0       # Get software updates and install
+SWITCH_SOFTWARE=0
 UPDATE_HOSTNAME=0       # Change the hostname (requires reboot)
 CONF_TIME_ZONE=0        # Run timezone configuration script
 CONF_POSTFIX=0          # Run postfix configuration script
@@ -91,6 +92,16 @@ while [ $# != 0 ]; do
             if [ $EXECUTE == 1 ];then user_msg "Check for and install Ion Software updates"; fi
             UPDATE_SOFTWARE=1
         ;;
+        '--switch-repo'|'-w')
+            if [ $ENABLE_DEPRECATION == "True" ]; then
+              if [ $EXECUTE == 1 ];then user_msg "Check for switching Repo and install Ion Software updates"; fi
+              SWITCH_SOFTWARE=1
+              confirm_switch_repo
+            else
+              echo "Repo switching is not allowed currently..."
+              exit 1
+            fi
+        ;;
         '--security-update')
             if [ $EXECUTE == 1 ];then user_msg "Check for and install packages with security updates"; fi
             SECURITY_UPDATE=1
@@ -148,8 +159,6 @@ while [ $# != 0 ]; do
     shift
 done
 
-
-
 #---                                                                        ---#
 #---    Exit and call script again this time logging all stdout and stderr  ---#
 #---                                                                        ---#
@@ -167,7 +176,9 @@ fi
 ## Start logging all stdout/stderr
 ##----------------------------------------------------------------------------
 #exec > >(tee "$TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG") 2>&1
+#
 
+check_switch_repo
 
 #---                    ---#
 #---    Main Execution  ---#

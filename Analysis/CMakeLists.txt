@@ -459,14 +459,16 @@ set(BaseCallerSRCS
     BaseCaller/BarcodeClassifier.cpp
     BaseCaller/BarcodeDatasets.cpp
     BaseCaller/MolecularTagTrimmer.cpp
+    BaseCaller/NNModel.cpp
     BaseCaller/OrderedDatasetWriter.cpp
     BaseCaller/PhaseEstimator.cpp
     BaseCaller/PerBaseQual.cpp
-    BaseCaller/NNModel.cpp
-    BaseCaller/WellsNormalization.cpp
+    BaseCaller/ReadClassMap.cpp
     Calibration/HistogramCalibration.cpp
     Calibration/LinearCalibrationModel.cpp
     VariantCaller/Bookkeeping/MiscUtil.cpp
+    Wells/WellsNormalization.cpp
+    Wells/WellsManager.cpp
     
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")

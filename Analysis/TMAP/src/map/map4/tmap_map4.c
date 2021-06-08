@@ -129,7 +129,6 @@ tmap_map4_core(tmap_map_driver_t *driver)
                       tmap_map4_thread_cleanup,
                       NULL,
                       driver->opt);
-  
 
   // run the driver
   tmap_map_driver_run(driver);

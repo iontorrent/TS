@@ -3,21 +3,21 @@
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 #set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
 
-#set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
 
 # Use the closest ION_UPDATE_SERVER we can find.
-message(STATUS "Searching for an ION_UPDATE_SERVER...")
-foreach ( SERVER updates updates.itw updates.iontorrent.com )
-    # See if we can look up the server in question.
-    execute_process( COMMAND host -W 2 -t A ${SERVER}
-       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
-
-    # If we can find it, great! We're done!
-    if ( NOT ${NOT_FOUND} )
-       set( ION_UPDATE_SERVER ${SERVER} )
-       break()
-    endif()
-endforeach()
+#message(STATUS "Searching for an ION_UPDATE_SERVER...")
+#foreach ( SERVER updates updates.itw updates.iontorrent.com )
+#    # See if we can look up the server in question.
+#    execute_process( COMMAND host -W 2 -t A ${SERVER}
+#       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
+#
+#    # If we can find it, great! We're done!
+#    if ( NOT ${NOT_FOUND} )
+#       set( ION_UPDATE_SERVER ${SERVER} )
+#       break()
+#    endif()
+#endforeach()
 
 # If we find a server, let everyone know.
 if (ION_UPDATE_SERVER)

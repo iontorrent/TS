@@ -8,22 +8,22 @@ import subprocess
 from ion.plugin import *
 
 class variantCaller(IonPlugin):
-    version = '5.12.0.4'
+    version = '5.14.0.3'
     envDict = dict(os.environ)
     runtypes = [RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE]
     requires_configuration = True # The user can not run the plugin w/o clicking the configuration button (exception: TS-16890).
-    __doc__ = 'Torrent Variant Caller.\nPlease get more information by visiting \"http://tools.thermofisher.com/content/sfs/manuals/MAN0014668_Torrent_Suite_RUO_Help.pdf\"'
+    __doc__ = 'Torrent Variant Caller.'
 
     def variantCall(self):
         # With only one line, this one is easy to convert.
         arg_list = [os.path.join(self.envDict['DIRNAME'], 'variant_caller_plugin.py'), '--install-dir', self.envDict['DIRNAME'], '--output-dir', self.envDict['TSP_FILEPATH_PLUGIN_DIR'], '--output-url', self.envDict['TSP_URLPATH_PLUGIN_DIR'], '--report-dir', self.envDict['ANALYSIS_DIR']]
         command_line = ' '.join(arg_list)
-        print command_line
+        print(command_line)
         return subprocess.call(command_line, shell=True)
 
     def launch(self, data=None):
         # Run the plugin.
-        print 'running the python plugin.'
+        print('running the python plugin.')
         exit_code = self.variantCall()
         sys.exit(exit_code)
 

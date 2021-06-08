@@ -29,7 +29,7 @@
       service: name=ionPlugin state=restarted
 
     - name: Regenerate self-signed SSL cert with current hostname
-      shell: /usr/sbin/make-ssl-cert generate-default-snakeoil --force-overwrite
+      shell: /usr/sbin/TSmake-ssl-cert generate-default-snakeoil --force-overwrite
       ignore_errors: True
 
     #-----------------------------------------------------------------------------

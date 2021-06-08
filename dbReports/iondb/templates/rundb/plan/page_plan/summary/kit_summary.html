@@ -20,6 +20,12 @@
     <td><b>{% trans "workflow.step.kits.fields.librarykitname.label" %}:</b></td>
     <td id="selectedLibraryKitType"></td>
 </tr>
+{% if helper.getLibraryPrepProtocol %}
+<tr>
+    <td><b>Library Prep Protocol:</b></td>
+    <td id="libraryPrepProtocol">{{helper.getLibraryPrepProtocol}}</td>
+</tr>
+{% endif %}
 <tr>
     <td><b>{% trans "workflow.step.kits.fields.barcodeId.label" %}:</b></td>
     <td id="selectedBarcode">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.barcodeId|default_if_none:""}}</td>

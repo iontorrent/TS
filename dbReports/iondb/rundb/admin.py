@@ -6,7 +6,8 @@ from iondb.rundb import tasks
 from iondb.rundb import tsvm
 from iondb.rundb.forms import NetworkConfigForm
 from iondb.utils import files
-from iondb.utils.utils import is_TsVm
+from iondb.utils.files import rename_extension
+from iondb.utils.utils import is_TsVm, get_deprecation_messages
 from django.contrib import admin
 from django.forms import TextInput, Textarea
 from django.forms.models import model_to_dict
@@ -362,6 +363,12 @@ def get_zip_logs(request):
     return response
 
 
+@staff_member_required
+def switch_repo(request, majorPlatform):
+    GlobalConfig.objects.update(ts_update_status="switching repo")
+    tasks.lock_ion_apt_pgm_p1.delay(majorPlatform)
+    return http.HttpResponse()
+
 def run_update_check(request):
     tasks.check_updates.delay()
     return http.HttpResponse()
@@ -430,6 +437,18 @@ def get_EULA_text():
     return (eula_content, isValid, errorMsg)
 
 
+def isGenestudioRepo():
+    filePath = "/etc/apt/sources.list.d/iontorrent.list"
+    isGenestudioRepo = False
+    if os.path.isfile(filePath):
+        with open(filePath) as repo:
+            for line in repo.readlines():
+                if not line.strip().startswith("#"):
+                    if "genestudio" in line:
+                        isGenestudioRepo = True
+
+    return isGenestudioRepo
+
 @staff_member_required
 def update(request):
     """provide a simple interface to allow Torrent Suite to be updated"""
@@ -443,7 +462,6 @@ def update(request):
         config = GlobalConfig.objects.filter()[0]
         config_dict = model_to_dict(config)
         eula_content, isValid, errorMsg = get_EULA_text()
-
         try:
             # Disable Update Server button for some reason
             # Checking root partition for > 1GB free
@@ -455,9 +473,13 @@ def update(request):
             else:
                 if config.ts_update_status in "Insufficient disk space":
                     GlobalConfig.objects.update(ts_update_status="No updates")
+
         except Exception:
             allow_update = True
-
+        try:
+            majorPlatform = GlobalConfig.get().majorPlatform
+        except Exception, err:
+            majorPlatform = "NOT_AVAILABLE"
         return render_to_response(
             "admin/update.html",
             {
@@ -470,6 +492,9 @@ def update(request):
                 "global_config_json": json.dumps(config_dict),
                 "maintenance_mode": maintenance_action("check")["maintenance_mode"],
                 "allow_update": allow_update,
+                "majorPlatform": majorPlatform,
+                "deprecationMessage": get_deprecation_messages(),
+                "isGenestudioRepo": isGenestudioRepo()
             },
             RequestContext(request, {}),
         )
@@ -999,6 +1024,7 @@ class AnalysisArgsAdmin(admin.ModelAdmin):
         "applCategory",
         "isSystem",
     )
+    list_filter = ("chipType",)
     ordering = ("chipType", "-chip_default", "name")
     formfield_overrides = {
         models.CharField: {
@@ -1046,6 +1072,20 @@ class common_CVAdmin(admin.ModelAdmin):
     ordering = ("cv_type", "displayedValue")
     list_filter = ("cv_type",)
 
+class ChefPcrPlateconfigAdmin(admin.ModelAdmin):
+    list_display = ("kit", "confg")
+
+
+class SampleAnnotation_CVAdmin(admin.ModelAdmin):
+    list_display = (
+        "annotationType",
+        "value",
+        "isActive",
+        "uid",
+    )
+    ordering = ("annotationType", "value")
+    list_filter = ("annotationType",)
+
 
 class RigAdmin(admin.ModelAdmin):
     list_display = ("name", "ftpserver", "location", "state", "serial")
@@ -1084,6 +1124,7 @@ class SampleSetAdmin(admin.ModelAdmin):
 
 class SamplePrepDataAdmin(admin.ModelAdmin):
     list_display = (
+        "sample_Set",
         "instrumentName",
         "lastUpdate",
         "samplePrepDataType",
@@ -1094,6 +1135,9 @@ class SamplePrepDataAdmin(admin.ModelAdmin):
     )
     list_filter = ("instrumentName",)
     ordering = ("instrumentName", "lastUpdate")
+
+    def sample_Set(self, obj):
+        return obj.libraryPrepData_sampleSet.first()
 
 
 class ApplProductAdmin(admin.ModelAdmin):
@@ -1201,6 +1245,8 @@ admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs, AnalysisArgsAdmin)
 admin.site.register(SampleSet, SampleSetAdmin)
 admin.site.register(common_CV, common_CVAdmin)
+admin.site.register(ChefPcrPlateconfig, ChefPcrPlateconfigAdmin)
+admin.site.register(SampleAnnotation_CV, SampleAnnotation_CVAdmin)
 admin.site.register(ApplicationGroup, ApplicationGroupAdmin)
 admin.site.register(SamplePrepData, SamplePrepDataAdmin)
 

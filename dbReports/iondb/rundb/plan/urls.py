@@ -52,9 +52,19 @@ urlpatterns = patterns(
         name="page_plan_new_template_by_sample",
     ),
     url(
+        r"^page_plan_new_template_by_sample_set_item/(\d+)/([\d,]+)/$",
+        "views.page_plan_new_template_by_sample_set_item",
+        name="page_plan_new_template_by_sample_set_item",
+    ),
+    url(
         r"^page_plan_new_plan_by_sample/(\d+)/([\d,]+)$",
         "views.page_plan_new_plan_by_sample",
         name="page_plan_new_plan_by_sample",
+    ),
+    url(
+        r"^page_plan_new_plan_by_sample_set_item/(\d+)/(\d+)/([\d,]+)$",
+        "views.page_plan_new_plan_by_sample_set_item",
+        name="page_plan_new_plan_by_sample_set_item",
     ),
     url(
         r"^page_plan_by_sample_barcode/$",

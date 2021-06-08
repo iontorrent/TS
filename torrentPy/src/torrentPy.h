@@ -10,13 +10,19 @@
 class TreePhaser{
 public:
     TreePhaser(const std::string& sequence);
+    TreePhaser(const TreePhaser& copy_me);
     ~TreePhaser(){ delete dpTreephaser; }
     void setCalibFromTxtFile( const std::string& model_file, int threshold );
+    void setCalibFromBamFile( const std::string& bam_file );
     void setCalibFromJson(const std::string& json_model, int threshold );
     void setCAFIEParams(double cf, double ie, double dr);
     void setStateProgression(bool diagonalStates);
     void setSolverName( const std::string& _solverName ){ solverName = _solverName; }
-
+    bool applyCalibForQueryName(const string& qname);
+    bool applyCalibForXY(int calib_x, int calib_y);
+    void disableCalibration();
+    void Simulate_BasecallerRead(BasecallerRead& basecaller_read, int max_flows, bool state_inphase=false) {dpTreephaser->Simulate(basecaller_read, max_flows, state_inphase);};
+    void NormalizeAndSolve_SWnorm_BasecallerRead(BasecallerRead& basecaller_read, int max_flows)  {dpTreephaser->NormalizeAndSolve_SWnorm(basecaller_read, max_flows);};
     boost::python::object queryAllStates(const string &sequence, int maxFlows, int calib_x=0, int calib_y=0);
     boost::python::object Simulate(const string &sequence, int maxFlows);
     boost::python::dict treephaserSolve(boost::python::object _signal, boost::python::object _keyVec);
@@ -27,9 +33,11 @@ public:
 
 private:
     DPTreephaser *dpTreephaser;
-    LinearCalibrationModel calibModel;
+    LinearCalibrationModel calibModel; // For Calibration from TXT or JSON
     std::string solverName;
     ion::FlowOrder flowOrder;
+    map<string, LinearCalibrationModel> bam_header_recalibration; // For Calibration stored in BAM header
+    multimap<string,pair<int,int> > block_hash;  // For bam_header_recalibration, from run id, find appropriate block coordinates available
 };
 
 class PyRawDat{
@@ -76,7 +84,9 @@ private:
     std::vector< BamTools::BamAlignment > alignmentSample;
     map<string,string> flow_order_by_read_group;
     map<string,string> key_seq_by_read_group;
+    map<string, TreePhaser> treephaser_by_runid;
     int minRow, maxRow, minCol, maxCol;
+    bool suppress_recalibration = false;
 
     void appendToHeader( const std::string& key, bool has_key, std::string value );
     void appendRecord( const boost::python::dict &rec );
@@ -90,12 +100,13 @@ public:
     int flowAlign;
 
     void Open( std::string _fname );
+    void Close(){ bamReader.Close(); }
     int GetNumRecords( void );
 
     boost::python::dict ReadBamHeader(void);
     boost::python::dict ReadBam(void);
     void Rewind( void ) { bamReader.Rewind(); }
-
+    void SuppressRecalibration(bool flag) { suppress_recalibration = flag; }
     void SetSampleSize( int nSample );
 
     bool SetDNARegion( int leftRefId, int leftPosition, int rightRefId, int rightPosition ){ return bamReader.SetRegion( leftRefId, leftPosition, rightRefId, rightPosition ); }
@@ -104,10 +115,12 @@ public:
     void SimulateCafie( boost::python::dict& read );
     void PhaseCorrect(boost::python::dict& read , boost::python::object keyFlow );
 
-    ~PyBam(){ bamReader.Close(); }
+    ~PyBam(){ Close(); }
     PyBam(std::string _fname);
 
     PyBam& __iter__( void ){ return *this; }
+    PyBam& __enter__( void ){ return *this; }
+    bool __exit__(const boost::python::object& type, const boost::python::object& msg, const boost::python::object& traceback){Close(); return false;}
     boost::python::dict next( void );
 
 };

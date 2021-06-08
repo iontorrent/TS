@@ -42,6 +42,7 @@
 #include "PerBaseQual.h"
 #include "BaseCallerFilters.h"
 #include "BaseCallerMetricSaver.h"
+#include "ReadClassMap.h"
 //#include "LinearCalibrationModel.h"
 
 using namespace std;
@@ -65,13 +66,14 @@ void ValidateAndCanonicalizePath(string &path, const string& backup_path);
 
 struct BaseCallerFiles
 {
-    string    input_directory;
+    vector<string>    input_directory;
+    vector<string>    filename_wells;
+    vector<string>    filename_mask;
+
     string    output_directory;
     string    unfiltered_untrimmed_directory;
     string    unfiltered_trimmed_directory;
 
-    string    filename_wells;
-    string    filename_mask;
     string    filename_filter_mask;
     string    filename_json;
     string    filename_phase;
@@ -82,6 +84,7 @@ struct BaseCallerFiles
     string    inline_control_reference_file;
     Json::Value read_structure;
 
+    bool      ignore_washouts;        //!< Flag to use or ignore beads marked as washouts
     bool      options_set;            //!< Flag whether options have been read to ensure order
 };
 
@@ -94,11 +97,11 @@ struct BCwellSampling
     float     downsample_fraction;   //!< Reservoir sampled fraction of the wells on the chip.
 
     int       calibration_training;  //!< Number of wells to be sampled for calibration training
-    bool      have_calib_panel;      //!< Inidactes the presence of a calibration panel in this run
-    MaskType  MaskNotWanted;         //!< Type of beads to be excluded from sampling (e.g. for cal. training)
+    bool      have_calib_panel;      //!< Indicates the presence of a calibration panel in this run
 
     bool      options_set;           //!< Flag whether options have been read to ensure order
 };
+
 
 // ------------------------------------------------------------
 // Context variables that the worker threads need to be aware of.
@@ -144,7 +147,7 @@ struct BaseCallerContext {
     string                    keynormalizer;          //!< Name of selected key normalization algorithm
     string                    dephaser;               //!< Name of selected dephasing algorithm
     bool                      sse_dephaser;           //!< Flag to indicate whether vectorized code version is to be used
-    string                    filename_wells;         //!< Filename of the input wells file
+    vector<string>            filename_wells;         //!< Filename of the input wells file
     ion::FlowOrder            flow_order;             //!< Flow order object, also stores number of flows
     vector<KeySequence>       keys;                   //!< Info about key sequences in use by library and TFs
     string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
@@ -167,11 +170,11 @@ struct BaseCallerContext {
 
     // Important outside entities accessed by BaseCaller
     ion::ChipSubset           chip_subset;            //!< Chip coordinate & region handling for Basecaller
-    Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
+    //Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells XXX
     BaseCallerFilters         *filters;               //!< Filter configuration and stats
     PhaseEstimator            estimator;              //!< Phasing estimation results
     PerBaseQual               quality_generator;      //!< Base phred quality value generator
-    vector<int>               class_map;              //!< What to do with each well
+    ReadClassMap              *read_class_map;        //!< What to do with each well
     BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
     BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
     BarcodeClassifier         *calibration_barcodes;  //!< Barcode detection for calibration set
@@ -192,6 +195,8 @@ struct BaseCallerContext {
     OrderedDatasetWriter      unfiltered_trimmed_writer;  //!< Writer object for unfiltered trimmed BAMs for a random subset of library reads
 
     bool SetKeyAndFlowOrder(OptArgs& opts, const char * FlowOrder, const int NumFlows);
+
+    void ClassifyAndSampleWells(const BCwellSampling & SamplingOpts);
 
     bool WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_files);
 };
@@ -216,7 +221,7 @@ public:
 
     bool InitContextVarsFromOptArgs(OptArgs& opts);
 
-    bool InitializeSamplingFromOptArgs(OptArgs& opts, const int num_wells); // Needs chip subset size to reconcile options
+    bool InitializeSamplingFromOptArgs(OptArgs& opts, const int num_lib_wells); // Get num_lib_wells from ReadClassMep
 
     bool SetBaseCallerContextVars(BaseCallerContext & bc);
 
@@ -228,15 +233,21 @@ public:
 
     Json::Value NormalizeDictStructure(Json::Value structure);
 
-
     const BaseCallerFiles & GetFiles() const {
-     if (not bc_files.options_set){
-       cerr << "BaseCallerParameters::GetFiles: Options need to be initialized before they can be used." << endl;
-       exit(EXIT_FAILURE);
-     }
-     return bc_files;
+      if (not bc_files.options_set){
+        cerr << "BaseCallerParameters::GetFiles: Options need to be initialized before they can be used." << endl;
+        exit(EXIT_FAILURE);
+      }
+      return bc_files;
     };
 
+    const BCcontextVars & GetContext() const {
+      if (not context_vars.options_set){
+        cerr << "BaseCallerParameters::GetContext: Options need to be initialized before they can be used." << endl;
+        exit(EXIT_FAILURE);
+      }
+      return context_vars;
+    };
 
     const BCwellSampling & GetSamplingOpts() const {
       if (not sampling_opts.options_set){

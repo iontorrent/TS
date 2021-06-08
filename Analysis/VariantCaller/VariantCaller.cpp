@@ -270,6 +270,7 @@ void * VariantCallerWorker(void *input)
   list<PositionInProgress>::iterator consensus_position_ticket = consensus_position_temp.begin();
   consensus_position_ticket->begin = NULL;
   consensus_position_ticket->end = NULL;
+  Alignment dummy_alignment;
 
   CandidateExaminer my_examiner(&thread_objects, &vc);
 
@@ -380,36 +381,51 @@ void * VariantCallerWorker(void *input)
 
       bool more_read_come = false;
       for (int i = 0; i < kReadBatchSize and success[i]; ++i) {
-        // 1) Filling in read body information and do initial set of read filters
-        if (not vc.candidate_generator->BasicFilters(*new_read[i]))
-          continue;
+		  // Initialize read alignment object
+		  vc.bam_walker->InitializeReadAlignment(new_read[i]);
 
-        // 2) Alignment information altering methods (can also filter a read)
+          // Amplicon assignment, filter by target and Trim ampliseq primer
+    	  // Note that amplicon assignment must be done first as there are several amplicon-specific overriding for read filtering
+          vc.targets_manager->TrimAmpliseqPrimers(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
+          if (new_read[i]->filtered){
+            continue;
+          }
+
+        // Filling in read body information and do initial set of read filters
+        if (not vc.candidate_generator->BasicFilters(*new_read[i], vc.targets_manager)){
+          continue;
+        }
+
+        // Get UMT information
         if (not vc.mol_tag_manager->tag_trimmer->GetTagsFromBamAlignment(new_read[i]->alignment, new_read[i]->tag_info)){
           new_read[i]->filtered = true;
           continue;
         }
 
-        // 3) Filter by target and Trim ampliseq primer here
-        vc.targets_manager->TrimAmpliseqPrimers(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
-        if (new_read[i]->filtered)
-          continue;
-
-        // 4) Filter by read mismatch limit (note: NOT the filter for read-max-mismatch-fraction) here.
-        FilterByModifiedMismatches(new_read[i], vc.parameters->read_mismatch_limit, vc.targets_manager);
-        if (new_read[i]->filtered)
-          continue;
-
-        // 5) Calculate the hash for family identification
+        // Calculate the hash for UMT identification
         vc.mol_tag_manager->PreComputeForFamilyIdentification(new_read[i]);
-        if (new_read[i]->filtered)
+        if (new_read[i]->filtered){
           continue;
+        }
 
-        // 6) Parsing alignment: Read filtering & populating allele specific data types in Alignment object
-        vc.candidate_generator->UnpackReadAlleles(*new_read[i]);
+        // Parsing alignment: Read filtering & populating allele specific data types in Alignment object
+        vc.candidate_generator->UnpackReadAlleles(*new_read[i], vc.targets_manager);
+        if (new_read[i]->filtered){
+          continue;
+        }
 
-        // 7) Unpacking read meta data for evaluator
+        // Filter by read mismatch limit (note: NOT the filter for read-max-mismatch-fraction) here.
+        // Must be done after UnpackReadAlleles since the NM tag needs to be re-calculated if primer trimming was applied.
+        FilterByModifiedMismatches(new_read[i], vc.parameters->read_mismatch_limit, vc.targets_manager);
+        if (new_read[i]->filtered){
+          continue;
+        }
+
+        // Unpacking read meta data for evaluator
         UnpackOnLoad(new_read[i], *vc.global_context);
+        if (new_read[i]->filtered){
+          continue;
+        }
       }
 
       pthread_mutex_lock(&vc.bam_walker_mutex);
@@ -467,9 +483,24 @@ void * VariantCallerWorker(void *input)
     // Candidate Generation
     int haplotype_length = 1;
     if (use_molecular_tag){
-		if(consensus_position_ticket->begin != NULL){
-			vc.bam_walker->SetupPositionTicket(consensus_position_ticket);
-			vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length);
+		vc.bam_walker->SetupPositionTicket(consensus_position_ticket);
+		bool use_dummy_begin = consensus_position_ticket->begin == NULL;
+		bool use_dummy_end = consensus_position_ticket->end == NULL;
+		// TS-17995: consensus_position_ticket->begin or consensus_position_ticket->end needs to point to a dummy Alignment object "just for" FreeBayes
+		// Otherwise, FreeBayes simply skips the position and miss the hotspot candidates.
+		if (use_dummy_begin){
+			consensus_position_ticket->begin = &dummy_alignment;
+		}
+		if (use_dummy_end){
+			consensus_position_ticket->end = &dummy_alignment;
+		}
+		vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length, &my_examiner);
+		// Important! I MUST revert the dummy Alignment object back to NULL immediately, since ConsensusPositionTicketManager does a lot of operation for NULL pointer.
+		if (use_dummy_begin){
+			consensus_position_ticket->begin = NULL;
+		}
+		if (use_dummy_end){
+			consensus_position_ticket->end = NULL;
 		}
     }
     else{

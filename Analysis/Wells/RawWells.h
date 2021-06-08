@@ -258,6 +258,7 @@ class RawWells {
 public:  
 
   /* Constructors. */
+  RawWells();
   RawWells(const char *experimentPath, const char *rawWellsName, int rows, int cols);
   RawWells(const char *experimentPath, const char *rawWellsName);
   RawWells(const char *wellsFilePath, int rows, int cols);
@@ -318,6 +319,9 @@ public:
   float At(size_t well, size_t flow) const;
   float AtWithoutChecking(size_t row, size_t col, size_t flow) const;
   float AtWithoutChecking(size_t well, size_t flow) const;
+
+  float GetCopyCount(size_t row, size_t col) const;
+  float GetCopyCount(size_t well) const;
 
   float ResAtWithoutChecking(size_t row, size_t col, size_t flow) const;
   float ResAtWithoutChecking(size_t well, size_t flow) const;
@@ -486,7 +490,7 @@ private:
   // We keep around a write timer.
   SumTimer writeTimer;
 private:
-  RawWells(); // not implemented, don't call!
+  //RawWells(); // not implemented, don't call!
 };
 
 // A class that can accumulate flow data, and automatically write chunks when appropriate.

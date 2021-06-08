@@ -3,7 +3,7 @@
         "name": "AmpliSeq Panel - 530 - Somatic - Low Stringency", 
         "tooltip": "Parameters optimized using Oncomine Comprehensive AmpliSeq Panel with AcroMetrix Oncology Hotspot Control AF at 5% at depth 300", 
         "configuration": "ampliseq_somatic_lowstringency_530", 
-        "ts_version": "5.12", 
+        "ts_version": "5.14", 
         "compatibility": {
             "chip": [
                 "510", 

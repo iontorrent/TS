@@ -476,31 +476,26 @@ void UnpackOnLoadLight(Alignment *rai, const InputStructures &global_context)
 
 // This function relies on the NM tag and cigar vector to filter out the read.
 // Note: cigar may be updated during trim ampliseq primer, and the update of NM associated with the new cigar is done in AlleleOarser::UnpackReadAlleles.
-// One must make sure that MN and cigar are consistent.
+// One must make sure that NM and cigar are consistent.
 // Note that modified_mismatches_limit = 0 would disable the filter.
 // Rule of read_mismatch_limit overrode as follows.
 // 1) Override the parameter if there is any override parameter by the target that the read covers.
 // 2) If the read covers multiple targets with different override parameter, then filter out the read if it is filtered by any of the override parameter.
 void FilterByModifiedMismatches(Alignment *rai, int read_mismatch_limit, const TargetsManager *const targets_manager){
-	if (targets_manager != NULL){
-		// First deal with the modified_mismatches_limit override by targets.
-		bool is_override_by_target = false;
-		for (vector<int>::iterator target_idx_it = rai->target_coverage_indices.begin(); target_idx_it !=  rai->target_coverage_indices.end(); ++target_idx_it){
-			int read_mismatch_limit_by_target = targets_manager->unmerged[*target_idx_it].read_mismatch_limit;
-			// See if override by this target? (-1 means no override)
-			if (read_mismatch_limit_by_target >= 0){
-				if (is_override_by_target){
-					// The read covers multiple targets with override.
-					if (read_mismatch_limit == 0 or read_mismatch_limit_by_target == 0){
-						read_mismatch_limit = max(read_mismatch_limit, read_mismatch_limit_by_target);
-					}else{
-						read_mismatch_limit = min(read_mismatch_limit, read_mismatch_limit_by_target);
-					}
-				}else{
-					// This is the first time I see the override.
-					is_override_by_target = true;
-					read_mismatch_limit = read_mismatch_limit_by_target;
-				}
+	bool is_override_by_target = false;
+	// First deal with the modified_mismatches_limit override by targets.
+	for (vector<int>::iterator target_idx_it = rai->target_coverage_indices.begin(); target_idx_it != rai->target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
+		if (targets_manager->unmerged[*target_idx_it].read_mismatch_limit_override){
+			if (is_override_by_target){
+				int read_mismatch_limit_by_target = targets_manager->unmerged[*target_idx_it].read_mismatch_limit;
+				// The read covers multiple targets with override.
+				// Use the most stringent (i.e., smallest positive). Note that read_mismatch_limit = 0 means disable, the least stringent.
+				read_mismatch_limit = ((read_mismatch_limit * read_mismatch_limit_by_target) == 0)?
+						max(read_mismatch_limit, read_mismatch_limit_by_target) : min(read_mismatch_limit, read_mismatch_limit_by_target);
+			}else{
+				// This is the first time I see the override.
+				read_mismatch_limit = targets_manager->unmerged[*target_idx_it].read_mismatch_limit;
+				is_override_by_target = true;
 			}
 		}
 	}

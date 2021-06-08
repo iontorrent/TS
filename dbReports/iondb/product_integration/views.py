@@ -13,7 +13,6 @@ from iondb.product_integration.models import ThermoFisherCloudAccount
 
 logger = logging.getLogger(__name__)
 
-
 def configure(request):
     """Constructs the view for configuring your thermo fisher cloud account"""
 
@@ -39,8 +38,8 @@ def configure(request):
 
         try:
             tfcaccount.setup_ampliseq(form.data["tfc_password"])
-        except HTTPError as exc:
-            if exc.response.status_code == 401:
+        except Exception as exc:
+            if exc.message == 401:
                 return HttpResponse(
                     json.dumps({"error": "Bad username and/or password."}),
                     content_type="application/json",
@@ -50,12 +49,6 @@ def configure(request):
                     json.dumps({"error": "Could not link the account"}),
                     content_type="application/json",
                 )
-        except Exception as exc:
-            logger.exception(exc)
-            return HttpResponse(
-                json.dumps({"error": "Could not link the account"}),
-                content_type="application/json",
-            )
 
         try:
             tfcaccount.setup_deeplaser(form.data["tfc_password"])

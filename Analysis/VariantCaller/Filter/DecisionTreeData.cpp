@@ -710,7 +710,7 @@ void DecisionTreeData::FilterAlleleHypothesisBias(vcf::Variant & candidate_varia
       bool var_bad = (var_bias > 0 && fabs(var_bias) > threshold_bias);
 
       // the ith variant allele is problematic
-         if (var_bad){
+         if (var_bad and eval_genotype.IsAlleleCalled(_allele + 1)){
            stringstream filterReasonStr;
           filterReasonStr << "PREDICTIONVar";
           filterReasonStr << _allele+1;
@@ -720,7 +720,7 @@ void DecisionTreeData::FilterAlleleHypothesisBias(vcf::Variant & candidate_varia
           OverrideFilter(candidate_variant, my_tmp_string, _allele, sample_name);
         }
       // the reference is problematicly shifted relative to this allele
-        if (ref_bad){
+        if (ref_bad and eval_genotype.IsAlleleCalled(0)){
           stringstream filterReasonStr;
           filterReasonStr << "PREDICTIONRefSHIFTx" ;
           filterReasonStr << ref_bias;

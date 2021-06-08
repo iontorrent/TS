@@ -12,6 +12,10 @@
     - libapache2-mod-wsgi
   when: has_network_access
 
+- name: Regenerate self-signed SSL cert with current hostname
+  shell: /usr/sbin/TSmake-ssl-cert generate-default-snakeoil --force-overwrite
+  ignore_errors: True
+
 - name: Install additional apache packages for 18.04
   apt: name={{ item }} state=present force=yes
   with_items:

@@ -585,6 +585,159 @@
     }
   },
   {
+    "pk": 17,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "Unspecified",
+      "displayedValue": "Unspecified",
+      "description": "No LibraryPrep protocol deviation selected",
+      "isDefault": true,
+      "isActive": false,
+      "isVisible": false,
+      "categories": "",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0016"
+    }
+  },
+  {
+    "pk": 18,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "SOP",
+      "displayedValue": "SOP",
+      "description": "Standard LibraryPrep protocol",
+      "isDefault": false,
+      "isActive": false,
+      "isVisible": false,
+      "categories": "",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0017"
+    }
+  },
+  {
+    "pk": 19,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "Modified",
+      "displayedValue": "Modified",
+      "description": "Modified LibraryPrep protocol",
+      "isDefault": false,
+      "isActive": false,
+      "isVisible": false,
+      "categories": "",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0018"
+    }
+  },
+  {
+    "pk": 20,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "550_OCAv4_short_protocol",
+      "displayedValue": "2 Library Pools - OCA Plus",
+      "description": "LibraryPrep protocol for OCAv4 on 550 chip",
+      "isDefault": false,
+      "isActive": false,
+      "isVisible": true,
+      "categories": "ocav4;multiPoolSupport",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0019"
+    }
+  },
+  {
+    "pk": 21,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "myeloid_protocol",
+      "displayedValue": "Myeloid",
+      "description": "Myeloid Library Prep Protocol",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": true,
+      "categories": "myeloid",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0020"
+    }
+  },
+  {
+    "pk": 22,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "libraryPrepProtocol",
+      "value": "multiPoolSupport",
+      "displayedValue": "Multi Pool Support",
+      "description": "Multi Pool support",
+      "isDefault": false,
+      "isActive": false,
+      "isVisible": false,
+      "categories": "multiPoolSupport",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "CV0021"
+    }
+  },
+  {
+    "pk": 1,
+    "model": "rundb.chefpcrplateconfig",
+    "fields": {
+      "kit": "20086",
+      "confg": {
+        "RED_PLATE": [
+          "IonCode_0101",
+          "IonCode_0102",
+          "IonCode_0103",
+          "IonCode_0104",
+          "IonCode_0105",
+          "IonCode_0106",
+          "IonCode_0107",
+          "IonCode_0108"
+        ],
+        "YELLOW_PLATE": [
+          "IonCode_0109",
+          "IonCode_0110",
+          "IonCode_0111",
+          "IonCode_0112",
+          "IonCode_0113",
+          "IonCode_0114",
+          "IonCode_0115",
+          "IonCode_0116"
+        ],
+        "GREEN_PLATE": [
+          "IonCode_0117",
+          "IonCode_0118",
+          "IonCode_0119",
+          "IonCode_0120",
+          "IonCode_0121",
+          "IonCode_0122",
+          "IonCode_0123",
+          "IonCode_0124"
+        ],
+        "BLUE_PLATE": [
+          "IonCode_0125",
+          "IonCode_0126",
+          "IonCode_0127",
+          "IonCode_0128",
+          "IonCode_0129",
+          "IonCode_0130",
+          "IonCode_0131",
+          "IonCode_0132"
+        ],
+        "pool1PcrPlateRows": ["A", "B", "C", "D"],
+    	"pool2PcrPlateRows": ["E", "F", "G", "H"]
+      }
+    }
+  },
+  {
     "pk": 20001,
     "model": "rundb.applproduct",
     "fields": {
@@ -4848,48 +5001,6 @@
       "isIRCompatible": false,
       "sampleGroupType_CV": null,
       "value": "Manual",
-      "iRValue": "",
-      "iRAnnotationType": "",
-      "isActive": true
-    }
-  },
-  {
-    "pk": 74,
-    "model": "rundb.sampleannotation_cv",
-    "fields": {
-      "annotationType": "cyclingProtocols",
-      "uid": "SAMPLEANNOTATE_CV_0074",
-      "isIRCompatible": false,
-      "sampleGroupType_CV": null,
-      "value": "Unspecified",
-      "iRValue": "",
-      "iRAnnotationType": "",
-      "isActive": true
-    }
-  },
-  {
-    "pk": 75,
-    "model": "rundb.sampleannotation_cv",
-    "fields": {
-      "annotationType": "cyclingProtocols",
-      "uid": "SAMPLEANNOTATE_CV_0075",
-      "isIRCompatible": false,
-      "sampleGroupType_CV": null,
-      "value": "SOP",
-      "iRValue": "",
-      "iRAnnotationType": "",
-      "isActive": true
-    }
-  },
-  {
-    "pk": 76,
-    "model": "rundb.sampleannotation_cv",
-    "fields": {
-      "annotationType": "cyclingProtocols",
-      "uid": "SAMPLEANNOTATE_CV_0076",
-      "isIRCompatible": false,
-      "sampleGroupType_CV": null,
-      "value": "Modified",
       "iRValue": "",
       "iRAnnotationType": "",
       "isActive": true

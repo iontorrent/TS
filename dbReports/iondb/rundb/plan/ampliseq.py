@@ -120,6 +120,7 @@ class AmpliSeqPanelImport(object):
             inValidPlugins_str = ", ".join(inValidPlugins)
             print(self.get_errroMsg("E001", inValidPlugins_str))
             sys.exit(1)
+        return plan
 
     def config_choice_handler(self, ampSeq_path=None):
         data = self.data
@@ -137,7 +138,7 @@ class AmpliSeqPanelImport(object):
             )  # VC plugin is handled here separately to support backward compatability
 
             if (
-                "plugins" in self.plan and not ampSeq_path
+                "plugins" in plan_config and not ampSeq_path
             ):  # handle new plugin configuration in plan.json
                 updated_plan_config = self.setup_other_plugin_config(
                     updated_plan_config

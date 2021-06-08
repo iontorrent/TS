@@ -254,7 +254,7 @@ def manage_data(
                         extra=logid,
                     )
                 except DMExceptions.BaseInputLinked:
-                    # want to allow Basecalling Input delete if all results are expired
+                    # want to allow Basecalling Input delete if all results are expired and none are marked as Keep
                     related_objs = DMFileStat.objects.filter(
                         result__experiment=archiveme.result.experiment,
                         dmfileset__type=dmactions_types.BASE,
@@ -262,7 +262,7 @@ def manage_data(
                     if (
                         related_objs.count()
                         == related_objs.filter(created__lt=threshdate).count()
-                    ):
+                    ) and not related_objs.filter(preserve_data=True):
                         archiveme.allow_delete = True
                         return archiveme
                     else:

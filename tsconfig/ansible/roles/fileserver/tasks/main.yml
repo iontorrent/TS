@@ -202,13 +202,6 @@
     state: present
   when: has_network_access
 
-# TS-17915: need to explicitly enable dhcp on boot
-- name: enable isc-dhcp-server to start on boot if compatible interfaces are available
-  service:
-    name: isc-dhcp-server
-    enabled: yes
-  when: enable_dhcp|bool == True
-    
 # shutdown the service and disable it on boot
 - name: shutdown DHCP services if not configured or enabled
   service:

@@ -3,7 +3,7 @@
         "name": "AmpliSeq HD for Oncomine Tumor DNA - GeneStudio S5", 
         "tooltip": "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.", 
         "configuration": "ampliseq_hd_ffpe", 
-        "ts_version": "5.12", 
+        "ts_version": "5.14", 
         "compatibility": {
             "chip": [
                 "510", 

@@ -9,7 +9,7 @@
 #include <boost/python/stl_iterator.hpp>
 #include <ctime>
 #include <functional>
-
+#include <set>
 #include <libgen.h>
 #include "api/BamReader.h"
 #include "file-io/ion_util.h"
@@ -109,6 +109,12 @@ template<typename T> vector<T> fromNumpy( const boost::python::object& data ){
     return outputArr;
 }
 
+// I need the constructor for object assignment. Otherwise, two objects share the same dpTreephaser that could be deleted if the destructor of one object is called.
+TreePhaser::TreePhaser(const TreePhaser& copy_me){
+    *this = copy_me;
+    dpTreephaser = new DPTreephaser(*(copy_me.dpTreephaser));
+}
+
 TreePhaser::TreePhaser(const string &_flowOrder)
 {
     flowOrder = ion::FlowOrder(_flowOrder, _flowOrder.length());
@@ -118,6 +124,103 @@ TreePhaser::TreePhaser(const string &_flowOrder)
 void TreePhaser::setCalibFromTxtFile(const string &model_file, int threshold)
 {
     calibModel.InitializeModelFromTxtFile(model_file, threshold);
+}
+
+void TreePhaser::setCalibFromBamFile(const string &bam_file){
+	bam_header_recalibration.clear();
+	block_hash.clear();
+	BamTools::BamReader bamReader;
+    if(!bamReader.Open(bam_file))
+        throw std::runtime_error( std::string("Can't open bam file: ")+bam_file );
+    BamTools::SamHeader samHeader = bamReader.GetHeader();
+    bamReader.Close();
+
+    if (not samHeader.HasComments()){
+    	cerr << "Failed to set Calibration from the BAM file: No @CO tag found from the BAM header." << endl;
+    	return;
+    }
+
+    // Get eligible run_id for the flowOrder being initialized
+    set<string> eligible_run_id;
+    for (BamTools::SamReadGroupConstIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr) {
+        if (itr->ID.empty()){
+            cerr << "TVC ERROR: BAM file has a read group without ID." << endl;
+            exit(EXIT_FAILURE);
+        }
+        // We need a flow order to do variant calling so throw an error if there is none.
+        if (not itr->HasFlowOrder()) {
+            cerr << "TVC ERROR: read group " << itr->ID << " does not have a flow order." << endl;
+        exit(EXIT_FAILURE);
+        }
+        // I only accept the RUNID whose flow order is the same as the flow_order being initialized to TreePhaser.
+        if (itr->FlowOrder == flowOrder.full_nucs()){
+        	string my_run_id = itr->ID.substr(0, itr->ID.find("."));
+        	eligible_run_id.insert(my_run_id);
+        }
+    }
+
+    unsigned int num_parsing_errors = 0;
+    bool is_live = false;
+    // Read comment lines from Sam header
+    for (unsigned int i_co=0; i_co<samHeader.Comments.size(); i_co++) {
+      // There might be all sorts of comments in the file
+      // therefore must find the unlikely magic code in the line before trying to parse
+      string magic_code = "6d5b9d29ede5f176a4711d415d769108"; // md5hash "This uniquely identifies json comments for recalibration."
+
+      if (samHeader.Comments[i_co].find(magic_code) == std::string::npos) {
+        //cout << endl << "No magic code found in comment line "<< i_co <<endl;
+        //cout << samHeader.Comments.at(i_co) << endl;
+        continue;
+      }
+
+      // Parse recalibration Json object
+      Json::Value recal_params(Json::objectValue);
+      Json::Reader recal_reader;
+      if (not recal_reader.parse(samHeader.Comments[i_co], recal_params)) {
+        cerr << "Failed to parse recalibration comment line " << recal_reader.getFormattedErrorMessages() << endl;
+        num_parsing_errors++;
+        continue;
+      }
+
+      string my_block_key = recal_params["MasterKey"].asString();
+
+      // Assumes that the MasterKey is written in the format <run_id>.block_X<x_offset>_Y<y_offset>
+      int end_runid = my_block_key.find(".");
+      int x_loc     = my_block_key.find("block_X")+7;
+      int y_loc     = my_block_key.find("_Y");
+
+      // glorified assembly language
+      string runid = my_block_key.substr(0,end_runid);
+      int x_coord = atoi(my_block_key.substr(x_loc,y_loc-x_loc).c_str());
+      int y_coord = atoi(my_block_key.substr(y_loc+2, my_block_key.size()-y_loc+2).c_str());
+
+      // Skip the ineligible RUNID
+      if (eligible_run_id.find(runid) == eligible_run_id.end()){
+    	  cout << "The flow order used in the run "<< runid << " does not match the flow order being initialized to the TreePhaser object."<< endl;
+    	  continue;
+      }
+
+      //recalModel.InitializeFromJSON(recal_params, my_block_key, false, max_flows_by_run_id.at(runid));
+      // void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled, int over_flow_protect) {
+      // The calibration comment line contains  info about the hp threshold used during base calling, so set to zero here
+      // XXX FIXME: The number of flows in the TVC group can be larger than the one specified in the calibration block.
+      LinearCalibrationModel tmp_recalModel;
+      tmp_recalModel.InitializeModelFromJson(recal_params, flowOrder.num_flows());
+      bam_header_recalibration.insert(pair<string,LinearCalibrationModel>(my_block_key, tmp_recalModel));
+      block_hash.insert(pair<string, pair<int,int > >(runid,pair<int,int>(x_coord,y_coord)));
+      is_live = true;
+    }
+
+    // Verbose output
+    if (is_live){
+        cout << "Recalibration was detected from comment lines in bam file:" << endl;
+        cout << bam_header_recalibration.size() << " unique blocks of recalibration info detected." << endl;
+    }else{
+    	cout << "No valid Recalibration was detected in the bam file."<< endl;
+    }
+    if (num_parsing_errors > 0) {
+      cout << "Failed to parse " << num_parsing_errors << " recalibration comment lines." << endl;
+    }
 }
 
 void TreePhaser::setCalibFromJson(const string &json_model, int threshold)
@@ -140,17 +243,87 @@ void TreePhaser::setStateProgression(bool diagonalStates)
     dpTreephaser->SetStateProgression( diagonalStates );
 }
 
+bool ApplyCalibration(DPTreephaser *dpTreephaser, const LinearCalibrationModel& calibModel, int calib_x, int calib_y){
+	bool calibration_set = false;
+	dpTreephaser->DisableRecalibration();
+	if( calibModel.is_enabled()){
+	    const vector<vector<vector<float> > > * aPtr = calibModel.getAs(calib_x, calib_y);
+	    const vector<vector<vector<float> > > * bPtr = calibModel.getBs(calib_x, calib_y);
+	    if (aPtr == 0 or bPtr == 0) {
+	        std::cerr<< "Error finding recalibration model for x: " << calib_x << " y: " << calib_y << std::endl;
+	    }
+	    else{
+	    	dpTreephaser->SetAsBs(aPtr, bPtr);
+	    	calibration_set = true;
+	    }
+	}
+	return calibration_set;
+}
+
+bool TreePhaser::applyCalibForXY(int calib_x, int calib_y){
+	return ApplyCalibration(dpTreephaser, calibModel, calib_x, calib_y);
+}
+
+void TreePhaser::disableCalibration(){
+	dpTreephaser->DisableRecalibration();
+}
+
+bool TreePhaser::applyCalibForQueryName(const string &qname){
+	bool calibration_set = false;
+	int well_x = 0, well_y = 0;
+	string runid = qname.substr(0, qname.find(":"));
+	std::pair <std::multimap<string,pair<int,int> >:: const_iterator, std::multimap<string,pair<int,int> >:: const_iterator> blocks;
+
+	// Disable the previous Calibration
+	disableCalibration();
+
+	if (bam_header_recalibration.empty()){
+		cerr << "No valid calibration was initialized from a BAM file. Please run this->setCalibFromBamFile(bam_path) first."<<endl;
+		return calibration_set;
+	}
+
+	// Do the steps as in InitialzeBaseCallers in InputStructures.cpp
+	ion_readname_to_xy(qname.c_str(), &well_x, &well_y);
+	blocks = block_hash.equal_range(runid);
+	int tx = 0, ty = 0;
+	for (std::multimap<string,pair<int,int> >:: const_iterator it = blocks.first; it!=blocks.second; ++it) {
+		int ax = it->second.first;
+		int ay = it->second.second;
+		if ((ax<=well_x) && (ay<=well_y)) {
+			// potential block including this point because it is less than the point coordinates
+			// take the coordinates largest & closest
+			if (ax >tx)
+				tx = ax;
+			if (ay>ty)
+				ty = ay;
+		}
+	}
+	string found_key = runid + ".block_X" + to_string(tx) + "_Y" + to_string(ty);
+	MultiAB multi_ab;
+	// found_key in map to get iterator
+	map<string, LinearCalibrationModel>::const_iterator my_calibModel;
+	my_calibModel = bam_header_recalibration.find(found_key);
+	if (my_calibModel!=bam_header_recalibration.end()){
+		my_calibModel->second.getAB(multi_ab, well_x, well_y);
+		if (multi_ab.Valid()){
+			dpTreephaser->SetAsBs(multi_ab.aPtr, multi_ab.bPtr);
+			calibration_set = true;
+		}else{
+			cerr << "Unable to find the calibration data for the X-Y of the read "<< qname;
+		}
+	}else{
+		cerr << "Unable to find the calibration data for the read "<< qname <<". Please check the BAM file header.";
+	}
+
+	return calibration_set;
+}
+
 object queryStates( DPTreephaser* dpTreephaser, const LinearCalibrationModel& calibModel, const string& sequence, int maxFlows, int calib_x, int calib_y, bool getStates )
 {
     BasecallerRead read;
     read.sequence = std::vector<char>(sequence.begin(), sequence.end());
-    if( calibModel.is_enabled() ) {
-        const vector<vector<vector<float> > > * aPtr = calibModel.getAs(calib_x, calib_y);
-        const vector<vector<vector<float> > > * bPtr = calibModel.getBs(calib_x, calib_y);
-        if (aPtr == 0 or bPtr == 0) {
-            std::cerr<< "Error finding recalibration model for x: " << calib_x << " y: " << calib_y << std::endl;
-        }
-        dpTreephaser->SetAsBs(aPtr, bPtr);
+    if (min(calib_x, calib_y) >= 0){
+        ApplyCalibration(dpTreephaser, calibModel, calib_x, calib_y);
     }
     if( getStates ){
         vector< vector<float> > queryStates;
@@ -183,9 +356,9 @@ object TreePhaser::queryAllStates( const string& sequence, int maxFlows, int cal
 }
 
 
-object TreePhaser::Simulate( const string& sequence, int maxFlows )
+object TreePhaser::Simulate( const string& sequence, int maxFlows=-1)
 {
-    return queryStates(dpTreephaser, calibModel, sequence, maxFlows, 0, 0, false);
+    return queryStates(dpTreephaser, calibModel, sequence, maxFlows, -1, -1, false);
 }
 
 void makeOutput(const BasecallerRead& read, boost::python::dict& output)
@@ -1124,6 +1297,12 @@ boost::python::dict PyBam::ReadBamHeader( void ){
         appendToHeader("SequencingTechnology",itr->HasSequencingTechnology(),itr->SequencingTechnology);
         flow_order_by_read_group[itr->ID] = itr->FlowOrder;
         key_seq_by_read_group[itr->ID] = itr->KeySequence;
+        string runid = itr->ID.substr(0, itr->ID.find("."));
+        pair< map<string, TreePhaser>::iterator, bool> insert_new_tp;
+        insert_new_tp = treephaser_by_runid.insert(pair<string, TreePhaser>{runid, TreePhaser(itr->FlowOrder)});
+        if (insert_new_tp.second){
+        	insert_new_tp.first->second.setCalibFromBamFile(fname);
+        }
     }
     return header;
 }
@@ -1371,12 +1550,21 @@ void PyBam::SimulateCafie( boost::python::dict& read )
     unsigned int nFlow = PyArray_SIZE( measuredIntensity.ptr() );
 
     std::string groupId = boost::python::extract<std::string>(read["readGroup"]);
-    std::string flow_order = flow_order_by_read_group[groupId];
-
+    std::string query_name = boost::python::extract<std::string>(read["id"]);
+    std::string runid = query_name.substr(0, query_name.find(":"));
     //printf("cf: %g, meas: %d, groupId: %s,  nFlow: %d, flowOrder: %s \n", phaseParams[0], measuredIntensity[0], groupId.c_str(), nFlow, flow_order.c_str());
-    ion::FlowOrder flowOrder( flow_order, flow_order.size() );
-    DPTreephaser dpTreephaser(flowOrder);
-    dpTreephaser.SetModelParameters(phaseParams[0], phaseParams[1], phaseParams[2]);
+
+    map<string, TreePhaser>::iterator find_dpTreephaser = treephaser_by_runid.find(runid);
+    if (find_dpTreephaser == treephaser_by_runid.end()){
+    	cerr << "No RUNID was found in the BAM header for the read "<< query_name<<endl;
+    	return;
+    }
+    if (suppress_recalibration){
+    	find_dpTreephaser->second.disableCalibration();
+    }else{
+    	find_dpTreephaser->second.applyCalibForQueryName(query_name);
+    }
+    find_dpTreephaser->second.setCAFIEParams(phaseParams[0], phaseParams[1], phaseParams[2]);
 
     // Iterate over all reads
     BasecallerRead tseq_read, qseq_read;
@@ -1385,9 +1573,8 @@ void PyBam::SimulateCafie( boost::python::dict& read )
 
     sequence = key_seq_by_read_group[groupId] + static_cast<std::string>( boost::python::extract<std::string>(read["qseq_bases"]) );
     std::copy( sequence.begin(), sequence.end(), std::back_inserter(qseq_read.sequence) );
-
-    dpTreephaser.Simulate( tseq_read, nFlow );
-    dpTreephaser.Simulate( qseq_read, nFlow );
+    find_dpTreephaser->second.Simulate_BasecallerRead( tseq_read, nFlow );
+    find_dpTreephaser->second.Simulate_BasecallerRead( qseq_read, nFlow );
 
     npy_intp dims[]={(npy_intp)tseq_read.prediction.size()};
     handle<> tseq_read_out( PyArray_SimpleNew(1,dims,NPY_FLOAT) );
@@ -1412,12 +1599,21 @@ void PyBam::PhaseCorrect( boost::python::dict& read, object keyFlow )
     unsigned int nFlow = PyArray_SIZE( measuredIntensity.ptr() );
 
     std::string groupId = boost::python::extract<std::string>(read["readGroup"]);
-    std::string flow_order = flow_order_by_read_group[groupId];
 
-    //printf("cf: %g, meas: %d, groupId: %s,  nFlow: %d, flowOrder: %s \n", phaseParams[0], measuredIntensity[0], groupId.c_str(), nFlow, flow_order.c_str());
-    ion::FlowOrder flowOrder( flow_order, flow_order.size() );
-    DPTreephaser dpTreephaser(flowOrder);
-    dpTreephaser.SetModelParameters(phaseParams[0], phaseParams[1], phaseParams[2]);
+    std::string query_name = boost::python::extract<std::string>(read["id"]);
+    std::string runid = query_name.substr(0, query_name.find(":"));
+
+    map<string, TreePhaser>::iterator find_dpTreephaser = treephaser_by_runid.find(runid);
+    if (find_dpTreephaser == treephaser_by_runid.end()){
+    	cerr << "No RUNID was found in the BAM header for the read "<< query_name<<endl;
+    	return;
+    }
+    if (suppress_recalibration){
+    	find_dpTreephaser->second.disableCalibration();
+    }else{
+    	find_dpTreephaser->second.applyCalibForQueryName(query_name);
+    }
+    find_dpTreephaser->second.setCAFIEParams(phaseParams[0], phaseParams[1], phaseParams[2]);
     int nKeyFlow = PyArray_SIZE(keyFlow.ptr());
     vector <int> keyVec(nKeyFlow);
     for(int iFlow=0; iFlow < nKeyFlow; iFlow++)
@@ -1430,7 +1626,7 @@ void PyBam::PhaseCorrect( boost::python::dict& read, object keyFlow )
         sigVec[iFlow] = *(int16_t*)PyArray_GETPTR1( measuredIntensity.ptr(), iFlow );
 
     basecaller_read.SetDataAndKeyNormalize(&(sigVec[0]), (int)nFlow, &(keyVec[0]), nKeyFlow-1);
-    dpTreephaser.NormalizeAndSolve_SWnorm(basecaller_read, nFlow);
+    find_dpTreephaser->second.NormalizeAndSolve_SWnorm_BasecallerRead(basecaller_read, nFlow);
 
     npy_intp dims[]={nFlow};
     handle<> predicted_out( PyArray_SimpleNew(1,dims,NPY_FLOAT) );
@@ -1682,18 +1878,22 @@ BOOST_PYTHON_MODULE(torrentPyLib)
             .def("ReadBam",&PyBam::ReadBam,"ReadBam() - returns all reads in a single dictionary. May be very slow for large bam files.")
             .def("GetNumRecords", &PyBam::GetNumRecords,"GetNumRecords() - returns the number of reads in the bam file. This is a slow operation.")
             .def("Rewind", &PyBam::Rewind,"Rewind() - return read position to the beginning of the file.")
+            .def("Close", &PyBam::Close,"Close() - close the BAM file that was opened.")
             .def("SetSampleSize", &PyBam::SetSampleSize, "SetSampleSize( nSamples ) - set read sample size to nSamples.")
             .def("SetDNARegion", &PyBam::SetDNARegion, "SetDNARegion( leftRefId, leftPosition, rightRefId, rightPosition ) - set the range of DNA coordinates for bam file iterator.")
             .def("SetChipRegion", &PyBam::SetChipRegion, "SetChipRegion( minRow, maxRow, minCol, maxCol ) - restrict bam file iterator to a region of the chip.")
             .def("Jump", &PyBam::Jump, "Jump( refId, position ) - move bam file iterator to this position in the bam file.")
             .def("SimulateCafie", &PyBam::SimulateCafie, "SimulateCafie( dict_read ) - simulate phasing effects.")
             .def("PhaseCorrect", &PyBam::PhaseCorrect, "PhaseCorrect( dict_read, keyFlow ) - apply phase correction to the read.")
+            .def("SuppressRecalibration", &PyBam::SuppressRecalibration, "Jump( flag ) - Suppress recalibration in SimulateCafie and PhaseCorrect.")
             .def_readonly("data",&PyBam::data)
             .def_readonly("header",&PyBam::header, "Bam header.")
             .def_readonly("sample_size",&PyBam::sample_size, "Current sample size.")
             .def_readonly("reference_names",&PyBam::refNames, "List of alignement references.")
             .def_readwrite("flowAlign",&PyBam::flowAlign, "Should flow space alignment be done for the reads.")
             .def("__iter__",&PyBam::__iter__,return_internal_reference<>())
+            .def("__enter__",&PyBam::__enter__,return_internal_reference<>())
+            .def("__exit__",&PyBam::__exit__, "Exit")
             .def("next",&PyBam::next,"Returns bam file iterator.")
             ;
 
@@ -1726,6 +1926,10 @@ BOOST_PYTHON_MODULE(torrentPyLib)
     class_<TreePhaser>("TreePhaser",boost::python::init<std::string>("Interface to DPTreephaser",(boost::python::arg("flowOrder"))))
             .def("setCalibFromTxtFile",&TreePhaser::setCalibFromTxtFile,"setCalibFromTxtFile( model_file, threshold) Set calibration model from file named model_file, with homopolymer limit threshold.")
             .def("setCalibFromJson",&TreePhaser::setCalibFromJson,"Set calibration model from json")
+            .def("setCalibFromBamFile",&TreePhaser::setCalibFromBamFile,"Set calibration model from BAM file")
+            .def("applyCalibForQueryName",&TreePhaser::applyCalibForQueryName,"Apply calibration model for the BAM read")
+            .def("applyCalibForXY",&TreePhaser::applyCalibForXY,"Apply calibration model for the X-Y coordination")
+            .def("disableCalibration",&TreePhaser::disableCalibration,"Disable the calibration model that was previously applied")
             .def("setCAFIEParams",&TreePhaser::setCAFIEParams,"Set CAFIE parameters")
             .def("queryAllStates",&TreePhaser::queryAllStates,"Query all states")
             .def("Simulate",&TreePhaser::Simulate,"Simulate")

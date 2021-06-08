@@ -61,5 +61,5 @@ if [ ${exit_status} -eq 2 ] || [ ${exit_status} -gt 128 ]; then
           echo "Plugin Terminated by user request"
           ;;
   esac
-  ion-plugin-status --pk ${RUNINFO__PK} -s 'Error'
+  ion-plugin-status --state 'Error' --host ${RUNINFO__NET_LOCATION} --apikey ${RUNINFO__API_KEY} --pk ${RUNINFO__PK}
 fi

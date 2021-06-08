@@ -18,6 +18,7 @@ from iondb.product_integration.utils import (
 from iondb.rundb.json_field import JSONField
 from iondb.security.models import SecureString
 from iondb import settings
+from iondb.utils.utils import authenticate_fetch_url
 
 
 class ThermoFisherCloudAccount(models.Model):
@@ -84,8 +85,7 @@ class ThermoFisherCloudAccount(models.Model):
     def setup_ampliseq(self, password):
         """This method will setup a secret for the ampliseq password"""
         base_url = os.path.join(settings.AMPLISEQ_URL, "ws/design/list")
-        ampliseq_response = requests.get(base_url, auth=(self.username, password))
-        ampliseq_response.raise_for_status()
+        authenticate_fetch_url(username=self.username, password=password, base_url=base_url)
 
     def get_ampliseq_password(self):
         """This will query the secure storage for the secret name and return the password unencrypted"""

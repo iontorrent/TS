@@ -627,6 +627,15 @@ bool BAMWalkerEngine::GetNextAlignmentCore(Alignment* new_read, VariantCallerCon
   return has_more_alignments_ = true;
 }
 
+void BAMWalkerEngine::InitializeReadAlignment(Alignment* new_read) const{
+	if (not new_read->alignment.BuildCharData()) {
+		cerr << "ERROR: Failed to parse read data for BAM Alignment " << new_read->alignment.Name << endl;
+		exit(1);
+	}
+	new_read->original_position = new_read->alignment.Position;
+	new_read->original_end_position = new_read->alignment.GetEndPosition();
+	new_read->end = new_read->alignment.GetEndPosition();
+}
 
 void BAMWalkerEngine::FinishReadProcessingTask(Alignment* new_read, bool success)
 {
@@ -669,7 +678,6 @@ void BAMWalkerEngine::FinishReadProcessingTask(Alignment* new_read, bool success
 
 void BAMWalkerEngine::SetupPositionTicket(list<PositionInProgress>::iterator& position_ticket) const
 {
-  if (position_ticket->begin == NULL) {return;}
 /*
   Alignment* tmp_begin_ = position_ticket->begin;
   while (tmp_begin_ and (

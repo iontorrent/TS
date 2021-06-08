@@ -4,414 +4,537 @@
 {% block title %}Management Options{% endblock %}
 
 {% block content %}
-  <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}" />
-  <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/tb-styles.min.css"%}" />
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css" %}"/>
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/tb-styles.min.css" %}"/>
 
-  <style type="text/css">
-    #warning_msg {
-      color: #b22222;
-      text-align: left;
-    }
-    #interface {
-      min-height: 150px;
-    }
-    #update_confirmation {
-      padding: 8px;
-    }
-    #update_running {
-      background-color: #90ee90;
-      padding: 8px;
-    }
-    #download_running {
-      background-color: #90ee90;
-      padding: 8px;
-    }
-    #release_memo {
-      margin-top: 20px;
-    }
-    .actions div {
-      margin: 10px 0;
-    }
-    .actions button {
-      margin-right: 10px;
-      margin-bottom: 10px;
-    }
-    .modal-body{
-        background-color: #fafad2;
-    }
-    .modal{
-      overflow-y: auto;
-      overflow-x: auto;
-      min-width: 700px;
-    }
-  </style>
-<script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
-
-<div id="content-main">
-  <h1>Update Torrent Suite</h1>
-  <div class="row-fluid">  
-    <div class="span4">
-      <h3>Software Versions</h3>
-      <div class="bounded_container clear">
-        <table class="table table-condensed table-striped">
-          <thead>
-          <tr>
-            <th>
-              <strong>Torrent Suite</strong>
-            </th>
-            <th align="left"><strong>{{ meta }}</strong></th>
-            {% if show_available %} <th align="left"><strong>Available</strong></th>{% endif %}
-          </tr>
-          </thead>
-          <tbody>
-          {% for label, version in about.items %}
-          <tr>
-            <td>
-              {{ label }}
-            </td>
-            <td align="left">{{ version.0 }}</td>
-            {% if show_available %}
-                <td align="left">{% ifnotequal version.0 version.1 %}{{ version.1 }}{% endifnotequal %}</td>
-            {% endif %}
-          </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="span8">
-      <div id="update_control">
-        <div id="interface">
-          <h2 id="update_status">Checking status</h2>
-          <div id="update_actions" class="actions">
-            <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
-          <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
-            <button id="check_update">Check</button>
-            <button id="confirm_update" disabled="disabled">Update Server</button>
-              {% if not allow_update %}
-                <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
-              {% endif %}
-          </div>
-          <div id="update_confirmation" class="modal modal-800 fade" data-backdrop="static" data-keyboard="false" role="dialog">
-            <div class="modal-dialog">
-              <div class="modal-content">
-                 {% if not eula_error %}
-                    <div class="modal-header bg-info">
-                      <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                      <h4 class="modal-title">End User License Agreement (EULA)</h4>
-                    </div>
-                    <div class="modal-body">
-                      <div id="agreement">
-                          {{eula_content|safe}}
-                       </div>
-                    </div>
-                    <div class="modal-footer bg-info">
-                      <span id="warning_msg" class="pull-left">System will be unavailable during the update.<br>Make sure ongoing analyses are completed before starting the update process.</span>
-                      <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                      <button id="start_update" type="button" class="btn btn-primary" disabled>Agree and Update now</button>
-                    </div>
-                    {% else %}
-                      <div class="alert alert-danger" role="alert">
-                        <p><i class="icon-wrench"></i><strong>Error: cannot proceed with the upgrade process...</strong></p>
-                        <p>{{eula_error}}. Please consult your Torrent Suite administrator to fix this issue.</p>
-                        <input type="hidden" id="eula_error" value="{{eula_error}}">
-                       </div>
-                       <div class="modal-footer bg-info">
-                        <button id="cancel" type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                     </div>
-                {% endif %}
-              </div>
-             </div>
-          </div>
-          <div id="status_texts">
-            <div id="update_checking" style="display: none;">
-              <p>Your system is checking Ion Torrent for updates.
-                This may take a minute.</p>
-            </div>
-            <div id="ready_install" style="display: none;">
-              <p>Your system has successfully downloaded the files necessary for a new update and is ready to install them.  Click Update Server to install the update.</p>
-            </div>
-            <div id="update_running" style="display: none;">
-              <p>Your system is now upgrading, please wait a few minutes.</p>
-            </div>
-            <div id="download_running" style="display: none;">
-              <p>Your system is now downloading updates, please wait a few minutes.</p>
-            </div>
-            <div id="update_finished" style="display: none;">
-              <p>The upgrade completed successfully.  Please refresh the page.</p>
-            </div>
-            <div id="update_failure" style="display: none;">
-              <p>There was a problem checking for updates.
-                Try again or check you network settings.</p>
-                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-            </div>
-            <div id="download_failure" style="display: none;">
-              <p>The upgrade did not download completely.
-                Click Update Server to try again or check your network settings.</p>
-                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-            </div>
-            <div id="install_failure" style="display: none;">
-              <p>There were errors during installation.
-                You may click Update Server to try again: contact support,
-                if this does not work.</p>
-                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
-                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
-            </div>
-            <div id="disk_root_full" style="display: none;">
-              <p><strong>Low free disk space on the root partition.
-              Software update is disabled until space is freed up.</strong></p>
-            </div>
-            <div id="unknown" style="display: none;">
-              <p>The status of your system is unknown at this time.
-                Check this page again in a few minutes or contact support.</p>
-            </div>
-          </div>
-        </div>
-        <div id=software_version title="Check box to disable all software updates. (Default is unchecked.)">
-          <h3>Disable software updates</h3>
-          <div><input type="checkbox" id="version_lock" /> Lock current TS software version.</div>
-        </div>
-        <div id="release_memo">
-          <h3>Torrent Suite Release Notes</h3>
-          <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
-        </div>
-      </div>  <!--END update_control-->
-      </br>
-      <div id="maintenance_div" class="actions">
-        <h3>Website Maintenance</h3>
-        <div>
-          <button id="maintenance_enable_btn" class="maintenance">Activate</button>
-          <button id="maintenance_disable_btn" class="maintenance">Cancel</button>
-          </br>
-          <p>When Maintenance is activated all webpages other than this one will be disabled and display Maintenance mode message</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-  <script>
-    var global_config_initial = {{ global_config_json|safe }};
-    $(function(){
-      var Config = Backbone.Model.extend({
-        url: function() {
-          return "/rundb/api/v1/globalconfig/" + this.get("id") + "/";
+    <style type="text/css">
+        #warning_msg {
+            color: #b22222;
+            text-align: left;
         }
-      });
 
-      var UpdateControl = Backbone.View.extend({
-        el: $('#update_control'),
-
-        events: {
-          'click #check_update': 'check_update',
-          'click #confirm_update': 'confirm_update',
-          'click #start_update': 'start_update',
-          'click #cancel': 'no_update_thx',
-          'click #auto_download': 'toggle_auto_download',
-          'click #version_lock': 'toggle_version_lock',
-          'click #checkbox_auto_security': 'toggle_auto_security'
-        },
-
-        initialize: function(){
-          _.bindAll(this, 'render', 'start_update', 'toggle_auto_download',
-            'poll', 'check_update', 'confirm_update', 'no_update_thx',
-            'toggle_version_lock', 'toggle_auto_security');
-          _.each(this.handle_status, function(func, name, list){
-            this.handle_status[name] = _.bind(func, this);
-          }, this);
-          this.config = new Config(global_config_initial);
-          this.config.bind('change', this.render);
-          this.previous_status = null;
-          this.render();
-          this.poll(3000);
-          $(this.el).show();
-        },
-
-        render: function(){
-          this.$("#auto_download").attr("checked", this.config.get("enable_auto_pkg_dl"));
-          this.$("#version_lock").attr("checked", this.config.get("enable_version_lock"));
-          var status_text = this.config.get("ts_update_status");
-          this.$("#update_status").html(status_text);
-          var status = status_text.split(":", 1)[0];
-          if (status.indexOf("Downloading") > -1){ status = "Downloading"; }
-          if (status != this.previous_status && status in this.handle_status) {
-            this.$("#status_texts > div").hide();
-            this.handle_status[status]();
-            this.previous_status = status;
-          }
-          this.$("#checkbox_auto_security").attr("checked", this.config.get("enable_auto_security"));
-        },
-
-        handle_status: {
-          "Unknown": function() {
-            this.$("#unknown").slideDown();
-          },
-          "Checking for update": function() {
-            this.$("#check_update").attr("disabled", "disabled");
-            this.$("#confirm_update").attr("disabled", "disabled");
-            this.$("#update_checking").show();
-          },
-          "Available": function() {
-            this.$("#check_update").removeAttr("disabled");
-            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-            this.$("#update_actions").slideDown();
-            if (this.previous_status != null) {
-              setTimeout(function(){
-                window.location.reload(true);
-              }, 1000);
-            }
-          },
-          "No updates": function() {
-            this.$("#check_update").removeAttr("disabled");
-            this.$("#confirm_update").attr("disabled", "disabled");
-            this.$("#update_actions").slideDown();
-          },
-          "Ready to install": function() {
-            this.$("#check_update").removeAttr("disabled");
-            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-            this.$("#ready_install").slideDown();
-            this.$("#update_actions").slideDown();
-          },
-          "Downloading": function() {
-            this.$("#update_actions").hide();
-            this.$("#download_running").slideDown('slow');
-          },
-          "Installing": function() {
-            this.$("#update_actions").hide();
-            this.$("#update_running").slideDown('slow');
-          },
-          "Update failure": function() {
-            this.$("#update_actions").slideDown();
-            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-            this.$("#update_failure").slideDown();
-          },
-          "Download failure": function() {
-            this.$("#update_actions").slideDown();
-            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-            this.$("#download_failure").slideDown();
-          },
-          "Install failure": function() {
-            this.$("#update_actions").slideDown();
-            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
-            this.$("#install_failure").slideDown();
-          },
-          "Insufficient disk space": function() {
-            this.$("#update_actions").hide();
-            this.$("#disk_root_full").slideDown('slow');
-          },
-          "Finished installing": function() {
-            this.$("#update_finished").show();
-            if (this.previous_status != null) {
-              setTimeout(function(){
-                window.location.reload(true);
-              }, 1000);
-            }
-          }
-        },
-
-        poll: function(frequency){
-          clearInterval(this.update_timer);
-          if(frequency) {
-            var config = this.config;
-            this.update_timer = setInterval(function(){
-              config.fetch();
-            }, frequency);
-          }
-        },
-
-        check_update: function(){
-          this.$("#check_update").attr("disabled", "disabled");
-          $.post("/admin/update/check/");
-        },
-
-        confirm_update: function(){
-          this.$("#update_actions").hide();
-          this.$('#update_confirmation').modal('show');
-        },
-
-        start_update: function(){
-          $.post("/admin/update/", null, function() {
-          });
-          this.$("#update_confirmation").modal('hide');
-          this.$("#confirm_update").attr("disabled", "disabled");
-          this.$("#update_running").slideDown('slow');
-          $('#maintenance_div').hide();
-          this.poll(750);
-        },
-
-        no_update_thx: function(){
-          this.$("#update_confirmation").hide();
-          this.$("#update_actions").slideDown('slow');
-        },
-
-        toggle_auto_download: function(){
-          var checked = this.$("#auto_download").attr("checked") || false;
-          this.config.save({
-            "enable_auto_pkg_dl": checked
-          });
-        },
-
-        toggle_auto_security: function(){
-          var checked = this.$("#checkbox_auto_security").attr("checked") || false;
-          this.config.save({
-            "enable_auto_security": checked
-          });
-        },
-
-        toggle_version_lock: function(){
-          var checked = this.$("#version_lock").attr("checked") || false;
-          this.config.save({
-            "enable_version_lock": checked
-          });
-          if (checked)
-            $.post("/admin/update/version_lock/enable_lock");
-          else
-            $.post("/admin/update/version_lock/disable_lock");
-          setTimeout(function(){
-                window.location.reload(true);
-              }, 1000);
+        #interface {
+            min-height: 150px;
         }
-      });
 
-      window.controller = new UpdateControl;
+        #update_confirmation {
+            padding: 8px;
+        }
 
-      if ($('#eula_error').length == 0) {
-          if ($('#agreement').height() < $('#update_confirmation').height()){
-              $('#start_update').removeAttr('disabled')
-          }
-          $('.modal-body').scroll(function() {
-            disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height())
-            if ($.browser.mozilla) {
-                disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height() + 15)
+        #update_running {
+            background-color: #90ee90;
+            padding: 8px;
+        }
+
+        #download_running {
+            background-color: #90ee90;
+            padding: 8px;
+        }
+
+        #switching_repo {
+            background-color: #fafad2;
+            padding: 8px;
+        }
+
+        #release_memo {
+            margin-top: 20px;
+        }
+
+        .actions div {
+            margin: 10px 0;
+        }
+
+        .actions button {
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .modal-body {
+            background-color: #fafad2;
+        }
+
+        .modal {
+            overflow-y: auto;
+            overflow-x: auto;
+            min-width: 700px;
+        }
+
+        .toggle-repo input{
+            margin-bottom: 8px;
+        }
+
+        .toggle-repo span {
+            margin-bottom:5px;
+            padding-left:5px;
+            display:inline-block;
+        }
+    </style>
+    <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js" %}"></script>
+
+    <div id="content-main">
+        <h1>Update Torrent Suite</h1>
+        <div class="row-fluid">
+            <div class="span4">
+                <h3>Software Versions</h3>
+                <div class="bounded_container clear">
+                    <table class="table table-condensed table-striped">
+                        <thead>
+                        <tr>
+                            <th>
+                                <strong>Torrent Suite</strong>
+                            </th>
+                            <th align="left"><strong>{{ meta }}</strong></th>
+                            {% if show_available %}
+                                <th align="left"><strong>Available</strong></th>{% endif %}
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for label, version in about.items %}
+                            <tr>
+                                <td>
+                                    {{ label }}
+                                </td>
+                                <td align="left">{{ version.0 }}</td>
+                                {% if show_available %}
+                                    <td align="left">
+                                        {% ifnotequal version.0 version.1 %}{{ version.1 }}{% endifnotequal %}</td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="span8">
+                <div id="update_control">
+                    <div id="interface">
+                        <h2 id="update_status">Checking status</h2>
+                        <div id="update_actions" class="actions">
+                            <p id="instructions">Your system will automatically check for updates periodically. You can
+                                click Check below to manually check for new updates.</p>
+                            <div><input type="checkbox" id="auto_download"/> Automatically download but do not install
+                                updates.
+                            </div>
+                            {% if deprecationMessage.enableDeprecationMessage %}
+                                 {% if majorPlatform.lower == "mixed" %}
+                                        {% for message in deprecationMessage.messages %}
+                                            {{ message.mixed.warning | safe }}
+                                            <div id="s5_only_msg">
+                                                {{ message.s5_only.warning  | safe }}
+                                            </div>
+                                            <div id="s5_only_msg">
+                                                {{ message.s5_only.error  | safe }}
+                                            </div>
+                                            <div id="pgm_p1_only_msg" style="display: none;">
+                                                {{ message.pgm_or_proton_only.warning | safe }}
+                                            </div>
+                                            <div id="pgm_p1_only_msg" style="display: none;">
+                                                {{ message.pgm_or_proton_only.error | safe }}
+                                            </div>
+                                        {% endfor %}
+                                       <div class="toggle-repo">
+                                            <input type="radio" name="mixed" value="pgm_or_proton_only" {% if not isGenestudioRepo %}checked{% endif %}><span>PGM/Proton</span>
+                                           &ensp; <input type="radio" name="mixed" value="s5_only" {% if isGenestudioRepo %}checked{% endif %}><span>S5</span>
+                                        </div>
+                                            <button id="majorPlatform">Check</button>
+                                {% elif majorPlatform.lower == "s5_only" %}
+                                        <!-- This is for post 5.14, needed to switch bionic-genestudio -->
+                                        <button id="majorPlatform">Check</button>
+                                {% elif majorPlatform.lower == "pgm_or_proton_only" %}
+                                    <!-- For PGM/Proton users only  -->
+                                        {% for message in deprecationMessage.messages %}
+                                            {% if message.pgm_or_proton_only.warning %}
+                                                <div id="pgm_p1_only_msg">
+                                                    {{ message.pgm_or_proton_only.warning | safe }}
+                                                </div>
+                                            {% endif %}
+                                            {% if message.pgm_or_proton_only.error %}
+                                                <div id="pgm_p1_only_msg">
+                                                    {{ message.pgm_or_proton_only.error | safe }}
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                        <button id="check_update">Check</button>
+                                 {% endif %}
+                            {% else %}
+                                <button id="check_update">Check</button>
+                            {% endif %}
+                            <button id="confirm_update" disabled="disabled">Update Server</button>
+                            {% if not allow_update %}
+                                <p><strong>Update is disabled until more disk space is available on root
+                                    partition</strong></p>
+                            {% endif %}
+                        </div>
+                        <div id="update_confirmation" class="modal modal-800 fade" data-backdrop="static"
+                             data-keyboard="false" role="dialog">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    {% if not eula_error %}
+                                        <div class="modal-header bg-info">
+                                            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+                                                &times;
+                                            </button>
+                                            <h4 class="modal-title">End User License Agreement (EULA)</h4>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div id="agreement">
+                                                {{ eula_content|safe }}
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer bg-info">
+                                            <span id="warning_msg" class="pull-left">System will be unavailable during the update.<br>Make sure ongoing analyses are completed before starting the update process.</span>
+                                            <button id="cancel" type="button" class="btn btn-default"
+                                                    data-dismiss="modal">Cancel
+                                            </button>
+                                            <button id="start_update" type="button" class="btn btn-primary" disabled>
+                                                Agree and Update now
+                                            </button>
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-danger" role="alert">
+                                            <p><i class="icon-wrench"></i><strong>Error: cannot proceed with the upgrade
+                                                process...</strong></p>
+                                            <p>{{ eula_error }}. Please consult your Torrent Suite administrator to fix
+                                                this issue.</p>
+                                            <input type="hidden" id="eula_error" value="{{ eula_error }}">
+                                        </div>
+                                        <div class="modal-footer bg-info">
+                                            <button id="cancel" type="button" class="btn btn-default"
+                                                    data-dismiss="modal">Cancel
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div id="status_texts">
+                            <div id="update_checking" style="display: none;">
+                                <p>Your system is checking Ion Torrent for updates.
+                                    This may take a minute.</p>
+                            </div>
+                            <div id="ready_install" style="display: none;">
+                                <p>Your system has successfully downloaded the files necessary for a new update and is
+                                    ready to install them. Click Update Server to install the update.</p>
+                            </div>
+                            <div id="update_running" style="display: none;">
+                                <p>Your system is now upgrading, please wait a few minutes.</p>
+                            </div>
+                            <div id="switching_repo" style="display: none;">
+                                <p>Switching system repository and checking for updates, please wait a few minutes.</p>
+                            </div>
+                            <div id="download_running" style="display: none;">
+                                <p>Your system is now downloading updates, please wait a few minutes.</p>
+                            </div>
+                            <div id="update_finished" style="display: none;">
+                                <p>The upgrade completed successfully. Please refresh the page.</p>
+                            </div>
+                            <div id="update_failure" style="display: none;">
+                                <p>There was a problem checking for updates.
+                                    Try again or check you network settings.</p>
+                                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+                            </div>
+                            <div id="download_failure" style="display: none;">
+                                <p>The upgrade did not download completely.
+                                    Click Update Server to try again or check your network settings.</p>
+                                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+                            </div>
+                            <div id="install_failure" style="display: none;">
+                                <p>There were errors during installation.
+                                    You may click Update Server to try again: contact support,
+                                    if this does not work.</p>
+                                <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+                                <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
+                            </div>
+                            <div id="disk_root_full" style="display: none;">
+                                <p><strong>Low free disk space on the root partition.
+                                    Software update is disabled until space is freed up.</strong></p>
+                            </div>
+                            <div id="unknown" style="display: none;">
+                                <p>The status of your system is unknown at this time.
+                                    Check this page again in a few minutes or contact support.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id=software_version title="Check box to disable all software updates. (Default is unchecked.)">
+                        <h3>Disable software updates</h3>
+                        <div><input type="checkbox" id="version_lock"/> Lock current TS software version.</div>
+                    </div>
+                    <div id="release_memo">
+                        <h3>Torrent Suite Release Notes</h3>
+                        <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments
+                            to the same software level to ensure they are compatible.</p>
+                    </div>
+                </div>  <!--END update_control-->
+                </br>
+                <div id="maintenance_div" class="actions">
+                    <h3>Website Maintenance</h3>
+                    <div>
+                        <button id="maintenance_enable_btn" class="maintenance">Activate</button>
+                        <button id="maintenance_disable_btn" class="maintenance">Cancel</button>
+                        </br>
+                        <p>When Maintenance is activated all webpages other than this one will be disabled and display
+                            Maintenance mode message</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var global_config_initial = {{ global_config_json|safe }};
+        $(function () {
+            var Config = Backbone.Model.extend({
+                url: function () {
+                    return "/rundb/api/v1/globalconfig/" + this.get("id") + "/";
+                }
+            });
+            var UpdateControl = Backbone.View.extend({
+                el: $('#update_control'),
+                events: {
+                    'click #check_update': 'check_update',
+                    'click #confirm_update': 'confirm_update',
+                    'click #start_update': 'start_update',
+                    'click #cancel': 'no_update_thx',
+                    'click #auto_download': 'toggle_auto_download',
+                    'click #version_lock': 'toggle_version_lock',
+                    'click #checkbox_auto_security': 'toggle_auto_security',
+                    'click #majorPlatform': 'switchRepo_checkUpdate',
+                    'click input[name="mixed"]': 'switchRepo_warning',
+                },
+                initialize: function () {
+                    _.bindAll(this, 'render', 'start_update', 'toggle_auto_download',
+                        'poll', 'check_update', 'confirm_update', 'no_update_thx',
+                        'toggle_version_lock', 'toggle_auto_security', 'switchRepo_checkUpdate');
+                    _.each(this.handle_status, function (func, name, list) {
+                        this.handle_status[name] = _.bind(func, this);
+                    }, this);
+                    this.config = new Config(global_config_initial);
+                    this.config.bind('change', this.render);
+                    this.previous_status = null;
+                    this.render();
+                    this.display_switchRepo_message();
+                    this.poll(3000);
+                    $(this.el).show();
+                },
+                render: function () {
+                    this.$("#auto_download").attr("checked", this.config.get("enable_auto_pkg_dl"));
+                    this.$("#version_lock").attr("checked", this.config.get("enable_version_lock"));
+                    var status_text = this.config.get("ts_update_status");
+                    this.$("#update_status").html(status_text);
+                    var status = status_text.split(":", 1)[0];
+                    if (status.indexOf("Downloading") > -1) {
+                        status = "Downloading";
+                    }
+                    if (status != this.previous_status && status in this.handle_status) {
+                        this.$("#status_texts > div").hide();
+                        this.handle_status[status]();
+                        this.previous_status = status;
+                    }
+                    this.$("#checkbox_auto_security").attr("checked", this.config.get("enable_auto_security"));
+                },
+                handle_status: {
+                    "Unknown": function () {
+                        this.$("#unknown").slideDown();
+                    },
+                    "Checking for update": function () {
+                        this.$("#check_update").attr("disabled", "disabled");
+                        this.$("#confirm_update").attr("disabled", "disabled");
+                        this.$("#switching_repo").hide();
+                        this.$("#update_checking").show();
+                    },
+                    "switching repo": function () {
+                        this.$("#check_update").attr("disabled", "disabled");
+                        this.$("#switching_repo").show();
+                    },
+                    "Failed checking for updates": function () {
+                        this.$("#check_update").removeAttr("disabled");
+                        this.$("#majorPlatform").removeAttr("disabled");
+                        this.$("#switching_repo").hide();
+                    },
+                    "Available": function () {
+                        this.$("#check_update").removeAttr("disabled");
+                        if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
+                        this.$("#update_actions").slideDown();
+                        this.$("#switching_repo").hide();
+                        if (this.previous_status != null) {
+                            setTimeout(function () {
+                                window.location.reload(true);
+                            }, 1000);
+                        }
+                    },
+                    "No updates": function () {
+                        this.$("#check_update").removeAttr("disabled");
+                        this.$("#confirm_update").attr("disabled", "disabled");
+                        this.$("#update_actions").slideDown();
+                        this.$("#switching_repo").hide();
+                        if (this.previous_status != null) {
+                            setTimeout(function () {
+                                    window.location.reload(true);
+                            }, 1000);
+                    }
+                    },
+                    "Ready to install": function () {
+                        this.$("#check_update").removeAttr("disabled");
+                        if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
+                        this.$("#ready_install").slideDown();
+                        this.$("#update_actions").slideDown();
+                        this.$("#switching_repo").hide();
+                    },
+                    "Downloading": function () {
+                        this.$("#update_actions").hide();
+                        this.$("#download_running").slideDown('slow');
+                    },
+                    "Installing": function () {
+                        this.$("#update_actions").hide();
+                        this.$("#update_running").slideDown('slow');
+                    },
+                    "Update failure": function () {
+                        this.$("#update_actions").slideDown();
+                        if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
+                        this.$("#update_failure").slideDown();
+                    },
+                    "Download failure": function () {
+                        this.$("#update_actions").slideDown();
+                        if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
+                        this.$("#download_failure").slideDown();
+                    },
+                    "Install failure": function () {
+                        this.$("#update_actions").slideDown();
+                        if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
+                        this.$("#install_failure").slideDown();
+                    },
+                    "Insufficient disk space": function () {
+                        this.$("#update_actions").hide();
+                        this.$("#disk_root_full").slideDown('slow');
+                    },
+                    "Finished installing": function () {
+                        this.$("#update_finished").show();
+                        if (this.previous_status != null) {
+                            setTimeout(function () {
+                                window.location.reload(true);
+                            }, 1000);
+                        }
+                    }
+                },
+                poll: function (frequency) {
+                    clearInterval(this.update_timer);
+                    if (frequency) {
+                        var config = this.config;
+                        this.update_timer = setInterval(function () {
+                            config.fetch();
+                        }, frequency);
+                    }
+                },
+                check_update: function () {
+                    this.$("#check_update").attr("disabled", "disabled");
+                    $.post("/admin/update/check/");
+                },
+                switchRepo_checkUpdate: function () {
+                    this.$("#majorPlatform").attr("disabled", "disabled");
+                    var majorPlatform = $('input:radio[name="mixed"]:checked').val();
+                    if (majorPlatform) {
+                        this.$("#switching_repo").slideDown('slow');
+                    } else {
+                        majorPlatform = "{{ majorPlatform }}";
+                    }
+                    $.post("/admin/update/switch_repo/" + majorPlatform)
+                },
+                display_switchRepo_message: function(){
+                    var majorPlatform = $('input:radio[name="mixed"]:checked').val();
+                    if (majorPlatform === "s5_only") {
+                        this.$("#pgm_p1_only_msg").hide();
+                        this.$("#s5_only_msg").slideDown('slow');
+                    } else {
+                        this.$("#pgm_p1_only_msg").slideDown('slow');
+                        this.$("#s5_only_msg").hide();
+                    }
+                },
+                switchRepo_warning: function () {
+                    this.$("#majorPlatform").removeAttr("disabled");
+                    this.$("#check_update").removeAttr("disabled");
+                    this.$("#confirm_update").attr("disabled", "disabled");
+                    this.display_switchRepo_message();
+                },
+                confirm_update: function () {
+                    this.$("#switching_repo").hide();
+                    this.$("#update_actions").hide();
+                    this.$('#update_confirmation').modal('show');
+                },
+                start_update: function () {
+                    $.post("/admin/update/", null, function () {
+                    });
+                    this.$("#update_confirmation").modal('hide');
+                    this.$("#confirm_update").attr("disabled", "disabled");
+                    this.$("#update_running").slideDown('slow');
+                    $('#maintenance_div').hide();
+                    this.poll(750);
+                },
+                no_update_thx: function () {
+                    this.$("#update_confirmation").hide();
+                    this.$("#update_actions").slideDown('slow');
+                },
+                toggle_auto_download: function () {
+                    var checked = this.$("#auto_download").attr("checked") || false;
+                    this.config.save({
+                        "enable_auto_pkg_dl": checked
+                    });
+                },
+                toggle_auto_security: function () {
+                    var checked = this.$("#checkbox_auto_security").attr("checked") || false;
+                    this.config.save({
+                        "enable_auto_security": checked
+                    });
+                },
+                toggle_version_lock: function () {
+                    var checked = this.$("#version_lock").attr("checked") || false;
+                    this.config.save({
+                        "enable_version_lock": checked
+                    });
+                    if (checked)
+                        $.post("/admin/update/version_lock/enable_lock");
+                    else
+                        $.post("/admin/update/version_lock/disable_lock");
+                    setTimeout(function () {
+                        window.location.reload(true);
+                    }, 1000);
+                }
+            });
+            window.controller = new UpdateControl;
+            if ($('#eula_error').length == 0) {
+                if ($('#agreement').height() < $('#update_confirmation').height()) {
+                    $('#start_update').removeAttr('disabled')
+                }
+                $('.modal-body').scroll(function () {
+                    disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height())
+                    if ($.browser.mozilla) {
+                        disable = $('#agreement').height() <= ($(this).scrollTop() + $(this).height() + 15)
+                    }
+                    if (disable) {
+                        $('#start_update').removeAttr('disabled');
+                    }
+                });
             }
-            if (disable) {
-                $('#start_update').removeAttr('disabled');
-            }
-          });
-      }
-      $(".maintenance").click(function(){
-        $(this).prop('disabled', true);
-        $('#maintenance_div .error').remove();
-
-        var action = this.id.split('_')[1];
-        $.post("/admin/update/maintenance/" + action, function(data){
-          if (data.error){
-            $('#maintenance_div').append("<p class='error' style='color:red;'> Error: "+ data.error +"</p>")
-          } else {
-            handle_maintenance_mode(data.maintenance_mode);
-          }
+            $(".maintenance").click(function () {
+                $(this).prop('disabled', true);
+                $('#maintenance_div .error').remove();
+                var action = this.id.split('_')[1];
+                $.post("/admin/update/maintenance/" + action, function (data) {
+                    if (data.error) {
+                        $('#maintenance_div').append("<p class='error' style='color:red;'> Error: " + data.error + "</p>")
+                    } else {
+                        handle_maintenance_mode(data.maintenance_mode);
+                    }
+                });
+            });
+            handle_maintenance_mode("{{maintenance_mode}}");
         });
-      });
 
-      handle_maintenance_mode("{{maintenance_mode}}");
-    });
-
-    function handle_maintenance_mode(mode){
-      $('#maintenance_div h3').text("Website Maintenance is " + mode);
-      $('#maintenance_enable_btn').attr('disabled', mode=="ON");
-      $('#maintenance_disable_btn').attr('disabled', mode=="OFF");
-    }
-  </script>
+        function handle_maintenance_mode(mode) {
+            $('#maintenance_div h3').text("Website Maintenance is " + mode);
+            $('#maintenance_enable_btn').attr('disabled', mode == "ON");
+            $('#maintenance_disable_btn').attr('disabled', mode == "OFF");
+        }
+    </script>
 {% endblock %}

@@ -113,8 +113,6 @@ bool Realigner::SetScores(const vector<int>& score_vec) {
 void Realigner::SetClipping(int clipping, bool is_forward_strand)
 {
   //DVK
-    
-    
   // These settings are set for a forward strand read
   switch (clipping) {
     case 0: // align full strings, no clipping in read or ref

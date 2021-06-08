@@ -227,7 +227,22 @@ bool ParseInfoKey(const string key, string info, long &value) {
   }
 
   info.erase(0, found+key.size());
-  value = strtol (info.c_str(), NULL, 0);
+  value = strtol(info.c_str(), NULL, 0);
+  if (value>=0)
+    return true;
+  else
+    return false;
+}
+
+bool ParseInfoKey(const string key, string info, float &value) {
+
+  size_t found = info.find(key);
+  if (found == string::npos){
+    return false;
+  }
+
+  info.erase(0, found+key.size());
+  value = (float) strtod(info.c_str(), NULL);
   if (value>=0)
     return true;
   else
@@ -236,26 +251,71 @@ bool ParseInfoKey(const string key, string info, long &value) {
 
 // -------------------------------------------------------------------------------------
 
-void TargetsManager::ParseBedInfoField(UnmergedTarget& target, const string info)
+void TargetsManager::ParseBedInfoField(UnmergedTarget& target, const string info) const
 {
   // parse extra parameters out of the bed file info fields
   long int temp = 0;
+  float temp_f = 0.0f;
 
   target.trim_left = 0;
-  if (ParseInfoKey("TRIM_LEFT=", info, temp))
+  if (ParseInfoKey("TRIM_LEFT=", info, temp)){
     target.trim_left = temp;
+  }
 
   target.trim_right = 0;
-  if (ParseInfoKey("TRIM_RIGHT=", info, temp))
+  if (ParseInfoKey("TRIM_RIGHT=", info, temp)){
     target.trim_right = temp;
+  }
 
   target.hotspots_only = 0;
-  if (ParseInfoKey("HS_ONLY=", info, temp))
+  if (ParseInfoKey("HS_ONLY=", info, temp)){
     target.hotspots_only = temp;
+  }
 
-  target.read_mismatch_limit = -1;
+  target.read_mismatch_limit = 0;
+  target.read_mismatch_limit_override = false;
+  // 5.12 and earlier uses upper case. To be consistent with the overriding format in hotspot BED, we will use lower case key in 5.14 and beyond.
   if (ParseInfoKey("READ_MISMATCH_LIMIT=", info, temp)){
-      target.read_mismatch_limit = temp;
+    target.read_mismatch_limit = temp;
+    target.read_mismatch_limit_override = temp >= 0;
+  }else if (ParseInfoKey("read_mismatch_limit=", info, temp)){
+	target.read_mismatch_limit = temp;
+    target.read_mismatch_limit_override = temp >= 0;
+  }
+
+  target.read_snp_limit = 0;
+  target.read_snp_limit_override = false;
+  if (ParseInfoKey("read_snp_limit=", info, temp)){
+    target.read_snp_limit = temp;
+    target.read_snp_limit_override = temp >= 0;
+  }
+
+  target.min_mapping_qv = 0;
+  target.min_mapping_qv_override = false;
+  if (ParseInfoKey("min_mapping_qv=", info, temp)){
+    target.min_mapping_qv = temp;
+    target.min_mapping_qv_override = temp >= 0;
+  }
+
+  target.min_tag_fam_size = 0;
+  target.min_tag_fam_size_override = false;
+  if (ParseInfoKey("min_tag_fam_size=", info, temp)){
+    target.min_tag_fam_size = temp;
+    target.min_tag_fam_size_override = temp >= 0;
+  }
+
+  target.min_fam_per_strand_cov = 0;
+  target.min_fam_per_strand_cov_override = false;
+  if (ParseInfoKey("min_fam_per_strand_cov=", info, temp)){
+    target.min_fam_per_strand_cov = temp;
+    target.min_fam_per_strand_cov_override = temp >= 0;
+  }
+
+  target.min_cov_fraction = -1.0f;
+  target.min_cov_fraction_override = false;
+  if (ParseInfoKey("min_cov_fraction=", info, temp_f)){
+    target.min_cov_fraction = temp_f;
+    target.min_cov_fraction_override = temp_f >= 0.0f and temp_f <= 1.0f;
   }
 }
 
@@ -291,6 +351,8 @@ void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint
   rai->align_start = rai->alignment.Position;
   rai->align_end = rai->alignment.GetEndPosition(false, true);
   rai->old_cigar = rai->alignment.CigarData;
+  int read_start = rai->alignment.Position;
+  int read_end = rai->alignment.GetEndPosition();
 
   // Step 1: Find the first potential target region
 
@@ -309,18 +371,17 @@ void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint
   best_fit_penalty = 500;
   best_overlap = 0;
 
-  while (target_idx < (int)unmerged.size() and rai->alignment.RefID == unmerged[target_idx].chr and rai->end >= unmerged[target_idx].begin) {
-
-    int read_start = rai->alignment.Position;
-    int read_end = rai->end;
+  while (target_idx < (int)unmerged.size() and rai->alignment.RefID == unmerged[target_idx].chr and read_end >= unmerged[target_idx].begin) {
     int read_prefix_size = unmerged[target_idx].begin - read_start;
     int read_postfix_size = read_end - unmerged[target_idx].end;
     int overlap = min(unmerged[target_idx].end, read_end) - max(unmerged[target_idx].begin, read_start);
     int fit_penalty = 100;
 
     float overlap_ratio = (float) overlap / (float) (unmerged[target_idx].end - unmerged[target_idx].begin);
-    if (overlap_ratio > min_coverage_fraction)
+    float eff_min_coverage_fraction = unmerged[target_idx].min_cov_fraction_override? unmerged[target_idx].min_cov_fraction : min_coverage_fraction;
+    if (overlap_ratio >= eff_min_coverage_fraction){
       rai->target_coverage_indices.push_back(target_idx);
+    }
     /*else{
       // Quick fix for TS-16996
       ++target_idx;
@@ -365,7 +426,8 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   int best_overlap = 0;
   GetBestTargetIndex(rai, unmerged_target_hint, best_target_idx, best_fit_penalty, best_overlap);
 
-  if ((best_target_idx < 0 or rai->target_coverage_indices.empty()) and min_coverage_fraction > 0.0f){
+  // Filter by target
+  if (best_target_idx < 0 or rai->target_coverage_indices.empty()){
 	  rai->filtered = true;
 	  return;
   }
@@ -535,7 +597,6 @@ bool TargetsManager::FilterReadByRegion(Alignment* rai, int unmerged_target_hint
 	int best_fit_penalty = 100;
 	int best_overlap = 0;
 	GetBestTargetIndex(rai, unmerged_target_hint, best_target_idx, best_fit_penalty, best_overlap);
-
 	// Filter out the read if it does not cover any region.
 	if (best_target_idx < 0 or rai->target_coverage_indices.empty()){
 		is_filtered_out = true;
@@ -549,10 +610,10 @@ bool TargetsManager::FilterReadByRegion(Alignment* rai, int unmerged_target_hint
 void TargetsManager::AddToRawReadCoverage(const Alignment* const rai){
 	pthread_mutex_lock(&coverage_counter_mutex_);
 	for (vector<int>::const_iterator target_it = rai->target_coverage_indices.begin(); target_it != rai->target_coverage_indices.end(); ++target_it){
-		++unmerged[*target_it].my_stat.raw_read_coverage;
+		++unmerged[*target_it].my_stats.raw_read_coverage;
 	}
 	if (rai->best_coverage_target_idx >= 0){
-		++unmerged[rai->best_coverage_target_idx].my_stat.raw_read_coverage_by_best_target;
+		++unmerged[rai->best_coverage_target_idx].my_stats.raw_read_coverage_by_best_target;
 	}
 	pthread_mutex_unlock(&coverage_counter_mutex_);
 }
@@ -577,7 +638,28 @@ bool TargetsManager::IsFullyCoveredByMerged(int merged_idx, int chr, long pos_st
 	assert(pos_start <= pos_end);
 	// Note that the regions are left-close and right-open.
 	return (pos_start >= merged[merged_idx].begin) and (pos_end < merged[merged_idx].end);
+}
 
+// Is the (0-based) interval [pos_start, pos_end) fully covered by merged[merged_idx]?
+bool TargetsManager::IsFullyCoveredByUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const{
+	// Skip the check of chromosone if chr < 0.
+	if (chr >= 0 and unmerged[unmerged_idx].chr != chr){
+		return false;
+	}
+	assert(pos_start <= pos_end);
+	// Note that the regions are left-close and right-open.
+	return (pos_start >= unmerged[unmerged_idx].begin) and (pos_end < unmerged[unmerged_idx].end);
+}
+
+// Is the (0-based) interval [pos_start, pos_end) fully covered by merged[merged_idx]?
+bool TargetsManager::IsOverlapWithUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const{
+	// Skip the check of chromosone if chr < 0.
+	if (chr >= 0 and unmerged[unmerged_idx].chr != chr){
+		return false;
+	}
+	assert(pos_start <= pos_end);
+	// Note that the regions are left-close and right-open.
+	return (pos_start < unmerged[unmerged_idx].end) and (pos_end > unmerged[unmerged_idx].begin);
 }
 
 // Definition [Breaking Interval]
@@ -665,36 +747,36 @@ void TargetsManager::WriteTargetsCoverage(const string& target_cov_file, const R
 				       << target_it->begin << "\t"
 					   << target_it->end << "\t"
 					   << (target_it->name.empty()? "." : target_it->name) << "\t"
-			           << (use_best_target ? target_it->my_stat.read_coverage_in_families_by_best_target : target_it->my_stat.read_coverage_in_families);
+			           << (use_best_target ? target_it->my_stats.read_coverage_in_families_by_best_target : target_it->my_stats.read_coverage_in_families);
 		if (use_mol_tag){
 			target_cov_out << "\t"
-					       << target_it->my_stat.family_coverage << "\t";
-			for (map<int, unsigned int>::const_iterator hist_it = target_it->my_stat.fam_size_hist.begin(); hist_it != target_it->my_stat.fam_size_hist.end(); ++hist_it){
+					       << target_it->my_stats.family_coverage << "\t";
+			for (map<int, unsigned int>::const_iterator hist_it = target_it->my_stats.fam_size_hist.begin(); hist_it != target_it->my_stats.fam_size_hist.end(); ++hist_it){
 				target_cov_out << "(" << hist_it->first << "," << hist_it->second <<"),";
 				check_fam_cov += hist_it->second;
 				check_read_cov += (hist_it->second * (unsigned int) hist_it->first);
 			}
 			// Check fam_size_hist matches read/family coverages.
-			assert((check_read_cov == target_it->my_stat.read_coverage_in_families) and (check_fam_cov == target_it->my_stat.family_coverage));
+			assert((check_read_cov == target_it->my_stats.read_coverage_in_families) and (check_fam_cov == target_it->my_stats.family_coverage));
 			target_cov_out << "\t";
 			// raw read depth
-			target_cov_out << (use_best_target ? target_it->my_stat.raw_read_coverage_by_best_target : target_it->my_stat.raw_read_coverage);
+			target_cov_out << (use_best_target ? target_it->my_stats.raw_read_coverage_by_best_target : target_it->my_stats.raw_read_coverage);
 		}
 		target_cov_out << endl;
 	}
 	target_cov_out.close();
 }
 
-void TargetsManager::AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets){
+void TargetsManager::AddCoverageToRegions(const map<int, TargetStats>& stat_of_targets){
 	pthread_mutex_lock(&coverage_counter_mutex_);
-	for (map<int, TargetStat>::const_iterator stat_it = stat_of_targets.begin(); stat_it != stat_of_targets.end(); ++stat_it){
+	for (map<int, TargetStats>::const_iterator stat_it = stat_of_targets.begin(); stat_it != stat_of_targets.end(); ++stat_it){
 		int target_idx = stat_it->first;
-		unmerged[target_idx].my_stat.read_coverage_in_families += stat_it->second.read_coverage_in_families;
-		unmerged[target_idx].my_stat.family_coverage += stat_it->second.family_coverage;
+		unmerged[target_idx].my_stats.read_coverage_in_families += stat_it->second.read_coverage_in_families;
+		unmerged[target_idx].my_stats.family_coverage += stat_it->second.family_coverage;
 		for (map<int, unsigned int>::const_iterator hist_it = stat_it->second.fam_size_hist.begin(); hist_it != stat_it->second.fam_size_hist.end(); ++hist_it){
-			unmerged[target_idx].my_stat.fam_size_hist[hist_it->first] += hist_it->second;
+			unmerged[target_idx].my_stats.fam_size_hist[hist_it->first] += hist_it->second;
 		}
-		unmerged[target_idx].my_stat.read_coverage_in_families_by_best_target += stat_it->second.read_coverage_in_families_by_best_target;
+		unmerged[target_idx].my_stats.read_coverage_in_families_by_best_target += stat_it->second.read_coverage_in_families_by_best_target;
 	}
 	pthread_mutex_unlock(&coverage_counter_mutex_);
 }

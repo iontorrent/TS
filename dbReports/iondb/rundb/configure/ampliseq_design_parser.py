@@ -11,6 +11,7 @@ from django.conf import settings
 from iondb.rundb.models import FileMonitor, ContentUpload
 from iondb.rundb.plan.ampliseq import AmpliSeqPanelImport
 from iondb.utils.utils import convert
+from iondb.utils.utils import authenticate_fetch_url
 
 logger = logging.getLogger(__name__)
 
@@ -31,36 +32,39 @@ def _get_all_ampliseq_designs(api_url, user, password):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, api_url)
     response = {}
     errMsg = None
-    all_ampseq_designs = []
+    all_ampliseq_designs = []
 
     try:
-        response = requests.get(url, auth=(user, password), timeout=TIMEOUT_LIMIT_SEC)
-        response.raise_for_status()
-        design_data = response.json()
-        all_ampseq_designs = design_data.get("AssayDesigns", [])
+        design_data = authenticate_fetch_url(username=user, password=password, base_url=url)
+        all_ampliseq_designs = design_data.get("AssayDesigns", [])
     except ValueError as decodeError:
         errMsg = "Unable to parse the response from {url}: {err}".format(
             url=url, err=str(decodeError)
         )
-    except (
-        requests.ConnectionError,
-        requests.Timeout,
-        requests.HTTPError,
-    ) as serverError:
-        errMsg = "%s. Please check your network connection and try again." % str(
-            serverError
-        )
-    except Exception as err:
-        errMsg = (
-            "There was an unknown error when contacting Ampliseq.com for Design Panels: %s"
-            % str(err)
-        )
+    except Exception as exc:
+        status_code = exc.message
+        if exc.message == 401:
+            logger.error("ampliseq.com authentication failed %s" % str(exc))
+            errMsg = (
+                "Error Code-401 : ampliseq.com Authentication failure"
+            )
+        elif exc.message == 500:
+            logger.error("Internal error: %s" % str(exc))
+            errMsg = (
+                "Error Code-500 : Internal Server Error when contacting ampliseq.com"
+            )
+        else:
+            logger.error("Unknown error: %s" % str(exc))
+            errMsg = (
+                "There was an unknown error when contacting ampliseq.com for Design Panels: %s"
+                % str(exc)
+            )
 
     if errMsg:
-        response = {"status": "500", "err_msg": errMsg}
+        response = {"status": status_code, "err_msg": errMsg}
         logger.error(errMsg)
 
-    return response, all_ampseq_designs
+    return response, all_ampliseq_designs
 
 
 def getASPanelImportStatus(panel_type, design_id, solution_id=None, sourceUrl=None):
@@ -264,9 +268,7 @@ def get_ampliseq_fixed_designs(user, password, api_url):
     ctx = {}
     try:
         url = urlparse.urljoin(settings.AMPLISEQ_URL, api_url)
-        response = requests.get(url, auth=(user, password), timeout=TIMEOUT_LIMIT_SEC)
-        response.raise_for_status()
-        fixed_design_data = response.json()
+        fixed_design_data = authenticate_fetch_url(username=user, password=password, base_url=url)
         fixed_solutions, ordered_solutions, fixed_ids_choices = get_fixed_designs_list(
             fixed_design_data
         )
@@ -278,18 +280,8 @@ def get_ampliseq_fixed_designs(user, password, api_url):
             url=url, err=str(decodeError)
         )
         logger.error(errMsg)
-    except (
-        requests.ConnectionError,
-        requests.Timeout,
-        requests.HTTPError,
-    ) as serverError:
-        ctx["http_error"] = "Could not connect to AmpliSeq.com."
-        errMsg = "%s. Please check your network connection and try again." % str(
-            serverError
-        )
-        logger.error(errMsg)
     except Exception as Err:
-        ctx["http_error"] = "Could not connect to AmpliSeq.com."
-        logger.error("There was a unknown error when contacting ampliseq: %s" % Err)
+        ctx["http_error"] = "Could not connect to ampliseq.com."
+        logger.error("There was a unknown error when contacting ampliseq: %s" % str(Err))
 
     return ctx

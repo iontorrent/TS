@@ -24,7 +24,7 @@ struct MergedTarget {
   int         first_unmerged;
 };
 
-struct TargetStat{
+struct TargetStats{
 	unsigned int read_coverage_in_families = 0;   // Number of reads in a family that cover this target (where one read can cover multiple targets, e.g., super amplicon, overlapping amplicons).
     unsigned int read_coverage_in_families_by_best_target = 0;  // Number of reads that cover this target (where one read can cover only one target, determined by the best target assignment).
 	unsigned int family_coverage = 0; // Number of families that cover this target (where one family can cover multiple targets, e.g., super amplicon, overlapping amplicons).
@@ -48,25 +48,43 @@ public:
     int          end    = 0;
     string       name   = "";
     int          merged = 0;
+    // Extra amplicon trimming
     int          trim_left  = 0;
     int          trim_right = 0;
+    // HS_ONLY for unify_vcf
     int          hotspots_only = 0;
-    int          read_mismatch_limit = -1;
-    TargetStat   my_stat;
+    // Amplicon-specific override for read filtering parameters
+    bool         read_mismatch_limit_override = false;
+    int          read_mismatch_limit = 0;
+    bool         read_snp_limit_override = false;
+    int          read_snp_limit = 0;
+    bool         min_mapping_qv_override = false;
+    int          min_mapping_qv = 0;
+    bool         min_cov_fraction_override = false;
+    float        min_cov_fraction = 0.0f;
+    // Amplicon-specific override for molcular tagging parameters
+    bool         min_tag_fam_size_override = false;
+    int          min_tag_fam_size = 0;
+    bool         min_fam_per_strand_cov_override = false;
+    int          min_fam_per_strand_cov = 0;
+    // Amplicon stats
+    TargetStats   my_stats;
   };
 
 
   void LoadRawTargets(const ReferenceReader& ref_reader, const string& bed_filename, list<UnmergedTarget>& raw_targets);
-  void ParseBedInfoField(UnmergedTarget& target, const string info);
+  void ParseBedInfoField(UnmergedTarget& target, const string info) const;
   void TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hint) const;
   void GetBestTargetIndex(Alignment *rai, int unmerged_target_hint, int& best_target_idx, int& best_fit_penalty, int& best_overlap) const;
   bool FilterReadByRegion(Alignment* rai, int unmerged_target_hint) const;
-  void AddCoverageToRegions(const map<int, TargetStat>& stat_of_targets);
+  void AddCoverageToRegions(const map<int, TargetStats>& stat_of_targets);
   void AddToRawReadCoverage(const Alignment* const rai);
   void WriteTargetsCoverage(const string& file_path, const ReferenceReader& ref_reader, bool use_best_target, bool use_mol_tags) const;
   int  ReportHotspotsOnly(const MergedTarget &merged, int chr, long pos);
   bool IsCoveredByMerged(int merged_idx, int chr, long pos) const;
   bool IsFullyCoveredByMerged(int merged_idx, int chr, long pos_start, long pos_end) const;
+  bool IsFullyCoveredByUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const;
+  bool IsOverlapWithUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const;
   bool IsBreakingIntervalInMerged(int merged_idx, int chr, long pos_start, long pos_end) const;
   int FindMergedTargetIndex(int chr, long pos) const;
 

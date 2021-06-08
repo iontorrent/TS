@@ -310,7 +310,7 @@ tmap_vsw_process(tmap_vsw_t *vsw,
       if(NULL != overflow && 1 == (*overflow)) {
           found_forward = 0;
       }
-      else if(result->score_fwd <- score_thr) {
+      else if(result->score_fwd < score_thr) {
           found_forward = 0;
       }
       else if((result->query_end == result->query_start || result->target_end == result->target_start)
@@ -413,7 +413,7 @@ tmap_vsw_process(tmap_vsw_t *vsw,
           } 
           ap.gap_open = vsw->opt->pen_gapo; ap.gap_ext = vsw->opt->pen_gape; 
           ap.gap_end = vsw->opt->pen_gape; 
-          ap.row = 5; 
+          ap.row = 5;   
           score = tmap_sw_clipping_core((uint8_t*)target, tlen, (uint8_t*)query, qlen, &ap,
                                         vsw->query_start_clip, vsw->query_end_clip, 
                                         NULL, NULL, direction);

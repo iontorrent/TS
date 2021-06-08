@@ -598,6 +598,7 @@ class common_CV(models.Model):
     ALLOWED_CONTROL_VACABULORIES = (
         ("samplePrepProtocol", "Sample Prep Protocol"),
         ("applicationCategory", "Research Category"),
+        ("libraryPrepProtocol", "Library Prep Protocol"),
     )
 
     cv_type = models.CharField(
@@ -1299,6 +1300,11 @@ class PlannedExperiment(models.Model):
     # this is to use alternate chef script protocal
     samplePrepProtocol = models.CharField(
         max_length=64, blank=True, null=True, default=""
+    )
+
+    # this is for chef's multi pool support
+    libraryPool = models.CharField(
+        max_length=12, blank=True, null=True, default=""
     )
 
     # this is used on Plan Wizard Kits chevron to pick "default" vs "custom" advanced settings
@@ -3204,7 +3210,6 @@ class SampleAnnotation_CV(models.Model):
         ("sampleSource", "SampleSource"),
         ("panelPoolType", "PanelPoolType"),
         ("libraryPrepType", "LibraryPrepType"),
-        ("cyclingProtocols", "CyclingProtocols"),
         ("additionalCycles", "AdditionalCycles"),
         ("16s_markers", "16S_Markers"),
     )
@@ -3302,7 +3307,7 @@ class SampleSet(models.Model):
     ALLOWED_LIBRARY_PREP_TYPES = (
         ("", "Manual"),
         ("amps_on_chef_v1", "AmpliSeq on Chef"),
-    #    ("amps_hd_on_chef_v1", "AmpliSeq HD on Chef"),
+        ("amps_hd_on_chef_v1", "AmpliSeq HD on Chef"),
     )
     libraryPrepType = models.CharField(
         max_length=64, blank=True, choices=ALLOWED_LIBRARY_PREP_TYPES, default=""
@@ -3311,13 +3316,21 @@ class SampleSet(models.Model):
     combinedLibraryTubeLabel = models.CharField(max_length=64, blank=True, default="")
 
     libraryPrepInstrumentData = models.ForeignKey(
-        "SamplePrepData", related_name="libraryPrepData_sampleSet", null=True
+        "SamplePrepData", related_name="libraryPrepData_sampleSet", null=True, on_delete=models.SET_NULL,
     )
     libraryPrepKitName = models.CharField(max_length=512, blank=True, null=True)
 
-    cyclingProtocols = models.CharField(max_length=64, blank=True, null=True)
+    libraryPrepProtocol = models.CharField(max_length=64, blank=True, null=True)
 
+    # deprecated 5.14 onwards, can be reused for AmpliSeqHD on chef (TS-18031)
     additionalCycles = models.CharField(max_length=64, blank=True, null=True)
+    
+    ALLOWED_CATEGORIES = (
+        ("", "Unspecified"),
+        ("ocav4;multiPoolSupport", "OCAv4 Short Library Prep Protocol"),
+        ("myeloid", "Myeloid Library Prep Protocol"),
+    )
+    categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default="", blank=True)
 
     def __unicode__(self):
         return u"%s" % (self.displayedName)
@@ -4085,17 +4098,17 @@ class Results(models.Model, Lookup):
         }
         for i in range(0, 100):
             statusmap["Completed with %(n)s error(s)" % {"n": i}] = {
-                    "state": ERROR,
-                    "i18n": _("report.fields.status.choice.CompletedWithErrors") % {"n": i},
-                }
+                "state": ERROR,
+                "i18n": _("report.fields.status.choice.CompletedWithErrors") % {"n": i},
+            }
             statusmap["Completed with %(n)s errors" % {"n": i}] = {
-                    "state": ERROR,
-                    "i18n": _("report.fields.status.choice.CompletedWithErrors") % {"n": i},
-                }
+                "state": ERROR,
+                "i18n": _("report.fields.status.choice.CompletedWithErrors") % {"n": i},
+            }
             statusmap["Completed with %(n)s error" % {"n": i}] = {
-                    "state": ERROR,
-                    "i18n": _("report.fields.status.choice.CompletedWithError") % {"n": i},
-                }
+                "state": ERROR,
+                "i18n": _("report.fields.status.choice.CompletedWithError") % {"n": i},
+            }
 
         result = (
             statusmap[self.status]
@@ -5280,6 +5293,8 @@ class GlobalConfig(models.Model):
     telemetry_enabled = models.BooleanField(
         "Enable TFC telemetry services?", default=True
     )
+
+    majorPlatform = models.CharField(max_length=24, blank=True, null=True, default="")
 
     def set_TS_update_status(self, inputstr):
         self.ts_update_status = inputstr
@@ -6647,6 +6662,27 @@ class dnaBarcode(models.Model):
     class Meta:
         verbose_name_plural = "DNA Barcodes"
 
+
+class ChefPcrPlateconfig(models.Model):
+    ALLOWED_PLATE_NAMES = (
+        ("", "Unspecified"),
+        ("none", "None"),
+        ("red", "RED"),
+        ("yellow", "YELLOW"),
+        ("blue", "BLUE"),
+        ("green", "GREEN")
+    )
+    kit = models.ForeignKey(KitInfo, null=True, blank=True)
+    confg = json_field.JSONField(blank=True)
+
+    def get_chefPlatesConfig(self, kit):
+        data = {}
+        if kit == self.kit.id:
+            data = self.confg
+        return data
+
+    class Meta:
+        verbose_name_plural = "Chef PCR Plate Names"
 
 class ReferenceGenome(models.Model):
 

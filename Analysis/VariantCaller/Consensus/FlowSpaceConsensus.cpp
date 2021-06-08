@@ -1128,12 +1128,37 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 	// std::map is a better container than vector to store the target stat.
 	// stat_of_targets[i] is the coverage information for the i-th unmerged region generated here.
 	// TODO: Should I split coverage stat for each sample?
-	map<int, TargetStat> stat_of_targets;
+	map<int, TargetStats> stats_of_targets;
 	for (vector< vector< vector< MolecularFamily> > >::iterator sample_it = my_molecular_families_multisample.begin(); sample_it != my_molecular_families_multisample.end(); ++sample_it) {
 		for (vector< vector< MolecularFamily> >::iterator strand_it = sample_it->begin(); strand_it != sample_it->end(); ++strand_it) {
-			for (vector< MolecularFamily>::iterator fam_it = strand_it->begin(); fam_it !=  strand_it->end(); ++fam_it) {
+			for (vector< MolecularFamily>::iterator fam_it = strand_it->begin(); fam_it != strand_it->end(); ++fam_it) {
+				// Amplicon-specific overriding
+				bool min_family_size_override = false;
+				bool min_fam_per_strand_cov_override = false;
+				unsigned int eff_min_family_size = 0;
+				unsigned int eff_min_fam_per_strand_cov = 0;
+				if (fam_it->all_family_members.empty()){
+					continue;
+				}
+				for (vector<int>::const_iterator target_idx_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_idx_it != fam_it->all_family_members[0]->target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
+					if (targets_manager->unmerged[*target_idx_it].min_tag_fam_size_override){
+						// Get the largest (most stringent) one in case the family covers multiple amplicons.
+						eff_min_family_size = min_family_size_override?
+								max(eff_min_family_size, (unsigned int) targets_manager->unmerged[*target_idx_it].min_tag_fam_size) : (unsigned int) targets_manager->unmerged[*target_idx_it].min_tag_fam_size;
+						min_family_size_override = true;
+					}
+					if (targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov_override){
+						// Get the largest (most stringent) one in case the family covers multiple amplicons.
+						eff_min_fam_per_strand_cov = min_fam_per_strand_cov_override?
+								max(eff_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov;
+						min_fam_per_strand_cov_override = true;
+					}
+				}
+				eff_min_family_size = min_family_size_override? eff_min_family_size : min_family_size;
+				eff_min_fam_per_strand_cov = min_fam_per_strand_cov_override? eff_min_fam_per_strand_cov : min_fam_per_strand_cov;
+
 				// Is *fam_it functional?
-				if (not fam_it->SetFuncFromAll(min_family_size, min_fam_per_strand_cov)) {
+				if (not fam_it->SetFuncFromAll(eff_min_family_size, eff_min_fam_per_strand_cov)) {
 					continue;
 				}
 				unsigned int consensus_fam_size = 0;
@@ -1145,12 +1170,14 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 					consensus_fam_size = flow_space_consensus_master.FlowSpaceConsensusOneFamily(fam_it->all_family_members, consensus_position_ticket, aln_needed_consensus_position_ticket);
 				}
 				// Count the coverage of the target.
-				if (consensus_fam_size >= min_family_size and (not fam_it->all_family_members.empty())){
+				// CZB: Why didn't I check per-strand-coverage? Seems like it is affected only if read filtering (on QT, no-adapter reads) is applied.
+				//@TODO: Handle the condition for per-strand-coverage
+				if (consensus_fam_size >= eff_min_family_size and (not fam_it->all_family_members.empty())){
 					if (use_mol_tag){
 						// Important Assumption: is_split_families_by_region_ = true in MolecularFamilyGenerator.
 						// Count the family based coverage: One family or read can cover multiple targets
 						for (vector<int>::iterator target_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_it != fam_it->all_family_members[0]->target_coverage_indices.end(); ++target_it){
-							TargetStat& my_stat = stat_of_targets[*target_it];
+							TargetStats& my_stat = stats_of_targets[*target_it];
 							my_stat.read_coverage_in_families += consensus_fam_size;
 							++(my_stat.family_coverage);
 							++(my_stat.fam_size_hist[consensus_fam_size]);
@@ -1162,14 +1189,14 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 						// One read can cover only one target.
 						int best_target_idx = (*read_it)->best_coverage_target_idx;
 						if (best_target_idx > -1) {
-							TargetStat& my_stat = stat_of_targets[best_target_idx];
+							TargetStats& my_stat = stats_of_targets[best_target_idx];
 							++my_stat.read_coverage_in_families_by_best_target;
 						}
 						// If not use_mol_tag, the assumption where all reads in a family have the same target_coverage_indices does not hold.
 						// Need to iterate over all reads and the target_coverage_indices of one read.
 						if (not use_mol_tag){
 							for (vector<int>::iterator target_it = (*read_it)->target_coverage_indices.begin(); target_it != (*read_it)->target_coverage_indices.end(); ++target_it){
-								TargetStat& my_stat = stat_of_targets[*target_it];
+								TargetStats& my_stat = stats_of_targets[*target_it];
 								++my_stat.read_coverage_in_families;
 							}
 						}
@@ -1178,7 +1205,7 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 			}
 		}
 	}
-	targets_manager->AddCoverageToRegions(stat_of_targets);
+	targets_manager->AddCoverageToRegions(stats_of_targets);
 	// Finally close the tickets
 	ConsensusPositionTicketManager::CloseConsensusPositionTicket(consensus_position_ticket);
 	ConsensusPositionTicketManager::CloseConsensusPositionTicket(aln_needed_consensus_position_ticket);

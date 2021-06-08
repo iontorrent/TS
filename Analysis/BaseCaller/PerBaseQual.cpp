@@ -59,7 +59,7 @@ void PerBaseQual::PrintHelp()
 }
 
 
-void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &input_directory, const string &output_directory, bool recalib)
+void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &output_directory, bool recalib)
 {
   if(phred_table_)
   {

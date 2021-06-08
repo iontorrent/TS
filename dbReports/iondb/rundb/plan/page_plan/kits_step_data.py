@@ -31,6 +31,7 @@ class KitsFieldNames:
     SAMPLE_PREPARATION_KIT = "samplePreparationKit"
     SAMPLE_PREP_KITS = "samplePrepKits"
     LIBRARY_KIT_NAME = "librarykitname"
+    LIBRARY_PREP_PROTOCOL = "libraryPrepProtocol"
     LIB_KITS = "libKits"
     LIBRARY_KEY = "libraryKey"
     TF_KEY = "tfKey"

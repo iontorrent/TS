@@ -14,12 +14,10 @@
 #include <deque>
 
 #include "json/json.h"
-#include "RawWells.h"
-#include "Mask.h"
 #include "DPTreephaser.h"
 #include "OptArgs.h"
 #include "BaseCallerUtils.h"
-#include "WellsNormalization.h"
+#include "WellsManager.h"
 
 using namespace std;
 
@@ -40,18 +38,15 @@ public:
   //! @param  opts                Command line options
   void InitializeFromOptArgs(OptArgs& opts,
                              const ion::ChipSubset & chip_subset,
-                             const string & key_norm_method,
-                             bool compress_multi_tap);
+                             const string & key_norm_method);
 
   //! @brief  Perform phasing estimation using appropriate algorithm.
   //! @param  wells               Wells reader object
-  //! @param  mask                Mask object
+  //! @param  rcm                 Read class map object
   //! @param  flow_order          Flow order object, also stores number of flows
   //! @param  keys                Key sequences in use
   //! @param  use_single_core     Do not use multithreading?
-//  void DoPhaseEstimation(RawWells *wells, Mask *mask, int num_flows, int region_size_x, int region_size_y,
-//      const string& flow_order, const vector<KeySequence>& keys, bool use_single_core);
-  void DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, int num_workers);
+  void DoPhaseEstimation(WellsManager *wells_mngr, int num_workers);
 
   bool HaveEstimates() const { return have_phase_estimates_; };
 
@@ -100,9 +95,10 @@ protected:
 
   //! @brief    Run spatial-refiner, the nelder-mead based estimator with progressive chip partitioning
   //! @param    wells               Wells reader object
-  //! @param    mask                Mask object
+  //! @param    rcm                 Read Class Map object
   //! @param    num_workers         Number of worker threads to spawn
-  void SpatialRefiner(RawWells *wells, Mask *mask, int num_workers);
+  //void SpatialRefiner(RawWells *wells, ReadClassMap *rcm, int num_workers);
+  void SpatialRefiner(int num_workers);
 
   //! @brief    Pthread wrapper for calling EstimatorWorker
   //! @param    arg                 Pointer to PhaseEstimator
@@ -196,15 +192,14 @@ protected:
   //bool                use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
   string                normalization_string_;    //!< Normalization method
   string                wells_norm_method_;       //!< Method to do wells file normalization
-  WellsNormalization    *wells_norm_;             //!< Pointer to wells file normalization class
+  //WellsNormalization    *wells_norm_;             //!< Pointer to wells file normalization class XXX
 
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
   vector<KeySequence>   keys_;                    //!< Key sequences, 0 = library, 1 = TFs.
   string                key_norm_method_;         //!< Method to do key normalization;
-  bool                  compress_multi_taps_;     //!< Compress the signal of multi-tap flows
-  RawWells              *wells_;                  //!< Wells file reader
-  Mask                  *mask_;                   //!< Beadfind and filtering outcomes for wells
+  WellsManager         *wells_mngr_;              //!< Wells file reader
+  ReadClassMap const   *rcm_;                     //!< Beadfind and filtering outcomes for wells
   int                   region_size_x_;           //!< Wells hdf5 dataset chunk width
   int                   region_size_y_;           //!< Wells hdf5 dataset chunk height
   int                   num_regions_x_;           //!< Number of chunks per chip width

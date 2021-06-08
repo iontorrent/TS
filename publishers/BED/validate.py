@@ -86,6 +86,13 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
             "or contact Technical Support." % bed_file
         )
         sys.exit(1)
+    if meta["is_ampliseq"]:
+        # If camelCase reference exists, do not change
+        # For backward compatibility, check for lower case ref if exists and update the meta reference
+        refPath = "/results/referenceLibrary/tmap-f3/%s/%s.fasta"
+        if not os.path.exists(refPath % (meta["reference"], meta["reference"])):
+            if os.path.exists(refPath % (meta["reference"].lower(), meta["reference"].lower())):
+                meta["reference"] = meta["reference"].lower()
 
     path_end = "/" + meta["reference"] + "/unmerged/detail/" + bed_file
     data, response, raw = api.get(

@@ -392,11 +392,22 @@ void * FlowSpaceConsensusWorker(void *input) {
 
 
 			for (int i = 0; i < kReadBatchSize and success[i]; ++i) {
-				// 1) Filling in read body information and do initial set of read filters
-				if (not vc.candidate_generator->BasicFilters(*new_read[i]))
-				{ continue; }
+				// Initialize read alignment object
+				vc.bam_walker->InitializeReadAlignment(new_read[i]);
 
-				// 2) Alignment information altering methods (can also filter a read)
+				// Assign the reads to amplicon and filter by target coverage
+				vc.targets_manager->FilterReadByRegion(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
+				if (new_read[i]->filtered){
+				  continue;
+				}
+
+				// Filling in read body information and do initial set of read filters
+				vc.candidate_generator->BasicFilters(*new_read[i], vc.targets_manager);
+				if (new_read[i]->filtered){
+				  continue;
+				}
+
+				// Alignment information altering methods (can also filter a read)
 				if (not vc.mol_tag_manager->tag_trimmer->GetTagsFromBamAlignment(new_read[i]->alignment, new_read[i]->tag_info)) {
 					new_read[i]->filtered = true;
 					continue;
@@ -405,23 +416,21 @@ void * FlowSpaceConsensusWorker(void *input) {
 		        // Filter by read mismatch limit (note: NOT the filter for read-max-mismatch-fraction) here.
 				// Note: Target override did not apply for consensus.
 		        FilterByModifiedMismatches(new_read[i], vc.consensus_parameters->read_mismatch_limit, NULL);
-		        if (new_read[i]->filtered)
+		        if (new_read[i]->filtered){
 		          continue;
+		        }
 
-				// 3) Filter by target
-				// These two variables should be parameters of consensus.
-				vc.targets_manager->FilterReadByRegion(new_read[i], vc.bam_walker->GetRecentUnmergedTarget());
-				if (new_read[i]->filtered)
-				  continue;
-				vc.targets_manager->AddToRawReadCoverage(new_read[i]);
-
-		        // 4) Calculate the hash for family identification
+		        // Calculate the hash for family identification
 		        vc.mol_tag_manager->PreComputeForFamilyIdentification(new_read[i]);
-				if (new_read[i]->filtered)
+				if (new_read[i]->filtered){
 				  continue;
+				}
 
-				// 5) Unpacking read meta data for flow-space consensus
+				// Unpacking read meta data for flow-space consensus
 				UnpackOnLoadLight(new_read[i], *vc.global_context);
+
+				// Count the read in amplicon stats
+				vc.targets_manager->AddToRawReadCoverage(new_read[i]);
 			}
 
 			pthread_mutex_lock(&vc.bam_walker_mutex);

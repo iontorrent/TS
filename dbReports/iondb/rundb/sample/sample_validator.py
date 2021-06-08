@@ -19,6 +19,8 @@ from iondb.rundb.models import (
     Sample,
     SampleAttribute,
     SampleAttributeValue,
+    common_CV,
+    KitInfo,
 )
 from iondb.rundb.labels import (
     Sample as _Sample,
@@ -84,27 +86,17 @@ def validate_sampleSet(queryDict, isNew=False, sampleset_label=_SampleSet.verbos
     pcrPlateSerialNum = queryDict.get("pcrPlateSerialNum", "").strip()
     sampleGroupTypeName = queryDict.get("sampleGroupTypeName", "").strip()
     additionalCycles = queryDict.get("additionalCycles", "").strip()
-    cyclingProtocols = queryDict.get("cyclingProtocols", "").strip()
+    libraryPrepProtocol = queryDict.get("libraryPrepProtocol", "").strip()
+    libraryPrepKit = queryDict.get("libraryPrepKit", "").strip()
 
     return validate_sampleSet_values(
-        sampleSetName,
-        sampleSetDesc,
-        pcrPlateSerialNum,
-        isNew,
-        sampleGroupTypeName,
-        additionalCycles,
-        cyclingProtocols,
+        sampleSetName, sampleSetDesc, pcrPlateSerialNum, isNew, sampleGroupTypeName, additionalCycles,
+        libraryPrepProtocol, libraryPrepKit,
     )
 
 
-def validate_sampleSet_values(
-    sampleSetName,
-    sampleSetDesc,
-    pcrPlateSerialNum,
-    isNew=False,
-    sampleGroupTypeName=None,
-    additionalCycles=None,
-    cyclingProtocols=None,
+def validate_sampleSet_values(sampleSetName, sampleSetDesc, pcrPlateSerialNum, isNew=False,
+        sampleGroupTypeName=None, additionalCycles=None, libraryPrepProtocol=None, libraryPrepKit=None
 ):
     """
     validate the sampleSet input.
@@ -208,12 +200,16 @@ def validate_sampleSet_values(
         if not isValid:
             return isValid, errorMessage
 
-    if validation.has_value(cyclingProtocols):
-        isValid, errorMessage, cvValue = validate_cyclingProtocols(
-            cyclingProtocols, field_label="cyclingProtocols"
+    if validation.has_value(libraryPrepProtocol):
+        isValid, errorMessage, cvValue = validate_libraryPrepProtocol(
+            libraryPrepProtocol, field_label="libraryPrepProtocol"
         )
         if not isValid:
             return isValid, errorMessage
+        else:
+            errorMessage = validate_libraryPrepProtocol_for_kit(libraryPrepProtocol, libraryPrepKit)
+            if errorMessage:
+                return False, errorMessage
 
     return True, None
 
@@ -663,11 +659,45 @@ def validate_additionalCycles(additionalCycles, field_label="Additional Cycles")
     )
 
 
-def validate_cyclingProtocols(cyclingProtocols, field_label="Cycling Protocols"):
-    return _validate_SampleAnnotation_CV(
-        cyclingProtocols, "cyclingProtocols", field_label
-    )
+def validate_libraryPrepProtocol(libraryPrepProtocol, field_label="Library Prep Protocol"):
+    value = libraryPrepProtocol
+    isValid = True
+    error = None
 
+    if libraryPrepProtocol:
+        choices = common_CV.objects.filter(cv_type="libraryPrepProtocol", isActive=True)
+        match = choices.filter(value__iexact=libraryPrepProtocol)
+        if match:
+            value = match[0].value
+        else:
+            isValid = False
+            error = validation.invalid_choice(
+                field_label,
+                libraryPrepProtocol,
+                choices.order_by("value").values_list("value", flat=True),
+                include_error_prefix=True,
+            )
+
+    return isValid, error, value
+
+
+def validate_libraryPrepProtocol_for_kit(libraryPrepProtocol, libraryPrepKit,
+                                        field_label="Library Prep Protocol", kit_label="Library Prep Kit"):
+    errors = []
+    if libraryPrepProtocol:
+        protocol = common_CV.objects.filter(value=libraryPrepProtocol)
+        kit = KitInfo.objects.filter(name=libraryPrepKit)
+        if protocol and kit and protocol[0].categories:
+            if not any(c in kit[0].categories.split(";") for c in protocol[0].categories.split(";")):
+                errors.append(
+                    validation.invalid_invalid_value_related_value(
+                        field_label,
+                        protocol[0].displayedValue,
+                        kit_label,
+                        kit[0].description,
+                    )
+                )
+    return errors
 
 def validate_sampleGender(
     sampleGender,
@@ -726,9 +756,7 @@ def validate_cellularityPct(
             if value < 0:
                 return (
                     False,
-                    validation.invalid_min_value(
-                        field_label, 0, include_error_prefix=True
-                    ),
+                    validation.invalid_min_value(field_label, 0, include_error_prefix=True),
                 )
             elif value > 100:
                 return (
@@ -1599,3 +1627,22 @@ def validate_sampleset_items_limit(pending_samplesetitems, sampleSet):
         return False, errorMessage
 
     return True, None
+
+# validation for chef Multi Pool support for OCAv4
+def validate_multi_pool_support_samples(all_plates_mapping, sampleSets):
+    errors = []
+    allSamplesInOnePlan = []
+
+    allSamples = [sampleSet.samples.all() for sampleSet in sampleSets]
+    allSampleSetItems = [item for sublist in allSamples for item in sublist]
+    if len(allSampleSetItems) <= 8:
+        allSamplesInOnePlan = allSampleSetItems
+
+    sample_set_config = [sample_set_config.keys() for sample_set_config in all_plates_mapping]
+    sampleSetConfigPlates = [item for sublist in sample_set_config for item in sublist]
+    if len(sampleSetConfigPlates) != len(set(sampleSetConfigPlates)):
+        isValid = False
+        errors.append("Duplicate plate%s found in combined sampleset. "
+                      "Samplesets must originate from unique plates to be combined for this application." %
+                      [str(plateName) for plateName in sampleSetConfigPlates])
+    return allSamplesInOnePlan, errors

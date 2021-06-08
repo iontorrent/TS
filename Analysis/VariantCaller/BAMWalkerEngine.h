@@ -196,6 +196,7 @@ public:
   void RequestReadProcessingTask(Alignment*& new_read);
   bool GetNextAlignmentCore(Alignment* new_read, VariantCallerContext& vc, vector<MergedTarget>::iterator& indel_target);
   void FinishReadProcessingTask(Alignment* new_read, bool success);
+  void InitializeReadAlignment(Alignment* new_read) const;
 
   // Processing genomic position
   void SetupPositionTicket(list<PositionInProgress>::iterator& position_ticket) const;

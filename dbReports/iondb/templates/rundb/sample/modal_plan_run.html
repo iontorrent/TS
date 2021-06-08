@@ -1,93 +1,162 @@
 {% load i18n %}
-<div id="modal_planexperiment" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_planexperimentLabel" aria-hidden="false">
+<div id="modal_planexperiment" class="modal fade hide" tabindex="-1" role="dialog"
+     aria-labelledby="modal_planexperimentLabel" aria-hidden="false">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
         <h3>
             {% trans "sampleset_plan_run.title" %}
         </h3>
     </div>
-	<div class="modal-body">
-	    {% for warning in warnings %}
-		<div class="alert alert-error">{{warning}}</div>
-	    {% endfor %}
-		<form class="">
-			<label for="templates" class="form-label">{% trans "sampleset_plan_run.fields.templates.label" %}</label>
-			<select name="templates" class="span4" id="templates">
-				<option value=""></option>
-				<option value="0">{% trans "sampleset_plan_run.fields.templates.choice.0"|safe %}</option>
-			</select>
+    <div class="modal-body">
+        {% for warning in warnings %}
+            <div class="alert alert-error">{{ warning }}</div>
+        {% endfor %}
+        <form class="">
+            <label for="templates" class="form-label">{% trans "sampleset_plan_run.fields.templates.label" %}</label>
+            <select name="templates" class="span4" id="templates">
+                <option value=""></option>
+                <option value="0">{% trans "sampleset_plan_run.fields.templates.choice.0"|safe %}</option>
+            </select>
             <div class="help-block">{% trans "sampleset_plan_run.fields.templates.helptext" %}</div>
-		</form>
+        </form>
         <div>
-            <label for="showAllTemplates" class="form-label"><input type="checkbox" id="showAllTemplates" name="showAllTemplates" onclick="updateTemplateList();" />{% trans "sampleset_plan_run.fields.showAllTemplates.label" %}</label>
+            <label for="showAllTemplates" class="form-label"><input type="checkbox" id="showAllTemplates"
+                                                                    name="showAllTemplates"
+                                                                    onclick="updateTemplateList();"/>{% trans "sampleset_plan_run.fields.showAllTemplates.label" %}
+            </label>
             <div class="help-block">{% trans "sampleset_plan_run.fields.showAllTemplates.helptext" %}</div>
         </div>
-	</div>
-	<div class="modal-footer">
-		<button class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</button>
-		<a class="btn btn-primary" id="plan_run">{% trans "sampleset_plan_run..action.submit" %}</a>
-	</div>
+        {% if multiLibraryPoolPlanData %}
+            <div class="controls" id="ir_accounts">
+                <h4><b>Create Plan Run using:</b></h4>
+                {% if multiLibraryPoolPlanData.all %}
+                    <label class="multiPool radio">All
+                        <input type="radio" name="multiPool" value="all">
+                        <span class="tab">(A - H : Pool
+                            {% if multiLibraryPoolPlanData.pool1 %} 1 {% endif %}
+                            {% if multiLibraryPoolPlanData.pool1 and multiLibraryPoolPlanData.pool2 %} , {% endif %}
+                            {% if multiLibraryPoolPlanData.pool2 %} 2 {% endif %})</span>
+                    </label>
+                {% endif %}
+                {% if multiLibraryPoolPlanData.pool1 %}
+                    <label class="multiPool radio">Pool 1
+                        <input type="radio" name="multiPool" value="pool1" checked>
+                        <span class="tab">(A - D)</span>
+                    </label>
+                {% endif %}
+                {% if multiLibraryPoolPlanData.pool2 %}
+                    <label class="multiPool radio">Pool 2
+                        <input type="radio" name="multiPool" value="pool2" {% if not multiLibraryPoolPlanData.pool1 %} checked {% endif %}>
+                        <span class="tab">(E - H)</span>
+                    </label>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+    <div class="modal-footer">
+        <button class="btn" data-dismiss="modal">{% trans "global.action.modal.cancel" %}</button>
+        <a class="btn btn-primary" id="plan_run">{% trans "sampleset_plan_run..action.submit" %}</a>
+    </div>
 </div>
-
-<script>
-var allTemplatePkToObj = [];
-var sampleGroupTypes = [];
-
-updateTemplateList = function() {
-    while ($('#templates option:nth-child(3)').length > 0) {
-        $('#templates option:nth-child(3)').remove();
+<style type="text/css">
+    .multiPool {
+        margin-left: 20px;
     }
-    
-    $.each(allTemplatePkToObj, function(index, templateMap){
-	var samplegroup = templateMap['sg_name'];
 
-        var newOpt = $('<option>');
-        newOpt.val(templateMap['pk']);
-        var optText = templateMap['name'];
-        if (samplegroup.length > 0) {
-            optText += " (" + samplegroup + ")";
+    .tab {
+        position: relative;
+        left: 50px;
+        color: grey;
+    }
+
+</style>
+<script>
+    var allTemplatePkToObj = [];
+    var sampleGroupTypes = [];
+    var sampleSetCategories = [];
+
+    updateTemplateList = function () {
+        while ($('#templates option:nth-child(3)').length > 0) {
+            $('#templates option:nth-child(3)').remove();
         }
-        newOpt.text(optText);
-        
-	if ($('#showAllTemplates').is(":checked")) {
-            //show all if checked
-            $('#templates').append(newOpt);
-        } else if(sampleGroupTypes.length > 0) {
-            // only show templates with matching sample group if sampleset has one.
-            if (sampleGroupTypes.indexOf( samplegroup ) >= 0){
+
+        $.each(allTemplatePkToObj, function (index, templateMap) {
+            var samplegroup = templateMap['group'];
+            var optText = templateMap['name'];
+            if (samplegroup.length > 0) {
+                optText += " (" + samplegroup + ")";
+            }
+            var newOpt = $('<option>', {
+                value: templateMap['pk'],
+                text: optText,
+            });
+
+            if ($('#showAllTemplates').is(":checked") || show_template(templateMap)) {
                 $('#templates').append(newOpt);
             }
+        });
+    };
+
+    function show_template(obj) {
+        var show = true;
+        // check sample Group
+        if (sampleGroupTypes.length > 0) {
+            // only show templates with matching group
+            show = sampleGroupTypes.indexOf(obj.group) >= 0;
         } else {
-            // only show templates without a samplegroup if the sampleset does not have one.
-            if (samplegroup.length == 0){
-                $('#templates').append(newOpt);
-            }
+            // only show templates without a group if the sampleset does not have one
+            show = obj.group.length == 0;
         }
+        // check categories
+        if (sampleSetCategories.length > 0) {
+            // only show templates with matching category
+            show = show && obj.categories && (
+                sampleSetCategories.some(function (c) {
+                    return obj.categories.split(";").indexOf(c) > -1;
+                })
+            );
+        }
+        return show;
+    }
+
+    $(document).ready(function () {
+        {% for template in template_params %}
+            allTemplatePkToObj.push({
+                'pk': '{{template.pk}}',
+                'name': '{{template.planDisplayedName}}',
+                'group': '{{template.sampleGrouping__displayedName|default_if_none:""}}',
+                'categories': '{{template.categories}}',
+            });
+        {% endfor %}
+
+        {% for type in sampleGroupTypes %}
+            sampleGroupTypes.push('{{type}}');
+        {% endfor %}
+
+        {% for category in sampleSetCategories %}
+            sampleSetCategories.push('{{category}}');
+        {% endfor %}
+
+        updateTemplateList();
+        $("#plan_run").on('click', function () {
+            var template_id = $("#templates option:selected").val();
+            const multiPool = $('input[name="multiPool"]:checked').val();
+            const sampleSet_ids = "{{sampleSet_ids}}";
+            var url;
+            if (template_id == '') {
+                template_id = 0;
+            }
+            if (multiPool && multiPool.startsWith('pool')) {
+                lib_pool_id = multiPool.match(/\d+/)[0];
+                url = ((template_id == 0) ? "/plan/page_plan_new_template_by_sample_set_item/" :
+                    "/plan/page_plan_new_plan_by_sample_set_item/" + template_id) + "/" + lib_pool_id + "/";
+                url += (multiPool === 'pool1') ? "{{multiLibraryPoolPlanData.pool1}}" : "{{multiLibraryPoolPlanData.pool2}}";
+            } else {
+                url = "/plan/page_plan_new_plan_by_sample/" + template_id + "/" + sampleSet_ids;
+            }
+
+            window.location.href = url;
+        });
     });
-}
-
-$(document).ready(function(){
-    {% for template in template_params %}
-        allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_name': '{{template.sampleGrouping__displayedName|default_if_none:""}}'});
-    {% endfor %}
-    
-    {% for type in sampleGroupTypes %}
-	sampleGroupTypes.push('{{type}}');
-    {% endfor %}
-    
-    updateTemplateList();
-	$("#plan_run").on('click', function(){
-		var template_id = $("#templates option:selected").val();
-		
-		if (template_id == '') {
-			template_id = 0;
-		}
-
-		var sampleSet_ids = "{{sampleSet_ids}}";
-		var url = "/plan/page_plan_new_plan_by_sample/" + template_id + "/" + sampleSet_ids;
-
-		window.location.href = url;
-	});
-});
-//# sourceURL=templates/rundb/sample/modal_plan_run.html
+    //# sourceURL=templates/rundb/sample/modal_plan_run.html
 </script>

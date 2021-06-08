@@ -44,7 +44,7 @@ from iondb.rundb.models import (
     Results,
     EventLog,
     common_CV,
-)
+    SampleSet)
 from django.db.models import Q
 from distutils.version import StrictVersion, LooseVersion
 
@@ -282,11 +282,14 @@ def page_plan_new_template(request, code=None):
     return render_to_response(ctxd["step"].resourcePath, context_instance=ctxd)
 
 
-def page_plan_new_template_by_sample(request, sampleset_id):
+def page_plan_new_template_by_sample_set_item(request, lib_pool_id, samplesetitem_ids):
+    return page_plan_new_template_by_sample(request, None, lib_pool_id, samplesetitem_ids)
+
+def page_plan_new_template_by_sample(request, sampleset_id=None, lib_pool_id=None, samplesetitem_ids=None):
     """ Create a new template by sample """
 
     step_helper = StepHelperDbLoader().getStepHelperForNewTemplateBySample(
-        _get_runtype_from_code(0).pk, sampleset_id
+        _get_runtype_from_code(0).pk, sampleset_id, lib_pool_id, samplesetitem_ids
     )
     if settings.FEATURE_FLAGS.IONREPORTERUPLOADER:
         ctxd = handle_step_request(request, StepNames.IONREPORTER, step_helper)
@@ -315,8 +318,10 @@ def page_plan_new_plan(request, template_id):
     ].validationErrors.clear()  # Remove validation errors found during wizard initialization
     return render_to_response(ctxd["step"].resourcePath, context_instance=ctxd)
 
+def page_plan_new_plan_by_sample_set_item(request, template_id, lib_pool_id, sampleset_item_id):
+    return page_plan_new_plan_by_sample(request, template_id, None, lib_pool_id, sampleset_item_id)
 
-def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
+def page_plan_new_plan_by_sample(request, template_id, sampleset_id, lib_pool_id=None, sampleset_item_id=None):
     """ create a new plan by sample from a template with id template_id """
 
     if int(template_id) == int(0):
@@ -330,7 +335,7 @@ def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
         return render_to_response("501.html")
 
     step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(
-        template_id, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE, sampleset_id=sampleset_id
+        template_id, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE, sampleset_id=sampleset_id, lib_pool_id=lib_pool_id, sampleset_item_id=sampleset_item_id
     )
     apply_prepopulated_values_to_step_helper(request, step_helper)
 
@@ -628,6 +633,23 @@ def page_plan_save(request, exp_id=None):
 
         # or redirect based on context
         if step_helper.isTemplateBySample():
+            if (step_helper.steps[StepNames.IONREPORTER].savedFields[
+                            "samplesetitem_ids"
+                        ]):
+                return HttpResponseRedirect(
+                    reverse(
+                        "page_plan_new_plan_by_sample_set_item",
+                        args=(
+                            planTemplate.pk,
+                            step_helper.steps[StepNames.IONREPORTER].savedFields[
+                                "libraryPool"
+                            ],
+                            step_helper.steps[StepNames.IONREPORTER].savedFields[
+                                "samplesetitem_ids"
+                            ],
+                        ),
+                    )
+                )
             return HttpResponseRedirect(
                 reverse(
                     "page_plan_new_plan_by_sample",
@@ -965,6 +987,13 @@ class PlanDetailView(DetailView):
             libraryPrepInstrumentData__isnull=False,
             libraryPrepType__contains="amps_on_chef",
         )
+        context["combinedLibraryTubeLabel"] = plan.libraryPool
+
+        for sampleSet in context["ampsOnChef_sampleSets"]:
+            if plan.libraryPool:
+                context["combinedLibraryTubeLabel"] = sampleSet.combinedLibraryTubeLabel.split(',')[int(plan.libraryPool) - 1]
+            else:
+                context["combinedLibraryTubeLabel"] = sampleSet.combinedLibraryTubeLabel
 
         context["thumbnail"] = True if report_pk and result.isThumbnail else False
         context["show_thumbnail"] = (
@@ -1174,6 +1203,16 @@ class PlanDetailView(DetailView):
             context["origin"] = planMeta[0].upper()
             if len(planMeta) > 1:
                 context["tsVersion"] = planMeta[1]
+
+        # Library Prep Protocol
+        libPrepProtocols = plan.sampleSets.exclude(libraryPrepProtocol="Unspecified").values_list(
+            "libraryPrepProtocol", flat=True
+        )
+        if len(libPrepProtocols) > 0:
+            libraryPrepProtocolsDisplayed = common_CV.objects.filter(value__in=libPrepProtocols).values_list(
+                "displayedValue", flat=True
+            )
+            context["libraryPrepProtocol"] = ", ".join(libraryPrepProtocolsDisplayed)
 
         # log
         history = EventLog.objects.for_model(plan).order_by("-created")

@@ -279,18 +279,12 @@ fi
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Generating basic reads stats..." >&2
 fi
-# NOTE: Mapped and on-target reads here are before applying length and other filters (quality, unique, non-duplicate)
-# - to get with filters:
-#read MAPPED_READS ONTRG_READS <<< `awk 'NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
-#TOTAL_READS=`samtools view -c "$BAMFILE"`
-#
-# work-around for read command change on Ubuntu 18
+# work-around for read command change on Ubuntu 19
 SFSTMP=samtools_flagstat.tmp
-samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}' > $SFSTMP
-read -d '' TOTAL_READS MAPPED_READS < $SFSTMP
+awk 'BEGIN {FS="\t"} NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE" > $SFSTMP
+read -d '' MAPPED_READS ONTRG_READS < $SFSTMP
 rm $SFSTMP
-
-ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
+TOTAL_READS=`samtools view -c "$BAMFILE"`
 #
 echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
 echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"

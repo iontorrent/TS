@@ -16,7 +16,8 @@ from iondb.rundb.models import (
     KitInfo,
     AnalysisArgs,
     ApplicationGroup,
-)
+    common_CV,
+    SampleSetItem)
 
 from iondb.rundb.plan.page_plan.step_helper import StepHelper
 
@@ -233,6 +234,8 @@ class StepHelperDbLoader:
         self,
         run_type_id,
         sampleset_id,
+        lib_pool_id,
+        samplesetitem_ids,
         step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE,
     ):
         """
@@ -243,13 +246,19 @@ class StepHelperDbLoader:
         application_step_data = step_helper.steps[StepNames.APPLICATION]
         kits_step_data = step_helper.steps[StepNames.KITS]
 
-        sampleset = SampleSet.objects.filter(pk__in=sampleset_id.split(","))[0]
+        sampleset = []
+        if sampleset_id:
+            sampleset = SampleSet.objects.filter(pk__in=sampleset_id.split(","))[0]
+        elif samplesetitem_ids:
+            sampleset = SampleSet.objects.filter(samples__in=samplesetitem_ids.split(","))[0]
         runType = RunType.objects.get(pk=run_type_id)
         step_helper.parentName = runType.description
 
         step_helper.isParentSystem = False
 
         ionReporter_step_data.savedFields["sampleset_id"] = sampleset_id
+        ionReporter_step_data.savedFields["samplesetitem_ids"] = samplesetitem_ids
+        ionReporter_step_data.savedFields["libraryPool"] = lib_pool_id
         self._updateApplicationStepData(runType, step_helper, application_step_data)
 
         barcodeSet = None
@@ -1532,88 +1541,8 @@ class StepHelperDbLoader:
         )
         plugins_step_data.updateSavedObjectsFromSavedFields()
 
-    def get_ir_fields_dict_from_user_input_info(
-        self, user_input_info, sample_name, index
-    ):
-        # logger.debug("ENTER step_helper_db_loader.get_ir_fields_dict_from_user_input_info()")
-
-        if sample_name == "barcoded--Sample":
-            if index >= len(list(user_input_info[0].keys())):
-                return dict(
-                    sample="",
-                    sampleDescription="",
-                    sampleExternalId="",
-                    barcodeId="",
-                    SampleCollectionDate=None,
-                    SampleReceiptDate=None,
-                    Gender=None,
-                    Population=None,
-                    RelationRole=None,
-                    Workflow=None,
-                    mouseStrains=None,
-                    setid=None,
-                    cancerType=None,
-                    cellularityPct=None,
-                    biopsyDays=None,
-                    cellNum=None,
-                    coupleID=None,
-                    embryoID=None,
-                )
-
-            sample_name = list(user_input_info[0].keys())[index]
-
-            # do not re-invent what has already been persisted in the JSON blob!
-            barcodeSampleInfo = (
-                user_input_info[0].get(sample_name).get("barcodeSampleInfo", {})
-            )
-            barcode_id_strs = sorted(
-                user_input_info[0].get(sample_name).get("barcodeSampleInfo").keys()
-            )
-
-            barcode_id_str = list(
-                user_input_info[0].get(sample_name).get("barcodeSampleInfo").keys()
-            )[0]
-            sampleDescription = (
-                user_input_info[0]
-                .get(sample_name)
-                .get("barcodeSampleInfo")
-                .get(barcode_id_str)
-                .get("description")
-            )
-            externalId = (
-                user_input_info[0]
-                .get(sample_name)
-                .get("barcodeSampleInfo")
-                .get(barcode_id_str)
-                .get("externalId")
-            )
-
-            return dict(
-                sample=sample_name,
-                sampleDescription=sampleDescription,
-                sampleExternalId=externalId,
-                barcodeSampleInfo=barcodeSampleInfo,
-                barcode_id_strs=barcode_id_strs,
-                SampleCollectionDate=None,
-                SampleReceiptDate=None,
-                Gender=None,
-                Population=None,
-                RelationRole=None,
-                Workflow=None,
-                mouseStrains=None,
-                setid=None,
-                cancerType=None,
-                cellularityPct=None,
-                biopsyDays=None,
-                cellNum=None,
-                coupleID=None,
-                embryoID=None,
-            )
-        else:
-            return user_input_info[index]
-
     def updatePlanBySampleSpecificStepHelper(
-        self, step_helper, planned_experiment, sampleset_id=None
+        self, step_helper, planned_experiment, sampleset_id=None, lib_pool_id=None, sampleset_item_id=None
     ):
         """
 
@@ -1662,8 +1591,13 @@ class StepHelperDbLoader:
             SavePlanFieldNames.ONCO_SAME_SAMPLE
         ] = isOncoSameSample
 
+        samplesets = []
         if sampleset_id:
             samplesets = SampleSet.objects.filter(pk__in=sampleset_id.split(","))
+        elif sampleset_item_id:
+            samplesets = SampleSet.objects.filter(samples__in=sampleset_item_id.split(","))
+
+        if samplesets:
             if samplesets[0].SampleGroupType_CV:
                 step_helper.steps[StepNames.APPLICATION].savedFields[
                     ApplicationFieldNames.SAMPLE_GROUPING
@@ -1672,16 +1606,45 @@ class StepHelperDbLoader:
             samplesets = planned_experiment.sampleSets.all()
 
         save_plan_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET] = samplesets
+        save_plan_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET_ITEM] = sampleset_item_id
+        if not lib_pool_id:
+            lib_pool_id = planned_experiment.libraryPool
+        save_plan_step.savedObjects[SavePlanBySampleFieldNames.LIBRARY_POOL] = lib_pool_id
+
+        if step_helper.isCreate():
+            libPrepKit = (
+                samplesets.exclude(libraryPrepKitName__in=["", "0"])
+                .values_list("libraryPrepKitName", flat=True)
+                .distinct()
+            )
+            if len(libPrepKit) == 1:
+                step_helper.steps[StepNames.KITS].savedFields[
+                    KitsFieldNames.LIBRARY_KIT_NAME
+                ] = libPrepKit[0]
+
+        libPrepProtocols = samplesets.exclude(libraryPrepProtocol="Unspecified").values_list(
+            "libraryPrepProtocol", flat=True
+        )
+        if len(libPrepProtocols) > 0:
+            libraryPrepProtocolsDisplayed = common_CV.objects.filter(value__in=libPrepProtocols).values_list(
+                "displayedValue", flat=True
+            )
+            step_helper.steps[StepNames.KITS].savedFields[
+                KitsFieldNames.LIBRARY_PREP_PROTOCOL
+            ] = ", ".join(libraryPrepProtocolsDisplayed)
 
         sorted_sampleSetItems = []
         for sampleset in samplesets:
-            sorted_sampleSetItems.extend(
-                list(
-                    sampleset.samples.all().order_by(
-                        "relationshipGroup", "nucleotideType", "sample__displayedName"
+            if sampleset_item_id:
+                sorted_sampleSetItems = SampleSetItem.objects.filter(pk__in=sampleset_item_id.split(","))
+            else:
+                sorted_sampleSetItems.extend(
+                    list(
+                        sampleset.samples.all().order_by(
+                            "relationshipGroup", "nucleotideType", "sample__displayedName"
+                        )
                     )
                 )
-            )
 
         barcoding_step.prepopulatedFields[
             BarcodeBySampleFieldNames.SAMPLESET_ITEMS
@@ -2213,7 +2176,7 @@ class StepHelperDbLoader:
         return samplesTable
 
     def getStepHelperForTemplatePlannedExperiment(
-        self, pe_id, step_helper_type=StepHelperType.EDIT_TEMPLATE, sampleset_id=None
+        self, pe_id, step_helper_type=StepHelperType.EDIT_TEMPLATE, sampleset_id=None, lib_pool_id=None, sampleset_item_id=None
     ):
         """
             Get a step helper from a template planned experiment.
@@ -2261,7 +2224,7 @@ class StepHelperDbLoader:
 
         if step_helper.isPlan() and step_helper.isPlanBySample():
             self.updatePlanBySampleSpecificStepHelper(
-                step_helper, planned_experiment, sampleset_id
+                step_helper, planned_experiment, sampleset_id, lib_pool_id, sampleset_item_id
             )
         elif step_helper.isPlan():
             self.updatePlanSpecificStepHelper(step_helper, planned_experiment, True)

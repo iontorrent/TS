@@ -48,6 +48,7 @@
 #include "HistogramCalibration.h"
 #include "LinearCalibrationModel.h"
 #include "MolecularTagTrimmer.h"
+#include "WellsManager.h"
 
 #include "BaseCallerParameters.h"
 
@@ -149,71 +150,6 @@ void SaveBaseCallerProgress(int percent_complete, const string& output_directory
     SaveJson(progress_json, filename_json);
 }
 
-
-// --------------------------------------------------------------------------
-// Function sets the read class for each well and sub-samples if desired
-
-void ClassifyAndSampleWells(BaseCallerContext & bc, const BCwellSampling & SamplingOpts)
-{
-    ReservoirSample<unsigned int> downsampled_subset(SamplingOpts.downsample_size, 2);
-    ReservoirSample<unsigned int> unfiltered_subset(SamplingOpts.num_unfiltered, 1);
-    bool eval_all_libWells = SamplingOpts.downsample_size == 0 or SamplingOpts.have_calib_panel;
-    bc.class_map.assign((unsigned int)(bc.chip_subset.GetChipSizeX()*bc.chip_subset.GetChipSizeY()), -1);
-
-    // First iteration over wells to sample them and/or assign read class
-    for (int y = bc.chip_subset.GetBeginY(); y < bc.chip_subset.GetEndY(); ++y) {
-      for (int x = bc.chip_subset.GetBeginX(); x < bc.chip_subset.GetEndX(); ++x) {
-    	if (bc.mask->Match(x, y, MaskLib)) {
-          // Unfiltered set contains a selection of randomly selected library beads
-          if (SamplingOpts.num_unfiltered>0)
-            unfiltered_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
-          // For calibration set we exclude already filtered reads
-          if (SamplingOpts.downsample_size>0 and (not bc.mask->Match(x, y, SamplingOpts.MaskNotWanted)))
-            downsampled_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
-          if (eval_all_libWells)
-            bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] = 0;
-        }
-        if (bc.mask->Match(x, y, MaskTF) and bc.process_tfs) {
-          if (SamplingOpts.downsample_size>0)
-            downsampled_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
-          else
-            bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] = 1;
-        }
-      }
-    }
-    downsampled_subset.Finished();
-    unfiltered_subset.Finished();
-
-    // Another pass over the read class map to set our sampled subsets
-    if (SamplingOpts.num_unfiltered > 0)
-      bc.unfiltered_set.insert(unfiltered_subset.GetData().begin(), unfiltered_subset.GetData().end());
-    if (SamplingOpts.downsample_size > 0) {
-      for (size_t idx=0; idx<downsampled_subset.GetCount(); idx++) {
-    	// Mark random calibration sample to be used in addition to calibration panel reads
-        if (SamplingOpts.have_calib_panel)
-          bc.class_map.at(downsampled_subset.GetVal(idx)) = 2;
-        else if (bc.mask->Match(downsampled_subset.GetVal(idx), MaskTF))
-          bc.class_map.at(downsampled_subset.GetVal(idx)) = 1;
-        else
-          bc.class_map.at(downsampled_subset.GetVal(idx)) = 0;
-      }
-    }
-    // Print Summary:
-    unsigned int sum_tf_wells    = 0;
-    unsigned int sum_lib_wells   = 0;
-    unsigned int sum_calib_wells = 0;
-    for (unsigned int idx=0; idx<bc.class_map.size(); idx++) {
-      if (bc.class_map.at(idx) == 0) sum_lib_wells++;
-      if (bc.class_map.at(idx) == 1) sum_tf_wells++;
-      if (bc.class_map.at(idx) == 2) sum_calib_wells++;
-    }
-    cout << "Bead classification summary:" << endl;
-    cout << " - Total num. wells   : " << bc.class_map.size() << endl;
-    cout << " - Num. Library wells : " << sum_lib_wells       << endl;
-    cout << " - Num. Test fragments: " << sum_tf_wells        << endl;
-    cout << " - Num. calib. wells  : " << sum_calib_wells     << endl;
-};
-
 // --------------------------------------------------------------------------
 
 void scaleup_flowgram(const vector<float>& sigIn, vector<int16_t>& sigOut, int max_flow)
@@ -289,40 +225,38 @@ int main (int argc, const char *argv[])
     bc_params.InitContextVarsFromOptArgs(opts);
 
     // Command line processing *** Options that have default values retrieved from wells or mask files
-    RawWells wells ("", bc_params.GetFiles().filename_wells.c_str());
-    if (!wells.OpenMetaData()) {
-        fprintf (stderr, "Failed to retrieve metadata from %s\n", bc_params.GetFiles().filename_wells.c_str());
-        exit (EXIT_FAILURE);
-    }
-    unsigned int chunk_rows, chunk_cols, chunk_flows;
-    wells.GetH5ChunkSize(chunk_rows, chunk_cols, chunk_flows);
-    Mask mask (1, 1);
-    if (mask.SetMask (bc_params.GetFiles().filename_mask.c_str()))
-        exit (EXIT_FAILURE);
+    WellsManager wells_mngr(bc_params.GetFiles().filename_wells, true);
 
-    string chip_type = "unknown";
-    if (wells.KeyExists("ChipType"))
-        wells.GetValue("ChipType", chip_type);
-
-    if((!chip_type.empty()) && chip_type[0] == 'P') chip_type[0] = 'p';
+    ReadClassMap read_class_map;
+    read_class_map.LoadMaskFiles(bc_params.GetFiles().filename_mask, bc_params.GetFiles().ignore_washouts);
 
     // Command line processing *** Various general option and opts to classify and sample wells
     BaseCallerContext bc;
-    bc.mask = &mask;
-    bc.SetKeyAndFlowOrder(opts, wells.FlowOrder(), wells.NumFlows());
-    bc.chip_subset.InitializeChipSubsetFromOptArgs(opts, mask.W(), mask.H(), chunk_cols, chunk_rows);
+    bc.read_class_map = &read_class_map;
+    bc.SetKeyAndFlowOrder(opts, wells_mngr.FlowOrder(), wells_mngr.NumFlows());
+    bc.chip_subset.InitializeChipSubsetFromOptArgs(
+        opts,
+        read_class_map.getMaskWidth(),
+        read_class_map.getMaskHeight(),
+        wells_mngr.H5ChunkSizeCol(),
+        wells_mngr.H5ChunkSizeRow());
 
     // Sampling options may reset command line arguments & change context
-    bc_params.InitializeSamplingFromOptArgs(opts, bc.chip_subset.NumWells());
+    bc_params.InitializeSamplingFromOptArgs(opts, bc.read_class_map->NumValidWells());
     bc_params.SetBaseCallerContextVars(bc);
+    wells_mngr.SetWellsContext(&bc.flow_order,
+                               bc.keys,
+                               &read_class_map,
+                               bc_params.GetContext().wells_norm_method,
+                               bc_params.GetContext().compress_multi_taps);
 
     // --------- Stand alone phase estimation and exit ---------------------------------------
-    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer, bc.compress_multi_taps);
+    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
 
     if (bc_params.JustPhaseEstimation()) {
-      wells.OpenForIncrementalRead();
-      bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc_params.NumThreads());
-      wells.Close();
+      wells_mngr.OpenForIncrementalRead();
+      bc.estimator.DoPhaseEstimation(&wells_mngr, bc_params.NumThreads());
+      wells_mngr.Close();
 
       bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
       bc.estimator.ExportTrainSubsetToJson(basecaller_json["TrainSubset"]);
@@ -373,7 +307,7 @@ int main (int argc, const char *argv[])
     bc.linear_cal_model = &linear_calibration_model;
 
     // initialize the per base quality score generator - dependent on calibration
-    bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
+    bc.quality_generator.Init(opts, wells_mngr.ChipType(), bc_params.GetFiles().output_directory, hist_calibration.is_enabled());
 
     // Barcode classification
     BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
@@ -389,7 +323,9 @@ int main (int argc, const char *argv[])
         &bc.flow_order, barcodes.GetBarcodeMaskPointer(), bc_params.GetFiles().read_structure);
     bc.end_barcodes = &end_barcodes;
 
-    BaseCallerFilters filters(opts, basecaller_bam_comments["BaseCallerComments"], bc.flow_order, bc.keys, mask);
+    BaseCallerFilters filters(opts, basecaller_bam_comments["BaseCallerComments"],
+          bc.flow_order, bc.keys, bc.chip_subset.NumWells(),
+          bc_params.GetFiles().filename_wells.size());
     bc.filters = &filters;
 
     // Molecular tag identification & trimming
@@ -402,7 +338,7 @@ int main (int argc, const char *argv[])
     opts.CheckNoLeftovers();
 
     // Save some run info into our handy json file
-    bc_params.SaveParamsToJson(basecaller_json, bc, chip_type);
+    bc_params.SaveParamsToJson(basecaller_json, bc, wells_mngr.ChipType());
     SaveBaseCallerProgress(0, bc_params.GetFiles().output_directory);
 
     MemUsage("RawWellsBasecalling");
@@ -413,10 +349,10 @@ int main (int argc, const char *argv[])
     //
 
     // Classify wells subsets to be processed / ignored during base calling
-    ClassifyAndSampleWells(bc, bc_params.GetSamplingOpts());
+    bc.ClassifyAndSampleWells(bc_params.GetSamplingOpts());
 
     // Find distribution of clonal reads for use in read filtering:
-    filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells, mask);
+    filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells_mngr.Wells0(), read_class_map.filter_mask); // XXX Clonal training
     MemUsage("ClonalPopulation");
     ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
 
@@ -424,9 +360,9 @@ int main (int argc, const char *argv[])
     if (not bc.estimator.HaveEstimates()) {
         MemUsage("BeforePhaseEstimation");
 
-        wells.OpenForIncrementalRead();
-        bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc_params.NumThreads());
-        wells.Close();
+        wells_mngr.OpenForIncrementalRead();
+        bc.estimator.DoPhaseEstimation(&wells_mngr, bc_params.NumThreads());
+        wells_mngr.Close();
         MemUsage("AfterPhaseEstimation");
     }
     bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
@@ -526,7 +462,7 @@ int main (int argc, const char *argv[])
         bc.tf_writer.Close(datasets_tf, end_barcodes.EndBarcodeNames(),
             bc_params.GetFiles().output_directory, "Test Fragments");
 
-    filters.TransferFilteringResultsToMask(mask);
+    filters.TransferFilteringResultsToMask(read_class_map.filter_mask);
 
     if (!bc.unfiltered_set.empty()) {
 
@@ -575,8 +511,7 @@ int main (int argc, const char *argv[])
     SaveJson(basecaller_json, bc_params.GetFiles().filename_json);
     SaveBaseCallerProgress(100, bc_params.GetFiles().output_directory);
 
-    mask.WriteRaw (bc_params.GetFiles().filename_filter_mask.c_str());
-    mask.validateMask();
+    read_class_map.WriteFilterMask(bc_params.GetFiles().filename_filter_mask);
 
     MemUsage("AfterBasecalling");
     ReportState(analysis_start_time,"Basecalling Complete");
@@ -593,15 +528,19 @@ void * BasecallerWorker(void *input)
 {
     BaseCallerContext& bc = *static_cast<BaseCallerContext*>(input);
 
-    RawWells wells ("", bc.filename_wells.c_str());
+    //RawWells wells ("", bc.filename_wells.c_str());
+    WellsManager wells_mngr(bc.filename_wells, false);
+    wells_mngr.SetWellsContext(&bc.flow_order,
+                               bc.keys,
+                               bc.read_class_map,
+                               bc.wells_norm_method,
+                               bc.compress_multi_taps);
+
     pthread_mutex_lock(&bc.mutex);
-    wells.OpenForIncrementalRead();
+    wells_mngr.OpenForIncrementalRead();
     pthread_mutex_unlock(&bc.mutex);
 
-    WellsNormalization wells_norm(&bc.flow_order, bc.wells_norm_method);
-    wells_norm.SetWells(&wells, bc.mask);
-    int num_flows =  bc.flow_order.num_flows();
-
+    int num_flows =   bc.flow_order.num_flows();
     vector<float>     residual(num_flows, 0);
     vector<float>     scaled_residual(num_flows, 0);
     vector<float>     wells_measurements(num_flows, 0);
@@ -642,7 +581,7 @@ void * BasecallerWorker(void *input)
 
         int current_region, begin_x, begin_y, end_x, end_y;
         if (not bc.chip_subset.GetCurrentRegionAndIncrement(current_region, begin_x, end_x, begin_y, end_y)) {
-           wells.Close();
+           wells_mngr.Close();
            pthread_mutex_unlock(&bc.mutex);
            return NULL;
         }
@@ -650,7 +589,7 @@ void * BasecallerWorker(void *input)
         int num_usable_wells = 0;
         for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x)
-                if (bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] >= 0)
+                if (bc.read_class_map->ClassMatch(x,y, MapOutputWell))
                     num_usable_wells++;
 
         if      (begin_x == 0)            printf("\n% 5d/% 5d: ", begin_y, bc.chip_subset.GetChipSizeY());
@@ -679,19 +618,14 @@ void * BasecallerWorker(void *input)
                 bc.calib_writer.WriteRegion(current_region, calib_reads);
             if (bc.process_tfs)
                 bc.tf_writer.WriteRegion(current_region, tf_reads);
-            if (!bc.unfiltered_set.empty()) {
+            if (not bc.unfiltered_set.empty()) {
                 bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
                 bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);
             }
             continue;
         }
 
-        wells.SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
-        wells.ReadWells();
-        //wells.ReadRes();
-        wells_norm.CorrectSignalBias(bc.keys);
-        wells_norm.DoKeyNormalization(bc.keys);
-
+        wells_mngr.LoadChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
 
         for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x) {   // Loop over wells within current region
@@ -701,15 +635,18 @@ void * BasecallerWorker(void *input)
                 //
 
                 unsigned int read_index = x + y * bc.chip_subset.GetChipSizeX();
-                int read_class = bc.class_map[read_index];
+                if (not bc.read_class_map->ClassMatch(read_index, MapOutputWell))
+                  continue;
+
+                int read_class = -1;
+                if (bc.read_class_map->ClassMatch(read_index, MapLibrary))
+                  read_class = 0;
+                else if (bc.read_class_map->ClassMatch(read_index, MapTF))
+                  read_class = 1;
                 if (read_class < 0)
                     continue;
-                bool is_random_calibration_read = false;
-                if (read_class == 2){
-                  is_random_calibration_read = true;
-                  read_class = 0; // Calibration reads are library beads;
-                }
-                bool is_random_unfiltered  = bc.unfiltered_set.count(read_index) > 0;
+                bool is_random_calibration_read = bc.read_class_map->ClassMatch(read_index, MapCalibration);
+                bool is_random_unfiltered  = bc.read_class_map->ClassMatch(read_index, MapUnfiltered);
 
                 if (not is_random_unfiltered and bc.only_process_unfiltered_set)
                   continue;
@@ -723,14 +660,19 @@ void * BasecallerWorker(void *input)
                 ProcessedRead& processed_read = (read_class==0) ? lib_reads.back() : tf_reads.back();
 
                 // Respect filter decisions from Background Model
-                if (bc.mask->Match(read_index, MaskFilteredBadResidual))
-                    bc.filters->SetBkgmodelHighPPF(read_index, processed_read.filter);
-
-                if (bc.mask->Match(read_index, MaskFilteredBadPPF))
-                    bc.filters->SetBkgmodelPolyclonal(read_index, processed_read.filter);
-
-                if (bc.mask->Match(read_index, MaskFilteredBadKey))
-                    bc.filters->SetBkgmodelFailedKeypass(read_index, processed_read.filter);
+                // Account for beads only once - order of filter precedence below.
+                // Mixed beads should have a valid key
+                if (bc.read_class_map->ClassMatch(read_index, MapFilteredBadKey))
+                  bc.filters->SetBkgmodelFailedKeypass(read_index, processed_read.filter);
+                // Super-mixed bead category
+                else if (bc.read_class_map->ClassMatch(read_index, MapFilteredHighPPF))
+                  bc.filters->SetBkgmodelHighPPF(read_index, processed_read.filter);
+                // Mixed beads
+                else if (bc.read_class_map->ClassMatch(read_index, MapFilteredPolyclonal))
+                  bc.filters->SetBkgmodelPolyclonal(read_index, processed_read.filter);
+                // Beads where all we got was a washout
+                else if (bc.read_class_map->getSignalDiversity(read_index)==0)
+                  bc.filters->SetFilteredShort(read_index, processed_read.filter);
 
                 if (!is_random_unfiltered and !bc.filters->IsValid(read_index)) // No reason to waste more time
                     continue;
@@ -739,41 +681,7 @@ void * BasecallerWorker(void *input)
                 float ie = bc.estimator.GetWellIE(x,y);
                 float dr = bc.estimator.GetWellDR(x,y);
 
-                // Multi-tap compression
-                if (bc.compress_multi_taps) {
-                  int sig_idx = 0;
-                  for (int flow = 0; flow < num_flows; ++flow){
-                    if (flow>0 and bc.flow_order[flow-1]==bc.flow_order[flow]) {
-                      wells_measurements[flow] = 0.0;
-                      wells_measurements[sig_idx] += wells.At(y,x,flow);
-                    }
-                    else {
-                      sig_idx = flow;
-                      wells_measurements[flow] = wells.At(y,x,flow);
-                    }
-                  }
-                }
-                else
-                  for (int flow = 0; flow < num_flows; ++flow)
-                    wells_measurements[flow] = wells.At(y,x,flow);
-
-
-                // Sanity check. If there are NaNs in this read, print warning
-                vector<int> nanflow;
-                for (int flow = 0; flow < num_flows; ++flow) {
-                    if (!isnan(wells_measurements[flow]))
-                        continue;
-                    wells_measurements[flow] = 0.0;
-                    nanflow.push_back(flow);
-                }
-                if (nanflow.size() > 0) {
-                    fprintf(stderr, "ERROR: BaseCaller read NaNs from wells file, x=%d y=%d flow=%d", x, y, nanflow[0]);
-                    for (unsigned int flow=1; flow < nanflow.size(); flow++) {
-                        fprintf(stderr, ",%d", nanflow[flow]);
-                    }
-                    fprintf(stderr, "\n");
-                    fflush(stderr);
-                }
+                wells_mngr.GetMeasurements(y,x, wells_measurements);
 
                 //
                 // Step 3. Perform base calling and quality value calculation
@@ -801,7 +709,7 @@ void * BasecallerWorker(void *input)
                 // Check if this read is either from the calibration panel or from the random calibration set
                 if(bc.calibration_training and bc.have_calibration_panel) {
                   if (!is_random_calibration_read and !bc.calibration_barcodes->MatchesBarcodeSignal(read)) {
-                	bc.filters->SetFiltered(read_index, read_class, processed_read.filter); // Set as filtered
+                	bc.filters->SetFilteredShort(read_index, processed_read.filter); // Set as filtered
                     continue;  // And move on along
                   }
                 }
@@ -970,8 +878,7 @@ void * BasecallerWorker(void *input)
                 }
                 if(!use_flow_predictors){ // base space quality
                 	bool redo_genPred = ! bc.quality_generator.toSavePredictors();
-
-                	if (redo_genPred) {
+                    if (redo_genPred) {
                 		int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
                 		PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases,
                 				base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
@@ -995,6 +902,14 @@ void * BasecallerWorker(void *input)
                 			use_flow_predictors);
 
                 	if(bc.quality_generator.toSavePredictors()){
+                        int num_predictor_bases = min(num_flows, processed_read.filter.n_bases);
+                        PerBaseQual::PredictorLocalNoise(local_noise, num_predictor_bases,
+                                base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                        PerBaseQual::PredictorNeighborhoodNoise(neighborhood_noise, num_predictor_bases,
+                                base_to_flow, read.normalized_measurements, read.prediction,use_flow_predictors);
+                        PerBaseQual::PredictorBeverlyEvents(minus_noise_overlap, num_predictor_bases, base_to_flow, scaled_residual,use_flow_predictors);
+                        PerBaseQual::PredictorHomopolymerRank(homopolymer_rank, num_predictor_bases, read.sequence, homopolymer_rank_flow, flow_to_base, use_flow_predictors);
+                    
                 		bc.quality_generator.DumpPredictors(read_name, processed_read.filter.n_bases, num_flows,
                 				read.penalty_residual, local_noise, minus_noise_overlap, // <- predictors 1,2,3
                 				homopolymer_rank, read.penalty_mismatch, neighborhood_noise, // <- predictors 4,5,6
@@ -1225,7 +1140,7 @@ void * BasecallerWorker(void *input)
             bc.calib_writer.WriteRegion(current_region, calib_reads);
         if (bc.process_tfs)
             bc.tf_writer.WriteRegion(current_region, tf_reads);
-        if (!bc.unfiltered_set.empty()) {
+        if (not bc.unfiltered_set.empty()) {
             bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
             bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);
         }

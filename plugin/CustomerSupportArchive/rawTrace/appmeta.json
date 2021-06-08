@@ -1,0 +1,33 @@
+{
+    "activationClass":"none",
+    "dependsOn":[
+        "none"
+    ],
+    "embeddedOutput":"false",
+    "executeDxAdapter":"true",
+    "img":"none",
+    "inWorkflow":"true",
+    "inputs":[
+        "analysisDir",
+        "pluginOutputDir"
+    ],
+    "isThumbnail":"true",
+    "name":"rawTrace",
+    "outputs":[
+        "./outputs"
+    ],
+    "payOption":"Free",
+    "runAllowed":"THUMBNAIL",
+    "runOnceOnly":"true",
+    "scriptLauncher":"launch.sh",
+    "validWorkflowAppTypes":[
+        "DNA",
+        "RNA",
+        "DNA_RNA"
+    ],
+    "variantAnnotationKeys":[
+        "type"
+    ],
+    "vendorActivation":"/share/apps/",
+    "ver":"0.3"
+}

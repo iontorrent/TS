@@ -78,11 +78,13 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
           }
 
 	    // Pull out the data for requested wells
+        Rcpp::NumericVector copy_count(nX);
 	    Rcpp::IntegerVector rank(nX);
         Rcpp::NumericMatrix signal(nX,(nFlowRequested > 0) ? nFlowRequested : nFlow);
 	    for(uint64_t i=0; i<nX; i++) {
               const WellData *w = wells.ReadXY(x(i), y(i));
               rank(i) = w->rank;
+              copy_count(i) = wells.GetCopyCount(y(i), x(i));
               if(nFlowRequested > 0) {
                 for(size_t j=0; j<nFlowRequested; j++)
                   signal(i,j) = w->flowValues[flow(j)]; //wellData[flow(j) + (nFlow * (x(i) + (nCol * y(i))))];
@@ -107,6 +109,7 @@ RcppExport SEXP readWells(SEXP wellDir_in, SEXP wellFile_in, SEXP nCol_in, SEXP 
                                 Rcpp::Named("flowOrder")   = *flowOrder,
                                 Rcpp::Named("flow")        = flow,
                                 Rcpp::Named("rank")        = rank,
+                                Rcpp::Named("wellsCopies") = copy_count,
                                 Rcpp::Named("signal")      = signal);
 
 	}

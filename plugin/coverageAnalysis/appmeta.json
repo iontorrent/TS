@@ -3,7 +3,7 @@
     "dependsOn":[
         "none"
     ],
-    "embeddedOutput":"true",
+    "embeddedOutput":"false",
     "executeDxAdapter":"true",
     "img":"none",
     "inWorkflow":"true",
@@ -16,7 +16,8 @@
         "./outputs"
     ],
     "payOption":"Free",
-    "runAllowed":"false",
+    "runAllowed":"SAMPLE",
+    "isThumbnail":"true",
     "runOnceOnly":"true",
     "scriptLauncher":"coverageAnalysis.py",
     "validWorkflowAppTypes":[
@@ -28,5 +29,5 @@
         "type"
     ],
     "vendorActivation":"/share/apps/",
-    "ver":"5.11.0.1"
+    "ver":"5.14.0.0"
 }

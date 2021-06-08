@@ -355,6 +355,22 @@ void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &b
     else{
 	    DoFastScan_();
     }
+
+    // Do normalization
+    double linear_sum = 0.0;
+    double log_sum = (double) max_ll;
+	for (vector<float>::const_iterator it = log_posterior_by_frequency.begin(); it != log_posterior_by_frequency.end(); ++it){
+		// Cusum of small numbers needs better floating point accuracy. Do it in double.
+		linear_sum += exp((double) (*it) - log_sum);
+	}
+	log_sum += log(linear_sum);
+	for (vector<float>::iterator it = log_posterior_by_frequency.begin(); it != log_posterior_by_frequency.end(); ++it){
+    	(*it) -= (float) log_sum;
+    }
+	// Remember to normalize max_ll
+    max_log_posterior_scanned_ -= (float) log_sum;
+    max_ll -= (float) log_sum;
+
     // if doing monomorphic eval, set frequency to begin with and don't update
     //FindMaxFrequency(update_frequency);
     //   log_posterior now contains all frequency information inferred from the data

@@ -1,0 +1,376 @@
+---
+title: "Fetching JSON data from REST APIs"
+date: "2015-09-06"
+output:
+  html_document
+vignette: >
+  %\VignetteIndexEntry{Fetching JSON data from REST APIs}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+
+
+This section lists some examples of public HTTP APIs that publish data in JSON format. These are great to get a sense of the complex structures that are encountered in real world JSON data. All services are free, but some require registration/authentication. Each example returns lots of data, therefore not all output is printed in this document.
+
+
+```r
+library(jsonlite)
+```
+
+## Github
+
+Github is an online code repository and has APIs to get live data on almost all activity. Below some examples from a well known R package and author:
+
+
+```r
+hadley_orgs <- fromJSON("https://api.github.com/users/hadley/orgs")
+hadley_repos <- fromJSON("https://api.github.com/users/hadley/repos")
+gg_commits <- fromJSON("https://api.github.com/repos/hadley/ggplot2/commits")
+gg_issues <- fromJSON("https://api.github.com/repos/hadley/ggplot2/issues")
+
+#latest issues
+paste(format(gg_issues$user$login), ":", gg_issues$title)
+```
+
+```
+ [1] "idavydov     : annotate(\"segment\") wrong position if limits are inverted"                      
+ [2] "ben519       : geom_polygon doesn't make NA values grey when using continuous fill"              
+ [3] "has2k1       : Fix multiple tiny issues in the position classes"                                 
+ [4] "neggert      : Problem with geom_bar position=fill and faceting"                                 
+ [5] "robertzk     : Fix typo in geom_linerange docs."                                                 
+ [6] "lionel-      : stat_bar() gets confused with numeric discrete data?"                             
+ [7] "daattali     : Request: support theme axis.ticks.length.x and axis.ticks.length.y"               
+ [8] "sethchandler : Documentation error on %+replace% ?"                                              
+ [9] "daattali     : dev version 1.0.1.9003 has some breaking changes"                                 
+[10] "lionel-      : Labels"                                                                           
+[11] "nutterb      : legend for `geom_line` colour disappears when `alpha` < 1.0"                      
+[12] "wch          : scale_name property should be removed from Scale objects"                         
+[13] "wch          : scale_details arguments in Coords should be renamed panel_scales or scale"        
+[14] "wch          : ScalesList-related functions should be moved into ggproto object"                 
+[15] "wch          : update_geom_defaults and update_stat_defaults should accept Geom and Stat objects"
+[16] "wch          : Make some ggproto objects immutable. Closes #1237"                                
+[17] "and3k        : Control size of the border and padding of geom_label"                             
+[18] "hadley       : Consistent argument order and formatting for layer functions"                     
+[19] "hadley       : Consistently handle missing values"                                               
+[20] "cmohamma     : fortify causes fatal error"                                                       
+[21] "lionel-      : Flawed `label_bquote()` implementation"                                           
+[22] "beroe        : Create alias for `colors=` in `scale_color_gradientn()`"                          
+[23] "and3k        : hjust broken in y facets"                                                         
+[24] "joranE       : Allow color bar guides for alpha scales"                                          
+[25] "hadley       : dir = \"v\" also needs to swap nrow and ncol"                                     
+[26] "joranE       : Add examples for removing guides"                                                 
+[27] "lionel-      : New approach for horizontal layers"                                               
+[28] "bbolker      : add horizontal linerange geom"                                                    
+[29] "hadley       : Write vignette about grid"                                                        
+[30] "hadley       : Immutable flag for ggproto objects"                                               
+```
+
+## CitiBike NYC
+
+A single public API that shows location, status and current availability for all stations in the New York City bike sharing imitative.
+
+
+```r
+citibike <- fromJSON("http://citibikenyc.com/stations/json")
+stations <- citibike$stationBeanList
+colnames(stations)
+```
+
+```
+ [1] "id"                    "stationName"          
+ [3] "availableDocks"        "totalDocks"           
+ [5] "latitude"              "longitude"            
+ [7] "statusValue"           "statusKey"            
+ [9] "availableBikes"        "stAddress1"           
+[11] "stAddress2"            "city"                 
+[13] "postalCode"            "location"             
+[15] "altitude"              "testStation"          
+[17] "lastCommunicationTime" "landMark"             
+```
+
+```r
+nrow(stations)
+```
+
+```
+[1] 509
+```
+
+## Ergast
+
+The Ergast Developer API is an experimental web service which provides a historical record of motor racing data for non-commercial purposes.
+
+
+```r
+res <- fromJSON('http://ergast.com/api/f1/2004/1/results.json')
+drivers <- res$MRData$RaceTable$Races$Results[[1]]$Driver
+colnames(drivers)
+```
+
+```
+[1] "driverId"        "code"            "url"             "givenName"      
+[5] "familyName"      "dateOfBirth"     "nationality"     "permanentNumber"
+```
+
+```r
+drivers[1:10, c("givenName", "familyName", "code", "nationality")]
+```
+
+```
+   givenName    familyName code nationality
+1    Michael    Schumacher  MSC      German
+2     Rubens   Barrichello  BAR   Brazilian
+3   Fernando        Alonso  ALO     Spanish
+4       Ralf    Schumacher  SCH      German
+5       Juan Pablo Montoya  MON   Colombian
+6     Jenson        Button  BUT     British
+7      Jarno        Trulli  TRU     Italian
+8      David     Coulthard  COU     British
+9     Takuma          Sato  SAT    Japanese
+10 Giancarlo    Fisichella  FIS     Italian
+```
+
+
+## ProPublica
+
+Below an example from the [ProPublica Nonprofit Explorer API](http://projects.propublica.org/nonprofits/api) where we retrieve the first 10 pages of tax-exempt organizations in the USA, ordered by revenue. The `rbind.pages` function is used to combine the pages into a single data frame.
+
+
+
+```r
+#store all pages in a list first
+baseurl <- "https://projects.propublica.org/nonprofits/api/v1/search.json?order=revenue&sort_order=desc"
+pages <- list()
+for(i in 0:10){
+  mydata <- fromJSON(paste0(baseurl, "&page=", i), flatten=TRUE)
+  message("Retrieving page ", i)
+  pages[[i+1]] <- mydata$filings
+}
+
+#combine all into one
+filings <- rbind.pages(pages)
+
+#check output
+nrow(filings)
+```
+
+```
+[1] 275
+```
+
+```r
+filings[1:10, c("organization.sub_name", "organization.city", "totrevenue")]
+```
+
+```
+                              organization.sub_name organization.city
+1                 KAISER FOUNDATION HEALTH PLAN INC           OAKLAND
+2                 KAISER FOUNDATION HEALTH PLAN INC           OAKLAND
+3                 KAISER FOUNDATION HEALTH PLAN INC           OAKLAND
+4  DAVIDSON COUNTY COMMUNITY COLLEGE FOUNDATION INC         LEXINGTON
+5                       KAISER FOUNDATION HOSPITALS           OAKLAND
+6                       KAISER FOUNDATION HOSPITALS           OAKLAND
+7                       KAISER FOUNDATION HOSPITALS           OAKLAND
+8                   PARTNERS HEALTHCARE SYSTEM INC        CHARLESTOWN
+9                   PARTNERS HEALTHCARE SYSTEM INC        CHARLESTOWN
+10                  PARTNERS HEALTHCARE SYSTEM INC        CHARLESTOWN
+    totrevenue
+1  42346486950
+2  40148558254
+3  37786011714
+4  30821445312
+5  20013171194
+6  18543043972
+7  17980030355
+8  10619215354
+9  10452560305
+10  9636630380
+```
+
+
+## New York Times
+
+The New York Times has several APIs as part of the NYT developer network. These interface to data from various departments, such as news articles, book reviews, real estate, etc. Registration is required (but free) and a key can be obtained at [here](http://developer.nytimes.com/docs/reference/keys). The code below includes some example keys for illustration purposes.
+
+
+```r
+#search for articles
+article_key <- "&api-key=c2fede7bd9aea57c898f538e5ec0a1ee:6:68700045"
+url <- "http://api.nytimes.com/svc/search/v2/articlesearch.json?q=obamacare+socialism"
+req <- fromJSON(paste0(url, article_key))
+articles <- req$response$docs
+colnames(articles)
+```
+
+```
+ [1] "web_url"          "snippet"          "lead_paragraph"  
+ [4] "abstract"         "print_page"       "blog"            
+ [7] "source"           "multimedia"       "headline"        
+[10] "keywords"         "pub_date"         "document_type"   
+[13] "news_desk"        "section_name"     "subsection_name" 
+[16] "byline"           "type_of_material" "_id"             
+[19] "word_count"      
+```
+
+```r
+#search for best sellers
+bestseller_key <- "&api-key=5e260a86a6301f55546c83a47d139b0d:3:68700045"
+url <- "http://api.nytimes.com/svc/books/v2/lists/overview.json?published_date=2013-01-01"
+req <- fromJSON(paste0(url, bestseller_key))
+bestsellers <- req$results$list
+category1 <- bestsellers[[1, "books"]]
+subset(category1, select = c("author", "title", "publisher"))
+```
+
+```
+           author                title                  publisher
+1   Gillian Flynn            GONE GIRL           Crown Publishing
+2    John Grisham        THE RACKETEER Knopf Doubleday Publishing
+3       E L James FIFTY SHADES OF GREY Knopf Doubleday Publishing
+4 Nicholas Sparks           SAFE HAVEN   Grand Central Publishing
+5  David Baldacci        THE FORGOTTEN   Grand Central Publishing
+```
+
+```r
+#movie reviews
+movie_key <- "&api-key=5a3daaeee6bbc6b9df16284bc575e5ba:0:68700045"
+url <- "http://api.nytimes.com/svc/movies/v2/reviews/dvd-picks.json?order=by-date"
+req <- fromJSON(paste0(url, movie_key))
+reviews <- req$results
+colnames(reviews)
+```
+
+```
+ [1] "nyt_movie_id"     "display_title"    "sort_name"       
+ [4] "mpaa_rating"      "critics_pick"     "thousand_best"   
+ [7] "byline"           "headline"         "capsule_review"  
+[10] "summary_short"    "publication_date" "opening_date"    
+[13] "dvd_release_date" "date_updated"     "seo_name"        
+[16] "link"             "related_urls"     "multimedia"      
+```
+
+```r
+reviews[1:5, c("display_title", "byline", "mpaa_rating")]
+```
+
+```
+       display_title         byline mpaa_rating
+1    Tom at the Farm Stephen Holden          NR
+2     A Little Chaos Stephen Holden           R
+3           Big Game   Andy Webster        PG13
+4          Balls Out   Andy Webster           R
+5 Mad Max: Fury Road    A. O. Scott           R
+```
+
+## CrunchBase
+
+CrunchBase is the free database of technology companies, people, and investors that anyone can edit.
+
+
+```r
+key <- "f6dv6cas5vw7arn5b9d7mdm3"
+res <- fromJSON(paste0("http://api.crunchbase.com/v/1/search.js?query=R&api_key=", key))
+head(res$results)
+```
+
+## Sunlight Foundation
+
+The Sunlight Foundation is a non-profit that helps to make government transparent and accountable through data, tools, policy and journalism. Register a free key at [here](http://sunlightfoundation.com/api/accounts/register/). An example key is provided.
+
+
+```r
+key <- "&apikey=39c83d5a4acc42be993ee637e2e4ba3d"
+
+#Find bills about drones
+drone_bills <- fromJSON(paste0("http://openstates.org/api/v1/bills/?q=drone", key))
+drone_bills$title <- substring(drone_bills$title, 1, 40)
+print(drone_bills[1:5, c("title", "state", "chamber", "type")])
+```
+
+```
+                                     title state chamber type
+1                            WILDLIFE-TECH    il   lower bill
+2 Criminalizes the unlawful use of an unma    ny   lower bill
+3 Criminalizes the unlawful use of an unma    ny   lower bill
+4 Relating to: criminal procedure and prov    wi   lower bill
+5 Relating to: criminal procedure and prov    wi   upper bill
+```
+
+```r
+#Congress mentioning "constitution"
+res <- fromJSON(paste0("http://capitolwords.org/api/1/dates.json?phrase=immigration", key))
+wordcount <- res$results
+wordcount$day <- as.Date(wordcount$day)
+summary(wordcount)
+```
+
+```
+     count              day               raw_count      
+ Min.   :   1.00   Min.   :1996-01-02   Min.   :   1.00  
+ 1st Qu.:   3.00   1st Qu.:2001-01-22   1st Qu.:   3.00  
+ Median :   8.00   Median :2005-11-16   Median :   8.00  
+ Mean   :  25.27   Mean   :2005-10-02   Mean   :  25.27  
+ 3rd Qu.:  21.00   3rd Qu.:2010-05-12   3rd Qu.:  21.00  
+ Max.   :1835.00   Max.   :2015-08-05   Max.   :1835.00  
+```
+
+```r
+#Local legislators
+legislators <- fromJSON(paste0("http://congress.api.sunlightfoundation.com/",
+  "legislators/locate?latitude=42.96&longitude=-108.09", key))
+subset(legislators$results, select=c("last_name", "chamber", "term_start", "twitter_id"))
+```
+
+```
+  last_name chamber term_start      twitter_id
+1    Lummis   house 2015-01-06   CynthiaLummis
+2      Enzi  senate 2015-01-06     SenatorEnzi
+3  Barrasso  senate 2013-01-03 SenJohnBarrasso
+```
+
+## Twitter
+
+The twitter API requires OAuth2 authentication. Some example code:
+
+
+```r
+#Create your own appication key at https://dev.twitter.com/apps
+consumer_key = "EZRy5JzOH2QQmVAe9B4j2w";
+consumer_secret = "OIDC4MdfZJ82nbwpZfoUO4WOLTYjoRhpHRAWj6JMec";
+
+#Use basic auth
+library(httr)
+secret <- RCurl::base64(paste(consumer_key, consumer_secret, sep = ":"));
+req <- POST("https://api.twitter.com/oauth2/token",
+  add_headers(
+    "Authorization" = paste("Basic", secret),
+    "Content-Type" = "application/x-www-form-urlencoded;charset=UTF-8"
+  ),
+  body = "grant_type=client_credentials"
+);
+
+#Extract the access token
+token <- paste("Bearer", content(req)$access_token)
+
+#Actual API call
+url <- "https://api.twitter.com/1.1/statuses/user_timeline.json?count=10&screen_name=Rbloggers"
+req <- GET(url, add_headers(Authorization = token))
+json <- content(req, as = "text")
+tweets <- fromJSON(json)
+substring(tweets$text, 1, 100)
+```
+
+```
+ [1] "Analysing longitudinal data: Multilevel growth models (II) http://t.co/unUxszG7VJ #rstats"           
+ [2] "RcppDE 0.1.4 http://t.co/3qPhFzoOpj #rstats"                                                         
+ [3] "Minimalist Maps http://t.co/fpkNznuCoX #rstats"                                                      
+ [4] "Tutorials freely available of course I taught: including ggplot2, dplyr and shiny http://t.co/WsxX4U"
+ [5] "Deploying Shiny apps with shinyapps.io http://t.co/tjef1pbKLt #rstats"                               
+ [6] "Bootstrap Evaluation of Clusters http://t.co/EbY7ziKCz5 #rstats"                                     
+ [7] "Add external code to Rmarkdown http://t.co/RCJEmS8gyP #rstats"                                       
+ [8] "Linear models with weighted observations http://t.co/pUoHpvxAGC #rstats"                             
+ [9] "dplyr 0.4.3 http://t.co/ze3zc8t7qj #rstats"                                                          
+[10] "xkcd survey and the power to shape the internet http://t.co/vNaKhxWxE4 #rstats"                      
+```
+

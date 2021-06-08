@@ -117,36 +117,21 @@ select[readonly] option{
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="cyclingProtocols">Cycling Protocol</label>
+                <label class="control-label" for="libraryPrepProtocol">Library Prep Protocol</label>
                 <div class="controls">
-                    <select id="cyclingProtocols" name="cyclingProtocols" style="height:28px;"
+                    <select id="libraryPrepProtocol" name="libraryPrepProtocol" style="height:28px;"
                     {% if not editable %}
                         readonly="true"
                         data-toggle="tooltip"
-                        title="Cycling Protocol cannot be changed since this sample set status is {{sampleSet.status}}"
+                        title="Library Prep Protocol cannot be changed since this sample set status is {{sampleSet.status}}"
                     {% endif %}
                     >
-                        {% for cyclingProtocol in cyclingProtocols_choices %}
-                            <option value="{{cyclingProtocol.value}}" {% if cyclingProtocol.value == sampleSet.cyclingProtocols  %} selected {% elif cyclingProtocol.value == "SOP" %} selected {% endif %}>{{cyclingProtocol.value}}</option>
+                        <option value="">.....</option>
+                        {% for libraryPrepProtocol in libraryPrepProtocol_choices %}
+                            <option value="{{libraryPrepProtocol.value}}" {% if libraryPrepProtocol.value == sampleSet.libraryPrepProtocol  %} selected {% endif %}>{{libraryPrepProtocol.displayedValue}}</option>
                         {% endfor %}
                     </select>
                 </div>
-            </div>
-                <div class="control-group">
-                    <label class="control-label" for="additionalCycles">Additional Cycle</label>
-                    <div class="controls">
-                        <select id="additionalCycles" name="additionalCycles" style="height:28px;"
-                        {% if not editable %}
-                            readonly="true"
-                            data-toggle="tooltip"
-                            title="Additional Cycle cannot be changed since this sample set status is {{sampleSet.status}}"
-                        {% endif %}
-                        >
-                            {% for additionalCycle in additionalCycles_choices %}
-                                <option value="{{additionalCycle.value}}" {% if additionalCycle.value == sampleSet.additionalCycles  %} selected {% elif additionalCycle.value == "0" %} selected {% endif %}>{{additionalCycle.value}}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
             </div>
             <div class="control-group">
                 <label class="control-label" for="pcrPlateSerialNum">{% trans "samplesets.addedit.fields.pcrPlateSerialNum.label" %}</label>

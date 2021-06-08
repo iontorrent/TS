@@ -59,7 +59,7 @@
 							{% if ampsOnChef_sampleSets %}
                                 <tr>
                                     <td><b>{% trans "reviewplan.fields.ampsOnChef_sampleSets.label" %}:</b></td>
-                                    <td>{% for set in ampsOnChef_sampleSets %}{{set.combinedLibraryTubeLabel}} {% endfor %}</td>
+                                    <td> {{ combinedLibraryTubeLabel }} </td>
                                 </tr>
                             {% endif %}
 						</table>
@@ -79,6 +79,12 @@
 								<td><b>{% trans "reviewplan.fields.libraryKit.label" %}:</b></td>
 								<td>{{ libraryKit.0.description }}</td>
 							</tr>
+							{% if libraryPrepProtocol %}
+							<tr>
+								<td><b>Library Prep Protocol:</b></td>
+								<td>{{ libraryPrepProtocol }}</td>
+							</tr>
+							{% endif %}
 							<tr>
 								<td><b>{% trans "reviewplan.fields.eas.libraryKey.label" %}:</b></td>
 								<td>{{ eas.libraryKey }}</td>

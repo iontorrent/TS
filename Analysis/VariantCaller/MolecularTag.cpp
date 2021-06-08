@@ -1550,8 +1550,33 @@ void GenerateConsensusPositionTicket(vector< vector< vector<MolecularFamily> > >
 		for (vector< vector< MolecularFamily> >::iterator strand_it = sample_it->begin(); strand_it != sample_it->end(); ++strand_it) {
 			// Iterate over families
 			for (vector< MolecularFamily>::iterator fam_it = strand_it->begin(); fam_it !=  strand_it->end(); ++fam_it) {
+				// Amplicon-specific overriding
+				bool min_family_size_override = false;
+				bool min_fam_per_strand_cov_override = false;
+				unsigned int eff_min_family_size = 0;
+				unsigned int eff_min_fam_per_strand_cov = 0;
+				if (fam_it->all_family_members.empty()){
+					continue;
+				}
+				for (vector<int>::const_iterator target_idx_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_idx_it != fam_it->all_family_members[0]->target_coverage_indices.end() and vc.targets_manager != NULL; ++target_idx_it){
+					if (vc.targets_manager->unmerged[*target_idx_it].min_tag_fam_size_override){
+						// Get the largest (most stringent) one in case the family covers multiple amplicons.
+						eff_min_family_size = min_family_size_override?
+								max(eff_min_family_size, (unsigned int) vc.targets_manager->unmerged[*target_idx_it].min_tag_fam_size) : (unsigned int) vc.targets_manager->unmerged[*target_idx_it].min_tag_fam_size;
+						min_family_size_override = true;
+					}
+					if (vc.targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov_override){
+						// Get the largest (most stringent) one in case the family covers multiple amplicons.
+						eff_min_fam_per_strand_cov = min_fam_per_strand_cov_override?
+								max(eff_min_fam_per_strand_cov, (unsigned int) vc.targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov) : (unsigned int) vc.targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov;
+						min_fam_per_strand_cov_override = true;
+					}
+				}
+				eff_min_family_size = min_family_size_override? eff_min_family_size : min_family_size;
+				eff_min_fam_per_strand_cov = min_fam_per_strand_cov_override? eff_min_fam_per_strand_cov : min_fam_per_strand_cov;
+
 				// Is the family functional?
-				if (not fam_it->SetFuncFromAll(min_family_size, min_fam_per_strand_cov)) {
+				if (not fam_it->SetFuncFromAll(eff_min_family_size, eff_min_fam_per_strand_cov)) {
 					continue;
 				}
 				// Generate strand-specific basespace consensus reads for one family.
@@ -1579,9 +1604,10 @@ void GenerateConsensusPositionTicket(vector< vector< vector<MolecularFamily> > >
 					// Generate basespace consensus
 					Alignment* alignment = new Alignment;
 					bool success = consensus.CalculateConsensus(**my_reads_it, *alignment);
+					vc.bam_walker->InitializeReadAlignment(alignment);
 					// Basic filtering
 					if (success){
-						success = vc.candidate_generator->BasicFilters(*alignment);
+						success = vc.candidate_generator->BasicFilters(*alignment, vc.targets_manager);
 					}
 					// TrimAmpliseqPrimers (not alignment->target_coverage_indices.empty() implies it has been carried out)
 					if (success and alignment->target_coverage_indices.empty()){

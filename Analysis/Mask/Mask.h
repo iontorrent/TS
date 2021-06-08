@@ -38,7 +38,10 @@ enum MaskType {
   MaskFilteredShort       = ( 1<<13 ),
   MaskFilteredBadPPF      = ( 1<<14 ),
   MaskFilteredBadResidual = ( 1<<15 ),
-  MaskAll                 = 0xffff
+  MaskAll                 = 0xffff,
+
+  MaskFiltered  = MaskFilteredBadKey  | MaskFilteredBadPPF | MaskFilteredBadResidual
+
   // No more room at the inn - we've used up all the mask patterns that can be stored in the current bfmask.bin format, which uses 16-bit ints.
 };
 

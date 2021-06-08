@@ -13,8 +13,6 @@
 #include <stdlib.h>
 
 #include "PhaseEstimator.h"
-#include "RawWells.h"
-#include "Mask.h"
 #include "IonErr.h"
 #include "DPTreephaser.h"
 #include "BaseCallerUtils.h"
@@ -80,8 +78,8 @@ PhaseEstimator::PhaseEstimator()
   num_regions_x_ = 0;
   num_regions_y_ = 0;
   num_regions_   = 0;
-  wells_ = NULL;
-  mask_ = NULL;
+  wells_mngr_ = NULL;
+  rcm_   = NULL;
   jobs_in_progress_ = 0;
   result_regions_x_ = 1;
   result_regions_y_ = 1;
@@ -102,15 +100,14 @@ PhaseEstimator::PhaseEstimator()
 
   normalization_string_    = "gain";
   key_norm_method_         = "default";
-  compress_multi_taps_      = true;
   num_fullchip_iterations_ = 3;
   num_region_iterations_   = 1;
   maxfrac_negative_flows_  = 0.2;
 
   have_phase_estimates_ = false;
+  just_phase_estimation_ = false;
   max_phasing_levels_ = max_phasing_levels_default_;
   wells_norm_method_ = "off";
-  wells_norm_ = NULL;
   full_flow_order = NULL;
 }
 
@@ -118,8 +115,7 @@ PhaseEstimator::PhaseEstimator()
 
 void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts,
                                            const ion::ChipSubset & chip_subset,
-                                           const string & key_norm_method,
-                                           bool compress_multi_taps)
+                                           const string & key_norm_method)
 {
   // Parse command line options
   phasing_estimator_      = opts.GetFirstString ('-', "phasing-estimator", "spatial-refiner-2");
@@ -134,7 +130,6 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts,
   phase_file_name_        = opts.GetFirstString ('-', "phase-estimation-file", "");
   normalization_string_   = opts.GetFirstString ('-', "phase-normalization", "adaptive");
   key_norm_method_        = key_norm_method;
-  compress_multi_taps_    = compress_multi_taps;
   wells_norm_method_      = opts.GetFirstString ('-', "wells-normalization", "off");
   just_phase_estimation_  = opts.GetFirstBoolean('-', "just-phase-estimation", false);
 
@@ -235,20 +230,21 @@ void PhaseEstimator::SetPhaseParameters(float cf, float ie, float dr)
 // ---------------------------------------------------------------------------
 
 
-void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order,
-		                               const vector<KeySequence>& keys, int num_workers)
+//void PhaseEstimator::DoPhaseEstimation(RawWells *wells, ReadClassMap *rcm, const ion::FlowOrder& flow_order,
+//		                               const vector<KeySequence>& keys, int num_workers)
+void PhaseEstimator::DoPhaseEstimation(WellsManager *wells_mngr, int num_workers)
 {
   // For phase-estimation only mode: Strictly enforce that we have enough flows to do estimation
-  if (just_phase_estimation_ and (flow_order.num_flows() < phasing_end_flow_+20)) {
+  if (just_phase_estimation_ and (wells_mngr->ion_flow_order->num_flows() < phasing_end_flow_+20)) {
     cerr << "PhaseEstimator ERROR: Need " << phasing_end_flow_+20 << " flows for phase estimation but 1.wells only contains "
-         << flow_order.num_flows() << " flows." <<endl;
+         << wells_mngr->ion_flow_order->num_flows() << " flows." <<endl;
     exit(EXIT_FAILURE);
   }
 
   // We only load / process what is necessary
-  flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), phasing_end_flow_+20));
-  full_flow_order = &flow_order;  // Store pointer to run flow order for wells normalizer
-  keys_ = keys;
+  flow_order_.SetFlowOrder(wells_mngr->ion_flow_order->str(), min(wells_mngr->ion_flow_order->num_flows(), phasing_end_flow_+20));
+  full_flow_order = wells_mngr->ion_flow_order;  // Store pointer to run flow order for wells normalizer
+  keys_ = wells_mngr->Keys();
 
   // Do we have enough flows to do phase estimation?
   // Check and, if necessary, adjust flow interval for estimation,
@@ -280,6 +276,9 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
     }
   }
 
+  wells_mngr_ = wells_mngr;
+  rcm_        = wells_mngr->read_class_map;
+
   // ------------------------------------
 
   if (phasing_estimator_ == "override") {
@@ -288,14 +287,14 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
 
   } else if (phasing_estimator_ == "spatial-refiner") {
 
-    wells->Close();
-    wells->OpenForIncrementalRead();
-    SpatialRefiner(wells, mask, num_workers);
+    wells_mngr_->Close();
+    wells_mngr_->OpenForIncrementalRead();
+    SpatialRefiner(num_workers);
 
   } else if (phasing_estimator_ == "spatial-refiner-2") {
 
-    wells->Close();
-    wells->OpenForIncrementalRead();
+    wells_mngr_->Close();
+    wells_mngr_->OpenForIncrementalRead();
 
     train_subset_count_ = 2;
     train_subset_cf_.resize(train_subset_count_);
@@ -306,7 +305,7 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
 
 
     for (train_subset_ = 0; train_subset_ < train_subset_count_; ++train_subset_) {
-      SpatialRefiner(wells, mask, num_workers);
+      SpatialRefiner(num_workers);
       train_subset_cf_[train_subset_] = result_cf_;
       train_subset_ie_[train_subset_] = result_ie_;
       train_subset_dr_[train_subset_] = result_dr_;
@@ -424,7 +423,7 @@ float PhaseEstimator::GetWellDR(int x, int y) const
 
 // ---------------------------------------------------------------------------
 
-void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers)
+void PhaseEstimator::SpatialRefiner(int num_workers)
 {
   printf("PhaseEstimator::analyze start\n");
 
@@ -449,10 +448,7 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
   region_num_reads_.assign(num_regions_, 0);
   for (int x = 0; x < chip_size_x_; x++)
     for (int y = 0; y < chip_size_y_; y++)
-      if (mask->Match(x, y, (MaskType)(MaskTF|MaskLib)) and
-         !mask->Match(x, y, MaskFilteredBadResidual) and
-         !mask->Match(x, y, MaskFilteredBadPPF) and
-         !mask->Match(x, y, MaskFilteredBadKey))
+      if (rcm_->IsValidRead(x,y))
         region_num_reads_[(x/region_size_x_) + (y/region_size_y_)*num_regions_x_]++;
 
   // Step 2. Build the tree of estimation subblocks.
@@ -576,12 +572,6 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
   pthread_mutex_init(&job_queue_mutex_, NULL);
   pthread_cond_init(&job_queue_cond_, NULL);
 
-  wells_ = wells;
-  mask_ = mask;
-  WellsNormalization wells_norm(full_flow_order, wells_norm_method_);
-  wells_norm.SetWells(wells_, mask_);
-  wells_norm_ = &wells_norm;
-
   job_queue_.push_back(&subblocks[0]);
   jobs_in_progress_ = 0;
 
@@ -667,11 +657,7 @@ size_t PhaseEstimator::LoadRegion(int region)
   // Mutex needed for wells access, but not needed for region_reads access
   pthread_mutex_lock(&region_loader_mutex_);
 
-  wells_->SetChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, flow_order_.num_flows());
-  wells_->ReadWells();
-  wells_norm_->CorrectSignalBias(keys_);
-  wells_norm_->DoKeyNormalization(keys_);
-
+  wells_mngr_->LoadChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, flow_order_.num_flows());
 
   vector<float> well_buffer(flow_order_.num_flows());
 
@@ -681,61 +667,17 @@ size_t PhaseEstimator::LoadRegion(int region)
       if (train_subset_count_ > 0 and get_subset(x,y) != train_subset_)
         continue;
 
-      if (!mask_->Match(x, y, MaskLive))
-        continue;
-      if (!mask_->Match(x, y, MaskBead))
-        continue;
-
-      // A little help from friends in BkgModel
-      if (mask_->Match(x, y, MaskFilteredBadResidual))
-        continue;
-      if (mask_->Match(x, y, MaskFilteredBadPPF))
-        continue;
-      if (mask_->Match(x, y, MaskFilteredBadKey))
+      if (not rcm_->IsValidRead(x, y))
         continue;
 
       int cls = 0;
-      if (!mask_->Match(x, y, MaskLib)) {  // Not a library bead?
+      if (not rcm_->ClassMatch(x, y, MapLibrary)) {  // Not a library bead?
         cls = 1;
-        if (!mask_->Match(x, y, MaskTF))   // Not a tf bead?
+        if (not rcm_->ClassMatch(x, y, MapTF))   // Not a tf bead?
           continue;
       }
 
-      // Multi-tap compression
-      if (compress_multi_taps_) {
-        int sig_idx = 0;
-        for (int flow = 0; flow < flow_order_.num_flows(); ++flow){
-          if (flow>0 and flow_order_[flow-1]==flow_order_[flow]) {
-            well_buffer[flow] = 0.0;
-            well_buffer[sig_idx] += wells_->At(y,x,flow);
-          }
-          else {
-            sig_idx = flow;
-            well_buffer[flow] = wells_->At(y,x,flow);
-          }
-        }
-      }
-      else
-        for (int flow = 0; flow < flow_order_.num_flows(); ++flow)
-          well_buffer[flow] = wells_->At(y,x,flow);
-
-      // Sanity check. If there are NaNs in this read, print warning
-      vector<int> nanflow;
-      for (int flow = 0; flow < flow_order_.num_flows(); ++flow) {
-        if (!isnan(well_buffer[flow]))
-          continue;
-        well_buffer[flow] = 0.0;
-        nanflow.push_back(flow);
-      }
-      if(nanflow.size() > 0) {
-        fprintf(stderr, "ERROR: BaseCaller read NaNs from wells file, x=%d y=%d flow=%d", x, y, nanflow[0]);
-        for(unsigned int flow=1; flow < nanflow.size(); flow++) {
-          fprintf(stderr, ",%d", nanflow[flow]);
-        }
-        fprintf(stderr, "\n");
-        fflush(stderr);
-      }
-
+      wells_mngr_->GetMeasurements(y,x, flow_order_.num_flows(), well_buffer);
       region_reads_[region].push_back(BasecallerRead());
 
       bool keypass = true;

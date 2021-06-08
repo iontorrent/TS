@@ -41,10 +41,11 @@ public:
   //! @brief  Initialize the object and load phred table.
   //! @param[in]  opts                Command line options
   //! @param[in]  chip_type           Chip type, may determine default phred table
-  //! @param[in]  input_directory     Directory where 1.wells could be found
   //! @param[in]  output_directory    Directory where predictor dump file may be saved
-  void Init(OptArgs& opts, const string& chip_type,
-		  const string &input_directory, const string &output_directory, bool recalib);
+  void Init(OptArgs& opts,
+          const string& chip_type,
+		  const string &output_directory,
+		  bool recalib);
 
   //! @brief  Generate quality values for all bases in a read.
   //! @param[in]  read_name           Read name used in predictor dump

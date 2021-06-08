@@ -305,9 +305,11 @@ void BarcodeClassifier::SetClassificationParams(int mode, double cutoff, double 
 
   CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      0,1, 5,1, 2);
   if (have_ambiguity_codes_ and score_mode_ != 0){
-    cout << "   WARNING: Non-ACGT characters detected. Setting score-mode=0." << endl;
-    score_mode_ =0;
-    return;
+    cout << "BarcodeClassifie ERROR: Non-ACGT characters in barcode sequences detected." << endl;
+    cout << " --- PLease use score-mode=0 to analyze this run! ---" << endl;
+    cerr << "BarcodeClassifie ERROR: Non-ACGT characters in barcode sequences detected." << endl;
+    cerr << " --- PLease use score-mode=0 to analyze this run! ---" << endl;
+    exit(EXIT_FAILURE);
   }
 
   // Do we have minimum distance information available?
@@ -771,10 +773,37 @@ void BarcodeClassifier::LoadHandlesFromArgs(OptArgs& opts,
   cout << "   handle-mode              : " << handle_mode_ << endl;
   cout << "   handle-cutoff            : " << handle_cutoff_ << endl;
 
-  if (not end_flow_synch_ and handle_mode_ !=0){
-    cerr << "BarcodeClassifier WARNING: Handles do not have a distinct start flow. Using base space matching handle-mode=0!" << endl;
-    handle_mode_ = 0;
+  int have_ambiguity_codes = false;
+  for (unsigned int iHandle=0; iHandle<handle_sequence_.size(); ++iHandle){
+
+    // Check handle sequences for (unsupported) barcode/adapter & handle base overlap
+    for (int bc = 0; bc < num_barcodes_; ++bc) {
+      if (barcode_[bc].full_barcode.back() == handle_sequence_[iHandle].front()){
+        cout << "BarcodeClassifier ERROR: PCR handle may not start with the ending base of any barcode/adapter." << endl;
+        cout << " --- You may be using an improperly formatted barcode set definition ---" << endl;
+        cerr << "BarcodeClassifier ERROR: PCR handle may not start with the ending base of any barcode/adapter." << endl;
+        cerr << " --- You may be using an improperly formatted barcode set definition ---" << endl;
+        exit(EXIT_FAILURE);
+      }
+    }
+
+    // Check for non-ACGT characters
+    if (std::string::npos != handle_sequence_[iHandle].find_first_not_of("ACGT")){
+      have_ambiguity_codes = true;
+    } else if (handle_sequence_[iHandle].length() == 0){
+      cerr << "BarcodeClassifier ERROR: Barcode handle " << (iHandle+1) << " has no sequence specified" << endl;
+      exit(EXIT_FAILURE);
+    }
   }
+
+  // Base Space classificatin only for non-flow-synchronized BCs.
+  if (not end_flow_synch_ and handle_mode_ !=0){
+    cerr << "BarcodeClassifier ERROR: Handles do not have a distinct start flow. Please use base space matching handle-mode=0!" << endl;
+    cout << "BarcodeClassifier ERROR: Handles do not have a distinct start flow. Please use base space matching handle-mode=0!" << endl;
+    exit(EXIT_FAILURE);
+  }
+
+  // We're done if we're doing base space matching of the handles.
   if (handle_mode_ == 0){
     have_handles_ = true;
     return;
@@ -782,7 +811,6 @@ void BarcodeClassifier::LoadHandlesFromArgs(OptArgs& opts,
 
   // Build handle flow information for mode 1
   handle_.resize(handle_sequence_.size());
-  int have_ambiguity_codes = false;
 
   for (unsigned int iHandle=0; iHandle<handle_sequence_.size(); ++iHandle){
 
@@ -1020,9 +1048,12 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
     string barcode_sequence, barcode_name;
     double one_error = 0.0, two_errors = 0.0;
     unsigned int adapter_filtered = 0;
+    bool is_control_barcode = not (*rg).get("controlType", "").asString().empty();
+    if (is_control_barcode)
+      cout << "Barcode classifier: " << (*rg)["barcode_name"] << " is a control barcode and will not be filtered." << endl;
 
     // We assume we consume a file written by the most up to date BaserCaller executable
-    // but may hve an older pipeline version
+    // but may have an older pipeline version
 
     if ((*rg).isMember("barcode")) {
       adapter_filtered = (*rg)["barcode"]["barcode_adapter_filtered"].asUInt();
@@ -1043,6 +1074,8 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
       unsigned int read_count = (*rg)["read_count"].asUInt();
       bool i_am_filtered = false;
       bool filter_this_bc = barcode_filter_named_ or (*rg)["sample"].asString() == "none";
+      if (is_control_barcode)
+        filter_this_bc = false;
 
       // Initial filtering based on number of reads in read group
       if (filter_this_bc) {
@@ -1057,7 +1090,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 
       // Filter read groups where a too large proportion of reads failed adapter verification
       // Likely to be a highly contaminated sample and should not be analyzed
-      if (not i_am_filtered)
+      if ((not i_am_filtered) and (not barcode_filter_postpone_) and (not is_control_barcode))
       {
         //unsigned int adapter_filtered = (*rg)["barcode_adapter_filtered"].asUInt();
         i_am_filtered = (5*adapter_filtered > read_count) ? true : false;

@@ -61,32 +61,37 @@ for (iFlow in c(seq(0, 11), seq(11,maxFlows,by=sampleFlowsBy))){
 	zerolevel<-max(zerolevel,jumpSize)
 	bottom<-log(quantile(dv[dv>zerolevel],prob=stablerange[1]))
 	top<-max(log(quantile(dv[dv>zerolevel],prob=stablerange[2])),bottom)
+	if (is.na(bottom) ){
+		bottom = zerolevel
+	}
 	dvp<-dv
-  #fold into range
+	#fold into range
 	dvp[dv>bottom]<-pmax(exp(bottom+safety),dv[dv>bottom])
 	dvp[dv>exp(top-safety)]<-exp(top-safety)
-  #fold into range
-  dvp[ex.mask]<-bottom-1 #out of range to suppress invisible regions
+	#fold into range
+	dvp[ex.mask]<-bottom-1 #out of range to suppress invisible regions
 	png(sprintf("%s/%s-var-%03d.png",plotDir,expName,iFlow),width=1400,height=1400)
-	image(matrix(log(dvp+1),dat$nCol,dat$nRow),zlim=c(bottom,top),col=gbscheme,xlab=paste("<-- Width = ",dat$nCol," wells -->",sep=""),ylab=paste("<-- Height = ",dat$nRow," wells -->",sep=""), main=sprintf("%03d flow log(sd) of well",iFlow))
+	try(image(matrix(log(dvp+1),dat$nCol,dat$nRow),zlim=c(bottom,top),col=gbscheme,xlab=paste("<-- Width = ",dat$nCol," wells -->",sep=""),ylab=paste("<-- Height = ",dat$nRow," wells -->",sep=""), main=sprintf("%03d flow log(sd) of well",iFlow)))
 	dev.off()
 
-  # now do the same thing using lagged sd
- 	dv<-dat$wellLag
+	# now do the same thing using lagged sd
+		dv<-dat$wellLag
 	zerolevel<-quantile(dv[in.mask],prob=c(masked)) 
 	zerolevel<-max(zerolevel,jumpSize)
 	bottom<-log(quantile(dv[dv>zerolevel],prob=stablerange[1]))
 	top<-max(log(quantile(dv[dv>zerolevel],prob=stablerange[2])),bottom)
+	if (is.na(bottom) ){
+		bottom = zerolevel
+	}
 	dvp<-dv
-  #fold into range
+	#fold into range
 	dvp[dv>bottom]<-pmax(exp(bottom+safety),dv[dv>bottom])
 	dvp[dv>exp(top-safety)]<-exp(top-safety)
-  #fold into range
-  dvp[ex.mask]<-bottom-1 #out of range to suppress invisible regions
+	#fold into range
+	dvp[ex.mask]<-bottom-1 #out of range to suppress invisible regions
 	png(sprintf("%s/%s-lag-%03d.png",plotDir,expName,iFlow),width=1400,height=1400)
-	image(matrix(log(dvp+1),dat$nCol,dat$nRow),zlim=c(bottom,top),col=gbscheme,xlab=paste("<-- Width = ",dat$nCol," wells -->",sep=""),ylab=paste("<-- Height = ",dat$nRow," wells -->",sep=""), main=sprintf("%03d flow lagged(sd) of well",iFlow))
+	try(image(matrix(log(dvp+1),dat$nCol,dat$nRow),zlim=c(bottom,top),col=gbscheme,xlab=paste("<-- Width = ",dat$nCol," wells -->",sep=""),ylab=paste("<-- Height = ",dat$nRow," wells -->",sep=""), main=sprintf("%03d flow lagged(sd) of well",iFlow)))
 	dev.off()
- 
 }
 
 #generate animated gif

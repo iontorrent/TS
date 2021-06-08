@@ -7,5 +7,6 @@ class ThermoFisherCloudConfigForm(forms.Form):
 
     tfc_username = forms.CharField(max_length=128, label="Username/Email")
     tfc_password = forms.CharField(
-        widget=forms.PasswordInput(), label="Password", required=False
+        widget=forms.PasswordInput(), label="Access Code",  required=False, 
+        help_text="Please sign into your Ampliseq.com account to generate an Access Code"
     )

@@ -41,6 +41,25 @@ except Exception:
 
 LowMemRetry = 0
 
+def getCurrentRunInformation():
+    CurExp = ""
+    CurFlow = 0
+
+    # check for run in progress
+    try:
+        if os.path.isfile("/software/config/CurExperiment"):
+            CurF = open("/software/config/CurExperiment", "r")
+            words = CurF.readline().split()
+            CurF.close()
+            CurExp = words[0]
+            CurFlow = int(words[1])
+            logger.info("run in progress %s" % CurExp)
+            logger.info("run in progress flows %d", CurFlow)
+    except Exception:
+        logger.info("failed to read /software/config/CurExperiment")
+
+    return [CurExp, CurFlow]
+
 
 class Worker(Thread):
     """Thread executing tasks from a given tasks queue"""
@@ -93,7 +112,6 @@ class Worker(Thread):
                 #    logger.error(traceback.format_exc())
                 #    pass
 
-                logger.info("%s: run process: %s" % (self.id, block))
 
                 # don't use shell=True , otherwise child process cannot be killed
                 outfile = open(
@@ -110,6 +128,7 @@ class Worker(Thread):
                 # add popen process to block
                 block.process = p
                 ret = p.wait()
+                logger.info("%s: run process: %s ret code %d" % (self.id, block,ret))
 
                 # error generation
                 # rand = random.randint(0,99)
@@ -213,18 +232,23 @@ def run_a_shell_process(command):
 def getSeparatorCommand(config, block):
     # command = "strace -o %s/strace.log %s" %
     # (block.sigproc_results_path_tmp,block.run.exp_beadfindArgs_block[block.lane])
-    command = "nice -n 3 %s" % block.run.exp_beadfindArgs_block[block.lane]
-    command += " --local-wells-file false"
-    command += " --beadfind-num-threads %s" % config.get(
-        "global", "nb_beadfind_threads"
-    )
-    command += " --no-subdir"
-    command += " --output-dir=%s" % block.sigproc_results_path_tmp
-    command += " --librarykey=%s" % block.run.libraryKey[block.lane]
-    if block.run.tfKey[block.lane] != "":
-        command += " --tfkey=%s" % block.run.tfKey[block.lane]
-    # command += " --explog-path=%s" % os.path.join(block.run.analysis_path, 'explog.txt')
-    command += " %s" % block.dat_path
+    if block.run.exp_platform == "Stingray":
+        command = "nice -n 3 %s" % block.run.exp_beadfindArgs_block[block.lane]
+        command += " --output-dir=%s" % block.sigproc_results_path_tmp
+        command += " --input-dir=%s" % block.dat_path
+    else:
+        command = "nice -n 3 %s" % block.run.exp_beadfindArgs_block[block.lane]
+        command += " --local-wells-file false"
+        command += " --beadfind-num-threads %s" % config.get(
+            "global", "nb_beadfind_threads"
+        )
+        command += " --no-subdir"
+        command += " --output-dir=%s" % block.sigproc_results_path_tmp
+        command += " --librarykey=%s" % block.run.libraryKey[block.lane]
+        if block.run.tfKey[block.lane] != "":
+            command += " --tfkey=%s" % block.run.tfKey[block.lane]
+        # command += " --explog-path=%s" % os.path.join(block.run.analysis_path, 'explog.txt')
+        command += " %s" % block.dat_path
     logger.debug('beadfindArgs(PR):"%s"' % command)
     return command
 
@@ -271,6 +295,10 @@ def getBaseCallerCommand(config, block):
 
 
 def Transfer(run_name, directory_to_transfer, file_to_transfer):
+    if '\/reseq' in run_name:
+        directory_to_transfer = '\/reseq' + directory_to_transfer
+        run_name.replace('\/reseq','',1)
+        
     if directory_to_transfer and file_to_transfer:
         args = [
             "/software/cmdControl",
@@ -340,14 +368,19 @@ class Run:
         except Exception:
             logger.error(traceback.format_exc())
 
-        explog_file = os.path.join(self.analysis_path, "explog.json")
-        if not os.path.exists(explog_file):
-            shutil.copyfile(
-                os.path.join(self.dat_path, "explog.json"),
-                os.path.join(self.analysis_path, "explog.json"),
-            )
+        explog_file = os.path.join(self.dat_path, "explog.json")
+        explog_final_file = os.path.join(self.dat_path, "explog_final.txt")
+        #if not os.path.exists(explog_file):
+        #shutil.copyfile(
+        #    os.path.join(self.dat_path, "explog.json"),
+        #    os.path.join(self.analysis_path, "explog.json"),
+        #    )
         if not os.path.exists(explog_file):
             raise Exception("%s doesn't exist" % explog_file)
+        
+        curName, curFlow = getCurrentRunInformation()
+        if not os.path.exists(explog_final_file) and name != curName:
+            raise Exception("%s doesnt exist and not the current experiment %s" %(explog_final_file,curName)) 
 
         try:
             if not os.path.exists(os.path.join(self.dat_path, "onboard_results")):
@@ -378,8 +411,8 @@ class Run:
             self.exp_planned_run_guid = self.explogdict["Planned Run GUID"]
             self.exp_chiptype = self.explogdict["ChipType"]
             self.exp_seqkitplanname = self.explogdict["SeqKitPlanName"]
-
             self.exp_chipversion = self.explogdict["ChipVersion"]
+            self.exp_platform = self.explogdict["Platform"]
             if not self.exp_chipversion:
                 self.exp_chipversion = self.exp_chiptype
 
@@ -445,7 +478,14 @@ class Run:
                 )  # [i] = aargs['prebasecallerargs']
                 self.libraryKey = {}  # [i] = aargs['libraryKey']
                 self.tfKey = {}  # [i] = aargs['tfKey']
-                if len(analysisargs) > 0:
+                if self.exp_platform == "Stingray":
+                    for i in range(4):
+                        self.exp_beadfindArgs_block[i] = "python /software/stingray/BeadFind.py"
+                        self.exp_analysisArgs_block[i] = "Stingray"
+                        self.exp_prebasecallerArgs_block[i] = ""
+                        self.libraryKey[i] = ""
+                        self.tfKey[i] = ""                   
+                elif len(analysisargs) > 0:
                     for i in range(4):
                         key = "chipLane_%d" % (i + 1)
                         aargs = analysisargs
@@ -624,6 +664,11 @@ class Run:
                 lane,
             )
 
+            if self.exp_platform == "Stingray":
+                # we only need to do one set of processing
+                newblock.analysis_done=True
+                newblock.basecaller_done=True
+                
             self.blocks.append(newblock)
 
     def update_status_file(self):
@@ -773,8 +818,16 @@ class App:
             )
         except Exception:
             pass
+        reseq_dirs = self.get_reseq_dirs(run_dirs)
+        return run_dirs+reseq_dirs
 
-        return run_dirs
+    def get_reseq_dirs(self, new_run_dirs):
+        reseq_dirs = []
+        root_dir = config.get("global","results")
+        for run_dir in new_run_dirs:
+            if os.path.isdir(root_dir+"/"+run_dir+"/reseq"):
+                reseq_dirs.append(run_dir+"/reseq")
+        return reseq_dirs
 
     def get_next_available_job(self, config):
 
@@ -998,24 +1051,6 @@ class App:
             "date >> /var/log/disk_util.log; vmstat -d | grep sd >> /var/log/disk_util.log"
         )
 
-    def getCurrentRunInformation(self):
-        CurExp = ""
-        CurFlow = 0
-
-        # check for run in progress
-        try:
-            if os.path.isfile("/software/config/CurExperiment"):
-                CurF = open("/software/config/CurExperiment", "r")
-                words = CurF.readline().split()
-                CurF.close()
-                CurExp = words[0]
-                CurFlow = int(words[1])
-                logger.info("run in progress %s" % CurExp)
-                logger.info("run in progress flows %d", CurFlow)
-        except Exception:
-            logger.info("failed to read /software/config/CurExperiment")
-
-        return [CurExp, CurFlow]
 
     def run(self):
         global LowMemRetry
@@ -1049,7 +1084,7 @@ class App:
                 except Exception:
                     logger.error(traceback.format_exc())
 
-            [CurExp, CurFlow] = self.getCurrentRunInformation()
+            [CurExp, CurFlow] = getCurrentRunInformation()
 
             all_run_dirs = self.get_run_dirs()
             logger.debug("RUNS DIRECTORIES: %s" % all_run_dirs)
@@ -1162,7 +1197,7 @@ class App:
                 if CurExp == arun.name and CurFlow < 1:
                     continue
 
-                if arun.exp_flows < self.flowblocks:
+                if arun.exp_flows < self.flowblocks and arun.exp_platform != "Stingray":
                     logger.info("skip run: %s, not enough flows" % arun.name)
                     self.runs_processed.append(arun)
                     continue
@@ -1327,7 +1362,7 @@ class App:
 
                 # TODO: run.exp_oia_during_run
                 # TODO: check for new runs only if no data acquisition
-                # [CurExp,CurFlow] = self.getCurrentRunInformation()
+                # [CurExp,CurFlow] = getCurrentRunInformation()
                 # every 60 sec check for new run
                 if time.time() - timestamp > 60:
                     logger.debug("check for new run")

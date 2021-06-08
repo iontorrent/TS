@@ -524,10 +524,10 @@ void realign_read
     {
         // extract packed cigar and it's length
         tmap_map_sam_t* match = sams->sams + matchidx;
-
         // check if we need to re-align this match
-        if ( (!stage_opt->do_realign && (!match->param_ovr || !match->param_ovr->do_realign.over || !match->param_ovr->do_realign.value)) ||
-             ( match->param_ovr && match->param_ovr->do_realign.over && !match->param_ovr->do_realign.value) )
+
+        if (  (match->param_ovr && match->param_ovr->do_realign.over && !match->param_ovr->do_realign.value)
+            ||(!match->param_ovr && !stage_opt->do_realign))
                 continue;
 
         // check if parameters are overriden
@@ -762,8 +762,8 @@ void context_align_read
         tmap_map_sam_t* match = sams->sams + matchidx;
 
         // check if we need to context-align this match
-        if ( (!stage_opt->do_hp_weight && (!match->param_ovr || !match->param_ovr->do_hp_weight.over || !match->param_ovr->do_hp_weight.value)) ||
-             ( match->param_ovr && match->param_ovr->do_hp_weight.over && !match->param_ovr->do_hp_weight.value) )
+        if (  (match->param_ovr && match->param_ovr->do_hp_weight.over && !match->param_ovr->do_hp_weight.value)
+            ||(!match->param_ovr && !stage_opt->do_hp_weight))
                 continue;
 
         uint32_t* orig_cigar = match->cigar;
@@ -1320,7 +1320,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                     for (j = 0; j < num_ends; j++) // for each end
                         tmap_map_sams_filter2 (records [low]->sams [j], stage->opt->stage_score_thr, stage->opt->stage_mapq_thr);
                 }
-
+ 
                 if (0 == do_pairing && 0 <= driver->opt->strandedness && 0 <= driver->opt->positioning
                  && 2 == num_ends && 0 < records [low]->sams [0]->n && 0 < records [low]->sams [1]->n) 
                 {   // pairs of reads!
@@ -2507,7 +2507,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
                     tmap_file_fprintf (tmap_file_stderr, "      per fully clipped read: %.1f\n", ((double) stat->bases_fully_tailclipped) / stat->num_fully_tailclipped);
             }
         }
-        if (!driver->opt->min_al_len && !driver->opt->min_al_cov && !driver->opt->min_identity)
+        if (driver->opt->min_al_len == MIN_AL_LEN_NOCHECK_SPECIAL && driver->opt->min_al_cov == MIN_AL_COVERAGE_NOCHECK_SPECIAL && driver->opt->min_identity == MIN_AL_IDENTITY_NOCHECK_SPECIAL)
             tmap_file_fprintf (tmap_file_stderr, "No alignment filtering performed\n");
         else
         {

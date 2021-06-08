@@ -7,7 +7,7 @@ from ion.plugin import *
 
 class molecularCoverageAnalysis(IonPlugin):
   '''Molecular Coverage Analysis. (Ion R&D)'''
-  version = "5.12.0.32"
+  version = "5.14.0.2"
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]

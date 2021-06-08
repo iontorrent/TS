@@ -52,6 +52,7 @@ urlpatterns = patterns(
     ),
     (r"^admin/update/$", "iondb.rundb.admin.update"),
     (r"^admin/update/check/$", "iondb.rundb.admin.run_update_check"),
+    (r"^admin/update/switch_repo/(?P<majorPlatform>[\w\.]+)", "iondb.rundb.admin.switch_repo"),
     (r"^admin/update/tsconfig_log/$", "iondb.rundb.admin.tsconfig_log"),
     (r"^admin/update/download_logs/$", "iondb.rundb.admin.get_zip_logs"),
     (r"^admin/updateOneTouch/$", "iondb.rundb.admin.updateOneTouch"),

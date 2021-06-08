@@ -149,16 +149,12 @@ def printStartupMessage():
   printlog('  Reference Name:   %s' % pluginParams['genome_id'])
   printlog('  Library  Type:     %s' % config['librarytype_id'])
   printlog('  Target Regions:   %s' % config['targetregions_id'])
-
-  if config['barcodebeds'] == 'Yes':
-    target_files = config['barcodetargetregions'].split(';')
-    for bctrg in sorted(target_files):
-        printlog ('test\t%s'%(bctrg))
-        det_list = bctrg.split('=')
-        if  len(det_list) == 2 :
-           trg = fileName(det_list[1])
-           printlog('    %s  %s' % (det_list[0],trg))
-
+  #if config['barcodebeds'] == 'Yes':
+    #target_files = pluginParams['target_files']
+    #for bctrg in sorted(target_files):
+      #trg = fileName(target_files[bctrg])
+      #if trg == "": trg = "None"
+      #printlog('    %s  %s' % (bctrg,trg))
   printlog('Data files used:')
   printlog('  Parameters:     %s' % pluginParams['jsonInput'])
   printlog('  Reference:      %s' % pluginParams['reference'])
@@ -717,7 +713,7 @@ def parseCmdArgs():
   pluginParams['jsonInput'] = args[0]
   pluginParams['jsonParams'] = jsonParams
   pluginParams['barcodeInput'] = args[1]  
-  pluginParams['barcoded'] = os.path.exists(args[1]) 
+  pluginParams['barcoded'] = os.path.exists(args[1])
    
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
@@ -963,6 +959,16 @@ def loadPluginParams():
   else:
     raise Exception("The plugin can't run without any configuration")
 
+  if "targetregions" in config :
+    for bc in bc_details :
+      bc_details[bc]['target_region_filepath']=config['targetregions']
+  if "barcodetargetregions" in config :
+    tlist = config['barcodetargetregions'].split(";")
+    for t in tlist :
+      l = t.split("=")
+      if l[0] in bc_details :
+        bc_details[l[0]]['target_region_filepath']=l[1]
+
   # code to handle single or per-barcode target files
   if 'librarytype' not in config: config['library'] =  jsonParams['runType']
   runtype = config['librarytype']
@@ -975,19 +981,7 @@ def loadPluginParams():
   pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S')
   pluginParams['target_files'] = targetFiles()
   pluginParams['have_targets'] = (config['targetregions'] or pluginParams['target_files'])
-  
-  if 'targetregions' in config :
-    pluginParams['target_files']=config['targetregions']
-    for bc in bc_details:
-        bc_details[bc]['target_region_filepath'] = config['targetregions']
-  if 'barcodetargetregions' in config :
-    bedlist = config['barcodetargetregions'].split(';')
-    for bc_config in bedlist :
-        det_list = bc_config.split('=')
-        if len(det_list) == 2:
-             if det_list[0] in bc_details:
-                bc_details[det_list[0]]['target_region_filepath'] = det_list[1]
-
+  if 'targetregions' in config :	pluginParams['target_files']=config['targetregions']
   pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
 
   # loading tvc_configuration file
@@ -1102,11 +1096,15 @@ def runForBarcodes():
     details = bc_details[barcode]
     bcbam = details['bam_filepath']
     printlog("barcode %s : bam  %s ...\n" % (barcode,bcbam))
+    ntype = details['nucleotide_type']
     if not os.path.exists(bcbam):
       bcBamFile.append("ERROR: BAM file not found")
       continue
     if os.stat(bcbam).st_size < minFileSize:
       bcBamFile.append("ERROR: BAM file too small")
+      continue
+    if ntype == "RNA":
+      bcBamFile.append("ERROR: The plugin does not support RNA barcodes")
       continue
     if barcode in bc_details :
       #bedfile = bc_details[barcode]['target_region_filepath']

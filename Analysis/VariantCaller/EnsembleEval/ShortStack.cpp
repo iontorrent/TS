@@ -374,7 +374,7 @@ void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 int ShortStack::OutlierCountsByFlowDisruptiveness(){
 	int ol_counts = 0;
 	for (unsigned int i_read = 0;  i_read < my_hypotheses.size(); ++i_read){
-		ol_counts += my_hypotheses[i_read].OutlierByFlowDisruptiveness(4);
+		ol_counts += my_hypotheses[i_read].OutlierByFlowDisruptiveness(3);
 	}
 	if (DEBUG > 0){
 		cout << endl << "+ Counting outlier reads using flow-disruptiveness:" <<endl

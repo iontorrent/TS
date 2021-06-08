@@ -633,7 +633,13 @@ if [ $TRACK -eq 1 ]; then
   echo "(`date`) Analyzing depth of coverage..." >&2
 fi
 
-read MAPPED_READS TARGET_READS <<< `awk 'BEGIN {FS="\t"} NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
+#read MAPPED_READS TARGET_READS <<< `awk 'BEGIN {FS="\t"} NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE"`
+# work-around for read command change on Ubuntu 18.04
+SFSTMP=samtools_flagstat.tmp
+awk 'BEGIN {FS="\t"} NR>1 {r+=$2+$3;t+=$4+$5} END {print r+0,t+0}' "$SSTFILE" > $SFSTMP
+read -d '' MAPPED_READS TARGET_READS < $SFSTMP
+rm $SFSTMP
+
 echo -e "Number of mapped reads:         $MAPPED_READS" >> "$STATSFILE"
 
 if [ -n "$BEDOPT" ]; then

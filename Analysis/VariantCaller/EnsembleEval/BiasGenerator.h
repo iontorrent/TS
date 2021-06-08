@@ -64,7 +64,7 @@ public:
    DEBUG = 0;
   }
 
-  void GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions);
+  void GenerateBiasByStrand(HiddenBasis &delta_state, vector<vector<float> > &new_residuals, vector<vector<float> > &new_predictions);
   void UpdateResiduals(CrossHypotheses &my_cross);
   void ResetUpdate();
   void AddOneUpdate(HiddenBasis &delta_state, const vector<vector<float> >&residuals,

@@ -69,6 +69,7 @@ void DiagnosticJsonCrossHypotheses(Json::Value &json, const CrossHypotheses &my_
   json["success"] = my_cross.success ? 1 : 0;
   json["usecorr"] = my_cross.use_correlated_likelihood ? 1: 0;
   json["read_counter"] = my_cross.read_counter;
+  json["name"] = *my_cross.ptr_query_name;
 
   json["heavy"] = my_cross.GetHeavyTailed();
   json["lastrelevantflow"] = my_cross.max_last_flow;

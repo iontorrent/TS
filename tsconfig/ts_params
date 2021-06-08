@@ -45,3 +45,14 @@ MAINTENANCE_WEB=/var/www/maintenance.enable
 
 # system service restart script
 CHECK_SYSTEM_SERVICES_PY='/opt/ion/iondb/bin/check_system_services.py'
+
+# Get th major platform
+TS_GET_PLATFORM_PY=${TSCONFIG_SRC_DIR}/TSgetPlatform.py
+TS_SWITCH_REPO_PY=${TSCONFIG_SRC_DIR}/TSswitchRepo.py
+
+META_DATA=($(python $TS_GET_PLATFORM_PY))
+MAJOR_PLATFORM=${META_DATA[0]}
+ENABLE_DEPRECATION=${META_DATA[1]}
+
+PGM_REPO="pgm_or_proton_only"
+S5_REPO="s5_only"

@@ -1,0 +1,33 @@
+{
+    "activationClass":"none",
+    "dependsOn":[
+        "none"
+    ],
+    "embeddedOutput":"false",
+    "executeDxAdapter":"true",
+    "img":"none",
+    "inWorkflow":"true",
+    "inputs":[
+        "analysisDir",
+        "pluginOutputDir"
+    ],
+    "isThumbnail":"true",
+    "name":"True_loading",
+    "outputs":[
+        "./outputs"
+    ],
+    "payOption":"Free",
+    "runAllowed":"ASSAY",
+    "runOnceOnly":"true",
+    "scriptLauncher":"True_loading.py",
+    "validWorkflowAppTypes":[
+        "DNA",
+        "RNA",
+        "DNA_RNA"
+    ],
+    "variantAnnotationKeys":[
+        "type"
+    ],
+    "vendorActivation":"/share/apps/",
+    "ver":"1.3"
+}

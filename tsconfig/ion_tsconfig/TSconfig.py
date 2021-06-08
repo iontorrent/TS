@@ -475,7 +475,7 @@ class TSconfig(object):
         os.environ["TS_EULA_ACCEPTED"] = "1"
         # First step is to update software packages
         try:
-            cmd = ["/usr/sbin/TSconfig", "-s", "--force"]
+            cmd = ["/usr/sbin/TSconfig", "-s", "--force", "--noninteractive"]
             p1 = subprocess.call(cmd)
             success = p1 == 0
         except Exception:
@@ -485,7 +485,6 @@ class TSconfig(object):
         # Next step is to configure the server, if update was successful
         if success:
             self.logger.info("Software Updated !")
-
             try:
                 self.logger.debug("Starting configuration")
                 cmd = [

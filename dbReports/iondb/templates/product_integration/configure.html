@@ -6,7 +6,8 @@
             <legend>AmpliSeq.com</legend>
             <h3>{{ form.tfc_username.label }}</h3>
             {{ form.tfc_username }}
-            <h3>{{ form.tfc_password.label }}</h3>
+            <h3>{{ form.tfc_password.label }} <span rel="tooltip" data-original-title="{{ form.tfc_password.help_text }}">
+                <i class="icon-info-sign"></i></span></h3>
             {{ form.tfc_password }}
             <h3 id="error" style="color: red">{{ error }}</h3>
             <div class="modal-footer">

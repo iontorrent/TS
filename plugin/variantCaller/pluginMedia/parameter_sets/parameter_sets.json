@@ -48,7 +48,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 5, 
@@ -152,7 +152,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 5, 
@@ -251,7 +251,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 7, 
@@ -349,7 +349,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 7, 
@@ -448,7 +448,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 7, 
@@ -549,7 +549,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Optimized for allele frequencies >2.5% and high sensitivity", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 11, 
@@ -654,7 +654,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Optimized for allele frequencies >2.5% and high sensitivity", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 11, 
@@ -756,7 +756,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 11, 
@@ -857,7 +857,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 11, 
@@ -957,7 +957,7 @@
                 "somatic_low_stringency_550"
             ], 
             "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 11, 
@@ -1058,7 +1058,7 @@
                 "nonampliseq_germline_low_stringency_proton"
             ], 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on non-AmpliSeq libraries", 
-            "ts_version": "5.12"
+            "ts_version": "5.14"
         }, 
         "torrent_variant_caller": {
             "data_quality_stringency": 5, 
@@ -1159,7 +1159,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA", 
-            "ts_version": "5.12", 
+            "ts_version": "5.14", 
             "tvcargs": "tvc", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on"
         }, 
@@ -1271,7 +1271,7 @@
             ], 
             "tmapargs": "tmap mapall ... -J 25 --end-repair 15 --do-repeat-clip --context stage1 map4", 
             "tooltip": "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.", 
-            "ts_version": "5.12", 
+            "ts_version": "5.14", 
             "tvcargs": "tvc", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on"
         }, 
@@ -1383,7 +1383,7 @@
             ], 
             "tmapargs": "tmap mapall -g 0 ... --context stage1 map4", 
             "tooltip": "For use with cell-free DNA (cfDNA) research samples. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.1% frequency in cfDNA", 
-            "ts_version": "5.12", 
+            "ts_version": "5.14", 
             "tvcargs": "tvc", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on"
         }, 
@@ -1496,7 +1496,7 @@
             ], 
             "tmapargs": "tmap mapall -g 0 ... --context stage1 map4", 
             "tooltip": "For use with solid tumor research samples from FFPE as well as fresh frozen tumor tissue. Analysis parameters are optimized for the sensitive and specific detection of rare somatic variants (SNPs, InDels) present at 0.5% frequency. Analysis parameters are optimized to eliminate false positives due to DNA damage resulting from formalin fixation.", 
-            "ts_version": "5.12", 
+            "ts_version": "5.14", 
             "tvcargs": "tvc", 
             "unifyargs": "tvcutils unify_vcf --hotspot-positions-only off --filter-by-target on"
         }, 

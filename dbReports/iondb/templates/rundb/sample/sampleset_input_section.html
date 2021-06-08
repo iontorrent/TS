@@ -17,133 +17,59 @@
 <div class="collapsible-section sstable form-horizontal form-horizontal-200">
         <div class="row-fluid control-group">
                 <div class="span6">
-                    {% if edit_amp_sampleSet  %}
-                        <label class="control-label" for="sampleSetName">{% trans "samplesets.addedit.fields.sampleSetName.label" %}</label>
-                        <input  maxlength="127" type="text" id="sampleSetName" name="sampleSetName" value="{{ edit_amp_sampleSet.displayedName}}"
-                                placeholder="{% trans "samplesets.addedit.fields.sampleSetName.placeholder" %}">
-                    {% else %}
-                        <label class="control-label" for="new_sampleSetName">{% trans "samplesets.addedit.fields.sampleSetName.label" %}</label>
-                        <input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="{% trans "samplesets.addedit.fields.sampleSetName.placeholder" %}">
-                    {% endif %}
+                    <label class="control-label" for="sampleSetName">{% trans "samplesets.addedit.fields.sampleSetName.label" %}</label>
+                    <input  maxlength="127" type="text" id="sampleSetName" name="sampleSetName" {% if edit_amp_sampleSet %} value="{{ edit_amp_sampleSet.displayedName}}" {% endif %}
+                            placeholder="{% trans "samplesets.addedit.fields.sampleSetName.placeholder" %}">
                 </div>
                 <div class="span6">
-                    {% if edit_amp_sampleSet  %}
-                        <label class="control-label" for="libraryPrepType">{% trans "samplesets.addedit.fields.libraryPrepType.label" %}</label>
-                        <select id="libraryPrepType" name="libraryPrepType" style="height:28px;">
-                            {% for libPrepType, displayed_libPrepType in libraryPrepType_choices.items %}
-                                <option value="{{libPrepType}}" {% ifequal libPrepType edit_amp_sampleSet.libraryPrepType  %} selected {% endifequal %}>{{displayed_libPrepType}}</option>
-                            {% endfor %}
-                        </select>
-                    {% else %}
-                        <label class="control-label" for="new_sampleSet_libraryPrepType">{% trans "samplesets.addedit.fields.libraryPrepType.label" %}</label>
-                        <select id="new_sampleSet_libraryPrepType" name="new_sampleSet_libraryPrepType" style="height:28px;">
-                            {% for libPrepType, displayed_libPrepType in libraryPrepType_choices.items %}
-                                <option value="{{libPrepType}}">{{displayed_libPrepType}}</option>
-                            {% endfor %}
-                        </select>
-                    {% endif %}
+                    <label class="control-label" for="libraryPrepType">{% trans "samplesets.addedit.fields.libraryPrepType.label" %}</label>
+                    <select id="libraryPrepType" name="libraryPrepType" style="height:28px;">
+                        {% for libPrepType, displayed_libPrepType in libraryPrepType_choices.items %}
+                            <option value="{{libPrepType}}" {% if edit_amp_sampleSet and libPrepType == edit_amp_sampleSet.libraryPrepType  %} selected {% endif %}>{{displayed_libPrepType}}</option>
+                        {% endfor %}
+                    </select>
                 </div>
        </div>
        <div class="row-fluid control-group">
                 <div class="span6">
-                {% if edit_amp_sampleSet  %}
                     <label class="control-label" for="groupType">{% trans "samplesets.addedit.fields.groupType.label" %}</label>
                     <select id="groupType" name="groupType" style="height:28px;">
                         <option value="0" >.....</option>
                         {% for groupType in sampleGroupType_list %}
-                            <option value="{{groupType.id}}" {% ifequal groupType.displayedName edit_amp_sampleSet.SampleGroupType_CV.displayedName  %} selected {% endifequal %} >{{groupType.displayedName}}</option>
+                            <option value="{{groupType.id}}" {% if edit_amp_sampleSet and groupType.displayedName == edit_amp_sampleSet.SampleGroupType_CV.displayedName  %} selected {% endif %} >{{groupType.displayedName}}</option>
                         {%endfor%}
                     </select>
-                {% else %}
-                    <label class="control-label" for="new_sampleSet_groupType">{% trans "samplesets.addedit.fields.groupType.label" %}</label>
-                    <select id="new_sampleSet_groupType" name="new_sampleSet_groupType" style="height:28px;">
-                        <option value="0" >.....</option>
-                        {% for groupType in sampleGroupType_list %}
-                            <option value="{{groupType.id}}">{{groupType.displayedName}}</option>
-                        {%endfor%}
-                    </select>
-                {% endif %}
                 </div>
                 <div class="span6">
-                {% if edit_amp_sampleSet  %}
                     <label class="control-label" for="libraryPrepKit">{% trans "samplesets.addedit.fields.libraryPrepKit.label" %}</label>
                     <select id="libraryPrepKit" name="libraryPrepKit" style="height:28px;">
                         <option value="" >.....</option>
                         {% for libraryPrepKit in libraryPrepKits %}
-                            <option value="{{libraryPrepKit.name}}" {% ifequal libraryPrepKit.description edit_amp_sampleSet.libraryPrepKitName  %} selected {% endifequal %} >{{libraryPrepKit.description}}</option>
+                            <option value="{{libraryPrepKit.name}}" {% if edit_amp_sampleSet and libraryPrepKit.name == edit_amp_sampleSet.libraryPrepKitName  %} selected {% endif %} >{{libraryPrepKit.description}}</option>
                         {% endfor %}
                     </select>
-                {% else %}
-                    <label class="control-label" for="new_sampleSet_libraryPrepKit">{% trans "samplesets.addedit.fields.libraryPrepKit.label" %}</label>
-                    <select id="new_sampleSet_libraryPrepKit" name="new_sampleSet_libraryPrepKit" style="height:28px;">
-                        <option value="" >.....</option>
-                        {% for libraryPrepKit in libraryPrepKits %}
-                            <option value="{{libraryPrepKit.name}}">{{libraryPrepKit.description}}</option>
-                        {% endfor %}
-                    </select>
-                {% endif %}
                 </div>
         </div>
        <div class="row-fluid control-group">
             <div class="span6">
-                {% if edit_amp_sampleSet  %}
-                    <label class="control-label" for="pcrPlateSerialNum">{% trans "samplesets.addedit.fields.pcrPlateSerialNum.label" %}</label>
-                    <input type="text" maxlength="64" id="pcrPlateSerialNum" name="pcrPlateSerialNum" value="{{ edit_amp_sampleSet.pcrPlateSerialNum }}" placeholder="{% trans "samplesets.addedit.fields.pcrPlateSerialNum.placeholder" %}" />
-            {% else %}
-                    <label class="control-label" for="new_sampleSet_pcrPlateSerialNum">{% trans "samplesets.addedit.fields.pcrPlateSerialNum.label" %}</label>
-                    <input type="text" maxlength="64" id="new_sampleSet_pcrPlateSerialNum" name="new_sampleSet_pcrPlateSerialNum" placeholder="{% trans "samplesets.addedit.fields.pcrPlateSerialNum.placeholder" %}" />
-            {% endif %}
+                <label class="control-label" for="pcrPlateSerialNum">{% trans "samplesets.addedit.fields.pcrPlateSerialNum.label" %}</label>
+                <input type="text" maxlength="64" id="pcrPlateSerialNum" name="pcrPlateSerialNum" {% if edit_amp_sampleSet %} value="{{ edit_amp_sampleSet.pcrPlateSerialNum }}" {% endif %} placeholder="{% trans "samplesets.addedit.fields.pcrPlateSerialNum.placeholder" %}" />
             </div>
-           <div class="span6">
-                {% if edit_amp_sampleSet  %}
-                    <label class="control-label" for="cyclingProtocols">Cycling Protocol</label>
-                    <select id="cyclingProtocols" name="cyclingProtocols" style="height:28px;">
-                        {% for cyclingProtocol in cyclingProtocols_choices %}
-                            <option value="{{cyclingProtocol.value}}" {% if cyclingProtocol.value == sampleSet.cyclingProtocols  %} selected {% elif cyclingProtocol.value == "SOP" %} selected {% endif %}>{{cyclingProtocol.value}}</option>
-                        {% endfor %}
-                    </select>
-                {% else %}
-                    <label class="control-label" for="new_sampleSet_cyclingProtocols">Cycling Protocols</label>
-                    <select id="new_sampleSet_cyclingProtocols" name="new_sampleSet_cyclingProtocols" style="height:28px;">
-                        {% for cyclingProtocol in cyclingProtocols_choices %}
-                            <option value="{{cyclingProtocol.value}}" {% ifequal "SOP" cyclingProtocol.value  %} selected {% endifequal %}>{{cyclingProtocol.value}}</option>
-                        {% endfor %}
-                    </select>
-                {% endif %}
-            </div>
-       </div>
-        <div class="row-fluid control-group">
-        <div class="span6">
-                {% if edit_amp_sampleSet  %}
-                    <label class="control-label" for="Description">{% trans "samplesets.addedit.fields.sampleSetDescription.label" %}</label>
-                    <textarea  maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" value="{{ edit_amp_sampleSet.description }}" >{{ edit_amp_sampleSet.description }}</textarea>
-                {% else %}
-                    <label class="control-label" for="new_Description">{% trans "samplesets.addedit.fields.sampleSetDescription.label" %}</label>
-                    <textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="{% trans "samplesets.addedit.fields.sampleSetDescription.placeholder" %}"></textarea>
-                {% endif %}
-            </div>
-
-
             <div class="span6">
-                {% if edit_amp_sampleSet  %}
-                    <label class="control-label" for="additionalCycles">Additional Cycle</label>
-                    <select id="additionalCycles" name="additionalCycles" style="height:28px;">
-                        {% for additionalCycle in additionalCycles_choices %}
-                            <option value="{{additionalCycle.value}}" {% if additionalCycle.value == sampleSet.additionalCycles  %} selected {% elif additionalCycle.value == "0" %} selected {% endif %}>{{additionalCycle.value}}</option>
-                        {% endfor %}
-                    </select>
-                {% else %}
-                    <label class="control-label" for="new_sampleSet_additionalCycles">Additional Cycle</label>
-                    <select id="new_sampleSet_additionalCycles" name="new_sampleSet_additionalCycles" style="height:28px;">
-                        {% for additionalCycle in additionalCycles_choices %}
-                            <option value="{{additionalCycle.value}}" {% ifequal "0" additionalCycle.value  %} selected {% endifequal %}
-                            >{{additionalCycle.value}}</option>
-                        {% endfor %}
-                    </select>
-                {% endif %}
+                <label class="control-label" for="libraryPrepProtocol">Library Prep Protocol</label>
+                <select id="libraryPrepProtocol" name="libraryPrepProtocol" style="height:28px;">
+                    <option value="">.....</option>
+                    {% for libraryPrepProtocol in libraryPrepProtocol_choices %}
+                        <option value="{{libraryPrepProtocol.value}}" {% if edit_amp_sampleSet and libraryPrepProtocol.value == edit_amp_sampleSet.libraryPrepProtocol  %} selected {% endif %}>{{libraryPrepProtocol.displayedValue}}</option>
+                    {% endfor %}
+                </select>
             </div>
-
-
+        </div>
+        <div class="row-fluid control-group">
+            <div class="span6">
+                <label class="control-label" for="Description">{% trans "samplesets.addedit.fields.sampleSetDescription.label" %}</label>
+                <textarea  maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" {% if edit_amp_sampleSet %} value="{{ edit_amp_sampleSet.description }}" {% endif %}>{{ edit_amp_sampleSet.description }}</textarea>
+            </div>
         </div>
         <p id="new_sampleset_error">
 </div>

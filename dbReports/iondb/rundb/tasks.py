@@ -682,6 +682,24 @@ def diskspace_status():
         for entry in list(set(newlines)):
             fh.write(entry + "\n")
 
+@periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
+def scheduled_update_majorPlatform():
+    from iondb.utils.utils import update_platform, get_deprecation_json_from_url
+
+    # Run the task to update the majorPlatform nightly
+    # This will ensure if any new instruments are connected
+    try:
+        update_platform()
+        data = get_deprecation_json_from_url()
+        if data:
+            if not os.path.exists(settings.OFFCYCLE_UPDATE_PATH_LOCAL):
+                os.makedirs(settings.OFFCYCLE_UPDATE_PATH_LOCAL)
+            with open(os.path.join(settings.OFFCYCLE_UPDATE_PATH_LOCAL, "deprecation_data.json"), 'w') as fh:
+                json.dump(data, fh, indent=4)
+    except Exception as err:
+        logger.error("scheduled_update_majorPlatform raised '%s' during updating the majorPlatform nightly." % err)
+        raise
+
 
 @periodic_task(run_every=timedelta(days=1), expires=600, queue="periodic")
 def scheduled_update_check():
@@ -711,6 +729,20 @@ def scheduled_update_check():
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
+@app.task
+def lock_ion_apt_pgm_p1(majorPlatform=None):
+# putting the import statement here to prevent circular imports
+
+    from iondb.rundb import models
+    TSCONFIG_SRC_DIR = '/usr/share/ion-tsconfig'
+    try:
+        return int(
+            subprocess.check_output(
+                ["sudo", os.path.join(TSCONFIG_SRC_DIR, 'TSswitchRepo.py'), majorPlatform]
+            )
+        )
+    except subprocess.CalledProcessError as cpe:
+        models.GlobalConfig.objects.update(ts_update_status=str(cpe.output))
 
 @app.task
 def check_updates():

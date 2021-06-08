@@ -4,13 +4,16 @@
 
 // bias generator handles latent variables representing sources of bias in measurement
 // the trivial example is by strand
-void BasicBiasGenerator::GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state,  vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions){
-
-  for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     //float b_val = PredictBias(delta_state, strand_key, i_hyp, j_flow);
+void BasicBiasGenerator::GenerateBiasByStrand(HiddenBasis &delta_state, vector<vector<float> > &new_residuals, vector<vector<float> > &new_predictions){
+	if (new_residuals.empty()){
+		return;
+	}
+	for (unsigned int t_flow=0; t_flow<new_residuals[0].size(); t_flow++){
      float b_val = delta_state.ServeCommonDirection(t_flow);
-     new_residuals[t_flow] -= b_val;
-     new_predictions[t_flow] -= b_val;
+     for (unsigned int i_hyp = 0; i_hyp < new_residuals.size(); ++i_hyp){
+    	 new_residuals[i_hyp][t_flow] -= b_val;
+    	 new_predictions[i_hyp][t_flow] -= b_val;
+     }
   }
 }
 
@@ -18,9 +21,7 @@ void BasicBiasGenerator::UpdateResiduals(CrossHypotheses &my_cross){
   // move all residuals in direction of bias
   my_cross.delta_state.SetDeltaReturn(latent_bias[my_cross.strand_key]);
     // in theory might have a hypothesis/bias interaction
-   for (unsigned int i_hyp=0; i_hyp<my_cross.residuals.size(); i_hyp++){
-      GenerateBiasByStrand(i_hyp, my_cross.delta_state, my_cross.test_flow, my_cross.strand_key, my_cross.residuals[i_hyp], my_cross.mod_predictions[i_hyp]);
-   }
+  GenerateBiasByStrand(my_cross.delta_state, my_cross.residuals, my_cross.mod_predictions);
 }
 
 void BasicBiasGenerator::ResetUpdate(){
@@ -121,10 +122,9 @@ void BasicBiasGenerator::InitForStrand(int num_alt){
 }
 
 float LogOfNormalDensity(float residual, float standard_deviation){
-  float log_density = 0.0f;
-  log_density += 0.0f-residual*residual/(2.0f*standard_deviation*standard_deviation);
-  log_density += 0.0f-0.5*log(2.0f*3.14159f*standard_deviation*standard_deviation);
-  return(log_density);
+  float log_density = -0.91893853320467267f - log(standard_deviation); // -0.91893853320467267 = -0.5*log(2*pi)
+  log_density -= (residual*residual/(2.0f*standard_deviation*standard_deviation));
+  return log_density ;
 }
 
 // make this relative log-likelihood instead
@@ -133,16 +133,19 @@ float BasicBiasGenerator::BiasLL(){
   // return estimated likelihood of the bias variables taking on their current forms
   // implicit scaling parameter for "true variance" missing
   float pseudo_sigma = pseudo_sigma_base/sqrt(damper_bias);
-  int fwd_strand = 0;
-  int rev_strand = 1;
   float log_sum = 0.0f;
   // LL taken over all basis vectors
-  for  (unsigned int o_alt=0; o_alt<latent_bias[fwd_strand].size(); o_alt++){
-      log_sum= LogOfNormalDensity(latent_bias[fwd_strand][o_alt], pseudo_sigma);
-       log_sum += LogOfNormalDensity(latent_bias[rev_strand][o_alt], pseudo_sigma);
-       // make relative likelihood by subtracting off maximum density
-      log_sum -= 2.0f*LogOfNormalDensity(0.0f, pseudo_sigma);
+  for (unsigned int i_strand = 0; i_strand < latent_bias.size(); ++i_strand){
+    for  (unsigned int i_alt=0; i_alt<latent_bias[i_strand].size(); i_alt++){
+	    log_sum += LogOfNormalDensity(latent_bias[i_strand][i_alt], pseudo_sigma);
+    }
   }
+  // CZB: I don't quite understand the reason of subtracting LogOfNormalDensity(0.0f, pseudo_sigma). 
+  // Isn't done in LogOfNormalDensity? Skip the step since it doesn't affect the result anyway.
+  /*
+  // make relative likelihood by subtracting off maximum density
+  log_sum -= latent_bias.size()*latent_bias[0].size()*LogOfNormalDensity(0.0f, pseudo_sigma);
+  */
    return log_sum;
 };
 

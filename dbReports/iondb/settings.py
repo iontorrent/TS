@@ -28,7 +28,6 @@ TEMPLATE_DEBUG = DEBUG
 # This is the URL for the AmpliSeq website
 AMPLISEQ_URL = "https://ampliseq.com/"
 NEWS_FEED = "http://updates.iontorrent.com/news/ion_news_feed.xml"
-
 REQUESTS_TIMEOUT_LIMIT_SEC = 30
 
 # Set ADMINS in local_settings
@@ -367,6 +366,7 @@ OFFCYCLE_UPDATE_PATH_LOCAL = "/results/uploads/offcycle/"
 
 SUPPORTED_INSTALL_PACKAGES = [("ion-chefupdates", "Ion Chef scripts")]
 
+OFFCYLE_DEPRECATION_MSG = "http://ionupdates.com/products/deprecation_data.json"
 
 EULA_TEXT_URL = "products/LICENSE.txt"
 

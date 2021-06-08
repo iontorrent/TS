@@ -1768,6 +1768,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion AmpliSeq Kit for Chef DL8",
+      "categories": "ocav4;myeloid;multiPoolSupport",
       "applicationType" : "AMPS_ANY"
     }
   },

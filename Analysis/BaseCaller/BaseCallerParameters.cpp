@@ -61,6 +61,93 @@ bool BaseCallerContext::SetKeyAndFlowOrder(OptArgs& opts, const char * FlowOrder
     return true;
 };
 
+void BaseCallerContext::ClassifyAndSampleWells(const BCwellSampling & SamplingOpts)
+{
+    ReservoirSample<unsigned int> downsampled_subset(SamplingOpts.downsample_size, 2);
+    ReservoirSample<unsigned int> unfiltered_subset(SamplingOpts.num_unfiltered, 1);
+    bool eval_all_libWells = SamplingOpts.downsample_size == 0 or SamplingOpts.have_calib_panel;
+
+    // First iteration over wells to sample them and/or assign read class
+    for (int y = chip_subset.GetBeginY(); y < chip_subset.GetEndY(); ++y) {
+      for (int x = chip_subset.GetBeginX(); x < chip_subset.GetEndX(); ++x) {
+
+        int well_index  = x + y * chip_subset.GetChipSizeX();
+        if (read_class_map->ClassMatch(x, y, MapLibrary)) {
+          // For calibration training set / downsampling set we exclude already filtered reads
+          // We however mark all filtered reads as output well to preserve correct accounting of filtered reads
+          // Unfiltered set contains a selection of randomly selected output library beads
+
+          if (SamplingOpts.downsample_size>0) {
+            if (not read_class_map->ClassMatch(x, y, MapFiltered))
+              downsampled_subset.Add(well_index);
+            else {
+              read_class_map->setClassType(well_index, MapOutputWell);
+              if (SamplingOpts.num_unfiltered>0)
+                unfiltered_subset.Add(well_index);
+            }
+          }
+          else if (SamplingOpts.num_unfiltered>0){
+            unfiltered_subset.Add(well_index);
+          }
+          if (eval_all_libWells)
+            read_class_map->setClassType(well_index, MapOutputWell);
+        }
+
+        if (read_class_map->ClassMatch(x, y, MapTF) and process_tfs) {
+          if (SamplingOpts.downsample_size>0)
+            downsampled_subset.Add(well_index);
+          else
+            read_class_map->setClassType(well_index, MapOutputWell);
+        }
+      }
+    }
+
+    // Another pass over the read class map to set our sampled subsets
+    downsampled_subset.Finished();
+    if (SamplingOpts.downsample_size > 0) {
+      for (size_t idx=0; idx<downsampled_subset.GetCount(); idx++) {
+        read_class_map->setClassType(downsampled_subset.GetVal(idx), MapOutputWell);
+        // Add to random unfiltered set
+        if (SamplingOpts.num_unfiltered>0)
+          unfiltered_subset.Add(downsampled_subset.GetVal(idx));
+        // Mark random calibration sample to be used in addition to calibration panel reads
+        if (SamplingOpts.have_calib_panel)
+          read_class_map->setClassType(downsampled_subset.GetVal(idx), MapCalibration);
+      }
+    }
+
+    unfiltered_subset.Finished();
+    if (SamplingOpts.num_unfiltered > 0){
+      unfiltered_set.insert(unfiltered_subset.GetData().begin(), unfiltered_subset.GetData().end());
+      for (size_t idx=0; idx<unfiltered_subset.GetCount(); idx++) {
+        read_class_map->setClassType(unfiltered_subset.GetVal(idx), MapOutputWell);
+        read_class_map->setClassType(unfiltered_subset.GetVal(idx), MapUnfiltered);
+      }
+    }
+
+    // Print Summary:
+    unsigned int sum_tf_wells    = 0;
+    unsigned int sum_lib_wells   = 0;
+    unsigned int sum_calib_wells = 0;
+    unsigned int sum_output_wells= 0;
+
+
+    for (unsigned int idx=0; idx<read_class_map->getNumWells(); idx++) {
+      if      (read_class_map->ClassMatch(idx, MapOutputWell))  ++sum_output_wells;
+      if      (read_class_map->ClassMatch(idx, MapCalibration)) ++sum_calib_wells;
+      else if (read_class_map->ClassMatch(idx, MapLibrary))     ++sum_lib_wells;
+      else if (read_class_map->ClassMatch(idx, MapTF))          ++sum_tf_wells;
+    }
+    cout << "Bead classification summary:" << endl;
+    cout << " - Total num. wells      : " << read_class_map->getNumWells() << endl;
+    cout << " - Num. Library wells    : " << sum_lib_wells       << endl;
+    cout << " - Num. Test fragments   : " << sum_tf_wells        << endl;
+    cout << " - Num. calib. wells     : " << sum_calib_wells     << endl;
+    cout << " - Num. unfiltered wells : " << unfiltered_set.size() << endl;
+    cout << " - Num. output wells     : " << sum_output_wells    << endl;
+};
+
+
 bool BaseCallerContext::WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_files) {
 
     ofstream filter_status;
@@ -72,8 +159,8 @@ bool BaseCallerContext::WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_f
         int x = (*I) % chip_subset.GetChipSizeX();
         int y = (*I) / chip_subset.GetChipSizeX();
         filter_status << x << "\t" << y;
-        filter_status << "\t" << (int) mask->Match(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
-        filter_status << "\t" << (int) mask->Match(x, y, MaskKeypass);
+        filter_status << "\t" << (int) read_class_map->MaskMatch(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
+        filter_status << "\t" << (int) read_class_map->MaskMatch(x, y, MaskKeypass);
         filter_status << endl;
     }
     filter_status.close();
@@ -85,8 +172,8 @@ bool BaseCallerContext::WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_f
         int x = (*I) % chip_subset.GetChipSizeX();
         int y = (*I) / chip_subset.GetChipSizeX();
         filter_status << x << "\t" << y;
-        filter_status << "\t" << (int) mask->Match(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
-        filter_status << "\t" << (int) mask->Match(x, y, MaskKeypass);
+        filter_status << "\t" << (int) read_class_map->MaskMatch(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
+        filter_status << "\t" << (int) read_class_map->MaskMatch(x, y, MaskKeypass);
         filter_status << endl;
     }
     filter_status.close();
@@ -176,10 +263,58 @@ void BaseCallerParameters::PrintHelp()
 
 
 // ----------------------------------------------------------------------
+// XXX Input options
 
 bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
 {
-    bc_files.input_directory        = opts.GetFirstString ('i', "input-dir", ".");
+    // Vectorized wells input to load&Analyze multiple wells files
+    // If explicitly specified --wells and --mask arguments need to contain the full paths
+    // Default names for wells is 1.wells in teh respective input directories and
+    // default names for mask is analysis.bfmask.bin
+
+    bc_files.input_directory        = opts.GetFirstStringVector ('i', "input-dir", ".");
+    bc_files.filename_wells         = opts.GetFirstStringVector ('-', "wells", "");
+    bc_files.filename_mask          = opts.GetFirstStringVector ('-', "mask", "");
+
+    // Read block offset
+    // Coordinate offset is addressable in row,col and x,y format, with x,y taking precedence
+    int block_offset_x = opts.GetFirstInt    ('-', "block-col-offset", 0);
+    int block_offset_y = opts.GetFirstInt    ('-', "block-row-offset", 0);
+    std::stringstream default_opt_val;
+    default_opt_val << block_offset_x << ',' << block_offset_y;
+    std::vector<int> arg_block_offset  = opts.GetFirstIntVector ('-', "block-offset", default_opt_val.str(), ',');
+    if (arg_block_offset.size() != 2) {
+      std::cerr << "BaseCaller Option Error: argument 'block-offset' needs to be 2 comma separated values <Int>,<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+    block_offset_x = arg_block_offset.at(0);
+    block_offset_y = arg_block_offset.at(1);
+    std::stringstream block;
+    block << "/block_X" << block_offset_x << "_Y" << block_offset_y;
+
+    if (bc_files.filename_wells.empty() and bc_files.filename_mask.empty())
+    {
+      for (unsigned int i=0; i<bc_files.input_directory.size(); ++i){
+    	string input_org(bc_files.input_directory[i]);
+    	bc_files.input_directory[i] += block.str();
+    	cout << "Trying to read raw data from " << bc_files.input_directory[i]
+    	     << " or " << input_org << endl;
+        ValidateAndCanonicalizePath(bc_files.input_directory[i], input_org);
+        bc_files.filename_wells.push_back(bc_files.input_directory[i] + "/1.wells");
+        bc_files.filename_mask.push_back(bc_files.input_directory[i] + "/analysis.bfmask.bin");
+      }
+    }
+    else if (bc_files.filename_wells.size() != bc_files.filename_mask.size())
+    {
+      cerr << "ERROR: Options --wells and --mask need to be vectors of the same length." << endl;
+      exit(EXIT_FAILURE);
+    }
+
+    for (unsigned int i=0; i<bc_files.filename_wells.size(); ++i){
+      ValidateAndCanonicalizePath(bc_files.filename_wells[i]);
+      ValidateAndCanonicalizePath(bc_files.filename_mask[i], bc_files.input_directory[i] + "/bfmask.bin");
+    }
+
     bc_files.output_directory       = opts.GetFirstString ('o', "output-dir", ".");
     bc_files.unfiltered_untrimmed_directory = bc_files.output_directory + "/unfiltered.untrimmed";
     bc_files.unfiltered_trimmed_directory   = bc_files.output_directory + "/unfiltered.trimmed";
@@ -188,26 +323,26 @@ bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
     CreateResultsFolder ((char*)bc_files.unfiltered_untrimmed_directory.c_str());
     CreateResultsFolder ((char*)bc_files.unfiltered_trimmed_directory.c_str());
 
-    ValidateAndCanonicalizePath(bc_files.input_directory);
+
     ValidateAndCanonicalizePath(bc_files.output_directory);
     ValidateAndCanonicalizePath(bc_files.unfiltered_untrimmed_directory);
     ValidateAndCanonicalizePath(bc_files.unfiltered_trimmed_directory);
 
-    bc_files.filename_wells         = opts.GetFirstString ('-', "wells", bc_files.input_directory + "/1.wells");
-    bc_files.filename_mask          = opts.GetFirstString ('-', "mask", bc_files.input_directory + "/analysis.bfmask.bin");
-
-    ValidateAndCanonicalizePath(bc_files.filename_wells);
-    ValidateAndCanonicalizePath(bc_files.filename_mask, bc_files.input_directory + "/bfmask.bin");
-
-    bc_files.filename_filter_mask   = bc_files.output_directory + "/bfmask.bin";
+    bc_files.filename_filter_mask   = bc_files.output_directory + "/basecaller.bfmask.bin";
     bc_files.filename_json          = bc_files.output_directory + "/BaseCaller.json";
     bc_files.filename_phase         = bc_files.output_directory + "/PhaseEstimates.json";
 
     printf("\n");
     printf("Input files summary:\n");
-    printf("     --input-dir %s\n", bc_files.input_directory.c_str());
-    printf("         --wells %s\n", bc_files.filename_wells.c_str());
-    printf("          --mask %s\n", bc_files.filename_mask.c_str());
+    printf("     --input-dir %s\n", bc_files.input_directory[0].c_str());
+    for (unsigned int i=1; i<bc_files.input_directory.size(); ++i)
+      cout<< ',' << bc_files.input_directory[i] <<endl;
+    printf("         --wells %s\n", bc_files.filename_wells[0].c_str());
+    for (unsigned int i=1; i<bc_files.filename_wells.size(); ++i)
+          cout<< ',' << bc_files.filename_wells[i] <<endl;
+    printf("          --mask %s\n", bc_files.filename_mask[0].c_str());
+    for (unsigned int i=1; i<bc_files.filename_mask.size(); ++i)
+          cout<< ',' << bc_files.filename_mask[i] <<endl;
     printf("\n");
     printf("Output directories summary:\n");
     printf("    --output-dir %s\n", bc_files.output_directory.c_str());
@@ -255,6 +390,7 @@ bool BaseCallerParameters::InitializeFilesFromOptArgs(OptArgs& opts)
       }
     }
 
+    bc_files.ignore_washouts          = opts.GetFirstBoolean('-', "ignore_washouts", false);
     bc_files.options_set = true;
     return true;
 };
@@ -267,9 +403,9 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     char default_run_id[6]; // Create a run identifier from full output directory string
     ion_run_to_readname (default_run_id, (char*)bc_files.output_directory.c_str(), bc_files.output_directory.length());
     context_vars.run_id                      = opts.GetFirstString ('-', "run-id", default_run_id);
-	num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
-	num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 0);
-	compress_output_bam_                     = opts.GetFirstBoolean('-', "compress-bam", true);
+    num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
+    num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 0);
+    compress_output_bam_                     = opts.GetFirstBoolean('-', "compress-bam", true);
 
     context_vars.flow_signals_type           = opts.GetFirstString ('-', "flow-signals-type", "none");
     context_vars.only_process_unfiltered_set = opts.GetFirstBoolean('-', "only-process-unfiltered-set", false);
@@ -314,15 +450,15 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
 
 // ----------------------------------------------------------------------
 
-bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const int num_wells)
+bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const int num_lib_wells)
 {
-	assert(context_vars.options_set);
+	  assert(context_vars.options_set);
 
     // If we are just doing phase estimation none of the options matter, so don't spam output
-	if (context_vars.just_phase_estimation){
-	  sampling_opts.options_set = true;
-	  return true;
-	}
+	  if (context_vars.just_phase_estimation){
+	    sampling_opts.options_set = true;
+	    return true;
+	  }
 
     sampling_opts.num_unfiltered           = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
     sampling_opts.downsample_size          = opts.GetFirstInt    ('-', "downsample-size", 0);
@@ -330,15 +466,16 @@ bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const in
 
     sampling_opts.calibration_training     = opts.GetFirstInt    ('-', "calibration-training", -1);
     sampling_opts.have_calib_panel         = (not bc_files.calibration_panel_file.empty());
-    sampling_opts.MaskNotWanted            = MaskNone;
 
     // Reconcile parameters downsample_size and downsample_fraction
     bool downsample = sampling_opts.downsample_size > 0 or sampling_opts.downsample_fraction < 1.0;
     if (sampling_opts.downsample_fraction < 1.0) {
       if (sampling_opts.downsample_size == 0)
-    	sampling_opts.downsample_size = (int)((float)num_wells*sampling_opts.downsample_fraction);
-      else
-        sampling_opts.downsample_size = min(sampling_opts.downsample_size, (int)((float)num_wells*sampling_opts.downsample_fraction));
+        sampling_opts.downsample_size = (int)((float)num_lib_wells*sampling_opts.downsample_fraction);
+      else {
+        cerr << " === BaseCaller Option Incompatibility: Specify either downsample-size or downsample-fraction. Aborting!" << endl;
+        exit(EXIT_FAILURE);
+      }
     }
     if (downsample)
       cout << "Downsampling activated: Randomly choosing " << sampling_opts.downsample_size << " reads on this chip." << endl;
@@ -347,14 +484,13 @@ bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const in
     if (sampling_opts.calibration_training >= 0) {
       if (context_vars.diagonal_state_prog) {
         cerr << " === BaseCaller Option Incompatibility: Calibration training not supported for diagonal state progression. Aborting!" << endl;
-        exit(EXIT_FAILURE);
+                exit(EXIT_FAILURE);
       }
       if (sampling_opts.downsample_size>0)
         sampling_opts.calibration_training = min(sampling_opts.calibration_training, sampling_opts.downsample_size);
 
       sampling_opts.downsample_size  = max(sampling_opts.calibration_training, 0);
-      sampling_opts.MaskNotWanted    = (MaskType)(MaskFilteredBadResidual|MaskFilteredBadPPF|MaskFilteredBadKey);
-	  sampling_opts.num_unfiltered   = 0;
+      sampling_opts.num_unfiltered   = 0;
       context_vars.process_tfs       = false;
       cout << "=== BaseCaller Calibration Training ===" << endl;
       cout << " - Generating a training set up to " << sampling_opts.downsample_size << " randomly selected reads." << endl;
@@ -363,7 +499,7 @@ bool BaseCallerParameters::InitializeSamplingFromOptArgs(OptArgs& opts, const in
       cout << endl;
     }
 
-	sampling_opts.options_set = true;
+	  sampling_opts.options_set = true;
     return true;
 };
 
@@ -405,16 +541,13 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
 };
 
 // ----------------------------------------------------------------------
-// XXX
 
 Json::Value BaseCallerParameters::NormalizeDictStructure(Json::Value structure)
 {
   vector<string> keys = structure.getMemberNames();
   for (unsigned int k=0; k<keys.size(); ++k){
-    //cout << keys[k] << structure[keys[k]].asString() << endl; XXX
     string normStr(getNormString(structure[keys[k]].asString()));
     structure[keys[k]] = normStr;
-    //cout << keys[k] << structure[keys[k]].asString() << endl;
   }
   return structure;
 }
@@ -429,10 +562,15 @@ bool BaseCallerParameters::SaveParamsToJson(Json::Value& basecaller_json, const 
     basecaller_json["BaseCaller"]["lib_key"] =  bc.keys[0].bases();
     basecaller_json["BaseCaller"]["tf_key"] =  bc.keys[1].bases();
     basecaller_json["BaseCaller"]["chip_type"] = chip_type;
-    basecaller_json["BaseCaller"]["input_dir"] = bc_files.input_directory;
     basecaller_json["BaseCaller"]["output_dir"] = bc_files.output_directory;
-    basecaller_json["BaseCaller"]["filename_wells"] = bc_files.filename_wells;
-    basecaller_json["BaseCaller"]["filename_mask"] = bc_files.filename_mask;
+
+    for (unsigned int i=0; i<bc_files.input_directory.size(); ++i)
+      basecaller_json["BaseCaller"]["input_dir"][i] = bc_files.input_directory[i];
+    for (unsigned int i=0; i<bc_files.input_directory.size(); ++i)
+      basecaller_json["BaseCaller"]["filename_wells"][i] = bc_files.filename_wells[i];
+    for (unsigned int i=0; i<bc_files.input_directory.size(); ++i)
+      basecaller_json["BaseCaller"]["filename_mask"][i] = bc_files.filename_mask[i];
+
     basecaller_json["BaseCaller"]["num_threads"] = num_threads_;
     basecaller_json["BaseCaller"]["dephaser"] = bc.dephaser;
     basecaller_json["BaseCaller"]["keynormalizer"] = bc.keynormalizer;

@@ -821,6 +821,7 @@ def report_chef_libPrep_display(report):
     sampleSet_keys = [
         ("libraryPrepType", "Library Prep Type"),
         ("libraryPrepPlateType", "Library Prep Plate Type"),
+        ("libraryPrepProtocol", "Library Prep Protocol"),
         ("pcrPlateSerialNum", "PCR Plate Serial Number"),
         ("combinedLibraryTubeLabel", "Combined Library Tube Label"),
     ]
@@ -854,6 +855,13 @@ def report_chef_libPrep_display(report):
             for key, label in sampleSet_keys:
                 if key == "libraryPrepType":
                     value = libPrepSampleSet.get_libraryPrepType_display()
+                elif key == "libraryPrepProtocol":
+                    if libPrepSampleSet.libraryPrepProtocol:
+                        value = models.common_CV.objects.get(
+                            value=libPrepSampleSet.libraryPrepProtocol
+                        ).displayedValue
+                    else:
+                        value = ""
                 else:
                     value = getattr(libPrepSampleSet, key)
                 info.append((label, value))

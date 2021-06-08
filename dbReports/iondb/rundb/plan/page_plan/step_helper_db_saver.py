@@ -399,6 +399,8 @@ class StepHelperDbSaver:
         save_step = step_helper.steps[StepNames.SAVE_PLAN_BY_SAMPLE]
         barcoding_step = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
         sampleset = save_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET]
+        sampleset_items = save_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET_ITEM]
+        library_pool = save_step.savedObjects[SavePlanBySampleFieldNames.LIBRARY_POOL]
         plugins_step_data = step_helper.steps[StepNames.PLUGINS]
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
 
@@ -443,6 +445,7 @@ class StepHelperDbSaver:
             "metaData": self.__update_metaData_for_LIMS(existing_meta, LIMS_meta),
             "isReusable": isReusable,
             "sampleSet": sampleset,
+            "libraryPool": library_pool,
             "x_endBarcodeKitName": x_endBarcodeKitName,
             "x_barcodedSamples": barcodedSamples,
             # 'x_numberOfChips' : barcoding_step.savedFields[BarcodeBySampleFieldNames.NUMBER_OF_CHIPS],

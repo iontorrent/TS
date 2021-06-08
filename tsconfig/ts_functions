@@ -18,6 +18,9 @@ function print_help()
     echo -e "\t--configure-timezone, -z      Set timezone."
     echo -e "\t--configure-postfix, -p       Configure postfix mailer"
     echo -e "\t--purge-all-deb               Deletes all debian packages in apt cache directory"
+    if [ "$ENABLE_DEPRECATION" == "True" ]; then
+      echo -e "\t--switch-repo, -w             Switch repo between PGM/Proton and S5. Run --update-torrent-suite(-s) after this"
+    fi
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version                     Prints version"
     echo
@@ -51,6 +54,9 @@ function print_help_1404()
     echo -e "\t--configure-timezone, -z          Set timezone."
     echo -e "\t--configure-postfix, -p           Configure postfix mailer"
     echo -e "\t--purge-all-deb                   Deletes all debian packages in apt cache directory"
+    if [ "$ENABLE_DEPRECATION" == "True" ]; then
+      echo -e "\t--switch-repo, -w                 Switch repo between PGM/Proton and S5. Run --update-torrent-suite(-s) after this"
+    fi
     echo -e "\t--help, -h                        Prints command line args"
     echo -e "\t--version                         Prints version"
     echo
@@ -724,9 +730,9 @@ function change_hostname()
         :
     fi
 
-    if is_master && [ -x /usr/sbin/make-ssl-cert ]; then
+    if is_master && [ -x /usr/sbin/TSmake-ssl-cert ]; then
         # Regenerate self-signed SSL cert with current hostname
-        /usr/sbin/make-ssl-cert generate-default-snakeoil --force-overwrite
+        /usr/sbin/TSmake-ssl-cert generate-default-snakeoil --force-overwrite
     fi
 
     hostfiles=$(find /usr/share/ion-tsconfig/ansible -name torrentsuite_hosts\*)
@@ -743,7 +749,6 @@ function change_hostname()
     read -p "Press Enter to reboot the server "
     shutdown -r now
 }
-
 
 function IsValidHostname ()
 {
@@ -3708,4 +3713,74 @@ function accept_eula(){
         echo "EULA rejected"
         exit 0
     fi
+}
+
+# Switching Repo from trusty/bionic to bionic(trusty)-genestudio and vice-versa: TS-18047
+function confirm_switch_repo(){
+    CHOICE=$(
+      whiptail --title "Do you want to switch repo ? " --menu "You cannot revert back after the upgrade... Make your choice" 20 75 9 \
+        "1)" "S5 Only"   \
+        "2)" "PGM or Proton"  3>&2 2>&1 1>&3
+    )
+    case $CHOICE in
+      "1)")
+        echo "Switching Repo to $S5_REPO and checking for updates. Please wait for a few minutes.."
+        echo
+        MSG=`python $TS_SWITCH_REPO_PY $S5_REPO`
+      ;;
+      "2)")
+        echo "Switching Repo $PGM_REPO and checking for updates. Please wait for a few minutes.."
+        echo
+        MSG=`python $TS_SWITCH_REPO_PY $PGM_REPO`
+      ;;
+    esac
+    echo $MSG
+    echo
+  exit 0
+}
+
+#---                                                                        ---#
+#---    Make sure to confirm the repo if Major_platform is mixed            ---#
+#---                                                                        ---#
+function check_switch_repo() {
+  if [ $NONINTERACTIVE = False ] && [ $ENABLE_DEPRECATION == "True" ]; then # this is to avoid collision with GUI
+      if [ $MAJOR_PLATFORM == "mixed" ] && [ $SWITCH_SOFTWARE == 0 ] ; then
+        if [ $UPDATE_SOFTWARE == 1 ] || [ $CONF_HEAD_NODE == 1 ] ; then
+            box_out "Found Proton/PGM and S5 instrument connected to your TS server"
+            echo
+            if [ $LSB_RELEASE == '14.04' ]; then
+              DISTRIB_CODENAME="trusty"
+            elif  [ $LSB_RELEASE == '18.04' ]; then
+              DISTRIB_CODENAME="bionic"
+            fi
+            if `grep -q "^[^#].*${DISTRIB_CODENAME}-genestudio/" /etc/apt/sources.list.d/iontorrent.list`; then
+                echo "Note: Switching Repo not allowed after the upgrade. Do you want to proceed with S5 only? [Y/n]"
+            else
+                echo "Warning: 5.14 is the last supported release for PGM/Proton. Do you want to proceed with PGM/Proton only? [Y/n]"
+            fi
+            read input
+            case ${input:0:1} in
+                y|Y )
+                    echo "Proceeding with the updates...."
+                ;;
+                * )
+                    echo "Please use --switch-repo|-w to switch the repo and then update/configure the server..."
+                    print_help_1404
+                    exit
+                ;;
+            esac
+        fi
+      fi
+  fi
+}
+function box_out()
+{
+  local s="$*"
+  tput setaf 3
+  echo " -${s//?/-}-
+| ${s//?/ } |
+| $(tput setaf 4)$s$(tput setaf 3) |
+| ${s//?/ } |
+ -${s//?/-}-"
+  tput sgr 0
 }

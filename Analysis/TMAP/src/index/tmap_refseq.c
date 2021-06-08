@@ -1262,8 +1262,8 @@ enum ovr_opt_code
     OO_max_amplicon_overrun_large_indel_rescue,
     // --max-adapter-bases-for-soft-clipping
     OO_max_adapter_bases_for_soft_clipping,
-    // --er-5clip
-    OO_er_5clip,
+    // --er-no5clip
+    OO_er_no5clip,
 
     // --end-repair-he
     OO_end_repair_he,
@@ -1275,10 +1275,10 @@ enum ovr_opt_code
     OO_max_amplicon_overrun_large_indel_rescue_he,
     // --max-adapter-bases-for-soft-clipping-he
     OO_max_adapter_bases_for_soft_clipping_he,
-    // --er-5clip-high-ampl-end-he
-    OO_er_5clip_he,
+    // --er-no5clip-he
+    OO_er_no5clip_he,
 
-    // --end-repair-low-ampl-end
+    // --end-repair-le
     OO_end_repair_le,
     // --max-one-large-indel-rescue-le
     OO_max_one_large_indel_rescue_le,
@@ -1289,7 +1289,7 @@ enum ovr_opt_code
     // --max-adapter-bases-for-soft-clipping-le
     OO_max_adapter_bases_for_soft_clipping_le,
     // --er-5clip-le
-    OO_er_5clip_le,
+    OO_er_no5clip_le,
     // --log
     OO_log,
     // --debug-log
@@ -1343,7 +1343,7 @@ static const sysopt_t overridable_opts [] =
     // --do-repeat-clip
     { "do-repeat-clip",       optional_argument,  NULL, OO_do_repeat_clip },
     // --repclip-cont
-    { "repclip_cont",         optional_argument,  NULL, OO_repclip_cont },
+    { "repclip-cont",         optional_argument,  NULL, OO_repclip_cont },
     // --context
     { "context",              optional_argument,  NULL, OO_context },
     // --gap-scale
@@ -1366,11 +1366,11 @@ static const sysopt_t overridable_opts [] =
     // --min-anchor-large-indel-rescue
     { "min-anchor-large-indel-rescue",                  required_argument,  NULL, OO_min_anchor_large_indel_rescue },
     // --max-er-5clip-large-indel-rescue
-    { "max-amplicon-overrun-large_intel_rescue",        required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue },
+    { "max-amplicon-overrun-large-indel-rescue",        required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue },
     // -J, --max-adapter-bases-for-soft-clipping
     { "max-adapter-bases-for-soft-clipping",            required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping },
-    // --er-5clip
-    { "er-5clip",                                       optional_argument,  NULL, OO_er_5clip },
+    // --er-no5clip
+    { "er-no5clip",                                       optional_argument,  NULL, OO_er_no5clip },
     // lower end of amplicon
     // --end-repair-le
     { "end-repair-le",                                  required_argument,   NULL, OO_end_repair_le },
@@ -1382,8 +1382,8 @@ static const sysopt_t overridable_opts [] =
     { "max-amplicon-overrun-large-indel-rescue-le",     required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue_le },
     // --max-adapter-bases-for-soft-clipping-le
     { "max-adapter-bases-for-soft-clipping-le",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_le },
-    // --er-5clip-le
-    { "er-5clip-le",                                    optional_argument,  NULL, OO_er_5clip_le },
+    // --er-no5clip-le
+    { "er-no5clip-le",                                    optional_argument,  NULL, OO_er_no5clip_le },
     // higher end of amplicon
     // --end-repair-he
     { "end-repair-he",                                  required_argument,  NULL, OO_end_repair_he },
@@ -1395,12 +1395,12 @@ static const sysopt_t overridable_opts [] =
     { "max-amplicon-overrun-large-indel-rescue-he",     required_argument,  NULL, OO_max_amplicon_overrun_large_indel_rescue_he },
     // --max-adapter-bases-for-soft-clipping-he
     { "max-adapter-bases-for-soft-clipping-he",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_he },
-    // --er-5clip-he
-    { "er-5clip-he",                                    optional_argument,  NULL, OO_er_5clip_he },
+    // --er-no5clip-he
+    { "er-no5clip-he",                                    optional_argument,  NULL, OO_er_no5clip_he },
     // --log
     { "log",                                            no_argument,        NULL, OO_log },
     // --debug-log
-    { "debug_log",                                      no_argument,        NULL, OO_debug_log },
+    { "debug-log",                                      no_argument,        NULL, OO_debug_log },
     // --pen_flow_error
     { "pen-flow-error",                                 required_argument,  NULL, OO_pen_flow_error },
     // --softclip-key
@@ -1496,9 +1496,7 @@ static uint8_t str2double (const char* str, double* value)
 }
 
 // parses string to get override parameters
-//
 // following TMAP options are recognized:
-// --no-bed-er
 // -A,--score-match
 // -M,--pen-mismatch
 // -O,--pen-gap-open
@@ -1534,12 +1532,10 @@ static uint8_t str2double (const char* str, double* value)
 // --min-anchor-large-indel-rescue
 // --max-er-5clip-large-indel-rescue
 // -J,--max-adapter-bases-for-soft-clipping
-// --er-5clip
+// --er-no5clip
 // the following option has a special meaning:
 // --log : if specified, cancels the post-processing logging for all amplicons but the ones for which it is specified.
-//
 // returns number of parameter overrides succesfully parsed
-
 
 uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str, int32_t* specific_log, char* bed_fname, int lineno)
 {
@@ -1569,14 +1565,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --no-bed-er", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --no-bed-er", value);
                     else
                         local_params->use_bed_in_end_repair.value = value?0:1,
                         local_params->use_bed_in_end_repair.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --no-bed-er", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --no-bed-er");
                 break;
             case 'A':
             case OO_score_match:
@@ -1585,7 +1581,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->score_match.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --score-match (-A)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --score-match (-A)");
                 break;
             case 'M':
             case OO_pen_mismatch:
@@ -1594,7 +1590,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->pen_mm.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --pen-mismatch (-M)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --pen-mismatch (-M)");
                 break;
             case 'O':
             case OO_pen_gap_open:
@@ -1603,7 +1599,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->pen_gapo.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-open (-O)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --pen-gap-open (-O)");
                 break;
             case 'E':
             case OO_pen_gap_extension:
@@ -1612,7 +1608,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->pen_gape.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-extension (-E)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --pen-gap-extension (-E)");
                 break;
             case 'G':
             case OO_pen_gap_long:
@@ -1621,7 +1617,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->pen_gapl.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --pen-gap-long (-G)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --pen-gap-long (-G)");
                 break;
             case 'K':
             case OO_gap_long_length:
@@ -1630,7 +1626,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->gapl_len.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --gap-long-length (-K)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --gap-long-length (-K)");
                 break;
             case 'w':
             case OO_band_width:
@@ -1639,21 +1635,21 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->bw.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --band_width (-w)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --band_width (-w)");
                 break;
             case 'g':
             case OO_softclip_type:
                 if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 3)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --softclip-type (-g)", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --softclip-type (-g)", value);
                     else
                         local_params->softclip_type.value = value,
                         local_params->softclip_type.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --softclip-type (-g)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --softclip-type (-g)");
                 break;
             case OO_do_realign:
                 if (!optarg) // optional argument not given : treat as 1
@@ -1663,14 +1659,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --do-realign", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --do-realign", value);
                     else
                         local_params->do_realign.value = value,
                         local_params->do_realign.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --do-realign", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --do-realign");
                 break;
             case OO_r_mat:
                 if (str2int (optarg, &value))
@@ -1678,7 +1674,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->realign_mat_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-mat", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-mat");
                 break;
             case OO_r_mis:
                 if (str2int (optarg, &value))
@@ -1686,7 +1682,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->realign_mis_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-mis", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-mis");
                 break;
             case OO_r_gip:
                 if (str2int (optarg, &value))
@@ -1694,7 +1690,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->realign_gip_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-gip", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-gip");
                 break;
             case OO_r_gep:
                 if (str2int (optarg, &value))
@@ -1702,7 +1698,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->realign_gep_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-gep", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-gep");
                 break;
             case OO_r_bw:
                 if (str2int (optarg, &value))
@@ -1710,20 +1706,20 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->realign_bandwidth.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-bw", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-bw");
                 break;
             case OO_r_clip:
                 if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 4)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --r-clip", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --r-clip", value);
                     else
                         local_params->realign_cliptype.value = value,
                         local_params->realign_cliptype.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --r-clip", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --r-clip");
                 break;
             case OO_do_repeat_clip:
                 if (!optarg) // optional argument not given : treat as 1
@@ -1733,14 +1729,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --do-repeat-clip", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --do-repeat-clip", value);
                     else
                         local_params->do_repeat_clip.value = value,
                         local_params->do_repeat_clip.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --do-repeat-clip", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --do-repeat-clip");
                 break;
             case OO_repclip_cont:
                 if (!optarg) // optional argument not given : treat as 1
@@ -1750,14 +1746,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --repclip-cont", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --repclip-cont", value);
                     else
                         local_params->repclip_continuation.value = value,
                         local_params->repclip_continuation.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --repclip-cont", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repclip-cont");
                 break;
             case OO_context:
                 if (!optarg) // optional argument not given : treat as 1
@@ -1767,14 +1763,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --context", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --context", value);
                     else
                         local_params->do_hp_weight.value = value,
                         local_params->do_hp_weight.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --context", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --context");
                 break;
             case OO_c_mat:
                 if (str2double (optarg, &dvalue))
@@ -1782,7 +1778,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->context_mat_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --c-mat", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-mat");
                 break;
             case OO_c_mis:
                 if (str2double (optarg, &dvalue))
@@ -1790,7 +1786,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->context_mis_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --c-mis", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-mis");
                 break;
             case OO_c_gip:
                 if (str2double (optarg, &dvalue))
@@ -1798,7 +1794,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->context_gip_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --c-gip", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-gip");
                 break;
             case OO_c_gep:
                 if (str2double (optarg, &dvalue))
@@ -1806,7 +1802,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->context_gep_score.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --c-gep", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-gep");
                 break;
             case OO_c_bw:
                 if (str2int (optarg, &value))
@@ -1814,7 +1810,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->context_extra_bandwidth.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --c-bw", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-bw");
                 break;
             case OO_end_repair:
                 if (str2int (optarg, &value))
@@ -1822,7 +1818,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->end_repair.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --end-repair");
                 break;
             case OO_end_repair_he:
                 if (str2int (optarg, &value))
@@ -1830,7 +1826,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->end_repair_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair-he", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --end-repair-he");
                 break;
             case OO_end_repair_le:
                 if (str2int (optarg, &value))
@@ -1838,7 +1834,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->end_repair_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --end-repair-le", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --end-repair-le");
                 break;
             case OO_max_one_large_indel_rescue:
                 if (str2int (optarg, &value))
@@ -1846,7 +1842,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_one_large_indel_rescue.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-one-large-indel-rescue");
                 break;
             case OO_max_one_large_indel_rescue_he:
                 if (str2int (optarg, &value))
@@ -1854,7 +1850,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_one_large_indel_rescue_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue-he", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-one-large-indel-rescue-he");
                 break;
             case OO_max_one_large_indel_rescue_le:
                 if (str2int (optarg, &value))
@@ -1862,7 +1858,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_one_large_indel_rescue_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-one-large-indel-rescue-le", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-one-large-indel-rescue-le");
                 break;
             case OO_min_anchor_large_indel_rescue:
                 if (str2int (optarg, &value))
@@ -1870,7 +1866,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->min_anchor_large_indel_rescue.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --min-anchor-large-indel-rescue");
                 break;
             case OO_min_anchor_large_indel_rescue_he:
                 if (str2int (optarg, &value))
@@ -1878,7 +1874,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->min_anchor_large_indel_rescue_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue-he", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --min-anchor-large-indel-rescue-he");
                 break;
             case OO_min_anchor_large_indel_rescue_le:
                 if (str2int (optarg, &value))
@@ -1886,7 +1882,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->min_anchor_large_indel_rescue_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --min-anchor-large-indel-rescue-le", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --min-anchor-large-indel-rescue-le");
                 break;
             case OO_max_amplicon_overrun_large_indel_rescue:
                 if (str2int (optarg, &value))
@@ -1894,7 +1890,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_amplicon_overrun_large_indel_rescue.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --amplicon-overrun");
                 break;
             case OO_max_amplicon_overrun_large_indel_rescue_he:
                 if (str2int (optarg, &value))
@@ -1902,7 +1898,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_amplicon_overrun_large_indel_rescue_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun-he", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --amplicon-overrun-he");
                 break;
             case OO_max_amplicon_overrun_large_indel_rescue_le:
                 if (str2int (optarg, &value))
@@ -1910,7 +1906,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_amplicon_overrun_large_indel_rescue_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --amplicon-overrun-le", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --amplicon-overrun-le");
                 break;
             case 'J':
             case OO_max_adapter_bases_for_soft_clipping:
@@ -1919,7 +1915,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_adapter_bases_for_soft_clipping.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-adapter-bases-for-soft-clipping");
                 break;
             case OO_max_adapter_bases_for_soft_clipping_he:
                 if (str2int (optarg, &value))
@@ -1927,7 +1923,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_adapter_bases_for_soft_clipping_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping-he", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-adapter-bases-for-soft-clipping-he");
                 break;
             case OO_max_adapter_bases_for_soft_clipping_le:
                 if (str2int (optarg, &value))
@@ -1935,31 +1931,64 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->max_adapter_bases_for_soft_clipping_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --max-adapter-bases-for-soft-clipping-le", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --max-adapter-bases-for-soft-clipping-le");
                 break;
-            case OO_er_5clip:
-                if (str2int (optarg, &value))
-                    local_params->end_repair_5_prime_softclip.value = value,
+            case OO_er_no5clip:
+                if (!optarg) // optional argument not given : treat as 1 => disable er_5'_softclip (store ZERO)
+                    local_params->end_repair_5_prime_softclip.value = 0, // 0 is correct
                     local_params->end_repair_5_prime_softclip.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip", bed_fname, lineno);
+                {
+                    if (str2int (optarg, &value))
+                    {
+                        if (value < 0 || value > 1)
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --er-no5clip", value);
+                        local_params->end_repair_5_prime_softclip.value = !value,
+                        local_params->end_repair_5_prime_softclip.over = 1,
+                        ++ovr_count;
+                    }
+                    else
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --er-no5clip");
+                }
                 break;
-            case OO_er_5clip_he:
-                if (str2int (optarg, &value))
-                    local_params->end_repair_5_prime_softclip_he.value = value,
+            case OO_er_no5clip_he:
+                if (!optarg) // optional argument not given : treat as 1 => disable er_5'_softclip (store ZERO)
+                    local_params->end_repair_5_prime_softclip_he.value = 0, // 0 is correct
                     local_params->end_repair_5_prime_softclip_he.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip-he", bed_fname, lineno);
+                {
+                    if (str2int (optarg, &value))
+                    {
+                        if (value < 0 || value > 1)
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --er-no5clip-he", value);
+                        local_params->end_repair_5_prime_softclip_he.value = !value,
+                        local_params->end_repair_5_prime_softclip_he.over = 1,
+                        ++ovr_count;
+                    }
+                    else
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --er-no5clip-he");
+                }
                 break;
-            case OO_er_5clip_le:
-                if (str2int (optarg, &value))
-                    local_params->end_repair_5_prime_softclip_le.value = value,
+            case OO_er_no5clip_le:
+                if (!optarg) // optional argument not given : treat as 1 => disable er_5'_softclip (store ZERO)
+                    local_params->end_repair_5_prime_softclip_le.value = 0, // 0 is correct
                     local_params->end_repair_5_prime_softclip_le.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --er-5clip-le", bed_fname, lineno);
+                {
+                    if (str2int (optarg, &value))
+                    {
+                        if (value < 0 || value > 1)
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --er-no5clip-le", value);
+                        local_params->end_repair_5_prime_softclip_le.value = !value,
+                        local_params->end_repair_5_prime_softclip_le.over = 1,
+                        ++ovr_count;
+                    }
+                    else
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --er-no5clip-le");
+                }
                 break;
             case OO_log:
                 local_params->specific_log.value = 1,
@@ -1979,7 +2008,7 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     local_params->fscore.over = 1,
                     ++ovr_count;
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --pen_flow_error (-X)", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --pen_flow_error (-X)");
                 break;
             case 'Y':
             case OO_softclip_key:
@@ -1990,14 +2019,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --softclip-key", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --softclip-key", value);
                     else
                         local_params->softclip_key.value = value,
                         local_params->softclip_key.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --softclip-key", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --softclip-key");
                 break;
             case 'S':
             case OO_ignore_flowgram:
@@ -2008,14 +2037,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --ignore_flowgram", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --ignore_flowgram", value);
                     else
                         local_params->ignore_flowgram.value = value,
                         local_params->ignore_flowgram.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --ignore_flowgram", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --ignore_flowgram");
                 break;
             case 'F':
             case OO_aln_flowspace:
@@ -2026,14 +2055,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                 else if (str2int (optarg, &value))
                 {
                     if (value < 0 || value > 1)
-                        tmap_warning ("%s:%d Invalid value (%d) for override for --final-flowspace", bed_fname, lineno, value);
+                        tmap_user_fileproc_msg (bed_fname, lineno, "Invalid value (%d) for override for --final-flowspace", value);
                     else
                         local_params->aln_flowspace.value = value,
                         local_params->aln_flowspace.over = 1,
                         ++ovr_count;
                 }
                 else
-                    tmap_warning ("%s:%d Error parsing parameters override: --final-flowspace", bed_fname, lineno);
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --final-flowspace");
                 break;
         }
     }
@@ -2062,7 +2091,7 @@ uint32_t extract_overrides (tmap_map_locopt_t* local_params, const char* descrip
         ++block_beg;
     if (*block_beg != BLOCK_OPEN)
     {
-        tmap_warning ("%s:%d: Error parsing parameters overrides: No parameters block opening found", bed_fname, lineno);
+        tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters overrides: No parameters block opening found");
         return 0;
     }
     ++block_beg; // point to first char inside param block
@@ -2072,7 +2101,7 @@ uint32_t extract_overrides (tmap_map_locopt_t* local_params, const char* descrip
         ++block_end;
     if (*block_end != BLOCK_CLOSE)
     {
-        tmap_warning ("%s:%d: Error parsing parameters overrides: Parameters block is not closed", bed_fname, lineno);
+        tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters overrides: Parameters block is not closed");
         return 0;
     }
     // end string at block end;

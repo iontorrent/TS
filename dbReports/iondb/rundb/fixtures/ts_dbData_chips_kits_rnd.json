@@ -182,7 +182,7 @@
     "pk": 32,
     "model": "rundb.chip",
     "fields": {
-      "name": "GX5v2",
+      "name": "GX5",
       "slots": 1,
       "description": "GX5",
       "isActive": true,
@@ -218,7 +218,7 @@
       "isActive": true,
       "description": "Ion 541 Kit-Chef",
       "categories" : "s5v1Kit;flowOverridable;multipleReadLength;s5541",
-      "chipTypes" : "541;541v2;GX5v2"
+      "chipTypes" : "541;541v2;GX5"
     }
   },
   {
@@ -288,6 +288,27 @@
       "description": "Ion AmpliSeq HD DL8 (Placeholder)",
       "applicationType" : "AMPS_ANY"
     }
+  },
+  {
+      "pk": 20119,
+      "model": "rundb.kitinfo",
+      "fields": {
+        "kitType": "TemplatingKit",
+        "name": "GX5 Kit",
+        "nucleotideType": "",
+        "runMode": "",
+        "flowCount": 500,
+        "uid": "2342344234",
+        "instrumentType": "S5",
+        "libraryReadLength" : 200,
+        "samplePrep_instrumentType": "",
+        "isActive": true,
+        "description": "Kit for processing Valkyrie runs",
+        "applicationType": "AMPS_ANY",
+        "defaultThreePrimeAdapter": [
+          "FWD_0001"
+        ]
+      }
   },
   {
     "pk": 20221,
