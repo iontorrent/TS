@@ -3,24 +3,15 @@
 include(../buildTools/cmake/CMakeLists.installpath.txt)
 
 # get the torrent suite version numbers
-execute_process(COMMAND "grep" "TS_MAJOR"   "${PROJECT_SOURCE_DIR}/../TSVersion"
-                COMMAND "sed" "s/^TS_MAJOR=//"
-                OUTPUT_VARIABLE TS_MAJOR
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "grep" "TS_MINOR"   "${PROJECT_SOURCE_DIR}/../TSVersion"
-                COMMAND "sed" "s/^TS_MINOR=//"
-                OUTPUT_VARIABLE TS_MINOR
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "grep" "TS_RELEASE" "${PROJECT_SOURCE_DIR}/../TSVersion"
-                COMMAND "sed" "s/^TS_RELEASE=//"
-                OUTPUT_VARIABLE TS_RELEASE
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "TS_MAJOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MAJOR=//"   OUTPUT_VARIABLE TS_MAJOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "TS_MINOR"   "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_MINOR=//"   OUTPUT_VARIABLE TS_MINOR   OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND "grep" "TS_RELEASE" "${PROJECT_SOURCE_DIR}/../TSVersion" COMMAND "sed" "s/^TS_RELEASE=//" OUTPUT_VARIABLE TS_RELEASE OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Figure out state of current build
-execute_process(COMMAND "hostname" "-f"
+execute_process(COMMAND "hostname" "-f" 
                 OUTPUT_VARIABLE BUILDHOST
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "date" "-u" "+%Y%m%d%H%M"
+execute_process(COMMAND "date" "-u" "+%Y%m%d%H%M" 
                 OUTPUT_VARIABLE BUILDDATE
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 
@@ -35,17 +26,17 @@ if(res EQUAL 0)
         # Pure GIT repo - Build script should tag releases,
         # otherwise returns short sha1 hash
         execute_process(COMMAND "git" "rev-parse" "--short" "HEAD"
-                        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-                        OUTPUT_VARIABLE IonVersion_WC_REVISION
-                        ERROR_VARIABLE git_info_error
-                        OUTPUT_STRIP_TRAILING_WHITESPACE)
+                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                OUTPUT_VARIABLE IonVersion_WC_REVISION
+                ERROR_VARIABLE git_info_error
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
 
         # Assumes remote is named "origin"
         execute_process(COMMAND "git" "config" "--get" "remote.origin.url"
-                        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-                        OUTPUT_VARIABLE IonVersion_WC_URL
-                        ERROR_VARIABLE git_info_error
-                        OUTPUT_STRIP_TRAILING_WHITESPACE)
+                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                OUTPUT_VARIABLE IonVersion_WC_URL
+                ERROR_VARIABLE git_info_error
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
 else()
     # else not a working copy!
     set(IonVersion_WC_URL ".")
@@ -53,15 +44,15 @@ else()
 endif()
 
 execute_process(COMMAND "grep" "MAJOR" "${PROJECT_SOURCE_DIR}/version"
-                COMMAND "sed" "s/^MAJOR=//"
+                COMMAND "sed" "s/^MAJOR=//" 
                 OUTPUT_VARIABLE MAJOR
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND "grep" "MINOR" "${PROJECT_SOURCE_DIR}/version"
-                COMMAND "sed" "s/^MINOR=//"
+                COMMAND "sed" "s/^MINOR=//" 
                 OUTPUT_VARIABLE MINOR
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND "grep" "RELEASE" "${PROJECT_SOURCE_DIR}/version"
-                COMMAND "sed" "s/^RELEASE=//"
+                COMMAND "sed" "s/^RELEASE=//" 
                 OUTPUT_VARIABLE RELEASE
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
 
@@ -92,16 +83,16 @@ string(REPLACE "${IonVersion_WC_ROOT}" "" ION_VERSION_GIT_PATH "${IonVersion_WC_
 
 # Version config files
 configure_file (
-    "${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.h.in"
-    "${PROJECT_BINARY_DIR}/IonVersion.h" @ONLY
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.h.in"
+	"${PROJECT_BINARY_DIR}/IonVersion.h" @ONLY
 )
 configure_file (
-    "${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.cpp.in"
-    "${PROJECT_BINARY_DIR}/IonVersion.cpp" @ONLY
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.cpp.in"
+	"${PROJECT_BINARY_DIR}/IonVersion.cpp" @ONLY
 )
 configure_file (
-    "${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.env.in"
-    "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" @ONLY
+	"${PROJECT_SOURCE_DIR}/../buildTools/IonVersion.env.in"
+	"${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" @ONLY
 )
 install(FILES "${PROJECT_BINARY_DIR}/IonTorrent/IonVersion.env" DESTINATION ${ION_INSTALL_PREFIX}/bin
     RENAME ${CMAKE_PROJECT_NAME}.version.env

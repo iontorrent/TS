@@ -16,7 +16,6 @@ MODULES=${MODULES-"
   pipeline
   publishers
   tsconfig
-  RSM
 "}
 
 PROJECT_ROOT=`pwd`
@@ -65,16 +64,6 @@ if [ ! -z $ANALYSIS_DIR ]; then
   cmake_opts+=" -DION_HTML_PREFIX=${ANALYSIS_DIR}/var/www"  
 fi
 
-for arg in "$@"; do
-  cmake_opts+=" -D$arg"
-done
-
-echo "MODULES: $MODULES"
-echo "CMAKE OPTS: $cmake_opts"
-echo "INPUT ARGS: $@"
-echo "DEFAULT JOB NUM: $DEFAULT_JOB_NUM"
-echo "ANALYSIS DIR (Dx): $ANALYSIS_DIR"
-
 ERR=0
 ERRMSG=""
 for MODULE in ${MODULES}; do
@@ -88,7 +77,7 @@ for MODULE in ${MODULES}; do
     LOCALERR=0
     find ${MODULE_BUILD_PATH} -name \*.deb | xargs rm -f
     cd ${MODULE_BUILD_PATH}
-    cmake_cmd="cmake ${cmake_opts} -G 'Unix Makefiles' ${MODULE_SRC_PATH}"
+    cmake_cmd="cmake $@ -G 'Unix Makefiles' ${MODULE_SRC_PATH} ${cmake_opts}"
     echo $cmake_cmd
     eval $cmake_cmd
   
