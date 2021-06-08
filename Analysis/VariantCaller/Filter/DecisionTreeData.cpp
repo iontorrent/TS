@@ -593,10 +593,13 @@ void DecisionTreeData::AddCountInformationTags(vcf::Variant & candidate_variant,
       PushAlleleCountsOntoStringMaps(sampleOutput, all_summary_stats, use_molecular_tag);
   }
 
-  // hrun fill in
+  // HRUN and GCM fill in
   ClearVal(candidate_variant, "HRUN");
+  ClearVal(candidate_variant, "GCM");
   for (unsigned int ia=0; ia<allele_identity_vector->size(); ia++){
     candidate_variant.info["HRUN"].push_back(convertToString(allele_identity_vector->at(ia).ref_hp_length));
+    string gcm = allele_identity_vector->at(ia).status.isGCMotif? "1" : "0";
+    variant->info["GCM"].push_back(gcm);
   }
 }
 
@@ -652,10 +655,20 @@ void DecisionTreeData::FilterOnSpecialTags(vcf::Variant & candidate_variant, con
   }
   */
   for (unsigned int _alt_allele_index = 0; _alt_allele_index < allele_identity_vector->size(); _alt_allele_index++) {
-     // if something is strange here
+	  float gc_motif_filter_multiplier = 1.0f;
+
+    if (allele_identity_vector->at(_alt_allele_index).status.isGCMotif){
+	  	gc_motif_filter_multiplier = variant_specific_params[_alt_allele_index].gc_motif_filter_multiplier_override?
+      variant_specific_params[_alt_allele_index].gc_motif_filter_multiplier : parameters.my_eval_control.gc_motif_filter_multiplier;
+	  }
+	  // if something is strange here
     /*  Not to do this on allele, revert to 4.6*/
-    SpecializedFilterFromLatentVariables(*(variant),  variant_specific_params[_alt_allele_index].filter_unusual_predictions_override ?
-        variant_specific_params[_alt_allele_index].filter_unusual_predictions : parameters.my_eval_control.filter_unusual_predictions, _alt_allele_index, sample_name); // unusual filters
+
+    float filter_unusual_predictions = variant_specific_params[_alt_allele_index].filter_unusual_predictions_override?
+    variant_specific_params[_alt_allele_index].filter_unusual_predictions : parameters.my_eval_control.filter_unusual_predictions;
+
+    // RBI filter
+    SpecializedFilterFromLatentVariables(*(variant),  filter_unusual_predictions, _alt_allele_index, sample_name, gc_motif_filter_multiplier); // unusual filters
     // ZZ: Per Earl, the correct filter for bias is max of all the bias in each allele (directional), and check that with the threshold.
     // No allele overriding.
     /*
@@ -668,13 +681,15 @@ void DecisionTreeData::FilterOnSpecialTags(vcf::Variant & candidate_variant, con
       OverrideFilter(my_tmp_string, _alt_allele_index);
     }
     */
+    // REFB , VARB filters
+    float filter_deletion_predictions = variant_specific_params[_alt_allele_index].filter_deletion_predictions_override?
+        variant_specific_params[_alt_allele_index].filter_deletion_predictions : parameters.my_eval_control.filter_deletion_bias;
+    float filter_insertion_predictions = variant_specific_params[_alt_allele_index].filter_insertion_predictions_override?
+        variant_specific_params[_alt_allele_index].filter_insertion_predictions : parameters.my_eval_control.filter_insertion_bias;
 
     SpecializedFilterFromHypothesisBias(*(variant), allele_identity_vector->at(_alt_allele_index),
-        variant_specific_params[_alt_allele_index].filter_deletion_predictions_override ?
-            variant_specific_params[_alt_allele_index].filter_deletion_predictions : parameters.my_eval_control.filter_deletion_bias,
-        variant_specific_params[_alt_allele_index].filter_insertion_predictions_override ?
-            variant_specific_params[_alt_allele_index].filter_insertion_predictions : parameters.my_eval_control.filter_insertion_bias,
-        _alt_allele_index, sample_name, parameters.my_controls.use_fd_param);
+        filter_deletion_predictions, filter_insertion_predictions,
+        _alt_allele_index, sample_name, parameters.my_controls.use_fd_param, gc_motif_filter_multiplier);
 
     float effective_data_quality_stringency = parameters.my_controls.data_quality_stringency;
     if (variant_specific_params[_alt_allele_index].data_quality_stringency_override)
@@ -683,14 +698,14 @@ void DecisionTreeData::FilterOnSpecialTags(vcf::Variant & candidate_variant, con
   } 
 }
 
-void DecisionTreeData::SpecializedFilterFromLatentVariables(vcf::Variant & candidate_variant, const float bias_radius, int _allele, const string &sample_name) {
+void DecisionTreeData::SpecializedFilterFromLatentVariables(vcf::Variant & candidate_variant, const float bias_radius, int _allele, const string &sample_name, float gc_motif_multiplier) {
 
   float bias_threshold;
   // likelihood threshold
   if (bias_radius < 0.0f)
     bias_threshold = 100.0f; // oops, wrong variable - should always be positive
   else
-    bias_threshold = bias_radius; // fine now
+    bias_threshold = bias_radius * gc_motif_multiplier; // fine now
 
 //  float radius_bias = hypothesis_stack.cur_state.bias_generator.RadiusOfBias();
    float radius_bias = RetrieveQualityTagValue(candidate_variant, "RBI", _allele);
@@ -700,37 +715,59 @@ void DecisionTreeData::SpecializedFilterFromLatentVariables(vcf::Variant & candi
     stringstream filterReasonStr;
     filterReasonStr << "PREDICTIONSHIFTx" ;
     filterReasonStr << radius_bias;
+    filterReasonStr << ">" << bias_radius;
+    if (gc_motif_multiplier != 1.0f){
+    	filterReasonStr << "x" << gc_motif_multiplier;
+    }
     string my_tmp_string = filterReasonStr.str();
     OverrideFilter(candidate_variant, my_tmp_string, _allele, sample_name);
   }
 }
 
-void DecisionTreeData::FilterAlleleHypothesisBias(vcf::Variant & candidate_variant, float ref_bias, float var_bias, float threshold_bias, int _allele, const string &sample_name) {
-      bool ref_bad = (ref_bias > 0 && fabs(ref_bias) > threshold_bias);  // not certain this one is in the correct direction for filtering
-      bool var_bad = (var_bias > 0 && fabs(var_bias) > threshold_bias);
-
+void DecisionTreeData::FilterAlleleHypothesisBias(vcf::Variant & candidate_variant, float ref_bias, float var_bias, float threshold_bias, int _allele, const string &sample_name, float gc_motif_multiplier) {
+      bool ref_bad = (ref_bias > 0 && fabs(ref_bias) > threshold_bias * gc_motif_multiplier);  // not certain this one is in the correct direction for filtering
+      bool var_bad = (var_bias > 0 && fabs(var_bias) > threshold_bias * gc_motif_multiplier);
+      bool var_plus_ref_bad = (gc_motif_multiplier < 1.0f) and fabs(ref_bias) + fabs(var_bias) > threshold_bias * gc_motif_multiplier;
       // the ith variant allele is problematic
-         if (var_bad and eval_genotype.IsAlleleCalled(_allele + 1)){
-           stringstream filterReasonStr;
+      if (eval_genotype.IsAlleleCalled(_allele + 1)){
+        if (var_bad){
+          stringstream filterReasonStr;
           filterReasonStr << "PREDICTIONVar";
           filterReasonStr << _allele+1;
-           filterReasonStr << "SHIFTx" ;
+          filterReasonStr << "SHIFTx" ;
           filterReasonStr << var_bias;
+          filterReasonStr << ">" << threshold_bias;
+          if (gc_motif_multiplier != 1.0f){
+        	  filterReasonStr << "x" << gc_motif_multiplier;
+          }
           string my_tmp_string = filterReasonStr.str();
           OverrideFilter(candidate_variant, my_tmp_string, _allele, sample_name);
+        }else if (var_plus_ref_bad){
+		  stringstream filterReasonStr;
+		  filterReasonStr << "(PREDICTIONVar";
+		  filterReasonStr << _allele+1;
+		  filterReasonStr << "SHIFT+PREDICTIONRefSHIFT)x(";
+		  filterReasonStr << fabs(var_bias) << "+" << fabs(ref_bias) << ")>";
+		  filterReasonStr << threshold_bias << "x"<< gc_motif_multiplier;
+		  string my_tmp_string = filterReasonStr.str();
+		  OverrideFilter(candidate_variant, my_tmp_string, _allele, sample_name);
         }
+      }
       // the reference is problematicly shifted relative to this allele
-        if (ref_bad and eval_genotype.IsAlleleCalled(0)){
+        if ((ref_bad and eval_genotype.IsAlleleCalled(0))){
           stringstream filterReasonStr;
           filterReasonStr << "PREDICTIONRefSHIFTx" ;
           filterReasonStr << ref_bias;
+          filterReasonStr << ">" << threshold_bias;
+          if (gc_motif_multiplier != 1.0f){
+        	  filterReasonStr << "x" << gc_motif_multiplier;
+          }
           string my_tmp_string = filterReasonStr.str();
           OverrideFilter(candidate_variant, my_tmp_string, _allele, sample_name);
         }
-
 }
 
-void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant & candidate_variant, AlleleIdentity allele_identity, const float deletion_bias, const float insertion_bias, int _allele, const string &sample_name, bool use_fd_param)
+void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant & candidate_variant, AlleleIdentity allele_identity, const float deletion_bias, const float insertion_bias, int _allele, const string &sample_name, bool use_fd_param, float gc_motif_multiplier)
 {
     float ref_bias = RetrieveQualityTagValue(candidate_variant, "REFB", _allele);
     float var_bias = RetrieveQualityTagValue(candidate_variant, "VARB", _allele);
@@ -755,9 +792,8 @@ void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant & candid
     		bias_threshold = insertion_bias;
     	}
     }
-
     if (bias_threshold > 0.0f){
-        FilterAlleleHypothesisBias(candidate_variant, ref_bias, var_bias, bias_threshold, _allele, sample_name);
+        FilterAlleleHypothesisBias(candidate_variant, ref_bias, var_bias, bias_threshold, _allele, sample_name, gc_motif_multiplier);
     }
 }
 

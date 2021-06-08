@@ -34,10 +34,10 @@ inline std::ostream& operator << (std::ostream& o, const EndClips& ec)
 // returns pointer to the first unclipped base and fills len with the not-clipped area length
 // saves exact clipping arrangement into clip_store
 const char* clip_seq (const char* qry, const uint32_t* cigar, unsigned cigar_sz, uint32_t& len, EndClips& clip_store);
+
 // creates cigar for the alignment, using clipping info from clip_store.
 // starting insertion is added to soft clip
 // starting deletion is subtracted from starting insertion and result is returned as reference shift
-
 unsigned roll_cigar (uint32_t* cigar, unsigned max_cigar_len, unsigned& cigar_len, const BATCH* batches, unsigned bno, unsigned clean_len, EndClips& clip_store, unsigned& x_off, unsigned& y_off, unsigned& xlen, unsigned& ylen);
 
 // conversion from cigar to batch format

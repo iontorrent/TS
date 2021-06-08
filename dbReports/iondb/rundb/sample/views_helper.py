@@ -1035,11 +1035,12 @@ def processMultiPoolPlanSupport(sampleSets):
                         else:
                             plateMapping[k] = 1
         allPlatesMapping.append(plateMapping)
-    allSamples, errors = sample_validator.validate_multi_pool_support_samples(allPlatesMapping, sampleSets)
+    allSamples, errors, warning = sample_validator.validate_multi_pool_support_samples(allPlatesMapping, sampleSets)
 
     return {
         'all': allSamples,
         'pool1': ','.join(str(x) for x in pool1PlanSampleSetItemIds),
         'pool2': ','.join(str(x) for x in pool2PlanSampleSetItemIds),
-        'errors': errors
+        'errors': errors,
+        'warning': warning
     }

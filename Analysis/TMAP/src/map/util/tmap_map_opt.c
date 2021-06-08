@@ -224,6 +224,13 @@ __tmap_map_opt_option_print_func_int_init(min_anchor_large_indel_rescue)
 __tmap_map_opt_option_print_func_int_init(amplicon_overrun)
 __tmap_map_opt_option_print_func_int_init(max_adapter_bases_for_soft_clipping)
 __tmap_map_opt_option_print_func_tf_init(end_repair_5_prime_softclip)
+__tmap_map_opt_option_print_func_int_init(repair_min_freq)
+__tmap_map_opt_option_print_func_int_init(repair_min_count)
+__tmap_map_opt_option_print_func_int_init(repair_min_adapter)
+__tmap_map_opt_option_print_func_int_init(repair_max_overhang)
+__tmap_map_opt_option_print_func_double_init(repair_identity_drop_limit)
+__tmap_map_opt_option_print_func_int_init(repair_max_primer_zone_dist)
+__tmap_map_opt_option_print_func_int_init(repair_clip_ext)
 
 __tmap_map_opt_option_print_func_int_init(shm_key)
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -610,9 +617,9 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_use_bed_in_mapq,
                            TMAP_MAP_ALGO_GLOBAL);
-  tmap_map_opt_options_add(opt->options, "read-ends", no_argument, 0, 0, 
+  tmap_map_opt_options_add(opt->options, "repair", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
-                           "use read ends statistics in end repair if provided in BED file",
+                           "use read ends statistics for REPAiR (read-end position alignment repair) if provided in BED file",
                            NULL,
                            tmap_map_opt_option_print_func_use_bed_read_ends_stat,
                            TMAP_MAP_ALGO_GLOBAL);
@@ -815,6 +822,49 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "disable 5' soft clipping by end-repair",
                            NULL,
                            tmap_map_opt_option_print_func_end_repair_5_prime_softclip,
+                           TMAP_MAP_ALGO_GLOBAL);
+
+  tmap_map_opt_options_add(opt->options, "repair-min-freq", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "minimal frequency sum for REPAiR (read-end position alignment repair) ",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_min_freq,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-min-count", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "minimal read count for REPAiR (read-end position alignment repair) ",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_min_count,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-min-adapter", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "Minimal adapter size (ZB tag) for REPAiR (read-end position alignment repair) ",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_min_adapter,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-max-overhang", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "maximal distance from the template end to the amplicon end (ampl_len - ZA) for REPAiR (read-end position alignment repair) ",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_max_overhang,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-identity-drop-limit", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_FLOAT,
+                           "the identity score of the newly aligned zone should be above IDENTITY_DROP_LIMIT*(removed_portion_identity) ",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_identity_drop_limit,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-max-primer-zone-dist", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "maximal number of errors in the primer zone (between amplicon end and the read end if read end is inside amplicon)",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_max_primer_zone_dist,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "repair-clip-ext", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "minimal number of bases to extend the clip in REPAiR",
+                           NULL,
+                           tmap_map_opt_option_print_func_repair_clip_ext,
                            TMAP_MAP_ALGO_GLOBAL);
 
   tmap_map_opt_options_add(opt->options, "shared-memory-key", required_argument, 0, 'k', 
@@ -1475,6 +1525,13 @@ tmap_map_opt_init(int32_t algo_id)
   opt->amplicon_overrun = 6;
   opt->max_adapter_bases_for_soft_clipping = INT32_MAX;
   opt->end_repair_5_prime_softclip = 1;
+  opt->repair_min_freq = 97;
+  opt->repair_min_count = 0;
+  opt->repair_min_adapter = 0;
+  opt->repair_max_overhang = 16;
+  opt->repair_identity_drop_limit = 0.6;
+  opt->repair_max_primer_zone_dist = 1;
+  opt->repair_clip_ext = 12;
   opt->shm_key = 0;
   opt->min_seq_len = -1;
   opt->max_seq_len = -1;
@@ -1877,7 +1934,7 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if((0 == c && 0 == strcmp("no-bed-mapq", options[option_index].name))) {
           opt->use_bed_in_mapq = 0;
       }
-      else if((0 == c && 0 == strcmp("read-ends", options[option_index].name))) {
+      else if((0 == c && 0 == strcmp("repair", options[option_index].name))) {
           opt->use_bed_read_ends_stat = 1;
       }
       else if(c == 'A' || (0 == c && 0 == strcmp("score-match", options[option_index].name))) {
@@ -2021,6 +2078,20 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       }
       else if (0 == c && 0 == strcmp ("er-no5clip", options [option_index].name)) {
           opt->end_repair_5_prime_softclip = 0;
+      } else if(0 == c && 0 == strcmp("repair-min-freq", options[option_index].name)) {
+          opt->repair_min_freq = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("repair-min-count", options[option_index].name)) {
+          opt->repair_min_count = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("repair-min-adapter", options[option_index].name)) {
+          opt->repair_min_adapter = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("repair-max-overhang", options[option_index].name)) {
+          opt->repair_max_overhang = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("repair-identity-drop-limit", options[option_index].name)) {
+          opt->repair_identity_drop_limit = atof(optarg);
+      } else if(0 == c && 0 == strcmp("repair-max-primer-zone-dist", options[option_index].name)) {
+          opt->repair_max_primer_zone_dist = atoi(optarg);
+      } else if(0 == c && 0 == strcmp("repair-clip-ext", options[option_index].name)) {
+          opt->repair_clip_ext = atoi(optarg);
       }
       // End of global options
 
@@ -2599,7 +2670,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->use_param_ovr, 0, 1, "--par-ovr");
   tmap_error_cmd_check_int(opt->use_bed_in_end_repair, 0, 1, "--no-bed-er");
   tmap_error_cmd_check_int(opt->use_bed_in_mapq, 0, 1, "--no-bed-mapq");
-  tmap_error_cmd_check_int(opt->use_bed_read_ends_stat, 0, 1, "--read-ends");
+  tmap_error_cmd_check_int(opt->use_bed_read_ends_stat, 0, 1, "--repair");
   tmap_error_cmd_check_int(opt->score_match, 1, INT32_MAX, "-A");
   tmap_error_cmd_check_int(opt->pen_mm, 1, INT32_MAX, "-M");
   tmap_error_cmd_check_int(opt->pen_gapo, 1, INT32_MAX, "-O");
@@ -2635,6 +2706,15 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->end_repair, 0, 100, "--end-repair");
   tmap_error_cmd_check_int(opt->max_adapter_bases_for_soft_clipping, 0, INT32_MAX, "max-adapter-bases-for-soft-clipping");
   tmap_error_cmd_check_int(opt->end_repair_5_prime_softclip, 0, 1, "--er-no5clip");
+
+  tmap_error_cmd_check_int(opt->repair_min_freq, 0, INT32_MAX, "repair-min-freq");
+  tmap_error_cmd_check_int(opt->repair_min_count, 0, INT32_MAX, "repair-min-count");
+  tmap_error_cmd_check_int(opt->repair_min_adapter, 0, INT32_MAX, "repair-min-freq");
+  tmap_error_cmd_check_int(opt->repair_max_overhang, 0, INT32_MAX, "repair-max-overhang");
+  tmap_error_cmd_check_double(opt->repair_identity_drop_limit, 0.0, 1.0, "repair-identity-drop-limit");
+  tmap_error_cmd_check_int(opt->repair_max_primer_zone_dist, 0, INT32_MAX, "repair-max-primer-zone-dist");
+  tmap_error_cmd_check_int(opt->repair_clip_ext, 0, INT32_MAX, "repair-clip-ext");
+
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_error_cmd_check_int(opt->sample_reads, 0, 1, "-x");
 #endif
@@ -2866,6 +2946,13 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->amplicon_overrun = opt_src->amplicon_overrun;
     opt_dest->max_adapter_bases_for_soft_clipping = opt_src->max_adapter_bases_for_soft_clipping;
     opt_dest->end_repair_5_prime_softclip = opt_src->end_repair_5_prime_softclip;
+    opt_dest->repair_min_freq = opt_src->repair_min_freq;
+    opt_dest->repair_min_count = opt_src->repair_min_count;
+    opt_dest->repair_min_adapter = opt_src->repair_min_adapter;
+    opt_dest->repair_max_overhang = opt_src->repair_max_overhang;
+    opt_dest->repair_identity_drop_limit = opt_src->repair_identity_drop_limit;
+    opt_dest->repair_max_primer_zone_dist = opt_src->repair_max_primer_zone_dist;
+    opt_dest->repair_clip_ext = opt_src->repair_clip_ext;
     opt_dest->shm_key = opt_src->shm_key;
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
     opt_dest->sample_reads = opt_src->sample_reads;
@@ -2990,6 +3077,13 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "max-amplicon-overrun-indel-rescue=%d", opt->amplicon_overrun);
   fprintf(stderr, "max_adapter_bases_for_soft_clipping=%d\n", opt->max_adapter_bases_for_soft_clipping);
   fprintf(stderr, "end_repair_5_prime_softclip=%d\n", opt->end_repair_5_prime_softclip);
+  fprintf(stderr, "repair_min_freq=%d", opt->repair_min_freq);
+  fprintf(stderr, "repair_min_count=%d", opt->repair_min_count);
+  fprintf(stderr, "repair_min_adapter=%d", opt->repair_min_adapter);
+  fprintf(stderr, "repair_max_overhang=%d", opt->repair_max_overhang);
+  fprintf(stderr, "repair_identity_drop_limit=%f", opt->repair_identity_drop_limit);
+  fprintf(stderr, "repair_max_primer_zone_dist=%d", opt->repair_max_primer_zone_dist);
+  fprintf(stderr, "repair_clip_ext=%d", opt->repair_clip_ext);
   fprintf(stderr, "shm_key=%d\n", (int)opt->shm_key);
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   fprintf(stderr, "sample_reads=%lf\n", opt->sample_reads);

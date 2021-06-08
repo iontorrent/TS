@@ -38,3 +38,13 @@ def get_instrument_name( ):
     if proton:
         return proton
     raise ValueError( 'Could not determine proton name' )
+
+def delete_dir( dirname ):
+    r = subprocess.Popen('sudo -S rm -r %s' % dirname, stdout=subprocess.PIPE , 
+                         stdin=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True )
+    vacuum = r.communicate('ionadmin\n')[0]
+
+def movedir( src, dest ):
+    r = subprocess.Popen('sudo -S mv %s %s' % (src, dest), stdout=subprocess.PIPE , 
+                         stdin=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True )
+    vacuum = r.communicate('ionadmin\n')[0]

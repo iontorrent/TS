@@ -29,6 +29,11 @@
 
 #include <stdint.h>
 
+#if defined (__cplusplus)
+extern "C"
+{
+#endif
+
 #define ACTGN_MATRIX_ROWSIZE 5
 #define ACTGN_MATRIX_ROWNO 5
 #define ACTGN_MATRIX_SIZE (ACTGN_MATRIX_ROWSIZE*ACTGN_MATRIX_ROWNO)
@@ -91,7 +96,7 @@ typedef struct
 {
     int32_t match_score; /*!< match score */
     int32_t ins_score; /*!< insertion score */
-    int32_t del_score; /*! <deletion score */
+    int32_t del_score; /*!< deletion score */
 } tmap_sw_dpscore_t;
 
 /*!
@@ -388,5 +393,9 @@ extern int32_t           tmap_sw_sm_hs[];
   */
 int
 tmap_sw_main(int argc, char *argv[]);
+
+#if defined (__cplusplus)
+}
+#endif
 
 #endif // TMAP_SW_H

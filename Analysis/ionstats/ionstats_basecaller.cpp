@@ -21,6 +21,7 @@ using namespace std;
 using namespace BamTools;
 
 
+
 void IonstatsBasecallerHelp()
 {
   cerr << endl;
@@ -30,10 +31,12 @@ void IonstatsBasecallerHelp()
   cerr << "Usage:   ionstats basecaller [options]"
        << endl << endl;
   cerr << "General options:" << endl;
-  cerr << "  -i,--input                 FILE       input BAM (unmapped or mapped) [required option]" << endl;
-  cerr << "  -o,--output                FILE       output json file [ionstats_basecaller.json]" << endl;
-  cerr << "  -h,--histogram-length      INT        read length histogram cutoff [400]" << endl;
-  cerr << "  -k,--key                   STRING     seq key - used for calculating system_snr [" << DEFAULT_SEQ_KEY << "]"
+  cerr << "  -i,--input                 FILE                  input BAM (unmapped or mapped) [required option]" << endl;
+  cerr << "  -o,--output                FILE                  output json file [ionstats_basecaller.json]" << endl;
+  cerr << "  -h,--histogram-length      INT                   read length histogram cutoff [400]" << endl;
+  cerr << "  -k,--key                   STRING                seq key - used for calculating system_snr [" << DEFAULT_SEQ_KEY << "]" << endl;
+  cerr << "  -b,--barcodes              STRING,STRING,...     select only for this set of barcodes [" << DEFAULT_BARCODE << "]" << endl;
+  cerr << "  -d,--output-barcodes       STRING,STRING,...     output barcoded json files [" << DEFAULT_BARCODE_OUTPUT<< "]"
        << endl << endl;
 }
 
@@ -45,6 +48,25 @@ int IonstatsBasecaller(OptArgs &opts)
   string output_json_filename = opts.GetFirstString ('o', "output","ionstats_basecaller.json");
   int    histogram_length     = opts.GetFirstInt    ('h', "histogram-length", 400);
   string seq_key              = opts.GetFirstString ('k', "key", DEFAULT_SEQ_KEY);
+  vector<string> barcodes;
+  opts.GetOption(barcodes, DEFAULT_BARCODE, 'b', "barcodes");
+  vector<string> output_json_filenames_barcoded;
+  
+  bool use_barcodes = !barcodes.empty();
+  if (use_barcodes){
+    opts.GetOption(output_json_filenames_barcoded, DEFAULT_BARCODE_OUTPUT, 'd', "output-barcodes");
+    if(barcodes.size() != output_json_filenames_barcoded.size()) {
+      IonstatsBasecallerHelp();
+      return 1;
+    }
+    cout << "Barcoded option enabled. Generating stats for barcodes :" << endl;
+    for (int i = 0; i < (int)barcodes.size(); i++) 
+    {
+        cout << barcodes[i] << " to ";
+        cout << output_json_filenames_barcoded[i] << endl;
+    }
+    cout << "Pooled stats for all barcodes : " <<  output_json_filename << endl;
+  }
 
   if(input_bam_filename.empty()) {
     IonstatsBasecallerHelp();
@@ -78,6 +100,25 @@ int IonstatsBasecaller(OptArgs &opts)
   MetricGeneratorSNR system_snr;
   BaseQVHistogram qv_histogram;
 
+  
+    const unsigned int numBarcodes = barcodes.size();
+    ReadLengthHistogram bc_full_histo[numBarcodes];
+    ReadLengthHistogram bc_insert_histo[numBarcodes];
+    ReadLengthHistogram bc_Q17_histo[numBarcodes];
+    ReadLengthHistogram bc_Q20_histo[numBarcodes];
+
+    MetricGeneratorSNR bc_system_snr[numBarcodes];
+    BaseQVHistogram bc_qv_histogram[numBarcodes];
+
+    for (unsigned int i = 0; i < numBarcodes; i++){
+      bc_full_histo[i].Initialize(histogram_length);
+      bc_insert_histo[i].Initialize(histogram_length);
+      bc_Q17_histo[i].Initialize(histogram_length);
+      bc_Q20_histo[i].Initialize(histogram_length);
+    }
+    
+
+
   // We assume all read groups share the same flow order, so point iterating over all
   string flow_order;
   for (SamReadGroupIterator rg = sam_header.ReadGroups.Begin(); rg != sam_header.ReadGroups.End(); ++rg) {
@@ -91,14 +132,30 @@ int IonstatsBasecaller(OptArgs &opts)
   for (int qv = 0; qv < 256; qv++)
     qv_to_error_rate[qv] =  pow(10.0,-0.1*(double)qv);
 
-
   BamAlignment alignment;
-  string read_group;
+  
   vector<uint16_t> flow_signal_fz(flow_order.length());
   vector<int16_t> flow_signal_zm(flow_order.length());
-
+  
   while(input_bam.GetNextAlignment(alignment)) {
-
+    
+    int idx_barcode = -1;
+    if (use_barcodes){
+      // get the readgroup from the read
+      string read_group;
+      alignment.GetTag("RG",read_group);
+      
+      for (unsigned int i = 0; i < barcodes.size(); i++){
+        string barcode = barcodes[i];
+        if (read_group.find(barcode) == string::npos){
+            continue;
+        }
+        else{
+          idx_barcode = (int) i;
+        }
+      }
+    }    
+    
     // Record read length
     unsigned int full_length = alignment.Length;
     total_full_histo.Add(full_length);
@@ -123,19 +180,37 @@ int IonstatsBasecaller(OptArgs &opts)
     total_Q20_histo.Add(Q20_length);
 
     // Record data for system snr
-    if(alignment.GetTag("ZM", flow_signal_zm))
+    if(alignment.GetTag("ZM", flow_signal_zm)){
       system_snr.Add(flow_signal_zm, seq_key, flow_order);
-    else if(alignment.GetTag("FZ", flow_signal_fz))
+      if(use_barcodes){
+        bc_system_snr[idx_barcode].Add(flow_signal_zm, seq_key, flow_order);
+      }
+    }
+    else if(alignment.GetTag("FZ", flow_signal_fz)){
       system_snr.Add(flow_signal_fz, seq_key, flow_order);
+      if(use_barcodes){
+        bc_system_snr[idx_barcode].Add(flow_signal_fz, seq_key, flow_order);
+      }
+    }
 
     // Record qv histogram
     qv_histogram.Add(alignment.Qualities);
-  }
+
+    // Record data for individual barcode
+    if(use_barcodes){
+      bc_full_histo[idx_barcode].Add(full_length);
+      bc_insert_histo[idx_barcode].Add(insert_length);
+      bc_Q17_histo[idx_barcode].Add(Q17_length);
+      bc_Q20_histo[idx_barcode].Add(Q20_length);
+      
+      bc_qv_histogram[idx_barcode].Add(alignment.Qualities);
+    }
+  } //end of while
 
   input_bam.Close();
 
 
-
+  // Full data to json
   Json::Value output_json(Json::objectValue);
   //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_basecaller";
@@ -148,16 +223,43 @@ int IonstatsBasecaller(OptArgs &opts)
   total_Q17_histo.SaveToJson(output_json["Q17"]);
   total_Q20_histo.SaveToJson(output_json["Q20"]);
 
-
+  int status = 0;
   ofstream out(output_json_filename.c_str(), ios::out);
   if (out.good()) {
     out << output_json.toStyledString();
-    return 0;
   } else {
     fprintf(stderr, "ERROR: unable to write to '%s'\n", output_json_filename.c_str());
-    return 1;
+    status = 1;
   }
 
+  // output data for individual barcode
+  if (use_barcodes){
+    for (unsigned int i = 0; i < barcodes.size(); i++){ 
+      Json::Value output_json_bc(Json::objectValue);
+      //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+      output_json_bc["meta"]["format_name"] = "ionstats_basecaller";
+      output_json_bc["meta"]["format_version"] = "1.0";
+      output_json_bc["meta"]["barcode"] = barcodes[i];
+      // cout << barcodes[i] <<endl;
+      bc_system_snr[i].SaveToJson(output_json_bc);
+      bc_qv_histogram[i].SaveToJson(output_json_bc);
+      bc_full_histo[i].SaveToJson(output_json_bc["full"]);
+      bc_insert_histo[i].SaveToJson(output_json_bc["insert"]);
+      bc_Q17_histo[i].SaveToJson(output_json_bc["Q17"]);
+      bc_Q20_histo[i].SaveToJson(output_json_bc["Q20"]);
+
+
+      ofstream out_bc(output_json_filenames_barcoded[i].c_str(), ios::out);
+      // delete output_json;
+      if (out_bc.good()) {
+        out_bc << output_json_bc.toStyledString();
+      } else {
+        fprintf(stderr, "ERROR: unable to write to '%s'\n", output_json_filenames_barcoded[i].c_str());
+        status = 1;
+      }
+    }
+ }
+ return status;
 }
 
 

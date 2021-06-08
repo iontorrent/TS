@@ -17,11 +17,11 @@
 	{%if helper.isTemplateBySample%}
 		<legend>{% trans "workflow.step.savetemplate.bysample.legend" %}</legend>
 		<p>{% trans "workflow.step.savetemplate.bysample.fields.templateName.label" %}:</p>
-		<input type="text" class="input-large" placeholder="{% trans "workflow.step.savetemplate.bysample.fields.templateName.placeholder" %}" value="{{helper.getStepDict.Save_template_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
+		<input type="text" class="input-large" placeholder='{% trans "workflow.step.savetemplate.fields.templateName.label" %}' value="{{helper.getStepDict.Save_template_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%else%}
 		<legend>{% trans "workflow.step.saveplan.bysample.title" %}</legend>
 		<p>{% trans "workflow.step.saveplan.bysample.fields.templateName.label" %}:</p>
-		<input type="text" class="input-large" placeholder="{% trans "workflow.step.saveplan.bysample.fields.templateName.placeholder" %}" value="{{helper.getStepDict.Save_plan_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
+		<input type="text" class="input-large" placeholder='{% trans "workflow.step.savetemplate.fields.templateName.label" %}' value="{{helper.getStepDict.Save_plan_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%endif%}						
 </div>
 <div id="errors" style="color:red;font-weight:bold;"></div>

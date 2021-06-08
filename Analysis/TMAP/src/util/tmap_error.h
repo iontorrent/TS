@@ -6,6 +6,12 @@
 
 #include <stdint.h>
 
+#if defined (__cplusplus)
+extern "C" 
+{
+#endif
+
+
 /*! 
   Error handling routines.
  */
@@ -19,6 +25,12 @@ enum {
     Warn,  /*!< print a warning  */
     LastActionType /*!< dummy action type */
 };
+
+// error reporting policy
+// for compliant functions, bitwise combination flags indicate what to do if error encountered:
+#define T_REPORT_ERROR 0x1
+#define T_EXIT_ON_ERROR 0x2
+#define T_REACT_ON_ERROR (T_REPORT_ERROR|T_EXIT_ON_ERROR)
 
 /*! 
   the type of error
@@ -123,14 +135,24 @@ void tmap_user_warning (const char *fmt, ...);
 
 void tmap_user_fileproc_msg (const char* fname, int lineno, const char *fmt, ...);
 
+#define tmap_flagerr(flag, fmt, ...) \
+    if (flag & T_REACT_ON_ERROR) \
+    {\
+        tmap_fail ((flag & T_EXIT_ON_ERROR), __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__); \
+    }
 
-#define tmap_conderr(quit, fmt, args...) \
-    tmap_fail (quit, __FILE__, __func__, __LINE__, fmt, args)
 
-#define tmap_failure(fmt, args...) \
-    tmap_fail (1, __FILE__, __func__, __LINE__, fmt, args)
+#define tmap_conderr(quit, fmt, ...) \
+    tmap_fail (quit, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
 
-#define tmap_warning(fmt, args...) \
-    tmap_warn (__FILE__, __func__, __LINE__, fmt, args)
+#define tmap_failure(fmt, ...) \
+    tmap_fail (1, __FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define tmap_warning(fmt, ...) \
+    tmap_warn (__FILE__, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_ERROR_H

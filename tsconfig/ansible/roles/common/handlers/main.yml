@@ -4,3 +4,7 @@
 - name: update grub
   command: /usr/sbin/update-grub
   when: not docker_image
+
+- name: update initramfs
+  command: /usr/sbin/update-initramfs -u
+  when: not docker_image

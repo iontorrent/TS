@@ -1264,6 +1264,18 @@ enum ovr_opt_code
     OO_max_adapter_bases_for_soft_clipping,
     // --er-no5clip
     OO_er_no5clip,
+    // --repair
+    OO_repair,
+    // --repair-min-adapter
+    OO_repair_min_adapter,
+    // --repair-max-overhang
+    OO_repair_max_overhang,
+    // --repair-identity-drop-limits
+    OO_repair_identity_drop_limit,
+    // --repair_max_primer_zone_dist
+    OO_repair_max_primer_zone_dist,
+    // --repair_clip_ext
+    OO_repair_clip_ext,
 
     // --end-repair-he
     OO_end_repair_he,
@@ -1277,6 +1289,18 @@ enum ovr_opt_code
     OO_max_adapter_bases_for_soft_clipping_he,
     // --er-no5clip-he
     OO_er_no5clip_he,
+    // --repair-he
+    OO_repair_he,
+    // --repair-min-adapter-he
+    OO_repair_min_adapter_he,
+    // --repair-max-overhang-he
+    OO_repair_max_overhang_he,
+    // --repair-identity-drop-limits-he
+    OO_repair_identity_drop_limit_he,
+    // --repair_max_primer_zone_dist-he
+    OO_repair_max_primer_zone_dist_he,
+    // --repair_clip_ext_he
+    OO_repair_clip_ext_he,
 
     // --end-repair-le
     OO_end_repair_le,
@@ -1288,8 +1312,22 @@ enum ovr_opt_code
     OO_max_amplicon_overrun_large_indel_rescue_le,
     // --max-adapter-bases-for-soft-clipping-le
     OO_max_adapter_bases_for_soft_clipping_le,
-    // --er-5clip-le
+    // --er-no5clip-le
     OO_er_no5clip_le,
+    // --repair-le
+    OO_repair_le,
+    // --repair-min-adapter-le
+    OO_repair_min_adapter_le,
+    // --repair-max-overhang-le
+    OO_repair_max_overhang_le,
+    // --repair-identity-drop-limits-le
+    OO_repair_identity_drop_limit_le,
+    // --repair_max_primer_zone_dist-le
+    OO_repair_max_primer_zone_dist_le,
+    // --repair_clip_ext_le
+    OO_repair_clip_ext_le,
+
+
     // --log
     OO_log,
     // --debug-log
@@ -1309,58 +1347,59 @@ typedef struct option sysopt_t;
 static const sysopt_t overridable_opts [] =
 {
     // --no-bed-er
-    { "no-bed-er",            optional_argument,  NULL, OO_no_bed_er },
+    { "no-bed-er",                              optional_argument,  NULL, OO_no_bed_er },
     // -A,--score-match
-    { "score-match",          required_argument,  NULL, OO_score_match },
+    { "score-match",                            required_argument,  NULL, OO_score_match },
     // -M,--pen-mismatch
-    { "pen-mismatch",         required_argument,  NULL, OO_pen_mismatch },
+    { "pen-mismatch",                           required_argument,  NULL, OO_pen_mismatch },
     // -O,--pen-gap-open
-    { "pen-gap-open",         required_argument,  NULL, OO_pen_gap_open },
+    { "pen-gap-open",                           required_argument,  NULL, OO_pen_gap_open },
     // -E,--pen-gap-extension
-    { "pen-gap-extension",    required_argument,  NULL, OO_pen_gap_extension },
+    { "pen-gap-extension",                      required_argument,  NULL, OO_pen_gap_extension },
     // -G,--pen-gap-long
-    { "pen-gap-long",         required_argument,  NULL, OO_pen_gap_long },
+    { "pen-gap-long",                           required_argument,  NULL, OO_pen_gap_long },
     // -K,--gap-long-length
-    { "gap-long-length",      required_argument,  NULL, OO_gap_long_length },
+    { "gap-long-length",                        required_argument,  NULL, OO_gap_long_length },
     // -w,--band-width
-    { "pen-band-width",       required_argument,  NULL, OO_band_width },
+    { "pen-band-width",                         required_argument,  NULL, OO_band_width },
     // -g,--softclip-type
-    { "softclip-type",        required_argument,  NULL, OO_softclip_type },
+    { "softclip-type",                          required_argument,  NULL, OO_softclip_type },
     // --do-realign
-    { "do-realign",           optional_argument,  NULL, OO_do_realign },
+    { "do-realign",                             optional_argument,  NULL, OO_do_realign },
     // --r-mat
-    { "r-mat",                required_argument,  NULL, OO_r_mat },
+    { "r-mat",                                  required_argument,  NULL, OO_r_mat },
     // --r-mis
-    { "r-mis",                required_argument,  NULL, OO_r_mis },
+    { "r-mis",                                  required_argument,  NULL, OO_r_mis },
     // --r-gip
-    { "r-gip",                required_argument,  NULL, OO_r_gip },
+    { "r-gip",                                  required_argument,  NULL, OO_r_gip },
     // --r-gep
-    { "r-gep",                required_argument,  NULL, OO_r_gep },
+    { "r-gep",                                  required_argument,  NULL, OO_r_gep },
     // --r-bw
-    { "r-bw",                 required_argument,  NULL, OO_r_bw },
+    { "r-bw",                                   required_argument,  NULL, OO_r_bw },
     // --r-clip
-    { "r-clip",               required_argument,  NULL, OO_r_clip },
+    { "r-clip",                                 required_argument,  NULL, OO_r_clip },
     // --do-repeat-clip
-    { "do-repeat-clip",       optional_argument,  NULL, OO_do_repeat_clip },
+    { "do-repeat-clip",                         optional_argument,  NULL, OO_do_repeat_clip },
     // --repclip-cont
-    { "repclip-cont",         optional_argument,  NULL, OO_repclip_cont },
+    { "repclip-cont",                           optional_argument,  NULL, OO_repclip_cont },
     // --context
-    { "context",              optional_argument,  NULL, OO_context },
+    { "context",                                optional_argument,  NULL, OO_context },
     // --gap-scale
-    { "gap-scale",            required_argument,  NULL, OO_gap_scale },
+    { "gap-scale",                              required_argument,  NULL, OO_gap_scale },
     // --c-mat
-    { "c-mat",                required_argument,  NULL, OO_c_mat },
+    { "c-mat",                                  required_argument,  NULL, OO_c_mat },
     // --c-mis
-    { "c-mis",                required_argument,  NULL, OO_c_mis },
+    { "c-mis",                                  required_argument,  NULL, OO_c_mis },
     // --c-gip
-    { "c-gip",                required_argument,  NULL, OO_c_gip },
+    { "c-gip",                                  required_argument,  NULL, OO_c_gip },
     // --c-gep
-    { "c-gep",                required_argument,  NULL, OO_c_gep },
+    { "c-gep",                                  required_argument,  NULL, OO_c_gep },
     // --c-bw
-    { "c-bw",                 required_argument,  NULL, OO_c_bw },
+    { "c-bw",                                   required_argument,  NULL, OO_c_bw },
+
     // Following options are recognised per se as well as with -le and -he suffixes:
     // --end-repair
-    { "end-repair",           required_argument,  NULL, OO_end_repair },
+    { "end-repair",                             required_argument,  NULL, OO_end_repair },
     // --max-one-large-indel-rescue
     { "max-one-large-indel-rescue",                     required_argument,  NULL, OO_max_one_large_indel_rescue },
     // --min-anchor-large-indel-rescue
@@ -1370,7 +1409,20 @@ static const sysopt_t overridable_opts [] =
     // -J, --max-adapter-bases-for-soft-clipping
     { "max-adapter-bases-for-soft-clipping",            required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping },
     // --er-no5clip
-    { "er-no5clip",                                       optional_argument,  NULL, OO_er_no5clip },
+    { "er-no5clip",                                     optional_argument,  NULL, OO_er_no5clip },
+    // --repair
+    { "repair",                                         optional_argument,  NULL, OO_repair },
+    // --repair-min-adapter
+    { "repair-min-adapter",                             required_argument,  NULL, OO_repair_min_adapter },
+    // --repair-max-overhang
+    { "repair-max-overhang",                            required_argument,  NULL, OO_repair_max_overhang },
+    // --repair-identity-drop-limit
+    { "repair-identity-drop-limit",                     required_argument,  NULL, OO_repair_identity_drop_limit },
+    // --repair-max-primer-zone-dist
+    { "repair-max-primer-zone-dist",                    required_argument,  NULL, OO_repair_max_primer_zone_dist },
+    // --repair-clip-ext
+    { "repair-clip-ext",                                required_argument,  NULL, OO_repair_clip_ext },
+
     // lower end of amplicon
     // --end-repair-le
     { "end-repair-le",                                  required_argument,   NULL, OO_end_repair_le },
@@ -1383,7 +1435,20 @@ static const sysopt_t overridable_opts [] =
     // --max-adapter-bases-for-soft-clipping-le
     { "max-adapter-bases-for-soft-clipping-le",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_le },
     // --er-no5clip-le
-    { "er-no5clip-le",                                    optional_argument,  NULL, OO_er_no5clip_le },
+    { "er-no5clip-le",                                  optional_argument,  NULL, OO_er_no5clip_le },
+    // --repair-le
+    { "repair-le",                                      optional_argument,  NULL, OO_repair_le },
+    // --repair-min-adapter-le
+    { "repair-min-adapter-le",                          required_argument,  NULL, OO_repair_min_adapter_le },
+    // --repair-max-overhang-le
+    { "repair-max-overhang-le",                         required_argument,  NULL, OO_repair_max_overhang_le },
+    // --repair-identity-drop-limit-le
+    { "repair-identity-drop-limit-le",                  required_argument,  NULL, OO_repair_identity_drop_limit_le },
+    // --repair-max-primer-zone-dist-le
+    { "repair-max-primer-zone-dist-le",                 required_argument,  NULL, OO_repair_max_primer_zone_dist_le },
+    // --repair-clip-ext-le
+    { "repair-clip-ext-le",                             required_argument,  NULL, OO_repair_clip_ext_le },
+
     // higher end of amplicon
     // --end-repair-he
     { "end-repair-he",                                  required_argument,  NULL, OO_end_repair_he },
@@ -1396,7 +1461,21 @@ static const sysopt_t overridable_opts [] =
     // --max-adapter-bases-for-soft-clipping-he
     { "max-adapter-bases-for-soft-clipping-he",         required_argument,  NULL, OO_max_adapter_bases_for_soft_clipping_he },
     // --er-no5clip-he
-    { "er-no5clip-he",                                    optional_argument,  NULL, OO_er_no5clip_he },
+    { "er-no5clip-he",                                  optional_argument,  NULL, OO_er_no5clip_he },
+    // --repair-he
+    { "repair-he",                                      optional_argument,  NULL, OO_repair_he },
+    // --repair-min-adapter-he
+    { "repair-min-adapter-he",                          required_argument,  NULL, OO_repair_min_adapter_he },
+    // --repair-max-overhang-he
+    { "repair-max-overhang-he",                         required_argument,  NULL, OO_repair_max_overhang_he },
+    // --repair-identity-drop-limit-he
+    { "repair-identity-drop-limit-he",                  required_argument,  NULL, OO_repair_identity_drop_limit_he },
+    // --repair-max-primer-zone-dist-he
+    { "repair-max-primer-zone-dist-he",                 required_argument,  NULL, OO_repair_max_primer_zone_dist_he },
+    // --repair-clip-ext-he
+    { "repair-clip-ext-he",                             required_argument,  NULL, OO_repair_clip_ext_he },
+
+
     // --log
     { "log",                                            no_argument,        NULL, OO_log },
     // --debug-log
@@ -1990,6 +2069,129 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                         tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --er-no5clip-le");
                 }
                 break;
+
+            case OO_repair_min_adapter:
+                if (str2int (optarg, &value))
+                    local_params->repair_min_adapter.value = value,
+                    local_params->repair_min_adapter.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-min-adapter");
+                break;
+            case OO_repair_min_adapter_he:
+                if (str2int (optarg, &value))
+                    local_params->repair_min_adapter_he.value = value,
+                    local_params->repair_min_adapter_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-min-adapter-he");
+                break;
+            case OO_repair_min_adapter_le:
+                if (str2int (optarg, &value))
+                    local_params->repair_min_adapter_le.value = value,
+                    local_params->repair_min_adapter_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-min-adapter-le");
+                break;
+            case OO_repair_max_overhang:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_overhang.value = value,
+                    local_params->repair_max_overhang.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-overhang");
+                break;
+            case OO_repair_max_overhang_he:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_overhang_he.value = value,
+                    local_params->repair_max_overhang_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-overhang-he");
+                break;
+            case OO_repair_max_overhang_le:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_overhang_le.value = value,
+                    local_params->repair_max_overhang_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-overhang-le");
+                break;
+            case OO_repair_identity_drop_limit:
+                if (str2double (optarg, &dvalue))
+                    local_params->repair_identity_drop_limit.value = dvalue,
+                    local_params->repair_identity_drop_limit.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-identity-drop-limit");
+                break;
+            case OO_repair_identity_drop_limit_he:
+                if (str2double (optarg, &dvalue))
+                    local_params->repair_identity_drop_limit_he.value = dvalue,
+                    local_params->repair_identity_drop_limit_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-identity-drop-limit-he");
+                break;
+            case OO_repair_identity_drop_limit_le:
+                if (str2double (optarg, &dvalue))
+                    local_params->repair_identity_drop_limit_le.value = dvalue,
+                    local_params->repair_identity_drop_limit_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-identity-drop-limit-le");
+                break;
+            case OO_repair_max_primer_zone_dist:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_primer_zone_dist.value = value,
+                    local_params->repair_max_primer_zone_dist.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-primer-zone-dist");
+                break;
+            case OO_repair_max_primer_zone_dist_he:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_primer_zone_dist_he.value = value,
+                    local_params->repair_max_primer_zone_dist_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-primer-zone-dist-he");
+                break;
+            case OO_repair_max_primer_zone_dist_le:
+                if (str2int (optarg, &value))
+                    local_params->repair_max_primer_zone_dist_le.value = value,
+                    local_params->repair_max_primer_zone_dist_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-max-primer-zone-dist-le");
+                break;
+
+            case OO_repair_clip_ext:
+                if (str2int (optarg, &value))
+                    local_params->repair_clip_ext.value = value,
+                    local_params->repair_clip_ext.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-clip-ext");
+                break;
+            case OO_repair_clip_ext_he:
+                if (str2int (optarg, &value))
+                    local_params->repair_clip_ext_he.value = value,
+                    local_params->repair_clip_ext_he.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-clip-ext-he");
+                break;
+            case OO_repair_clip_ext_le:
+                if (str2int (optarg, &value))
+                    local_params->repair_clip_ext_le.value = value,
+                    local_params->repair_clip_ext_le.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --repair-clip-ext-le");
+                break;
+
             case OO_log:
                 local_params->specific_log.value = 1,
                 local_params->specific_log.over = 1,
@@ -2157,7 +2359,9 @@ static void endpos_init (tmap_map_endpos_t* endpos)
     endpos->flag = 0;
 };
 
-int32_t extract_and_store_read_ends_tag_values (const char* description, const char* tag, tmap_refseq_t* refseq, char* bed_fname, int lineno)
+const unsigned MAX_SAFE_DIST = 50; // warn if read start/end is out of the amplicon boundaries by more then this number of bases
+
+int32_t extract_and_store_read_ends_tag_values (const char* description, const char* tag, tmap_refseq_t* refseq, char* bed_fname, int lineno, const char* chr, int32_t ampl_beg, int32_t ampl_end)
 {
     static const char* BLOCK_DELIM = ":";
     static const char* ELEM_DELIM = "|";
@@ -2190,9 +2394,11 @@ int32_t extract_and_store_read_ends_tag_values (const char* description, const c
             // assert (blocklen <= value_len); // sanity
             char* bcopy = alloca (blocklen + 1);
             memcpy (bcopy, block, blocklen +1);
-             printf ("Blocklen=%d, block = %s\n", blocklen, bcopy);
+            //  printf ("Blocklen=%d, block = %s\n", blocklen, bcopy);
+            uint8_t block_valid = 1;
             for (tok_initstr = tok = bcopy, tokno = 0; 
-                    (tok = strtok_r (tok_initstr, ELEM_DELIM, &tok_context)) != NULL; tok_initstr = NULL, ++tokno)
+                (tok = strtok_r (tok_initstr, ELEM_DELIM, &tok_context)) != NULL && block_valid; 
+                tok_initstr = NULL, ++tokno)
             {
                 switch (tokno)
                 {
@@ -2200,21 +2406,42 @@ int32_t extract_and_store_read_ends_tag_values (const char* description, const c
                         if (!str2int (tok, &endpos.coord))
                         {
                             tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse coordinate (from '%s') from block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
-                            tok = NULL;
+                            block_valid = 0;
+                        }
+                        else if (endpos.coord < 0)
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: %s: invalid position (%d) in block# %d (amplicon %s:%d-%d). Block ignored.", tag, endpos.coord, blockno, chr, ampl_beg, ampl_end);
+                            block_valid = 0;
+                        }
+                        // maybe add validation by the chromosome size? 
+                        else if (endpos.coord + MAX_SAFE_DIST < ampl_beg || endpos.coord > ampl_end + MAX_SAFE_DIST)
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: %s position %d in block# %d is too far out of the amplicon boundaries (%s:%d-%d). Block ignored.", tag, endpos.coord, blockno, chr, ampl_beg, ampl_end);
+                            block_valid = 0;
                         }
                         break;
                     case 1:
                         if (!str2int (tok, &endpos.count))
                         {
                             tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse count (from '%s') from block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
-                            tok = NULL;
+                            block_valid = 0;
+                        }
+                        else if (endpos.count < 0)
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: %s: invalid count (%d) in block# %d (amplicon %s:%d-%d). Block ignored.", tag, endpos.count, blockno, chr, ampl_beg, ampl_end);
+                            block_valid = 0;
                         }
                         break;
                     case 2:
                         if (!str2double (tok, &endpos.fraction))
                         {
                             tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Can not parse fraction (from '%s') from %d block %d of %s (%s). Block ignored.", tok, blockno, tag, block);
-                            tok = NULL;
+                            block_valid = 0;
+                        }
+                        else if (endpos.fraction < 0)
+                        {
+                            tmap_user_fileproc_msg (bed_fname, lineno, "Warning: %s: invalid fraction (%g) in block# %d (amplicon %s:%d-%d). Block ignored.", tag, endpos.fraction, blockno, chr, ampl_beg, ampl_end);
+                            block_valid = 0;
                         }
                         break;
                     case 3:
@@ -2225,6 +2452,8 @@ int32_t extract_and_store_read_ends_tag_values (const char* description, const c
                         ;
                 }
             }
+            if (!block_valid)
+                continue;
             if (tokno > 4)
                 tmap_user_fileproc_msg (bed_fname, lineno, "Warning: Ignoring %d extra fields in %s block %d (%s).", tokno - 3, tag, blockno, block);
             if (tokno > 0 && tokno < 3)
@@ -2252,16 +2481,16 @@ int32_t extract_and_store_read_ends_tag_values (const char* description, const c
 // puts the addresses of saved data into tmap_map_endstat_t, passed in by pointer.
 // returns number of ends stored, or -1 on (unrecoverable) error
 
-int32_t extract_read_ends (char* description, tmap_map_endstat_t* read_ends, tmap_refseq_t* refseq, char* bed_fname, int lineno)
+int32_t extract_read_ends (char* description, tmap_map_endstat_t* read_ends, tmap_refseq_t* refseq, char* bed_fname, int lineno, const char* chr, int32_t ampl_beg, int32_t ampl_end)
 {
     static const char* READ_STARTS_TAG = "READ_STARTS";
     static const char* READ_ENDS_TAG = "READ_ENDS";
     read_ends->index = UINT32_MAX, read_ends->starts_count = 0, read_ends->ends_count = 0;
 
-    int32_t starts_count = extract_and_store_read_ends_tag_values (description, READ_STARTS_TAG, refseq, bed_fname, lineno);
+    int32_t starts_count = extract_and_store_read_ends_tag_values (description, READ_STARTS_TAG, refseq, bed_fname, lineno, chr, ampl_beg, ampl_end);
     if (starts_count == -1)
         tmap_failure ("%s:%d : Unrecoverable error while parsing READ_STARTS",  bed_fname, lineno);
-    int32_t ends_count = extract_and_store_read_ends_tag_values (description, READ_ENDS_TAG, refseq, bed_fname, lineno);
+    int32_t ends_count = extract_and_store_read_ends_tag_values (description, READ_ENDS_TAG, refseq, bed_fname, lineno, chr, ampl_beg, ampl_end);
     if (ends_count == -1)
         tmap_failure ("%s:%d : Unrecoverable error while parsing READ_ENDS",  bed_fname, lineno);
     uint32_t stored = starts_count + ends_count;
@@ -2403,7 +2632,7 @@ tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32
                 if (use_read_ends)
                 {
                     // find the READ_STARTS and READ_ENDS blocks and parse / store them
-                    read_ends_count = extract_read_ends (last_tok, &read_ends, refseq, bedfile, lineno);
+                    read_ends_count = extract_read_ends (last_tok, &read_ends, refseq, bedfile, lineno, chr, beg, end);
                 }
             }
         }
@@ -2681,3 +2910,4 @@ int tmap_refseq_fasta2maskedfasta_main(int argc, char *argv[])
 
   return 0;
 }
+

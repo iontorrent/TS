@@ -146,6 +146,27 @@
   register: grub_update_needed
 
 #-----------------------------------------------------------------------------
+# TS-18116 and FST-14720
+#-----------------------------------------------------------------------------
+- name: Change i/o scheduler to improve performance on 550 for 18.04 Servers
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash elevator=deadline"'
+    regexp: 'GRUB_CMDLINE_LINUX_DEFAULT.*'
+  when: S5_virtual_guest|bool == False and ansible_distribution_version == "18.04"
+  notify: "update initramfs"
+  register: initramfs_update_needed
+
+- name: Change i/o scheduler to improve performance on 550 for S5 TSVM
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    line: 'GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8 net.ifnames=0 biosdevname=0 elevator=deadline"'
+    regexp: 'GRUB_CMDLINE_LINUX.*'
+  when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
+  notify: "update initramfs"
+  register: initramfs_update_needed
+
+#-----------------------------------------------------------------------------
 # initialize_system_users
 #-----------------------------------------------------------------------------
 
@@ -297,3 +318,10 @@
 - name: Run update-grub if needed
   command: /usr/sbin/update-grub
   when: grub_update_needed.changed
+
+- name: Run update-initramfs and grub if needed
+  command: "{{ item }}"
+  with_items:
+    - /usr/sbin/update-grub
+    - /usr/sbin/update-initramfs -u
+  when: initramfs_update_needed.changed

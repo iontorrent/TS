@@ -26,7 +26,7 @@ public:
   AlleleDetails() : type(ALLELE_UNKNOWN), chr(0), position(0), ref_length(0), 
       length(0), minimized_prefix(0), minimized_suffix(0),
       repeat_boundary(0), hp_repeat_len (0) , initialized(false), filtered(false), is_hotspot(false), is_black_listed('.'),
-      hotspot_params(NULL), coverage(0), coverage_fwd(0), coverage_rev(0), samples(1) {}
+      hotspot_params(NULL), coverage(0), coverage_fwd(0), coverage_rev(0), samples(1), param(NULL) {}
 
   void add_observation(const Allele& observation, int sample_index, bool is_reverse_strand, int _chr, int num_samples, int read_count) {
     if (not initialized) {
@@ -148,6 +148,7 @@ public:
   long int                coverage_rev;         //! reverse strand allele coverage (across samples)
   string                  raw_cigar; 
   vector<AlleleCoverage>  samples;              //! per-sample coverages
+  VariantSpecificParams   *param;
 };
 
 // ====================================================================
@@ -255,7 +256,7 @@ public:
 
   void GenerateCandidates(deque<VariantCandidate>& variant_candidates,
       list<PositionInProgress>::iterator& position_ticket, int& haplotype_length,
-	  CandidateExaminer* my_examiner = NULL);
+	  CandidateExaminer* my_examiner = NULL, const TargetsManager * const targets_manager = NULL);
   bool GetNextHotspotLocation(int& chr, long& position) const;
 
 private:
@@ -334,7 +335,7 @@ private:
   void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
   bool FillVariantFlowDisCheck(VariantCandidate &v, string &refstring, list<PositionInProgress>::iterator& position_ticket, bool hotspot_present, int haplotype_length);
   void set_subset(VariantCandidate &v1, VariantCandidate &v, list<int> &co);
-  void MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
+  int MakeVariant(deque<VariantCandidate>& variant_candidates, list<PositionInProgress>::iterator& position_ticket, int n, list<int> *alist);
   void BlacklistAlleleIfNeeded(AlleleDetails& allele, int cov, int cov_f, bool b);
   void SegmentBlacklist(int pos, int chr, int total_cov, int total_f_cov);
   void flushblackpos(int idx, size_t pos); 
@@ -404,6 +405,7 @@ private:
   pileup                      allele_pileup_;
   AlleleDetails               ref_pileup_;
   vector<long int>           coverage_by_sample_;
+  long int		     total_cov_;
   //vector<char>                black_list_strand_;
   char                        black_list_strand_; // revert to 4.2
   int                         hp_max_lenght_override_value; //! if not zero then it overrides the maxHPLenght parameter in filtering
@@ -417,6 +419,7 @@ private:
   size_t 		      blackstart;
   int			      blackidx;
   int                         black_chr;
+  long    		      end_cur_ampl_, start_next_ampl_;
 };
 
 #endif

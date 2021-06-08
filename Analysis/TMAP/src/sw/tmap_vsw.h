@@ -35,7 +35,12 @@
 #include <unistd.h>
 #include "tmap_vsw_definitions.h"
 #include "lib/AffineSWOptimizationWrapper.h"
-  
+
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*!
   Used to run the underlying vectorized smith waterman (VSW) types
   */
@@ -118,5 +123,9 @@ tmap_vsw_process_rev(tmap_vsw_t *vsw,
                  uint8_t *target, int32_t tlen, 
                  tmap_vsw_result_t *result,
                  int32_t *overflow, int32_t score_thr, int32_t direction);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_VSW_H

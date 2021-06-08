@@ -66,6 +66,7 @@ void UnifyVcfHelp()
   printf("      --subset-check              on/off      Enables or disables subset allele subset annotation [on]\n");
   printf("      --subset-scores       INT,INT,INT,INT   Scores for Smith-Waterman aligner: match,mismatch,gap-open,gap-extend  [1,-3,-5,-2]\n");
   printf("      --subset-simple-mnp         on/off      Simplified (faster) subset check for MNPs. [on]\n");
+  printf("      --output-truth-alleles      on/off      If on, use PPD and SPD to determine the true allele from alignment [off]\n");
   printf ("\n");
 }
 
@@ -235,7 +236,6 @@ void PriorityQueue::trim_variant(vcf::Variant* variant) {
 }
 
 void PriorityQueue::left_align_variant(vcf::Variant* variant) {
-  return;
   if (!left_align_enabled || variant->alt.empty() || variant->alt.size() > 1) return;
 
   string alt = variant->alt[0];
@@ -259,6 +259,31 @@ void PriorityQueue::left_align_variant(vcf::Variant* variant) {
   variant->alt[0] = alt;
 }
 
+void VcfOrderedMerger::right_align_variant(vcf::Variant* variant) {
+  if (variant->alt.empty() || variant->alt.size() > 1) return;
+
+  string alt = variant->alt[0];
+  if (variant->ref[0] != alt[0]) return;
+  int idx = reference_reader.chr_idx(variant->sequenceName.c_str());
+
+  while((int) (variant->position+variant->ref.length()) < reference_reader.chr_size(idx)) {
+    char pad = reference_reader.base(idx, variant->position-1 + variant->ref.length());
+    string temp_ref = variant->ref.substr(1)+pad;
+    string temp_alt = alt.substr(1)+pad;
+    if (temp_ref[0] != temp_alt[0]) break;
+    alt = temp_alt; variant->ref = temp_ref;
+
+    // left align of hotspots might cause issue of unsync alt and OMAPALT fields
+    vector<string>& oalt = variant->info["OMAPALT"];
+    if (oalt.size() == 1) {
+	oalt[0] = oalt[0].substr(1)+pad;
+    }
+    variant->position++;
+  }
+  variant->alt[0] = alt;
+}
+
+
 void PriorityQueue::open_vcf_file(vcf::VariantCallFile& vcf, string filename, bool parse_samples) {
   // Open VCF file for parsing
   if (!enabled) return;
@@ -278,7 +303,7 @@ void PriorityQueue::next() {
     ComparableVcfVariant* v = new ComparableVcfVariant(merger, file, _vc++);
     if (get_next_variant(v)) {
       //trim_variant(v);
-      //left_align_variant(v);
+      left_align_variant(v);
       push(v);
     } else {
       _size = 0;
@@ -309,12 +334,12 @@ VcfOrderedMerger::VcfOrderedMerger(string& novel_tvc,
                                    string& gvcf_output,
                                    const ReferenceReader& r,
                                    TargetsManager& tm,
-                                   size_t w = 1, size_t min_dp = 0, bool la = false)
+                                   size_t w = 1, size_t min_dp = 0, bool la = false, bool ota = false)
                                    : depth_in(NULL), gvcf_out(NULL), reference_reader(r), targets_manager(tm),
-                                   left_align_enabled(la),
+                                   left_align_enabled(la), use_ppd_spd (ota),
                                    window_size(w), minimum_depth(min_dp),
-                                   novel_queue(novel_tvc, *this, r, w, la, true),
-                                   assembly_queue(assembly_tvc, *this, r, w, la, true),
+                                   novel_queue(novel_tvc, *this, r, w, false, true),
+                                   assembly_queue(assembly_tvc, *this, r, w, true, true), // left align assembly
                                    hotspot_queue(hotspot_tvc, *this, r, w, la),
                                    bgz_out(output_tvc.c_str()),
                                    current_cov_info(NULL),
@@ -397,6 +422,7 @@ bool VcfOrderedMerger::too_far_far(vcf::Variant* v1, vcf::Variant* v2) {
 template<typename T>
 bool VcfOrderedMerger::is_within_target_region(T *variant) {
   long pos = variant->position;
+  long len = variant->ref.length();
   int chr_idx = reference_reader.chr_idx(variant->sequenceName.c_str());
   while (current_target != targets_manager.merged.end() && chr_idx > current_target->chr) {
     current_target++;
@@ -408,7 +434,7 @@ bool VcfOrderedMerger::is_within_target_region(T *variant) {
   return current_target != targets_manager.merged.end()
          && current_target->chr == chr_idx
          && pos >  current_target->begin
-         && pos <= current_target->end;
+         && pos+len-1 <= current_target->end;
 }
 
 
@@ -873,11 +899,24 @@ void VcfOrderedMerger::span_ref_and_alts() {
 
 void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
   if (variant->alt.empty()) return;
+  bool use_PPD_SPD = false;
+  if (use_ppd_spd and variant->info.find("PPD") != variant->info.end() and variant->info.find("SPD") !=  variant->info.end()) {
+	use_PPD_SPD = true;
+  }
   for (vector<string>::iterator alt = variant->alt.begin(); alt != variant->alt.end(); alt++) {
     long i = alt - variant->alt.begin();
     long opos = variant->position;
     string oref = variant->ref;
     string temp_alt = *alt;
+    if (use_PPD_SPD) {
+	int x = stoi(variant->info["PPD"][i]);
+	int y = stoi(variant->info["SPD"][i]);
+	opos += x;
+	int len = oref.size()-x-y;
+	oref = oref.substr(x, len);
+	len = temp_alt.size()-x-y;
+	temp_alt = temp_alt.substr(x, len);	
+    } else {
     // trim identical ends
     string::iterator orefi = oref.end();
     string::iterator alti = temp_alt.end();
@@ -893,6 +932,7 @@ void VcfOrderedMerger::generate_novel_annotations(vcf::Variant* variant) {
     }
     if (distance(temp_alt.begin(), alti) > 0) temp_alt.erase(temp_alt.begin(), alti);
     if (distance(oref.begin(), orefi) > 0) oref.erase(oref.begin(), orefi);
+    }
     if (oref.empty()) oref = "-";
     if (temp_alt.empty()) temp_alt = "-";
     stringstream ss;
@@ -1228,9 +1268,29 @@ void VcfOrderedMerger::flush_vcf(vcf::Variant* latest)
     	  ++num_records;
         }
       } else {
-        ++num_off_target;
-        cout << UNIFY_VARIANTS " Skipping " << current->sequenceName << ":" << current->position
+	bool off_targ = true;
+	long pos  = current->position;
+        if (current->isHotSpot and (not find_and_merge_assembly(current, false))) {
+	    right_align_variant(current);
+	    if (current->position != pos) {
+	      list<vcf::Variant>::iterator it;
+	      current->isHotSpot = false;
+	      for (it = variant_list.begin(), it++; it != variant_list.end(); it++) {
+		if (variant_cmp(&(*it), current) <= 0) break;
+	      } 
+	      if (it ==  variant_list.end() or variant_cmp(&(*it), current) != 0) {
+		vcf::Variant new_one = *current;
+		if (it ==  variant_list.end()) variant_list.push_back(new_one);
+		else variant_list.insert(it, new_one);
+		off_targ = false; // modified, and see if it is on target
+	      }
+	    }
+	}
+	if (off_targ) {
+          ++num_off_target;
+          cout << UNIFY_VARIANTS " Skipping " << current->sequenceName << ":" << pos
              << " outside of target regions.\n";
+	}
       }
       variant_list.pop_front();
     } else break;
@@ -1557,6 +1617,7 @@ int UnifyVcf(int argc, const char *argv[]) {
   bool subset_simple_mnp         = opts.GetFirstBoolean  ('-', "subset-simple-mnp",  true);
   bool ignore_symmetric_subsets  = opts.GetFirstBoolean  ('-', "subset-ignore-symmetric",  true);
   vector<int> subset_scores      = opts.GetFirstIntVector('-', "subset-scores", "1,-3,-5,-2");
+  bool true_alleles 		 = opts.GetFirstBoolean  ('-', "output-truth-alleles",  false);
 
   // check and fill optional arguments
   unsigned int w = (window_size < 1) ? DEFAULT_WINDOW_SIZE : (unsigned int) window_size;
@@ -1600,7 +1661,7 @@ int UnifyVcf(int argc, const char *argv[]) {
 
     // Prepare merger object
     VcfOrderedMerger merger(novel_vcf, assembly_vcf, hotspot_vcf, output_vcf, json_path, input_depth, output_gvcf,
-                            reference_reader, targets_namager, w, minimum_depth,DEFAULT_LEFT_ALIGN_FLAG);
+                            reference_reader, targets_namager, w, minimum_depth,DEFAULT_LEFT_ALIGN_FLAG, true_alleles);
     // Set filtering options
     merger.SetVCFrecordFilters(filter_by_target, hotspot_positions_only, hotspot_variants_only);
     // Set subset annotation options

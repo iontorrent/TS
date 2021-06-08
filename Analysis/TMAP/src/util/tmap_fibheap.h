@@ -33,6 +33,11 @@
 #ifndef TMAP_FIBHEAP_H
 #define TMAP_FIBHEAP_H
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   */
 
@@ -190,4 +195,9 @@ tmap_fibheap_deleteheap(tmap_fibheap_t *h);
 */
 tmap_fibheap_t *
 tmap_fibheap_union(tmap_fibheap_t *ha, tmap_fibheap_t *hb);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // TMAP_FIBHEAP_H

@@ -5,11 +5,14 @@ from ion.plugin import *
 
 import sys, os, datetime, time, json, re, csv, math, glob, textwrap
 import numpy as np
-
+import time # delete later
 import matplotlib
 matplotlib.use( 'agg' ) # to make sure this is set for before another module doesn't set it
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.ticker import FormatStrFormatter
+from matplotlib.lines import Line2D
+import matplotlib.dates as mdates
 
 # Set default cmap to jet, which is viridis on newer TS software (matplotlib 2.1)
 matplotlib.rcParams['image.cmap'] = 'jet'
@@ -18,17 +21,17 @@ matplotlib.rcParams['image.cmap'] = 'jet'
 from PIL import Image
 
 # Import our tools
-import inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0, os.path.join(parentdir, 'autoCal')) 
-print os.path.join(parentdir, 'autoCal')
-
 from tools.PluginMixin import PluginMixin
 from tools.debug_reader import ValkyrieDebug
 get_hms = ValkyrieDebug.get_hms
 from tools import html as H
 from tools import sparklines
+from tools.libpreplog import LibPrepLog 
+
+# Required for lane wetting detection
+#from skimage.measure import compare_ssim
+#import cv2
+
 
 LOG_REGEX = re.compile( '''summary.(?P<timestamp>[\w\-_:]+).log''' )
 
@@ -38,22 +41,16 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
     
     Plugin to analyze timing of Valkyrie workflow for run tracking and performance monitoring.
     
-    Latest Update | CN: Added maxAmp_foamScrape and normal_maxAmp metrics.
-                  | CN: Added warning message for when plugin is launched before post run cleans complete.
-                  | PW: Fixed a bug in regex for git branch/commit info.
-                  | CN: Move check for instrument platform before analyze_flow_rate to avoid crashing on proton runs.
-                  | PW: Fixed bug in regex for OIA_TIMING that did not expect a period in a run name.
-                  | CN: Bugfix to ensure plugin works when there is no postrun.
-                  | PW: Bugfix to ensure plugin works on RUO Pipeline.
-                  | PW: Added initialization and pipeline/analysis timing.
-                  | BP: Added pipette timing metrics
-                  | BP: minor uprev of version to better control relaunch and get plugins up to speed.
-                  | 0.9.11  | BP: fixed formatting bugs for date and floats
-                  | 0.9.12  | BP: uprevved for version control
-                  | 0.9.13  | BP: improved foam scrape detection, and block parsing
-                  | 0.9.14  | BP: uprevved for version control
+    Latest Update | CN: Bug-proof plugin. Search for !! to find changes.    
+    Latest Update | CN: Only make symlink to tube bottom log csv if link does not already exist.    
+    Latest Update | CN: Flow rate sparkline will include reseq flows, if reseq run on ValkTS.    
+    Latest Update | CN: added CW and CW+MW flow rate median and std to results.json   
+    Latest Update | CN: added libpreplog stuff   
+    Latest Update | CN: fix bug in debug_reader that was causing VW to crash for non reseq runs. Bugfix to run type categorization   
+    Latest Update | CN: Handles reseq runs. time_to_seq_done is time to reseq done for reseq runs.   
+    Latest Update | BP: Updated tools (v1.1.19)
     """
-    version       = "0.9.14"
+    version       = "1.1.20" # must also change the version number in launch function
     allow_autorun = True
     
     runTypes      = [ RunType.THUMB , RunType.FULLCHIP , RunType.COMPOSITE ]
@@ -61,7 +58,9 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
     def launch( self ):
         print( "Start Plugin" )
         self.init_plugin( )
-        
+       
+        self.version = "1.1.20"
+
         self.metrics['software_version'] = str(self.explog.metrics['ReleaseVersion'])
         self.metrics['dev_scripts_used'] = self.explog.metrics['Valkyrie_Dev_Scripts']
         self.metrics['datacollect']      = str(self.explog.metrics['DatacollectVersion'])
@@ -69,6 +68,20 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         
         # Set up debug_log path
         self.debug_log = os.path.join( self.calibration_dir , 'debug' )
+        
+        # Exit plugin if we're missing required data after waiting a while. Have to do this on RUO server and ValkTS since dbg folder may also be missing 
+        for delay in [(20,False),(20,False),(10,False),(10,False),(1,True)]:
+            not_a_valk, missing_debug = self.is_missing_data( final_check=delay[1] )
+            if not_a_valk:
+                print('We are on a valkyrie TS but this is not a valkyrie run. This should not be possible!')
+                sys.exit(0)
+            if missing_debug:
+                if delay[1]:
+                    sys.exit(0) # if debug is missing after the final delay, we give up and exit
+                print( 'Debug not found. Waiting {} minutes before checking again.'.format(delay[0]) )
+                time.sleep(delay[0]*60) # debug is missing, but we will wait and try again 
+            else:
+                break
         
         # Identify if we are on RUO or Valkryie by presence of dbg folder - where deck and chip images live
         dbg = os.path.join( self.calibration_dir , 'dbg' )
@@ -83,19 +96,19 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         else:
             print( 'Unable to find debug images!' )
             self.dbg = self.raw_data_dir
-            
-        # Exit plugin if we're missing required data
-        if self.is_missing_data( ):
-            sys.exit(0)
+        
+        # Set do_reseq variable, used in various areas. Eventually save as metric?  
+        try:
+            self.do_reseq = self.explog.metrics['doResequencing']
+            self.reseq_flow_order = self.explog.metrics['reseq_flow_order'].lower() 
+        except:
+            self.do_reseq = False
+            self.reseq_flow_order = None
         
         self.prepare_chip_images( )
         self.prepare_deck_images( scale_factor=2 )
         self.analyze_flow_rate  ( )
         
-        # Exit plugin if we're missing required data
-        #if self.is_missing_data( ):
-        #    sys.exit(0)
-            
         # Initialize debug log reader.  Send in end time as well in case of weird seq only runs.
         self.expt_start          = self.explog.start_time
         print('FROM DEBUG', self.expt_start, self.explog.end_time )
@@ -108,6 +121,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         # Define a minimum flow threshold for mock run detection
         self.mock_flow_threshold = 200
         if self.is_mock_run( ):
+            #print('actually, lets continue')
             sys.exit(0)
             
         ###########################################################################
@@ -129,30 +143,64 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             print( 'Detected that PostRunClean took place for this run, taking {:.1f} hours.'.format( self.postrun_clean_timing.get('duration',0) ) )
             
         # Read pipeline info for post-OIA data - need to add summary of sample timing to self.analysis_timing
-        self.analysis_timing = self.analyze_pipeline( )
-        print( self.analysis_timing )
-        
-        self.sample_timing   = self.analyze_samples ( )
-        print( self.sample_timing )
-        
-        if self.sample_timing:
-            self.analysis_timing['Samples'] = self.sample_timing
-        
+        try:
+            self.analysis_timing = self.analyze_pipeline( )
+            print('analysis_timing: ')
+            print( self.analysis_timing )
+            
+            self.sample_timing, self.sample_plugin_timing   = self.analyze_samples ( )
+            
+            print('sample_timing: ')
+            print( self.sample_timing )
+            
+            if self.sample_timing:
+                self.analysis_timing['Samples'] = self.sample_timing
+                self.analysis_timing['Sample-Level Plugins'] = self.sample_plugin_timing
+        except:
+            print('!! Something went wrong when analyzing summary logs. Skipping')
+            
         # If we found OIA data, let's analyze and add to the analysis_timing dictionary.
         oia_timing = os.path.join( self.raw_data_dir, 'onboard_results', 'sigproc_results', 'timing.txt' )
         if os.path.exists( oia_timing ):
             print( 'Found OIA timing.txt.  Now analyzing.' )
-            self.oia_timing = Timing( oia_timing )
-            self.oia_timing.make_detailed_plot( self.results_dir )
-            self.analysis_timing['OIA'] = self.oia_timing.overall
-            print( 'OIA timing:' )
-            print( self.oia_timing.overall )
+            try:
+                self.oia_timing = Timing( oia_timing )
+                self.oia_timing.make_detailed_plot( self.results_dir )
+                self.analysis_timing['OIA'] = self.oia_timing.overall
+                print( 'OIA timing:' )
+                print( self.oia_timing.overall )
+            except:
+                print('!! Something went wrong when analyzing OIA data. Skipping analysis')
             
+        
         ###########################################################################
         
         # Analyze Workflow Timing -- Now incorporating ScriptStatus.csv.
-        self.analyze_workflow_timing( )
+        self.analyze_workflow_timing(self.do_reseq )
         
+        ###########################################################################
+        # Analyze files for finding clogs in sequencing lines 
+        ###########################################################################
+        self.doPostChip = self.explog.metrics['doPostChipClean'] 
+        self.debugInfo = DebugInfo( self.calibration_dir, self.results_dir, self.expt_start, self.debug.all_lines )
+        if self.debugInfo.foundConicalClogCheck:
+            self.metrics['conical_clog_check'] = self.debugInfo.ccc_metrics  # conical clog check happens in PostRunClean and PostChipClean
+            if self.debugInfo.postChipClean:
+                self.metrics['pcc'] = self.debugInfo.pcc_metrics             # save all metrics generated from all other postChipClean tests
+        self.flows = FlowInfo( self.calibration_dir, self.results_dir, self.explog.metrics['flow_order'].lower(), self.do_reseq, self.reseq_flow_order, true_active=self.true_active )
+        if self.flows.hasFlowData:
+            self.metrics['flow_rate'].update( self.flows.flow_metrics )
+       
+        # New- libPrepLog
+        if self.ss_file_found: 
+            self.libpreplog = LibPrepLogCSV( self.calibration_dir, self.results_dir, self.expt_start, self.ss.data, seq_end=self.seq_end  )
+            if self.libpreplog.hasLog:
+                self.metrics['libpreplog'] = self.libpreplog.lpl_metrics 
+        else:
+            print('Skipping analysis of libpreplog since ScriptStatus.csv not found')
+            self.libpreplog = LibPrepLogCSV( self.calibration_dir, self.results_dir, self.expt_start )
+             
+
         # Analyze Tube Bottom locations
         self.analyze_tube_bottoms( )
         
@@ -164,20 +212,67 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
 
         # Analyze pipette behavior
         self.analyze_pipette_behavior( )
-
+        
+        # Find pipette errors such as er52
+        self.find_pipette_errors( ) # function to find er52 and other pipette errors
+        
         # Check if plugin completed before postrun cleans were complete
         self.did_plugin_run_too_early( )
+        # self.message = '' when PostRun data was found and the plugin did not run too early
 
         # Create graphic of which modules were used....Or just make an html table.
         self.write_block_html( )
         
-        self.write_metrics( )
-        print( "Plugin Complete." )
+        # If PostRun data is missing, wait for it to appear. If it appears, rerun parts of the plugin
+        if self.csa:
+            check_after_x_mins = [10,10,10,10,10,10,10,10,10,10,10,10] # input the number of minutes to delay and for how many iterations
+        else: 
+            check_after_x_mins = [10,10,10,10,10,10,10]
+        rerun = False # set to true if we find PostRun after waiting
+        if self.message == '': 
+            self.write_metrics( )
+            print( "Plugin Complete." )
+        else:
+            for delay in check_after_x_mins:
+                print( '_______________Waiting {} minutes for data to transfer to TS.'.format(delay) )
+                time.sleep(delay*60)
+                print( 'Check if postRun has ended....' )
+                self.analyze_workflow_timing( self.do_reseq ) # checks the ScriptStatus file for postRun complete
+                self.did_plugin_run_too_early( )
+                if self.message == '':
+                    print('_______________PostRun has been found. Stop waiting.')
+                    rerun = True
+                    break
+                else:
+                    print('_______________PostRun still not found.')
+            if rerun:
+                print('_______________Re-running parts of ValkyrieWorkflow....')
+                # Analyze vacuum log files - should now find PostLibClean vac logs
+                self.analyze_vacuum_logs( )
+                ###########################################################################
+                # Analyze files for finding clogs in sequencing lines 
+                ###########################################################################
+                self.doPostChip = self.explog.metrics['doPostChipClean'] 
+                self.debugInfo = DebugInfo( self.calibration_dir, self.results_dir, self.expt_start, self.debug.all_lines )
+                if (self.debugInfo.foundConicalClogCheck):
+                    self.metrics['conical_clog_check'] = self.debugInfo.ccc_metrics  # conical clog check happens in PostRunClean and PostChipClean
+                    if self.debugInfo.postChipClean:
+                        self.metrics['pcc'] = self.debugInfo.pcc_metrics             # save all metrics generated from all other postChipClean tests
+                self.flows = FlowInfo( self.calibration_dir, self.results_dir, self.explog.metrics['flow_order'].lower(), self.do_reseq, self.reseq_flow_order, true_active=self.true_active )
+                if self.flows.hasFlowData:
+                    self.metrics['flow_rate'].update( self.flows.flow_metrics )
+                self.write_block_html( )
+            else:
+                print( '_______________PostRun was never found... moving on' )
+            
+            # Complete plugin 
+            self.write_metrics( )
+            print( "Plugin Complete." )
         
     def analyze_pipeline( self ):
         """ Finds the appropriate summary.log file and reads in analysis modules and timing. """
         # The summary.__.log files live in the analysis dir.
-        log = self.get_first_log( self.analysis_dir )
+        log, log2 = self.get_first_log( self.analysis_dir )
         if log:
             # If we're here, it's time to read in the information.
             summary_log = SummaryLog( os.path.join( self.analysis_dir, log ) )
@@ -187,31 +282,82 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
     
     def analyze_samples( self ):
         """ Processes through sample log files and determines sample analysis timing details. """
-        sample_logs = []
+        sample_analysis_logs = []
+        sample_plugin_logs = []
+        log_dict = {}
         # Parse log files
         for sample_name in self.sample_dirs:
             sample_dir = os.path.join( self.analysis_dir, self.sample_dirs[sample_name] )
-            log = self.get_first_log( sample_dir )
+            log, log2 = self.get_first_log( sample_dir )
             if log:
-                sample_logs.append( SummaryLog( os.path.join( sample_dir, log ), sample_name ) )
-                
+                log_dict[sample_name]={}
+                sl_obj = SummaryLog( os.path.join( sample_dir, log ), sample_name )
+                log_dict[sample_name]['analysis_log'] = sl_obj
+                sample_analysis_logs.append( sl_obj ) 
+                print('log {} for sample {} in dir {}'.format( log, sample_name, dir ) )
+            if log2:
+                sl_obj = SummaryLog( os.path.join( sample_dir, log2 ), sample_name )
+                log_dict[sample_name]['plugin_log'] = sl_obj
+                sample_plugin_logs.append( sl_obj ) 
         # Exit if we found no samples
-        if not sample_logs:
+        if not sample_analysis_logs:
             print( 'Error!  No samples found.  This is embarassing . . .' )
-            return {}
+            print( 'sample dirs: {}'.format(self.sample_dirs) )
+            return {}, {}
         
+        #try:
         # Sort the logs by earliest analysis start time
-        sample_logs = sorted( sample_logs, key=lambda x: x.get_start_time() )
-        timing = { 'start' : sample_logs[0].get_start_time(),
-                   'end'   : sorted( [s.get_end_time() for s in sample_logs] )[-1] }
+        sample_analysis_logs = sorted( sample_analysis_logs, key=lambda x: x.get_start_time() )
+        sample_plugin_logs = sorted( sample_plugin_logs, key=lambda x: x.get_start_time() ) 
+        timing_sample_analysis = { 'start' : sample_analysis_logs[0].get_start_time(),
+                   'end'   : sorted( [s.get_end_time() for s in sample_analysis_logs] )[-1] }
+        timing_sample_plugins = { 'start' : sample_plugin_logs[0].get_start_time(),
+                   'end'   : sorted( [s.get_end_time() for s in sample_plugin_logs] )[-1] }
         
-        # Measure duration
-        timing['duration'] = sample_logs[0].get_duration( timing )
+        
+        print('sample plugin end: {}'.format( sorted( [s.get_end_time() for s in sample_plugin_logs] )[-1] ) )
+        
+        # Measure duration CN: only uses the input, but happens to be a method of the summary log class 
+        timing_sample_analysis['duration'] = sample_analysis_logs[0].get_duration( timing_sample_analysis )
+        timing_sample_plugins['duration'] = sample_plugin_logs[0].get_duration( timing_sample_plugins )
+        
+        
+        #except:
+        #    print('something went wrong with sample duration analysis...')
+        #    return {}
         
         # Plot the data separately
+        # CN: find a way to add in the plugin time- perhaps using the log_dict ? 
         def plot_sample( s, y ):
             """ Currently done to plot in minutes """
             info    = [ (k, s.timing[k]['start'], s.timing[k]['duration']) for k in s.timing ]
+            procs   = sorted( info, key=lambda x: x[1] )
+            labels  = [p[0] for p in procs]
+            patches = []
+            cm      = matplotlib.cm.Set3
+            colors  = [cm(i) for i in np.linspace(0,1,12)]
+            for i,proc in enumerate(procs):
+                left  = (proc[1] - procs[0][1]).total_seconds() / 60.
+                patch = plt.barh( y+i, proc[2]*60., height=0.8, left=left, align='center', color=colors[i],
+                                  label=proc[0], zorder=3 )
+                patches.append( patch )
+                
+            return y+i, labels, patches
+        
+        def plot_sample_all( sample_dict, y ):
+            """ 
+            Currently done to plot in minutes. Altered from plot_sample, this function uses the log_dict
+            to show sample analysis timing and sample plugin timing from summary logs 1 and 2, respectivel.
+            Should be find even when there is no second summary log (not tested)."""
+            s_a = sample_dict['analysis_log']
+            s_p = sample_dict['plugin_log']
+            info_analysis  = [ (k, s_a.timing[k]['start'], s_a.timing[k]['duration']) for k in s_a.timing ]
+            try:
+                info_plugins   = [ (k, s_p.timing[k]['start'], s_p.timing[k]['duration']) for k in s_p.timing ]
+            except:
+                info_plugins = [] # incase there is no second summary file found
+            
+            info = info_analysis + info_plugins 
             procs   = sorted( info, key=lambda x: x[1] )
             labels  = [p[0] for p in procs]
             patches = []
@@ -231,9 +377,16 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         yticktups = []
         y         = 0
         space     = 2
-        for sample in sample_logs:
-            last_y, labels, patches = plot_sample( sample, y )
-            yticktups.append( ((last_y-y)/2. + y,sample.name) )
+        
+        sorted_sample_names = log_dict.keys()
+        sorted_sample_names.sort()
+        
+        #for sample in sample_analysis_logs:
+        for sample_name in sorted_sample_names:
+            #last_y, labels, patches = plot_sample( sample, y )
+            last_y, labels, patches = plot_sample_all( log_dict[sample_name], y )
+            #yticktups.append( ((last_y-y)/2. + y,sample.name) )
+            yticktups.append( ((last_y-y)/2. + y,sample_name) )
             y = last_y + space
             plt.axhline( y =(last_y+space/2) , color='grey', ls='-' )
             
@@ -248,7 +401,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         plt.close( )
         
         # Pass out a timing heirarchy to be leveraged in the overall timing plot.
-        return timing
+        return timing_sample_analysis, timing_sample_plugins
     
     def get_summary_logs( self, log_dir ):
         """ Helper method to get summary log files.  Typically we want the first one created. """
@@ -256,13 +409,22 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         return sorted( logs )
     
     def get_first_log( self, log_dir ):
-        """ Wrapper on get_summary_logs to give the first log, usually what we want. """
+        """ 
+        Wrapper on get_summary_logs to give the first log, usually what we want.
+        CN update: first log gives sample analysis timing, second log gives timing for sample-level 
+        plugin execution. Lets get the first two since for certain runs, the plugin execution 
+        takes a significant amount of time and need to be shown in the timing analysis plot. 
+        """
         logs = self.get_summary_logs( log_dir )
         try:
-            log = logs[0]
+            log1 = logs[0]
         except IndexError:
-            log = ''
-        return log
+            log1 = ''
+        try:
+            log2 = logs[1]
+        except IndexError:
+            log2 = ''
+        return log1, log2
         
     def find_debug_images( self, regex , scale_factor=1 , convert_to_jpg=False ):
         """ Reusable routine to find images from the dbg folder and copy to plugin output dir """
@@ -321,7 +483,6 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         ci_re = re.compile( """chipImage_(?P<process>[\D]+)_(?P<dt>[\d_]+)_(?P<lane>[1-4]{1}).jpg""" )
         chip_images = self.find_debug_images( ci_re )
         chip_images = sorted( chip_images, key=lambda x: (x['dt'], x['lane']) )
-
         # Save a boolean to test if we had any images.  Will use in block html.
         self.found_chip_images = len( chip_images ) > 0
         
@@ -374,7 +535,40 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         doc.add( table )
         with open( os.path.join( self.results_dir, 'chipImages.html' ), 'w' ) as f:
             f.write( str( doc ) )
+        
+        # Lane wetting detection - compare Harpoon_start to Run_start for all unused lanes
+        #self.lane_wetting_detection( image_arr ) # incomplete, do not run
+
+    def lane_wetting_detection( self, chip_images ):
+        '''Adapted from Shawn W.'s script'''
+        print( 'chip_images' )
+        print( chip_images )
+        # First determine the lowest active lane
+        smallest_active_lane = 1
+        for lane in [1,2,3,4]:
+            if self.explog.metrics['LanesActive{}'.format(lane)]:
+                smallest_active_lane = lane
+        print( 'smallest_active_lane', smallest_active_lane )
+        for lane in [1,2,3,4]:
+            if lane < smallest_active_lane:
+                continue
+            left_boundary = int(800*(lane-1)/4)
+            right_boundary = int(800*(lane)/4)
+            print(lane, left_boundary, right_boundary)
+            # select the Harpoon_start and Run_start images
+            run_start_fileName  = chip_images[0][lane-1]['file']
+            harp_start_fileName = chip_images[1][lane-1]['file']
+            print( run_start_fileName , harp_start_fileName )
+            #run_start_original = cv2.imread( run_start_fileName )
+            #harp_start_original = cv2.imread( harp_start_fileName )
+
+            #if run_start_original is not None and harp_start_original is not None:
+                # crop
+            #    before = run_start_original[0:600,left_boundary:right_boundary]
+            #    after  = harp_start_original[0:600,left_boundary:right_boundary]
             
+
+
     def prepare_deck_images( self , scale_factor=1 ):
         """ 
         Searches for and prepares html page for deck images taken during the run. 
@@ -459,64 +653,75 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             """ Helper function to deal with yes/no in the LanesActive# field. """
             return string.lower() in ['yes','true','y']
         
-        true_active = sum( [ is_active( exp['LanesActive{}'.format(i)] ) for i in [1,2,3,4] ] )
-        print( 'Detected the true number of active lanes: {:d} . . .'.format( true_active ) )
-        
-        target_flow = 48. * true_active
-        flow_range  = target_flow * np.array( (1.0-flow_rate_margin, 1.0+flow_rate_margin ), float )
-        
-        # Let's get only the data we want from the text explog with flow data
-        x        = self.explog.flowax[   self.explog.flowax > 0 ]
-        data     = self.explog.flowrate[ self.explog.flowax > 0 ]
-        outliers = np.logical_or( data > flow_range.max() , data < flow_range.min() )
-        if outliers.any():
-            first = np.where( outliers )[0][0]
-            print( 'Found {} flow rate outliers!  First deviant flow: acq_{:04d}!'.format( outliers.sum(), first ))
-        else:
-            first = None
+        try:
+            true_active = sum( [ is_active( exp['LanesActive{}'.format(i)] ) for i in [1,2,3,4] ] )
+            print( 'Detected the true number of active lanes: {:d} . . .'.format( true_active ) )
+            self.true_active = true_active # will need in FlowInfo class 
+            target_flow = 48. * true_active
+            flow_range  = target_flow * np.array( (1.0-flow_rate_margin, 1.0+flow_rate_margin ), float )
             
-        if true_active == 0:
-            avg_per_lane = data.mean()
-        else:
-            avg_per_lane = data.mean() / true_active
+            # Let's get only the data we want from the text explog with flow data
+            x        = self.explog.flowax[   self.explog.seq_flow_mask ]
+            data     = self.explog.flowrate[ self.explog.seq_flow_mask ]
+            outliers = np.logical_or( data > flow_range.max() , data < flow_range.min() )
+            if outliers.any():
+                first = np.where( outliers )[0][0]
+                print( 'Found {} flow rate outliers!  First deviant flow: acq_{:04d}!'.format( outliers.sum(), first ))
+            else:
+                first = None
+                
+            if true_active == 0:
+                avg_per_lane = data.mean()
+            else:
+                avg_per_lane = data.mean() / true_active
+            print('Length of flow rate array: {}'.format(len(x)))
+            if self.do_reseq:
+                flow_total = len(x)
+            else:
+                flow_total = float(self.explog.flows)
+            print( 'Average flow rate: {:.1f} uL/s'.format( data.mean() ) )
+            flow_rate_metrics = { 'mean'         : data.mean() ,
+                                  'std'          : data.std() ,
+                                  'outliers'     : outliers.sum() ,
+                                  'perc_outliers': 100. * float(outliers.sum()) / flow_total ,
+                                  'first'        : first ,
+                                  'avg_per_lane' : avg_per_lane , 
+                                  'true_active'  : true_active }
             
-        print( 'Average flow rate: {:.1f} uL/s'.format( data.mean() ) )
-        flow_rate_metrics = { 'mean'         : data.mean() ,
-                              'std'          : data.std() ,
-                              'outliers'     : outliers.sum() ,
-                              'perc_outliers': 100. * float(outliers.sum()) / float(self.explog.flows) ,
-                              'first'        : first ,
-                              'avg_per_lane' : avg_per_lane , 
-                              'true_active'  : true_active }
-        
-        self.metrics['flow_rate'] = flow_rate_metrics
-        
-        # Also, make a sparkline.
-        fig   = plt.figure( figsize=(8,0.5) )
-        gs    = gridspec.GridSpec( 1, 1, left=0.0, right=1.0, bottom=0.05, top=0.95 )
-        spark = sparklines.Sparkline( fig, gs[0], 8 )
-        
-        label = sparklines.Label( r'$\overline{Q}=%.1f \  \frac{\mu L}{s}$' % data.mean() , width=3 , fontsize=16 )
-        spark.add_label( label, 'left' )
-        
-        # If we have outliers, let's color code it red.
-        if outliers.sum() > 0:
-            color = 'red'
-        else:
-            color = 'green'
-        num   = sparklines.Label( r'$%d$' % outliers.sum() , width=1 , fontsize=16 , color=color )
-        spark.add_label( num , 'right' )
-        spark.create_subgrid()
-        
-        spark.ax.axis   ( 'off' )
-        spark.ax.plot   ( x , data , '-' , linewidth=0.75 )
-        spark.ax.axhspan( flow_range[0] , flow_range[1] , color='green' , alpha=0.4 )
-        spark.ax.axhline( target_flow , ls='--', color='green', linewidth=0.5 )
-        spark.draw      ( )
-        
-        fig.savefig( os.path.join( self.results_dir , 'flow_spark.svg' ), format='svg' )
-        
-    def analyze_workflow_timing( self ):
+            self.metrics['flow_rate'] = flow_rate_metrics
+            
+            # Also, make a sparkline.
+            fig   = plt.figure( figsize=(8,0.5) )
+            gs    = gridspec.GridSpec( 1, 1, left=0.0, right=1.0, bottom=0.05, top=0.95 )
+            spark = sparklines.Sparkline( fig, gs[0], 8 )
+            
+            label = sparklines.Label( r'$\overline{Q}=%.1f \  \frac{\mu L}{s}$' % data.mean() , width=3 , fontsize=16 )
+            spark.add_label( label, 'left' )
+            
+            # If we have outliers, let's color code it red.
+            if outliers.sum() > 0:
+                color = 'red'
+            else:
+                color = 'green'
+            num   = sparklines.Label( r'$%d$' % outliers.sum() , width=1 , fontsize=16 , color=color )
+            spark.add_label( num , 'right' )
+            spark.create_subgrid()
+            spark.ax.axis   ( 'off' )
+            spark.ax.plot   ( x , data , '-' , linewidth=0.75 )
+            if self.do_reseq:
+                num_flows = int(self.explog.flows)
+                spark.ax.fill_between( np.arange(num_flows), flow_range[0] , flow_range[1], color='green' , alpha=0.4, linewidth=0.0 )
+                spark.ax.fill_between( np.arange(num_flows+13,x[-1],1), flow_range[0] , flow_range[1], color='green' , alpha=0.4, linewidth=0.0 )
+            else:
+                spark.ax.axhspan( flow_range[0] , flow_range[1] , color='green' , alpha=0.4 )
+            spark.ax.axhline( target_flow , ls='--', color='green', linewidth=0.5 )
+            spark.draw      ( )
+            
+            fig.savefig( os.path.join( self.results_dir , 'flow_spark.svg' ), format='svg' )
+        except:
+            print('!! Something went wrong when making flow rate sparkline') 
+            
+    def analyze_workflow_timing( self, do_reseq=False ):
         """ 
         Does original large scale analysis.
         Now also does analysis based on ScriptStatus.csv, if the file is available.
@@ -524,7 +729,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         self.debug.parallel_grep  ( )
 
         # Get timing and adjust if needed.
-        self.debug.get_overall_timing()
+        self.debug.get_overall_timing(reseq=do_reseq)
         
         if not self.debug.modules['libprep']:
             # Let's deal with mag2seq
@@ -553,7 +758,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             
         mods = self.debug.modules # shortcut
         self.metrics['modules'] = mods
-        if all( mods.values() ):
+        #if all( mods.values() ): # no longer works since resequencing was added as a module
+        if all( [ mods['libprep'], mods['harpoon'], mods['magloading'], mods['coca'], mods['sequencing'] ] ):
             self.metrics['end_to_end']  = True
             self.metrics['run_type']    = 'End to End'
         elif all([ mods['harpoon'], mods['magloading'], mods['coca'], mods['sequencing'] ]):
@@ -568,7 +774,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         elif all([ mods['magloading'], mods['coca'] ]):
             self.metrics['mag_to_temp'] = True
             self.metrics['run_type']    = 'MagLoading to Templating'
-        elif mods['sequencing'] and not all([ mods['libprep'], mods['harpoon'], mods['magloading'], mods['coca'] ]):
+        elif mods['sequencing'] and not any([ mods['libprep'], mods['harpoon'], mods['magloading'], mods['coca'] ]): # change all to any
+            print('Classifying run as sequencing only')
             self.metrics['seq_only'] = True
             self.metrics['run_type'] = 'Sequencing Only'
             
@@ -581,47 +788,62 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         else:
             self.ss_file_found = True
             
-        # Add in postrun timing before we update_data
-        self.ss = ScriptStatus( ss_file, self.explog.start_time )
-        self.ss.read()
-        self.ss.add_postrun_modules( self.postchip_clean_timing, self.postrun_clean_timing )
-        self.ss.update_data( )
-        self.ss.add_overall_timing( self.debug.timing )
-        
-        # Make figures
-        self.ss.submodule_pareto( self.results_dir, count=5 )
-        self.ss.full_timing_plot( self.results_dir , self.init_timing , self.analysis_timing )
-        
-        # Save metrics for durations, used tips.  Some of these are copied to the overall results.json
-        seq_done   = self.ss.get_relative_time( self.ss.data['sequencing']['overall']['end'] )
-        ss_metrics = { 'used_tips': 0 }
-        
-        # The other metrics required for the program are time to basecaller completion and sample analysis compl.
-        self.metrics['time_to_seq_done']     = seq_done
         try:
-            self.metrics['time_to_postrun_done'] = self.ss.get_relative_time(self.ss.data['postrun']['overall']['end'])
-        except: # no POSTRUN
-            self.metrics['time_to_postrun_done'] = None
-        if self.analysis_timing:
-            self.metrics['time_to_basecaller_done'] = self.ss.get_relative_time( self.analysis_timing['BaseCallingActor']['end'] )
-            self.metrics['time_to_samples_done'] = self.ss.get_relative_time( self.analysis_timing['Samples']['end'] )
-        
-        for module in self.ss.data:
-            m           = self.ss.data[module]
-            module_time = m['overall']['duration']
-            module_tips = m['overall']['used_tips']
-            ss_metrics[module]       = { 'duration': module_time, 'used_tips': module_tips }
-            ss_metrics['used_tips'] += module_tips
+            # Add in postrun timing before we update_data
+            self.ss = ScriptStatus( ss_file, self.explog.start_time )
+            self.ss.read()
+            self.ss.update_data( )
+            self.ss.add_overall_timing( self.debug.timing, self.metrics['run_type'], reseq=do_reseq )
+            self.ss.add_postrun_modules( self.postchip_clean_timing, self.postrun_clean_timing )
             
-            # Add submodules
-            if 'submodules' in m:
-                for sm in m['submodules']:
-                    sm_time = m['submodules'][sm]['duration']
-                    sm_tips = m['submodules'][sm].get('used_tips',0)
-                    ss_metrics[module][sm] = {'duration': sm_time, 'used_tips': sm_tips }
+            # Make figures
+            self.ss.submodule_pareto( self.results_dir, count=5 )
+            self.ss.full_timing_plot( self.results_dir , self.init_timing , self.analysis_timing, reseq=do_reseq )
+            
+            # Save metrics for durations, used tips.  Some of these are copied to the overall results.json
+            if mods['resequencing']:
+                seq_done = self.ss.get_relative_time( self.ss.data['resequencing']['overall']['end'] )
+                self.seq_end = self.ss.data['resequencing']['overall']['end'] # for libPrepLog
+            else:
+                seq_done = self.ss.get_relative_time( self.ss.data['sequencing']['overall']['end'] )
+                self.seq_end = self.ss.data['sequencing']['overall']['end'] # for libPrepLog
+            
+            ss_metrics = { 'used_tips': 0 }
+            
+            # The other metrics required for the program are time to basecaller completion and sample analysis compl.
+            self.metrics['time_to_seq_done']     = seq_done
+            try:
+                self.metrics['time_to_postrun_done'] = self.ss.get_relative_time(self.ss.data['postrun']['overall']['end'])
+            except: # no POSTRUN
+                self.metrics['time_to_postrun_done'] = None
+            if self.analysis_timing:
+                try:
+                    self.metrics['time_to_basecaller_done'] = self.ss.get_relative_time( self.analysis_timing['BaseCallingActor']['end'] )
+                except:
+                    self.metrics['time_to_basecaller_done'] = None # for when BaseCallingActor fails
+                try:
+                    self.metrics['time_to_samples_done'] = self.ss.get_relative_time( self.analysis_timing['Samples']['end'] )
+                except:
+                    self.metrics['time_to_samples_done'] = None # for case where sample summary files are missing. 
+            for module in self.ss.data:
+                m           = self.ss.data[module]
+                module_time = m['overall']['duration']
+                module_tips = m['overall']['used_tips']
+                ss_metrics[module]       = { 'duration': module_time, 'used_tips': module_tips }
+                ss_metrics['used_tips'] += module_tips
+                # Add submodules
+                if 'submodules' in m:
+                    for sm in m['submodules']:
+                        sm_time = m['submodules'][sm]['duration']
+                        sm_tips = m['submodules'][sm].get('used_tips',0)
+                        ss_metrics[module][sm] = {'duration': sm_time, 'used_tips': sm_tips }
+                        
+            self.metrics['script_status'] = ss_metrics
+        except:
+            print('!! Something went wrong when analyzing the ScriptStatus file or making timing plot. Skipping analysis')
+            self.ss_file_found = False
+            return None
                     
-        self.metrics['script_status'] = ss_metrics
-                
     def analyze_tube_bottoms( self ):
         """ 
         Analyzes the debug csv that checks tubes for their bottom location (only occurs when running BottomFind) 
@@ -629,45 +851,103 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         self.metrics['bottomlog'] = {}
         missed    = []
         bent_tips = []
-        
-        tbl = os.path.join( self.calibration_dir, 'TubeBottomLog.csv' )
-        if os.path.exists( tbl ):
-            self.has_tube_bottom_log = True
-            with open( tbl, 'r' ) as f:
-                fnames = ['tube','pipette','missed_bottom','bent_tip','zcal','bottom_found'] 
-                reader = csv.DictReader( f, fieldnames=fnames )
-                for row in reader:
-                    # Skip over rows if they are from the 'liq_waste_01' tube until Shawn fixes this line.
-                    if row['tube'] == 'liq_waste_01':
-                        continue
-                    
-                    try:
-                        # This line ignores other lines in the CSV that do not have a zcal value.
-                        _ = float( row['zcal'] )
+        try: 
+            tbl = os.path.join( self.calibration_dir, 'TubeBottomLog.csv' )
+            if os.path.exists( tbl ):
+                self.has_tube_bottom_log = True
+                with open( tbl, 'r' ) as f:
+                    fnames = ['tube','pipette','missed_bottom','bent_tip','zcal','bottom_found'] 
+                    reader = csv.DictReader( f, fieldnames=fnames )
+                    for row in reader:
+                        # Skip over rows if they are from the 'liq_waste_01' tube until Shawn fixes this line.
+                        if row['tube'] == 'liq_waste_01':
+                            continue
                         
-                        # Change to not count all levels of warnings, but only the most extreme.
-                        if 'Bent tip' in row['bent_tip']:
-                            bent_tips.append( row['tube'] )
+                        try:
+                            # This line ignores other lines in the CSV that do not have a zcal value.
+                            _ = float( row['zcal'] )
                             
-                        # Change to not count all levels of warnings, but only the most extreme.
-                        if 'Not reaching bottom' in row['missed_bottom']:
-                            missed.append( row['tube'] )
-                    except( ValueError, TypeError ):
-                        # Don't care, must not have been a row with a real zcal value and thus other useful info.
-                        pass
-                    
-            # Summarize metrics
-            self.metrics['bottomlog'] = { 'missed_bottom'       : ', '.join( missed ),
-                                          'missed_bottom_count' : len( missed ),
-                                          'bent_tips'           : ', '.join( bent_tips ),
-                                          'bent_tips_count'     : len( bent_tips )
-                                          }
-            
-            # Make a symlink to the raw file for easy access
-            os.symlink( tbl , os.path.join( self.results_dir, 'TubeBottomLog.csv' ) )
-        else:
+                            # Change to not count all levels of warnings, but only the most extreme.
+                            if 'Bent tip' in row['bent_tip']:
+                                bent_tips.append( row['tube'] )
+                                
+                            # Change to not count all levels of warnings, but only the most extreme.
+                            if 'Not reaching bottom' in row['missed_bottom']:
+                                missed.append( row['tube'] )
+                        except( ValueError, TypeError ):
+                            # Don't care, must not have been a row with a real zcal value and thus other useful info.
+                            pass
+                        
+                # Summarize metrics
+                self.metrics['bottomlog'] = { 'missed_bottom'       : ', '.join( missed ),
+                                              'missed_bottom_count' : len( missed ),
+                                              'bent_tips'           : ', '.join( bent_tips ),
+                                              'bent_tips_count'     : len( bent_tips )
+                                              }
+                
+                # Make a symlink to the raw file for easy access
+                if not os.path.exists( os.path.join( self.results_dir, 'TubeBottomLog.csv' ) ):
+                    os.symlink( tbl , os.path.join( self.results_dir, 'TubeBottomLog.csv' ) )
+                else:
+                    print( 'symlink TubeBottomLog.csv already exists.' )
+            else:
+                self.has_tube_bottom_log = False
+                print( 'Could not find the TubeBottomLog.csv file.  Skipping analysis.' )
+        except:
+            print('!! Something went wrong when analyzing TubeBottomLov.csv. Skipping analysis')
             self.has_tube_bottom_log = False
-            print( 'Could not find the TubeBottomLog.csv file.  Skipping analysis.' )
+
+    def find_pipette_errors( self ):
+        '''
+        Function to determine if either pipette experienced an ERROR 52. This error means that the pipette did not complete its aspiration.
+        The pipette may not have aspirated or dispensed everything it was supposed to. When one er52 happens, more are likely to follow.
+        Now adding in other pipette errors that will not yet be added to chipdb 
+        '''
+        print('Seaching for er52 and other pipette errors in debug log...')
+        er52 = {'pipette_1':0, 'pipette_2':0} # initiate dictionary containing times of er52 errors - now only used to make results.json
+        pipette_errors = { 'pipette_1':{'count':0, 'messages':[]}, 'pipette_2':{'count':0, 'messages':[]} } # for all pipette errors, including er52. Use in block html
+        self.search_for_pipette_errors = True 
+        try:
+            error_regex = re.compile( r"[\w:./\-_ ]+ ValueError: ERROR: (?P<function>[\w]+) pipette (?P<pipette_id>[\d]) returned error = (?P<error_str>[\w:\- !=<>.]+)"  ) # does not identify er52
+            
+            lines = self.debug.all_lines
+            for line in lines:
+                # First check if line is from er52
+                if ('er52' in line) and ('pipette response' in line):
+                    print( 'Line flagged for er52: {}'.format(line) )
+                    try:
+                        pipette_id = int(line.split('=')[1].split(',')[0])
+                        er52['pipette_{}'.format(pipette_id)]+=1
+                        message = 'er52'
+                        pipette_errors['pipette_{}'.format(pipette_id)]['count']+=1
+                        pipette_errors['pipette_{}'.format(pipette_id)]['messages'].append( message )
+                    except:
+                        print('WARNING: found er52 in line above, however could not identify pipette id')
+                
+                if 'ValueError' in line:
+                    print( 'Line flagged for pipette error: {}'.format(line) )
+
+                # See if the line matches the regex for the format of the generic pipette error    
+                match = error_regex.match( line )
+                if match:
+                    function = match.groupdict()['function']
+                    message = match.groupdict()['error_str']
+                    pipette_id = str(match.groupdict()['pipette_id'])
+                    pipette_errors['pipette_{}'.format(pipette_id)]['count']+=1
+                    pipette_errors['pipette_{}'.format(pipette_id)]['messages'].append( '{}: {}'.format(function,message) )
+            self.metrics['er52'] = er52
+
+            # All this just to get the messages into the right format for results.json
+            p1_count = pipette_errors['pipette_1']['count']
+            p2_count = pipette_errors['pipette_2']['count']
+            p1_mes   = ', '.join( pipette_errors['pipette_1']['messages'] )
+            p2_mes   = ', '.join( pipette_errors['pipette_2']['messages'] )
+            self.pipette_errors = { 'pipette_1': {'count': p1_count, 'messages': p1_mes}, 
+                                    'pipette_2': {'count': p2_count, 'messages': p2_mes} }
+            self.metrics['pipette_errors'] = self.pipette_errors
+        except:
+            print('!! Something went wrong when searching for pipette errors, such as er52. Skipping Analysis.')
+            self.search_for_pipette_errors = False
 
     def analyze_pipette_behavior( self ):
         """ Reads the debug log to extract the time pipettes spend on mixing steps
@@ -684,18 +964,21 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             That information should be sufficient to tie a pipette's timing to a specific lane.
         """
         print( '-------STARTING: Analyzing Pipette Behavior-------' )
-        # initialize metric storage
-        pipette_behavior = {}
-        
-        # get harpooon behavior
-        pipette_behavior['harpoon_mixing'] = self.analyze_pipette_behavior_HARPOON()
-        # get magloading
-        pipette_behavior['magloading'] = self.analyze_pipette_behavior_MAGLOADING()
-        
-        # store metrics
-        self.metrics['pipette_behavior'] = pipette_behavior
+        try:
+            # initialize metric storage
+            pipette_behavior = {}
+            
+            # get harpooon behavior
+            pipette_behavior['harpoon_mixing'] = self.analyze_pipette_behavior_HARPOON()
+            # get magloading
+            pipette_behavior['foam_scrape'] = self.analyze_pipette_behavior_FOAM_SCRAPE()
+            
+            # store metrics
+            self.metrics['pipette_behavior'] = pipette_behavior
 
-        print( '-------COMPLETE: Analyzing Pipette Behavior-------' )
+            print( '-------COMPLETE: Analyzing Pipette Behavior-------' )
+        except:
+            print( '!! Something went wrong when analyzing pipette behavoir. Skipping Analysis.')
 
     #############################################
     #   BEGIN -- HELPERS FOR PIPETTE BEHAVIOR   #
@@ -723,25 +1006,26 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         return self.parse_pipette_mixing_time_blocks( blocks )
     
     
-    def analyze_pipette_behavior_MAGLOADING( self ):
+    def analyze_pipette_behavior_FOAM_SCRAPE( self ):
         # Check if harpoon module was completed
         # If not --> stop further analysis
 
-        print( 'Starting -- Magloading analysis')
+        print( 'Starting -- Foam Scrape analysis')
         if not self.debug.modules['magloading']: return
         
         # Get the relevant lines from the debug log
         # --> For the harpoon module, it will be two blocks between 'mix well to denature' and 'ditch tip'
         process_start   = r'.*#Process:---Foam generation and foam.*'
         process_stop    = r'.*#Process:---60/40 AB/IPA.*'
-        relevant_lines  = [ r'Mixing: Pipette [0-9] Aspirate',
+        relevant_lines  = [ r'Mixing: Pipette [0-9]',
                             r'Mix: totalTime',
+                            r'Dispense: totalTime',
                             ]
         
         # Get blocks of lines for further parsing
         blocks = self.debug.search_blocks( process_start, process_stop, *relevant_lines, case_sensitive=True )
         print( 'blocks', blocks )
-        print( 'Complete -- Magloading analysis')
+        print( 'Complete -- Foam Scrape analysis')
 
         return self.parse_pipette_mixing_time_blocks( blocks )
     
@@ -752,30 +1036,30 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         
         NOTE:  Requires the following grep strings in the generation of the blocks
         
-        r'Mixing: Pipette [0-9] Aspirate' 
+        r'Mixing: Pipette [0-9]'
         r'Mix: totalTime'
         '''
         # parse each block for pipette timing information
-        regex_mixing = re.compile( r'.*: Mixing: Pipette (?P<pipette>[0-9]).*' )
-        regex_timing = re.compile( r'.*: Mix: totalTime = (?P<totalTime>[0-9]+[.][0-9]+) estTime = (?P<estTime>[0-9]+[.][0-9]+), elapsedTime = (?P<elapsedTime>[0-9]+[.][0-9]+).*' )
+        regex_mixing    = re.compile( r'.*: Mixing: Pipette (?P<pipette>[0-9]) (?P<type>\w+) (?P<output_volume>[0-9]+)ul and mix (?P<mix_volume>[0-9]+)ul for (?P<num_cycles>[0-9]+) cycles at (?P<mix_rate>[0-9]+)ul/sec.*' )
+        dispense_timing = re.compile( r'.*: Dispense: totalTime = (?P<totalTime>[0-9]+[.][0-9]+) estTime = (?P<estTime>[0-9]+[.][0-9]+), elapsedTime = (?P<elapsedTime>[0-9]+[.][0-9]+).*' )
+        mix_timing      = re.compile( r'.*: Mix: totalTime = (?P<totalTime>[0-9]+[.][0-9]+) estTime = (?P<estTime>[0-9]+[.][0-9]+), elapsedTime = (?P<elapsedTime>[0-9]+[.][0-9]+).*' )
         
         block_dict = {}
         for i,b in enumerate( blocks ):
             block_name = 'block{}'.format(i)
             block_dict[block_name]={}
-            use = {'1':0,'2':0}
+            use = {'A':{'1':0,'2':0},'D':{'1':0,'2':0},}
             for j, line in enumerate(b):
                 data = self.debug.read_line( line )
                 if data and 'Mixing' in data['message']:
+                    out_dict = {}
                     # get the pipette number and iterate use
                     mix_match   = regex_mixing.match( data['message'] )
                     mix_dict    = {}
                     if mix_match: mix_dict = mix_match.groupdict()
                     # try to get pipette number and make pipette_name with use appened
-                    try: pnum = str(mix_dict['pipette'])
+                    try: pnum = str(mix_dict.pop('pipette'))
                     except KeyError: continue
-                    use[pnum]+=1
-                    pipette_name = 'p{}_{}'.format( pnum, use[pnum] )
                     
                     # get the timestamp from the data line
                     timestamp = data['timestamp']
@@ -785,14 +1069,28 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                     except IndexError:
                         # Missing data --> try to continue
                         continue
-                    time_match = regex_timing.match( time_data['message'] )
-                    time_dict = {}
+                    
+                    time_message = time_data['message']
+                    if 'Dispense' in time_message:  
+                        regex_timing = dispense_timing
+                        type_letter = 'D'
+                    else:                           
+                        regex_timing = mix_timing
+                        type_letter = 'A'
+
+                    use[type_letter][pnum]+=1
+                    pipette_name = 'p{}_{}{}'.format( pnum, type_letter, use[type_letter][pnum] )
+                    for key, item in mix_dict.items():
+                        try:                out_dict[key] = float(item)
+                        except ValueError:  out_dict[key] = str(item)
+
+                    time_match = regex_timing.match( time_message )
                     if time_match:
                         for key, item in time_match.groupdict().items():
-                            time_dict[key] = float( item )
+                            out_dict[key] = float( item )
                     # store values
-                    time_dict['timestamp'] = timestamp.strftime( '%m/%d/%Y %H:%M:%S' )
-                    block_dict[block_name][pipette_name] = time_dict
+                    out_dict['timestamp'] = timestamp.strftime( '%m/%d/%Y %H:%M:%S' )
+                    block_dict[block_name][pipette_name] = out_dict
         return block_dict
     
     #############################################
@@ -801,58 +1099,64 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
 
     def count_blocked_tips( self ):
         """ Reads the debug log to identify how many tips were blocked during piercing and count them up. """
-        # Initialize variables
-        self.metrics['blocked_tips'] = {}
-
-        # Pipette 1 and 2 blockages here come from blockages detected after piercing.
-        # Warnings are when we are forced to use a blocked tip for a step and has a different error message.
-        pipette_1 = []
-        pipette_2 = []
-        warnings  = []
-
-        # Look for piercing-related blockages
-        lines     = self.debug.search_many( 'blocked after piercing' , 'GetContainerGeometry' )
-        lines     = [ line for line in lines if 'AddExpEntry' not in line ]
-        for i, line in enumerate( lines ):
-            data = self.debug.read_line( line )
-            if data:
-                if 'blocked' in data['message']:
-                    # Grab tube from previous line
-                    previous = self.debug.read_line( lines[ i-1 ] )['message'].strip()
-                    #if 'blocked' in previous:
-                    #    # Avoid double counting due to new ExpEntry Alarms
-                    #    previous = self.debug.read_line( lines[ i-2 ] )['message'].strip()
-                    
-                    tube = previous.split()[2]
-                    m    = re.match( r'.+?tip (?P<tip>[\d]{1}).+?', line )
-                    if m:
-                        tip = int( m.groupdict()['tip'])
-                        if tip == 1:
-                            pipette_1.append( tube )
-                        elif tip == 2:
-                            pipette_2.append( tube )
-                            
-                        print( "Found blocked tip on pipette {} after piercing {}!".format( tip, tube ) )
-                        
-        # Look for warnings where we had to use a blocked tip anyway:
-        lines = self.debug.search( 'using a blocked tip' , after=1 )
-        for i, line in enumerate(lines):
-            data = self.debug.read_line( line )
-            if data:
-                if 'blocked' in data['message'].lower():
-                    # Read which well is being accessed in the next line of the file
-                    tube = self.debug.read_line( lines[ i+1 ] )['message'].strip().split()[2]
-                    
-                    warnings.append( tube )
         
-        self.metrics['blocked_tips'] = { 'p1_count'  : len( pipette_1 ),
-                                         'p2_count'  : len( pipette_2 ),
-                                         'p1_tubes'  : pipette_1 ,
-                                         'p2_tubes'  : pipette_2 ,
-                                         'used_blocked_tips'      : warnings ,
-                                         'used_blocked_tips_count': len( warnings )
-                                         }
-        return None
+        try:
+            # Initialize variables
+            self.metrics['blocked_tips'] = {}
+            self.searched_for_blocked_tips = True 
+
+            # Pipette 1 and 2 blockages here come from blockages detected after piercing.
+            # Warnings are when we are forced to use a blocked tip for a step and has a different error message.
+            pipette_1 = []
+            pipette_2 = []
+            warnings  = []
+
+            # Look for piercing-related blockages
+            lines     = self.debug.search_many( 'blocked after piercing' , 'GetContainerGeometry' )
+            lines     = [ line for line in lines if 'AddExpEntry' not in line ]
+            for i, line in enumerate( lines ):
+                data = self.debug.read_line( line )
+                if data:
+                    if 'blocked' in data['message']:
+                        # Grab tube from previous line
+                        previous = self.debug.read_line( lines[ i-1 ] )['message'].strip()
+                        #if 'blocked' in previous:
+                        #    # Avoid double counting due to new ExpEntry Alarms
+                        #    previous = self.debug.read_line( lines[ i-2 ] )['message'].strip()
+                        
+                        tube = previous.split()[2]
+                        m    = re.match( r'.+?tip (?P<tip>[\d]{1}).+?', line )
+                        if m:
+                            tip = int( m.groupdict()['tip'])
+                            if tip == 1:
+                                pipette_1.append( tube )
+                            elif tip == 2:
+                                pipette_2.append( tube )
+                                
+                            print( "Found blocked tip on pipette {} after piercing {}!".format( tip, tube ) )
+                            
+            # Look for warnings where we had to use a blocked tip anyway:
+            lines = self.debug.search( 'using a blocked tip' , after=1 )
+            for i, line in enumerate(lines):
+                data = self.debug.read_line( line )
+                if data:
+                    if 'blocked' in data['message'].lower():
+                        # Read which well is being accessed in the next line of the file
+                        tube = self.debug.read_line( lines[ i+1 ] )['message'].strip().split()[2]
+                        
+                        warnings.append( tube )
+            
+            self.metrics['blocked_tips'] = { 'p1_count'  : len( pipette_1 ),
+                                             'p2_count'  : len( pipette_2 ),
+                                             'p1_tubes'  : ', '.join(pipette_1) ,
+                                             'p2_tubes'  : ', '.join(pipette_2) ,
+                                             'used_blocked_tips'      : ', '.join(warnings) ,
+                                             'used_blocked_tips_count': len( warnings )
+                                             }
+            return None
+        except:
+            print('!! Something went wrong when looking for blocked tips. Skipping Analysis.')
+            self.searched_for_blocked_tips = False
 
     def analyze_vacuum_logs( self ):
         ''' Reads the vacuum log csv files'''
@@ -860,35 +1164,39 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         self.metrics['vacLog'] = { 'lane 1':{}, 'lane 2':{}, 'lane 3':{}, 'lane 4':{}, 'lane 5':{}, 'lane 0':{}  } 
         
         lanes = ['lane 1', 'lane 2', 'lane 3', 'lane 4', 'lane 5', 'lane 0']
-
-        v5 = os.path.join( self.calibration_dir, 'vacuum_data_lane5.csv' )
-        vlog = os.path.join( self.calibration_dir, 'vacuum_log.csv' )
-        
-        # Regardless of which lane was run, the log for lane 5 (robot waste) will always be present
-        if os.path.exists( v5 ) or os.path.exists( vlog ):
-            self.has_vacuum_logs = True
-            print('Vacuum Logs Found')
-        else:
-            self.has_vacuum_logs = False
-        
-        for lane in lanes:
-            vl = os.path.join( self.calibration_dir, 'vacuum_data_lane{}.csv'.format(lane.split(' ')[1] ) )
-            if os.path.exists( vl ):
-                print( 'Analyzing {} vacuum log...'.format(lane) )
-                process_list = self.extract_vacLog_data( vl )
-                process_list, metrics_dict = self.detect_leaks_clogs( process_list )
-                self.metrics['vacLog'][lane] = metrics_dict
-                print('Total of {} processes for {}'.format(len(process_list) ,lane))
-                self.save_vacuum_plots( process_list, metrics_dict )
+        real_lanes = ['lane 1', 'lane 2', 'lane 3', 'lane 4']
+        try:
+            v5 = os.path.join( self.calibration_dir, 'vacuum_data_lane5.csv' )
+            vlog = os.path.join( self.calibration_dir, 'vacuum_log.csv' )
+            
+            # Regardless of which lane was run, the log for lane 5 (robot waste) will always be present
+            if os.path.exists( v5 ) or os.path.exists( vlog ):
+                self.has_vacuum_logs = True
+                print('Vacuum Logs Found')
             else:
-                print('{} vacuum log not found.'.format(lane))
-                self.metrics['vacLog'][lane]['log_found']=False
-                self.metrics['vacLog'][lane]['postLib_found']=False 
-        
-        # If there are no vacuum logs in any lane, set self.has_vacuum_logs False
-        if not any( [self.metrics['vacLog'][lane]['log_found'] for lane in lanes ] ) :
+                self.has_vacuum_logs = False
+            
+            for lane in lanes:
+                vl = os.path.join( self.calibration_dir, 'vacuum_data_lane{}.csv'.format(lane.split(' ')[1] ) )
+                if os.path.exists( vl ):
+                    print( 'Analyzing {} vacuum log...'.format(lane) )
+                    process_list = self.extract_vacLog_data( vl )
+                    process_list, metrics_dict = self.detect_leaks_clogs( process_list, lane )
+                    self.metrics['vacLog'][lane] = metrics_dict
+                    print('Total of {} processes for {}'.format(len(process_list) ,lane))
+                    self.save_vacuum_plots( process_list, metrics_dict )
+                else:
+                    print('{} vacuum log not found.'.format(lane))
+                    self.metrics['vacLog'][lane]['log_found']=False
+                    self.metrics['vacLog'][lane]['postLib_found']=False 
+            
+            # If there are no vacuum logs in any lane, set self.has_vacuum_logs False
+            if not any( [self.metrics['vacLog'][lane]['log_found'] for lane in real_lanes ] ) :
+                self.has_vacuum_logs = False
+        except:
+            print( '!! Something went wrong when analyzing the vacuum logs. Skipping analysis')
             self.has_vacuum_logs = False
-                
+                    
     def extract_vacLog_data( self, filepath ):
         '''Create empty array that will contain a list of dictionaries, one dict for each process'''
         all_process_list = []
@@ -1095,13 +1403,15 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         except:
             pass
         try:
-            process_dict['Duty Cycle at End'] = float(np.sum(pumping_to_maintain_target_temp[t_after_target_index:])) /float( len(pumping_to_maintain_target_temp[t_after_target_index:]))*100 
-            process_dict['Amplitude of Oscillation'] = np.std(pressure_temp[t_after_target_index:])* math.sqrt(3)
-            process_dict['Max Amp of Oscillation'] = (max(pressure_temp[pump_reached_target_index:t_after_target_index])-min(pressure_temp[pump_reached_target_index:t_after_target_index])) / 2.0
+            process_dict['Duty Cycle at End']           = float(np.sum(pumping_to_maintain_target_temp[t_after_target_index:])) /float( len(pumping_to_maintain_target_temp[t_after_target_index:]))*100 
+            process_dict['Amplitude of Oscillation']    = np.std(pressure_temp[t_after_target_index:])* math.sqrt(3)
+            process_dict['Max Amp of Oscillation']      = (max(pressure_temp[pump_reached_target_index:t_after_target_index])-min(pressure_temp[pump_reached_target_index:t_after_target_index])) / 2.0
+            process_dict['Integral of Abs. Osc.']       = np.absolute( np.array(pressure_temp[pump_reached_target_index:t_after_target_index]) ).sum()
         except:
-            process_dict['Duty Cycle at End'] = 100 
-            process_dict['Amplitude of Oscillation'] = None
-            process_dict['Max Amp of Oscillation'] = None
+            process_dict['Duty Cycle at End']           = 100 
+            process_dict['Amplitude of Oscillation']    = None
+            process_dict['Max Amp of Oscillation']      = None
+            process_dict['Integral of Abs. Osc.']       = None
             
         if process_dict['Target Pressure'] <= process_dict['Initial Pressure']: # normal VacuumDry    
             if pressure_reached_target:
@@ -1200,25 +1510,75 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         process_dict['pressure']=pressure_temp   
         process_dict['max_dt'] = max([fin-init for init, fin in zip(time_temp, time_temp[1:])]) # for width of bars
         
-    def detect_leaks_clogs( self, process_list ):
-        suspected_leaks = []
-        suspected_clogs = []
-        postLib_leaks = []
-        postLib_clogs = []
-        non_SDS_DC = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
-        non_SDS_amp = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
-        non_SDS_maxAmp = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
-        non_SDS_time_to_target = []
-        log_found = False   # workflow vacuum logs- set to true once found
-        postLib_found = False
-        maxAmp_foamScrape = None
+    def detect_leaks_clogs( self, process_list, lane ):
+        suspected_leaks         = []
+        suspected_clogs         = []
+        postLib_leaks           = []
+        postLib_clogs           = []
+        non_SDS_DC              = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
+        non_SDS_amp             = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
+        non_SDS_maxAmp          = [] # do not include SDS. Do not include postRun for Lanes1,2,3,4
+        non_SDS_time_to_target  = []
+        log_found               = False   # workflow vacuum logs- set to true once found
+        postLib_found           = False
+        maxAmp_foamScrape       = None
+        intAbsOsc_foamScrape    = None
+        postTemp_SDS_wash1_DC               = None
+        postTemp_SDS_wash1_time_to_target   = None
+        postTemp_SDS_wash1_AO               = None
+        postTemp_SDS_wash2_DC               = None
+        postTemp_SDS_wash2_time_to_target   = None
+        postTemp_SDS_wash2_AO               = None
+        temp_2xMeltOff_ABwash_DC               = None
+        temp_2xMeltOff_ABwash_time_to_target   = None
+        temp_2xMeltOff_ABwash_AO               = None
+        temp_postMO_flush_DC               = None
+        temp_postMO_flush_time_to_target   = None
+        temp_postMO_flush_AO               = None
+        
         for process_dict in process_list:
-            # Want to save the max amplitude of the VacuumDry following foam scrape since this usually has a pressure spike. 
-            if 'Foam Scrape' in process_dict['Process']:
+            # Want to save the VacuumDry steps around the meltoff 
+            if process_dict['Process'] == 'TEMPLATE: PostTemplating SDS Wash 1':
                 try:
-                    maxAmp_foamScrape = process_dict['Max Amp of Oscillation']
+                    postTemp_SDS_wash1_DC             = process_dict['Duty Cycle at End']
+                    postTemp_SDS_wash1_time_to_target = process_dict['Time to Target']
+                    print('iprocess: {}'.format(process_dict['Process']))
                 except:
-                    maxAmp_foamScrape = None
+                    postTemp_SDS_wash1_DC               = None
+                    postTemp_SDS_wash1_time_to_target   = None
+            if process_dict['Process'] == 'TEMPLATE: PostTemplating SDS Wash 2':
+                try:
+                    postTemp_SDS_wash2_DC             = process_dict['Duty Cycle at End']
+                    postTemp_SDS_wash2_time_to_target = process_dict['Time to Target']
+                    print('iprocess: {}'.format(process_dict['Process']))
+                except:
+                    postTemp_SDS_wash2_DC               = None
+                    postTemp_SDS_wash2_time_to_target   = None
+            if process_dict['Process'] == 'TEMPLATE: 2xMeltOff and AB wash':
+                try:
+                    temp_2xMeltOff_ABwash_DC             = process_dict['Duty Cycle at End']
+                    temp_2xMeltOff_ABwash_time_to_target = process_dict['Time to Target']
+                    print('iprocess: {}'.format(process_dict['Process']))
+                except:
+                    temp_2xMeltOff_ABwash_DC               = None
+                    temp_2xMeltOff_ABwash_time_to_target   = None
+            if process_dict['Process'] == 'TEMPLATE: PostMO 60/40 Flush':
+                try:
+                    temp_postMO_flush_DC             = process_dict['Duty Cycle at End']
+                    temp_postMO_flush_time_to_target = process_dict['Time to Target']
+                    print('iprocess: {}'.format(process_dict['Process']))
+                except:
+                    temp_postMO_flush_DC               = None
+                    temp_postMO_flush_time_to_target   = None
+            # Want to save the max amplitude of the VacuumDry following foam scrape since this usually has a pressure spike. 
+            # Want to save the max amplitude of the VacuumDry following foam scrape since this usually has a pressure spike. 
+            if 'Foam Scrape' in process_dict['Process'] or 'foam' in process_dict['Process']:
+                try:
+                    maxAmp_foamScrape       = process_dict['Max Amp of Oscillation']
+                    intAbsOsc_foamScrape    = process_dict['Integral of Abs. Osc.']
+                except:
+                    maxAmp_foamScrape       = None
+                    intAbsOsc_foamScrape    = None
             # For problems during workflow, excluding SDS steps
             if (process_dict['Type']=='VacuumDry') and not ('POSTLIBCLEAN' in process_dict['Process']) and not ('SDS' in process_dict['Process']) and not ('POSTRUN' in process_dict['Process']):  
                 log_found = True
@@ -1234,7 +1594,10 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                         non_SDS_DC.append(process_dict['Duty Cycle at End'])
                         non_SDS_amp.append(process_dict['Amplitude of Oscillation'])
                         non_SDS_maxAmp.append(process_dict['Max Amp of Oscillation'])
-                        non_SDS_time_to_target.append(process_dict['Time to Target'])
+                        # For time-to-target, only use vac steps in which no lane is starting right after a robot waste dump.
+                        if process_dict['Process'] in ['MAGLOAD: water wash for sucrose','MAGLOAD: AB wash and dry','TEMPLATE: PostMO 60/40 Flush']:
+                            print('normal time to target in process: {}'.format(process_dict['Process']))
+                            non_SDS_time_to_target.append(process_dict['Time to Target'])
                 # Leak if pressure did not reach target, however only when target pressure is attainable 
                 elif process_dict['Target Pressure']>-9:
                     suspected_leaks.append(process_dict['Process'])
@@ -1276,23 +1639,43 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         if postLib_found == False:
             print('No postLibClean logs were found.') 
         
-        metrics_dict = {'abnormal_process_count': len(suspected_leaks)+len(suspected_clogs),
-                        'suspected_leaks_count' : len(suspected_leaks),
-                        'suspected_clogs_count': len(suspected_clogs),
-                        'suspected_leaks' : suspected_leaks,
-                        'suspected_clogs': suspected_clogs,
-                        'postLib_abnormal_process_count': len(postLib_leaks)+len(postLib_clogs),
-                        'postLib_suspected_leaks_count' : len(postLib_leaks),
-                        'postLib_suspected_clogs_count': len(postLib_clogs),
-                        'postLib_leaks' : postLib_leaks,
-                        'postLib_clogs': postLib_clogs,
-                        'normal_DC': np.mean(non_SDS_DC),
-                        'normal_amp': np.mean(non_SDS_amp),
-                        'normal_maxAmp': np.mean(non_SDS_maxAmp),
-                        'normal_time_to_target': np.mean(non_SDS_time_to_target),
-                        'log_found': log_found, 
-                        'postLib_found': postLib_found ,
-                        'maxAmp_foamScrape': maxAmp_foamScrape }
+        if lane in ['lane 0','lane 5']:
+            metrics_dict = {'postLib_abnormal_process_count'    : len(postLib_leaks)+len(postLib_clogs),
+                            'postLib_suspected_leaks_count'     : len(postLib_leaks),
+                            'postLib_suspected_clogs_count'     : len(postLib_clogs),
+                            'postLib_leaks'                     : ', '.join(postLib_leaks),
+                            'postLib_clogs'                     : ', '.join(postLib_clogs),
+                            'postLib_found'                     : postLib_found ,
+                            'log_found'                         : log_found, # not saved in chipdb, but used to make block html. expect to always be false 
+                            }
+        else:
+            metrics_dict = {'abnormal_process_count'                : len(suspected_leaks)+len(suspected_clogs),
+                            'suspected_leaks_count'                 : len(suspected_leaks),
+                            'suspected_clogs_count'                 : len(suspected_clogs),
+                            'suspected_leaks'                       : ', '.join(suspected_leaks),
+                            'suspected_clogs'                       : ', '.join(suspected_clogs),
+                            'postLib_abnormal_process_count'        : len(postLib_leaks)+len(postLib_clogs),
+                            'postLib_suspected_leaks_count'         : len(postLib_leaks),
+                            'postLib_suspected_clogs_count'         : len(postLib_clogs),
+                            'postLib_leaks'                         : ', '.join(postLib_leaks),
+                            'postLib_clogs'                         : ', '.join(postLib_clogs),
+                            'normal_DC'                             : np.mean(non_SDS_DC),
+                            'normal_amp'                            : np.mean(non_SDS_amp),
+                            'normal_maxAmp'                         : np.mean(non_SDS_maxAmp),
+                            'normal_time_to_target'                 : np.mean(non_SDS_time_to_target),
+                            'postTemp_SDS_wash1_DC'                 : postTemp_SDS_wash1_DC,
+                            'postTemp_SDS_wash1_time_to_target'     : postTemp_SDS_wash1_time_to_target,
+                            'postTemp_SDS_wash2_DC'                 : postTemp_SDS_wash2_DC,
+                            'postTemp_SDS_wash2_time_to_target'     : postTemp_SDS_wash2_time_to_target,
+                            'meltOff_ABwash_DC'                     : temp_2xMeltOff_ABwash_DC,
+                            'meltOff_ABwash_time_to_target'         : temp_2xMeltOff_ABwash_time_to_target,
+                            'postMO_flush_DC'                       : temp_postMO_flush_DC,
+                            'postMO_flush_time_to_target'           : temp_postMO_flush_time_to_target,
+                            'log_found'                             : log_found, 
+                            'postLib_found'                         : postLib_found ,
+                            'maxAmp_foamScrape'                     : maxAmp_foamScrape,
+                            'intAbsOsc_foamScrape'                  : intAbsOsc_foamScrape,
+                            }
 
         return(process_list, metrics_dict)
     
@@ -1336,6 +1719,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                     plt.text(x_loc,y_loc,' DC = {:.0f} %'.format(process['Duty Cycle at End']) , fontsize=fontsize)
                     if process['Amplitude of Oscillation']:
                         plt.text(x_loc,y_loc-1,' amp = {:.3f} psi'.format(process['Amplitude of Oscillation']) , fontsize=fontsize)
+                    #if process['Max Amp of Oscillation']:
+                    #    plt.text(x_loc,y_loc-2,' max amp = {:.3f} psi'.format(process['Max Amp of Oscillation']) , fontsize=fontsize)
                     if process['Duty Cycle at End'] <=8:
                         color = 'red'
                         plt.title('Suspected Clog', fontsize=fontsize, fontweight='bold')
@@ -1522,16 +1907,17 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 
         return answer
     
-    def is_missing_data( self ):
+    def is_missing_data( self, final_check=False):
         """ Checks for required data and returns a true if we are missing data, meaning we should immediately exit the plugin. """
-        answer = False
-        
+        not_a_valk    = False # true if not a valkyrie run
+        missing_debug = False # won't necessarily exit plugin is data is missing, may decide to wait for debug
+        msg = ''
         # Let's make sure this is a Valkyrie run.
         if self.explog.metrics['Platform'].lower() == 'valkyrie':
             print( 'Confirmed that run is on a Valkyrie!  Proceeding with plugin.' )
         else:
             print( 'Exiting plugin as this run is not on a Valkyrie!' )
-            answer = True
+            not_a_valk = True
             
             # Write trivial output
             doc = H.Document()
@@ -1539,48 +1925,77 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             doc.add( msg )
             with open( os.path.join( self.results_dir, 'ValkyrieWorkflow_block.html' ), 'w' ) as f:
                 f.write( str( doc ) )
+            return not_a_valk, missing_debug
                 
         # Now let's make sure we have access to the debug file.
         if os.path.exists( self.debug_log ):
             print( 'Successfully located debug log file.' )
+            msg = H.Header( 'Found debug log file.', 3 )
         else:
-            print( 'Exiting plugin since the debug log file was not found!' )
-            answer = True
-            
-            # Write trivial output
-            doc = H.Document()
-            msg = H.Header( 'Unable to find debug log file.  Exiting plugin.', 3 )
-            doc.add( msg )
-            with open( os.path.join( self.results_dir, 'ValkyrieWorkflow_block.html' ), 'w' ) as f:
-                f.write( str( doc ) )
+            missing_debug = True
+            if final_check:
+                print( 'Exiting plugin since the debug log file was not found!' )
+                msg = H.Header( 'Unable to find debug log file.  Exiting plugin.', 3 )
+            else:
+                print( 'Debug log file was not found!' )
+                msg = H.Header( 'Unable to find debug log file.  Waiting to see if it appears....', 3 )
+        # Write trivial output
+        doc = H.Document()
+        doc.add( msg )
+        with open( os.path.join( self.results_dir, 'ValkyrieWorkflow_block.html' ), 'w' ) as f:
+            f.write( str( doc ) )
                 
-        return answer
+        return not_a_valk, missing_debug
     
     def did_plugin_run_too_early( self ):
         """
         Plugins are launch once analysis is complete. However, postLibClean and PostRun or PostChipClean may run after analysis is complete.
-        This function checks whether or not this is the case, and generates a message to add to the html notifying the user to re-launch.
+        This function checks whether or not this is the case, and generates a message notifying the user that data is missing.
+        This function is used to determine if ValkyrieWorkflow should wait and see if PostRun has finished. 
+        No longer using Vacuum logs from PostLibClean since PostRun will always occur after PostLibClean.
         """
         # First, read the explog to see if user has selected PostLibClean, PostChipClean, or PostRunClean.
-        doPostLib  = self.explog.metrics['doPostLibClean']
-        doPostRun  = self.explog.metrics['postRunClean']
-        doPostChip = self.explog.metrics['doPostChipClean']
+        doPostLib     = self.explog.metrics['doPostLibClean'] # now refers to the deck clean, usually happens in parallel (set by doParallelClean)
+        doPostLibVac  = self.explog.metrics['doVacuumClean']  # clean the vacuum manifold during PostLib
+        if doPostLibVac==None:
+            print( 'no entry for doVacuumClean in explog.' )
+            doPostLibVac = doPostLib  # will fail for earlier builds in which this does not yet exist since it was grouped with doPostLib
+        doPostRun     = self.explog.metrics['postRunClean']  # note that now PostRun and PostChip are always BOTH true unless unselected
+        doPostChip    = self.explog.metrics['doPostChipClean']
 
         # Print out what was selected for postLib, postRun, and postChip cleans
-        print('PostLib: {}'.format(doPostLib))
-        print('PostRun:{}'.format(doPostRun))
+        print('PostLib Deck Clean: {}'.format(doPostLib)) 
+        print('PostLib Vacuum Clean: {}'.format(doPostLibVac))  
+        print('PostRun:{}'.format(doPostRun)) 
         print('PostChip: {}'.format(doPostChip))
-        
+       
         # Next, generate a warning message for when the plugin completed before post run cleans were complete.
-        if (doPostChip or doPostRun) and not self.metrics['time_to_postrun_done']:
-            self.message = 'WARNING: Plugin was launched before postrun cleans were complete. Relaunch plugin to see complete timing analysis (applies to TS only)'
-        # Change message slightly if postLibClean was missing.  
-        elif doPostLib and not self.metrics['vacLog']['lane 5']['postLib_found']:
-            print(doPostLib, self.metrics['vacLog']['lane 5']['postLib_found'])
-            self.message = 'WARNING: Plugin was launched before postrun cleans were complete. Relaunch plugin to see complete timing analysis and postLibClean vacuum log data (applies to TS only).'
+        if self.ss_file_found:
+            try:
+                if self.ss.data['postrun']['overall']['end']==None:
+                    found_postrun_end = False
+                else:
+                    found_postrun_end = True
+            except:
+                found_postrun_end = False
+        else:
+            found_postrun_end = False
+
+
+        if (doPostChip or doPostRun) and not found_postrun_end:
+                self.message = 'WARNING: missing postRun/postChip clean data.'
+                print('Postrun end time not found.... likely that plugin was launched before postrun cleans were complete.')
         else:
             self.message = ''
-    
+        
+        vac_log_robotWaste = os.path.join( self.calibration_dir, 'vacuum_data_lane5.csv' )
+        os.path.exists( vac_log_robotWaste )
+        if doPostLibVac and not os.path.exists( vac_log_robotWaste ):
+                self.message = 'WARNING: missing postLib vacuum clean data.'
+                print('PostLib Deck clean not found.... likely that plugin was launched before these were generated.')
+        else:
+            self.message = ''
+
     def write_block_html( self ):
         """ Creates a simple block html file for minimal viewing clutter. """
         doc = H.Document()
@@ -1591,7 +2006,10 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         styles.add_css( 'td.inactive', { 'background-color': '#000' } )
         styles.add_css( 'td.error'   , { 'background-color': '#FF4500',
                                          'font-weight': 'bold',
-                                         'color': '#fff' } )
+                                         'color': '#000' } ) # used to be white (#fff) but I changed it to black
+        styles.add_css( 'td.flag'   , { 'background-color': '#FFAF33',
+                                         'font-weight': 'bold',
+                                         'color': '#000' } )
         styles.add_css( 'td.ok'      , { 'font-weight': 'bold',
                                          'color': '#0f0' } )
         styles.add_css( 'td.warning' , { 'font-weight': 'bold',
@@ -1607,7 +2025,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                                                              'background-color':'white',
                                                              'position': 'absolute',
                                                              'z-index': '1',
-                                                             'color': '#FF4500'} )
+                                                             'color': '#000'} ) # color used to be red (#FF4500) but I changed it to black
         
         styles.add_css( 'span.tooltip:hover + div.tooltiptext' , { 'visibility': 'visible' } )
         
@@ -1617,7 +2035,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         space   = H.TableCell( '&nbsp', width="5px" )
         
         for name,module in [('LibPrep','libprep'), ('Harpoon','harpoon'), ('MagLoading','magloading'),
-                            ('COCA'   ,'coca'   ), ('Seq.','sequencing') ]:
+                            ('COCA'   ,'coca'   ), ('Seq.','sequencing'),('ReSeq.','resequencing') ]:
             row   = H.TableRow()
             label = H.TableCell( name , width="80px", align='right' )
             row.add_cell( label )
@@ -1703,76 +2121,77 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         
         # Table
         # row per failure type, columns are label, colored box (green if ok, red if not), list of failed steps
-        blockage_table = H.Table( border='0' )
-        space          = H.TableCell( '&nbsp', width="5px" )
-        
-        # Pipette 1
-        row0   = H.TableRow( )
-        row0.add_cell( H.TC( 'Tip Blockages', True , align='right' , width="125px") )
-        row0.add_cell( space )
-        row0.add_cell( H.TableCell( '&nbsp', width="20px" ) )
-        
-        row1   = H.TableRow( )
-        label  = H.TableCell( 'Pipette 1', align='right' , width="125px")
-        p1_num = self.metrics['blocked_tips']['p1_count']
-        if p1_num == 0:
-            alert = H.TableCell( '', width="20px" )
-            alert.attrs['class'] = 'active'
-        else:
-            code  = textwrap.dedent("""\
-            <span class="tooltip">%s</span>
-            <div class="tooltiptext">%s</div>
-            """ % ( str(p1_num), ', '.join( self.metrics['blocked_tips']['p1_tubes'] ) ) )
-            alert = H.TableCell( code , width="20px" , align='center' )
-            alert.attrs['class'] = 'error'
-        #fails  = H.TableCell( self.metrics['blocked_tips']['p1_tubes'] , width='600px' )
-        for cell in [label, space, alert]:
-            row1.add_cell( cell )
+        if self.searched_for_blocked_tips:
+            blockage_table = H.Table( border='0' )
+            space          = H.TableCell( '&nbsp', width="5px" )
             
-        # Pipette 2
-        row2   = H.TableRow( )
-        label  = H.TableCell( 'Pipette 2', align='right' , width="125px")
-        space  = H.TableCell( '&nbsp', width="5px" )
-        p2_num = self.metrics['blocked_tips']['p2_count']
-        if p2_num == 0:
-            alert = H.TableCell( '', width="20px" )
-            alert.attrs['class'] = 'active'
-        else:
-            code  = textwrap.dedent("""\
-            <span class="tooltip">%s</span>
-            <div class="tooltiptext">%s</div>
-            """ % ( str(p2_num), ', '.join( self.metrics['blocked_tips']['p2_tubes'] ) ) )
-            alert = H.TableCell( code , width="20px" , align='center' )
-            alert.attrs['class'] = 'error'
-        #fails  = H.TableCell( self.metrics['blocked_tips']['p2_tubes'] , width='600px' )
-        for cell in [label, space, alert]:
-            row2.add_cell( cell )
+            # Pipette 1
+            row0   = H.TableRow( )
+            row0.add_cell( H.TC( 'Tip Blockages', True , align='right' , width="125px") )
+            row0.add_cell( space )
+            row0.add_cell( H.TableCell( '&nbsp', width="20px" ) )
+            
+            row1   = H.TableRow( )
+            label  = H.TableCell( 'Pipette 1', align='right' , width="125px")
+            p1_num = self.metrics['blocked_tips']['p1_count']
+            if p1_num == 0:
+                alert = H.TableCell( '', width="20px" )
+                alert.attrs['class'] = 'active'
+            else:
+                code  = textwrap.dedent("""\
+                <span class="tooltip">%s</span>
+                <div class="tooltiptext">%s</div>
+                """ % ( str(p1_num),  self.metrics['blocked_tips']['p1_tubes']  ) )
+                alert = H.TableCell( code , width="20px" , align='center' )
+                alert.attrs['class'] = 'flag'
+            #fails  = H.TableCell( self.metrics['blocked_tips']['p1_tubes'] , width='600px' )
+            for cell in [label, space, alert]:
+                row1.add_cell( cell )
+                
+            # Pipette 2
+            row2   = H.TableRow( )
+            label  = H.TableCell( 'Pipette 2', align='right' , width="125px")
+            space  = H.TableCell( '&nbsp', width="5px" )
+            p2_num = self.metrics['blocked_tips']['p2_count']
+            if p2_num == 0:
+                alert = H.TableCell( '', width="20px" )
+                alert.attrs['class'] = 'active'
+            else:
+                code  = textwrap.dedent("""\
+                <span class="tooltip">%s</span>
+                <div class="tooltiptext">%s</div>
+                """ % ( str(p2_num),  self.metrics['blocked_tips']['p2_tubes']  ) )
+                alert = H.TableCell( code , width="20px" , align='center' )
+                alert.attrs['class'] = 'flag'
+            #fails  = H.TableCell( self.metrics['blocked_tips']['p2_tubes'] , width='600px' )
+            for cell in [label, space, alert]:
+                row2.add_cell( cell )
 
-        # Warnings (uses of known or suspected blocked tips)
-        row3   = H.TableRow( )
-        label  = H.TableCell( 'Used Blocked Tips', align='right' , width="125px")
-        space  = H.TableCell( '&nbsp', width="5px" )
-        bt_num = self.metrics['blocked_tips']['used_blocked_tips_count']
-        if bt_num == 0:
-            alert = H.TableCell( '', width="20px" )
-            alert.attrs['class'] = 'active'
-        else:
-            code  = textwrap.dedent("""\
-            <span class="tooltip">%s</span>
-            <div class="tooltiptext">%s</div>
-            """ % ( str(bt_num), ', '.join( self.metrics['blocked_tips']['used_blocked_tips'] ) ) )
-            alert = H.TableCell( code , width="20px" , align='center' )
-            alert.attrs['class'] = 'error'
-        for cell in [label, space, alert]:
-            row3.add_cell( cell )
+            # Warnings (uses of known or suspected blocked tips)
+            row3   = H.TableRow( )
+            label  = H.TableCell( 'Used Blocked Tips', align='right' , width="125px")
+            space  = H.TableCell( '&nbsp', width="5px" )
+            bt_num = self.metrics['blocked_tips']['used_blocked_tips_count']
+            if bt_num == 0:
+                alert = H.TableCell( '', width="20px" )
+                alert.attrs['class'] = 'active'
+            else:
+                code  = textwrap.dedent("""\
+                <span class="tooltip">%s</span>
+                <div class="tooltiptext">%s</div>
+                """ % ( str(bt_num),  self.metrics['blocked_tips']['used_blocked_tips']  ) )
+                alert = H.TableCell( code , width="20px" , align='center' )
+                alert.attrs['class'] = 'error'
+            for cell in [label, space, alert]:
+                row3.add_cell( cell )
+                
+            blockage_table.add_row( row0 )
+            blockage_table.add_row( row1 )
+            blockage_table.add_row( row2 )
+            blockage_table.add_row( row3 )
             
-        blockage_table.add_row( row0 )
-        blockage_table.add_row( row1 )
-        blockage_table.add_row( row2 )
-        blockage_table.add_row( row3 )
-        
-        alarmrow.add_cell( H.TC( blockage_table , width='20%' ) )
-        
+            alarmrow.add_cell( H.TC( blockage_table , width='15%' ) )
+            
         # Need to add info about the TubeBottomLog.csv in the block html, including link to csv
         if self.has_tube_bottom_log:
             # Table
@@ -1826,10 +2245,43 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             tip_table.add_row( row1 )
             tip_table.add_row( row2 )
             
-            alarmrow.add_cell( H.TC( tip_table, width='20%' ) )
+            alarmrow.add_cell( H.TC( tip_table, width='15%' ) )
         else:
-            alarmrow.add_cell( H.TC( '&nbsp', width='20%' ) )
+            alarmrow.add_cell( H.TC( '&nbsp', width='15%' ) )
+       
+        if self.search_for_pipette_errors:
+            # Pipette Malfunction Errors including Error 52
+            er52_table  = H.Table( border='0' )
+            space       = H.TableCell( '&nbsp', width="5px" )
+            row0   = H.TableRow( )
+            row0.add_cell( H.TC( 'Pipette Errors', True , align='right' , width="100px") )
+            row0.add_cell( space )
+            row0.add_cell( H.TableCell( '&nbsp', width="20px" ) )
+            er52_table.add_row( row0 )
+
+            for id in [1,2]:
+                row   = H.TableRow( )
+                label  = H.TableCell( 'Pipette {}'.format(id), align='right' , width="100px")
+                count = self.pipette_errors['pipette_{}'.format(id)]['count']
+                alert = H.TableCell( '', width="20px" )
+                if count == 0:
+                    alert = H.TableCell( '', width="20px" )
+                    alert.attrs['class'] = 'active'
+                else:
+                    code  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( str(count), self.pipette_errors['pipette_{}'.format(id)]['messages'] ) )
+                    alert = H.TableCell( code , width="20px" , align='center' )
+                    alert.attrs['class'] = 'error'
+                for cell in [label, space, alert]:
+                    row.add_cell( cell )
+                er52_table.add_row( row )
+                
+            alarmrow.add_cell( H.TC( er52_table , width='15%' ) )
             
+        
+        # Errors and Warnings for vacuum logs    
         if self.has_vacuum_logs:
             # Table
             # row per lane, columns are label, colored box (green if ok, red if not, black if not used), number of failed processes 
@@ -1844,18 +2296,28 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             row0.add_cell( H.TC( 'PL', False, align='left', width="20px" ) )
             vacLog_table.add_row( row0 )
             
+            lanes = ['lane 1','lane 2','lane 3','lane 4','lane 5','lane 0']
+            lane_names = ['lane 1','lane 2','lane 3','lane 4','robot waste','bleed valve']
             # Workflow
-            for lane in [('lane 1', 'lane 1'),( 'lane 2','lane 2'),( 'lane 3','lane 3'),( 'lane 4','lane 4'), ('lane 5','robot waste'), ('lane 0','bleed valve')]:
+            for lane,lane_name in zip(lanes,lane_names):
                 Vrow1   = H.TableRow( )
-                label   = H.TableCell( lane[1], align='right' , width="100px")
+                label   = H.TableCell( lane_name, align='right' , width="100px")
                 # workflow alerts, only vacuum logs from lanes are in workflow
-                if self.metrics['vacLog'][lane[0]]['log_found']:
-                    abnormal_num = self.metrics['vacLog'][lane[0]]['abnormal_process_count']
+                if self.metrics['vacLog'][lane]['log_found']:
+                    abnormal_num = self.metrics['vacLog'][lane]['abnormal_process_count']
                     if abnormal_num == 0:
                         wf_alert = H.TableCell( '', width="20px" )
                         wf_alert.attrs['class'] = 'active'
+                    elif abnormal_num < 2: # one will just be flagged
+                        abnormal_processes = self.metrics['vacLog'][lane]['suspected_leaks'] + self.metrics['vacLog'][lane]['suspected_clogs']
+                        code  = textwrap.dedent("""\
+                        <span class="tooltip">%s</span>
+                        <div class="tooltiptext">%s</div>
+                        """ % ( str(abnormal_num), abnormal_processes  ))
+                        wf_alert = H.TableCell( code , width="20px" , align='center' )
+                        wf_alert.attrs['class'] = 'flag'
                     else:
-                        abnormal_processes = ', '.join(self.metrics['vacLog'][lane[0]]['suspected_leaks']) + ', '.join(self.metrics['vacLog'][lane[0]]['suspected_clogs'])
+                        abnormal_processes = self.metrics['vacLog'][lane]['suspected_leaks'] + self.metrics['vacLog'][lane]['suspected_clogs']
                         code  = textwrap.dedent("""\
                         <span class="tooltip">%s</span>
                         <div class="tooltiptext">%s</div>
@@ -1866,13 +2328,21 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                     wf_alert = H.TableCell('', width="20px" )
                     wf_alert.attrs['class'] = 'inactive'
                 # PostLibClean alerts, lanes, robot waste, and bleed valve 
-                if self.metrics['vacLog'][lane[0]]['postLib_found'] :# having issues here
-                    abnormal_num = self.metrics['vacLog'][lane[0]]['postLib_abnormal_process_count']
+                if self.metrics['vacLog'][lane]['postLib_found'] :# having issues here
+                    abnormal_num = self.metrics['vacLog'][lane]['postLib_abnormal_process_count']
                     if abnormal_num == 0:
                         postLib_alert = H.TableCell( '', width="20px" )
                         postLib_alert.attrs['class'] = 'active'
+                    elif abnormal_num < 2:
+                        abnormal_processes = self.metrics['vacLog'][lane]['postLib_leaks'] + self.metrics['vacLog'][lane]['postLib_clogs']
+                        code  = textwrap.dedent("""\
+                        <span class="tooltip">%s</span>
+                        <div class="tooltiptext">%s</div>
+                        """ % ( str(abnormal_num), abnormal_processes  ))
+                        postLib_alert = H.TableCell( code , width="20px" , align='center' )
+                        postLib_alert.attrs['class'] = 'flag'
                     else:
-                        abnormal_processes = ', '.join(self.metrics['vacLog'][lane[0]]['postLib_leaks']) + ', '.join(self.metrics['vacLog'][lane[0]]['postLib_clogs'])
+                        abnormal_processes = self.metrics['vacLog'][lane]['postLib_leaks'] + self.metrics['vacLog'][lane]['postLib_clogs']
                         code  = textwrap.dedent("""\
                         <span class="tooltip">%s</span>
                         <div class="tooltiptext">%s</div>
@@ -1895,14 +2365,220 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             except:
                 print('Error when trying to create vacuum_postlib_html') ###
                 
-            alarmrow.add_cell( H.TC( vacLog_table, width='20%' ) )
+            alarmrow.add_cell( H.TC( vacLog_table, width='15%' ) )
         else:
-            alarmrow.add_cell( H.TC( '&nbsp', width='20%' ) )
-            
-        flow_img = H.Image( os.path.join( 'flow_spark.svg' ), width='100%' )
-        fail4    = H.TC( flow_img.as_link() )
-        alarmrow.add_cell( fail4 )
+            alarmrow.add_cell( H.TC( '&nbsp', width='15%' ) )
+        
+        if os.path.exists( 'flow_spark.svg' ):
+            flow_img = H.Image( os.path.join( 'flow_spark.svg' ), width='100%' )
+            fail4    = H.TC( flow_img.as_link() )
+            alarmrow.add_cell( fail4 )
         alarms.add_row( alarmrow )
+        
+        # Section for PostRun and PostChip clean Warnings & Alarms
+        if self.debugInfo.hasDebugInfo:
+            pr_alarms   = H.Table( border='0', width='90%' )
+            pr_row = H.TR( )
+            if self.debugInfo.foundConicalClogCheck:  
+                # Conical clog check table
+                ccc_table = H.Table( border='0' )
+                space = H.TableCell( '&nbsp', width="5px" )
+                row0 = H.TR( ) 
+                row0.add_cell( H.TC( 'Conical Clog Check', True , align='right' , width="100px") )
+                row0.add_cell( space )
+                ccc_table.add_row( row0 )
+                for conical in ['W1','RG','RC','RA','RT']:
+                    ccc_row = H.TableRow( )
+                    label   = H.TableCell( conical, align='right' , width="50px")
+                    ccc_alert = H.TableCell( '', width="20px" )
+                    if self.debugInfo.ccc_metrics['conical'][conical]['is_clogged']:
+                        # clog in this conical
+                        ccc_alert.attrs['class'] = 'error'
+                    elif self.debugInfo.ccc_metrics['conical'][conical]['is_clogged']==None:
+                        # test not reliable due to low W3 flow
+                        ccc_alert.attrs['class'] = 'inactive'
+                    else:
+                        # no clog in this conical
+                        ccc_alert.attrs['class'] = 'active'
+                        print('no clog in conical {}'.format(conical))
+                    for cell in [label,space,ccc_alert]:
+                        ccc_row.add_cell( cell )
+                    ccc_table.add_row( ccc_row )
+                # Add one more row for W3 flow rate check
+                ccc_row = H.TableRow( )
+                label   = H.TableCell( 'W3 flow', align='right' , width="50px")
+                ccc_alert = H.TableCell( '', width="20px" ) 
+                if self.debugInfo.ccc_metrics['low_W3']==None:
+                    ccc_alert.attrs['class'] = 'error'
+                elif self.debugInfo.ccc_metrics['low_W3']:
+                    ccc_alert.attrs['class'] = 'flag'
+                else:
+                    ccc_alert.attrs['class'] = 'active'
+                for cell in [label,space,ccc_alert]:
+                    ccc_row.add_cell( cell )
+                ccc_table.add_row( ccc_row )
+                pr_row.add_cell( H.TC( ccc_table, width='10%') )
+
+
+            # PostChipClean alarm table- only build if we have postChipClean data to analyze
+            if self.debugInfo.postChipClean:
+                # sequencing line W3 flow rate check. 
+                flow_table = H.Table( border='0' )
+                space = H.TableCell( '&nbsp', width="5px" )
+                row0 = H.TR( )
+                row0.add_cell( H.TC( 'W3 Flow Rate', True , align='right' , width="100px") )
+                row0.add_cell( space ) 
+                row0.add_cell( H.TC( 'MW', False, align='right', width="20px" ) )
+                row0.add_cell( space ) 
+                row0.add_cell( H.TC( 'CW', False, align='right', width="20px" ) )
+                flow_table.add_row( row0 )
+                for lane in ['1','2','3','4']:
+                    rowX = H.TableRow( )
+                    label   = H.TableCell( 'lane {}'.format(lane), align='right' , width="100px")
+                    cells = [label] # start building the cells array that will be added to the row
+                    for line in ['PM','PC']:
+                        cells.append( space )
+                        note = ''
+                        # Build message in red box
+                        if self.debugInfo.pcc_seq_line_clog_check['{}{}'.format(line,lane)]['flowRate'] < 90:
+                            note = 'slightly low W3 flow rate' 
+                            color = 'flag'
+                        if self.debugInfo.pcc_seq_line_clog_check['{}{}'.format(line,lane)]['flowRate'] < 80:
+                            note = 'low W3 flow rate' 
+                            color = 'error'
+                        # Make alert
+                        if len(note)>1:
+                            code  = textwrap.dedent("""\
+                            <span class="tooltip">%s</span>
+                            <div class="tooltiptext">%s</div>
+                            """ % ( '!', note  ))
+                            alert = H.TableCell( code , width="20px", align='center' )
+                            alert.attrs['class'] = color 
+                        else:
+                            alert = H.TableCell( '', width="20px" )
+                            alert.attrs['class'] = 'active'
+                        cells.append( alert )
+                    for cell in cells:
+                        rowX.add_cell( cell )
+                    flow_table.add_row( rowX )
+                #pr_row.add_cell( H.TC( flow_table, width='15%') )
+                
+                # Seq line clog check and stuck valve check
+                slc_table = H.Table( border='0' )
+                space = H.TableCell( '&nbsp', width="5px" )
+                row0 = H.TR( )
+                row0.add_cell( H.TC( 'Clog Check', True , align='right' , width="100px") )
+                row0.add_cell( space ) 
+                row0.add_cell( H.TC( 'MW', False, align='right', width="20px" ) )
+                row0.add_cell( space ) 
+                row0.add_cell( H.TC( 'CW', False, align='right', width="20px" ) )
+                slc_table.add_row( row0 )
+                for lane in ['1','2','3','4']:
+                    rowX = H.TableRow( )
+                    label   = H.TableCell( 'lane {}'.format(lane), align='right' , width="100px")
+                    cells = [label] # start building the cells array that will be added to the row
+                    for line in ['PM','PC']:
+                        cells.append( space )
+                        note_list = []
+                        # Build message in red box
+                        attempts = self.debugInfo.pcc_seq_line_clog_check['{}{}'.format(line,lane)]['attempts']
+                        if self.debugInfo.pcc_stuck_valves_test != None:
+                            if self.debugInfo.pcc_stuck_valves_test['{}{}'.format(line,lane)]['is_stuck']:
+                                note_list.append( 'detected stuck valve' )
+                                color = 'error'
+                                message = '!'
+                        if self.debugInfo.pcc_seq_line_clog_check['{}{}'.format(line,lane)]['clog_cleared']:
+                            note_list.append( 'clog cleared after {} attempts'.format( attempts ) )
+                            color = 'flag'
+                            message = str(attempts)
+                        if self.debugInfo.pcc_seq_line_clog_check['{}{}'.format(line,lane)]['is_clogged']:
+                            note_list.append( 'clog remained after {} attempts'.format( attempts ) )
+                            color = 'error'
+                            message = str(attempts)
+                        # Make alert
+                        if len(note_list)>0:
+                            notes = ', '.join(x for x in note_list)  
+                            code  = textwrap.dedent("""\
+                            <span class="tooltip">%s</span>
+                            <div class="tooltiptext">%s</div>
+                            """ % ( message, notes  ))
+                            alert = H.TableCell( code , width="20px", align='center' )
+                            alert.attrs['class'] = color 
+                        else:
+                            alert = H.TableCell( '', width="20px" )
+                            alert.attrs['class'] = 'active'
+                        cells.append( alert )
+                    for cell in cells:
+                        rowX.add_cell( cell )
+                    slc_table.add_row( rowX )
+                #pr_row.add_cell( H.TC( slc_table, width='15%') )
+                
+                # Build dumping reagents check table
+                dump_table = H.Table( border='0' )
+                space = H.TableCell( '&nbsp', width="3px" ) # how can I make this space smaller?
+                row0 = H.TR( )
+                row0.add_cell( H.TC( 'Empty Conicals', True , align='right' , width="100px") )
+                row0.add_cell( space )
+                for conical in [ 'W1','RG', 'RC', 'RA', 'RT' ]:
+                    row0.add_cell( H.TC( conical, False, align='right', width="20px" ) )
+                    row0.add_cell( space )
+                dump_table.add_row( row0 )
+                reagents = [('unused reagents', 'unused reagents'),
+                               ('W3 wash', 'W3'),
+                               ('nuc cart. res.', 'nuc cartridge residual'),]
+                for tup in reagents:
+                    row = H.TableRow( )
+                    label = H.TableCell( tup[0], align='right' , width="200px") 
+                    cells = [label]
+                    # Only have box clored red if nuc cartride residual was not completely dumped
+                    if tup[0]=='nuc cart. res.':
+                        color = 'error'
+                    else:
+                        color = 'flag'
+                    for conical in [ 'W1','RG', 'RC', 'RA', 'RT' ]:
+                        cells.append(space)
+                        alert = H.TableCell( '', width="20px" )
+                        if self.debugInfo.pcc_dump_data[tup[1]][conical]['empty']:
+                            alert.attrs['class'] = 'active'
+                        else:
+                            alert.attrs['class'] = color
+                        cells.append(alert)
+                    for cell in cells:
+                        row.add_cell( cell )
+                    dump_table.add_row( row )
+                #pr_row.add_cell( H.TC( dump_table, width='15%') )
+            
+                # Mainifold Leak Check table
+                if self.debugInfo.pcc_manifoldLeakCheck != None:
+                    man_table = H.Table( border='0' ) 
+                    space = H.TableCell( '&nbsp', width="5px" )
+                    row0 = H.TR( )
+                    row0.add_cell( H.TC( 'Manifold Leak Check', True , align='right' , width="100px") )
+                    row0.add_cell( space )
+                    man_table.add_row( row0 )
+                    for man in self.debugInfo.pcc_manifoldLeakCheck:
+                        man_row = H.TableRow( )
+                        label   = H.TableCell( man, align='right' , width="50px")
+                        man_alert = H.TableCell( '', width="20px" )
+                        if self.debugInfo.pcc_manifoldLeakCheck[man]['found_leak']:
+                            # True means there was a leak
+                            man_alert.attrs['class'] = 'error'
+                        else:
+                            # no clog in this conical
+                            man_alert.attrs['class'] = 'active'
+                        for cell in [label,space,man_alert]:
+                            man_row.add_cell( cell )
+                        man_table.add_row( man_row )
+                
+                # Add all tables to pr_row - not sure why I don't seem to have control over the positioning
+                pr_row.add_cell( H.TC( flow_table, width='10%') )
+                pr_row.add_cell( H.TC( slc_table, width='10%') )
+                pr_row.add_cell( H.TC( dump_table, width='10%') )
+                if self.debugInfo.pcc_manifoldLeakCheck != None:
+                    pr_row.add_cell( H.TC( man_table, width='10%') )
+            
+            pr_alarms.add_row( pr_row ) 
+            
 
         # Actually build the document. Start with message to re-run plugin if necessary. 
         if self.message:
@@ -1950,6 +2626,36 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         else:
             links.add_item( H.ListItem( 'No deckImages found' ) )
 
+        if self.debugInfo.hasDebugInfo:
+            if self.debugInfo.pinchMeas:
+                sp = H.Link('Pinch_Clearing.html')
+                sp.add_body( 'Pinch_Clearing.html' )
+                links.add_item( H.ListItem( sp ) )
+            if (self.debugInfo.foundConicalClogCheck):
+                ccc = H.Link('ConicalClogCheck.html' )
+                ccc.add_body('ConicalClogCheck.html' )
+                links.add_item( H.ListItem( ccc ) )
+            if self.debugInfo.postChipClean:
+                slc = H.Link('PostChipClean.html' ) 
+                slc.add_body('PostChipClean.html' )
+                links.add_item( H.ListItem( slc ) )
+        else:
+            links.add_item( H.ListItem( 'DebugInfo.json not found' ) )
+
+        if self.flows.hasFlowData:
+            fd = H.Link('Detailed_Flow_Data.html')
+            fd.add_body( 'Detailed_Flow_Data.html' )
+            links.add_item( H.ListItem( fd ) )
+        else:
+            links.add_item( H.ListItem( 'No flow data found' ) )
+        
+        if self.libpreplog.hasLog:
+            lp = H.Link('libPrep_log.html')
+            lp.add_body( 'libPrep_log.html' )
+            links.add_item( H.ListItem( lp ) )
+        else:
+            links.add_item( H.ListItem( 'libPrep_log analysis unavailable' ) )
+
         # Add link to oia_timing if it was made
         if os.path.exists( os.path.join( self.results_dir, 'oia_timing.png' ) ):
             oia = H.Link( 'oia_timing.png' )
@@ -1979,6 +2685,19 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         doc.add( H.Header( 'Warnings & Alarms' , 4 ) )
         doc.add( alarms )
         
+        if self.debugInfo.hasDebugInfo:
+            # PostChipClean section
+            if (self.doPostChip and self.debugInfo.postChipClean):
+                doc.add( H.HR() ) 
+                doc.add( H.Header( 'PostChipClean Warnings & Alarms' , 4 ) )
+                doc.add( pr_alarms )
+        
+            # PostRunClean section
+            if self.debugInfo.postRunClean:
+                doc.add( H.HR() ) 
+                doc.add( H.Header( 'PostRunClean Warnings & Alarms' , 4 ) )
+                doc.add( pr_alarms )
+             
         # Now for the timing analysis
         doc.add( H.HR() )
         doc.add( H.H( 'Timing Analysis', 3 ) )
@@ -1993,6 +2712,9 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         if os.path.exists( os.path.join( self.results_dir, 'workflow_pareto.png' ) ):
             doc.add( H.Image( 'workflow_pareto.png' , width='500px' ).as_link() )
             
+        if self.csa:
+            doc.add( H.Paragraph( 'ValkyrieWorkflow v{}'.format(self.version) , style='font-style: italic;') )
+        
         with open( os.path.join( self.results_dir, 'ValkyrieWorkflow_block.html' ), 'w' ) as f:
             f.write( str( doc ) )
                         
@@ -2159,6 +2881,1390 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         with open( os.path.join( self.results_dir, 'PostLib_VacuumLog.html' ), 'w' ) as f:
             f.write( str(doc) )
 
+class DebugInfo:
+    '''Class for reading and interacting with DebugInfo.json'''
+    def __init__(self, filepath, outdir,expt_start, debug_lines):
+        self.expt_start = expt_start
+        self.filepath = filepath
+        self.outdir   = outdir
+        
+        try:
+            self.debug_lines = debug_lines # used to check if conical clog check was skipped due to low W3 flow 
+            print('loading DebugInfo.json...')
+            self.pinchMeas     = False # set initial value
+            self.postChipClean = False # set initial value
+            self.postRunClean  = False # set initial value
+            self.foundConicalClogCheck =  False # set initial value
+            debugInfo_raw = {}
+            try:
+                with open( os.path.join( self.filepath , 'DebugInfo.json' ), 'r' ) as f:
+                    debugInfo_raw = json.load( f, strict = False )
+            except:
+                print('DebugInfo.json file not found')
+                print('Skipping analysis of DebugInfo.json')
+                self.hasDebugInfo = False
+                return None
+            self.hasDebugInfo = True
+            # Next extract pinch clearing measurements, group data by name and lane, make plots, and generate html page.
+            pinch_data = self.extract_pinch_data( debugInfo_raw )
+            self.plot_pinch_data( pinch_data )
+            self.write_pinch_data_html( pinch_data )
+            # Next handle postRunClean - only care about the conical clog check, not so much the start and end time of PostRun
+            pr_ccc_data = self.extract_postRunClean( debugInfo_raw )
+            
+            # Next handle postChipClean
+            pc_data, pc_ccc_data  = self.extract_postChipClean( debugInfo_raw ) # sets self.postChipClean
+            if self.postChipClean:
+                print('We found real post chip clean data.')
+                # Check chip and main waste lines for clogs. Includes 'FlowRateCheck' and 'Checking for Clogs'  
+                # Checking for Clogs: PC1-1, PM1-4. PM = pressure main valve, PC = pressure chip valve. These air valves control the pressure in the pinch regulators, which controls flow
+                self.postChip_check_seq_lines_for_clogs( pc_data ) # generates metrics and plots
+                self.postChip_pinchManifoldStuckValve( pc_data )   # generates metrics and plots
+                self.postChip_dumpConicals( pc_data ) # generates metrics and plots - Confirm reagent dumping was sucessful. Pressure must drop to 1 below highest recorded pressure. First unused reagents, then W3, then nu cartridge residual
+                self.postChip_manifoldLeakCheck( pc_data ) # generates metrics and plots
+                self.write_PCC_html( )
+            
+            if self.foundConicalClogCheck: # will be true if found in either postRun or postChip
+                if pc_ccc_data != None:
+                    print('CCC data from PostChipClean')
+                    ccc_data = pc_ccc_data
+                elif pr_ccc_data != None:
+                    print('CCC data from PostRunClean')
+                    ccc_data = pr_ccc_data
+                if ccc_data['W3 only']==None:
+                    print('Conical Clog Check skipped due to low W3 flow. Skipping Conical Clog Check plot genration')
+                else:
+                    self.plot_ccc_data( ccc_data )
+                    self.write_conical_clog_check_html( ) # keep as pr html, since postChipClean html might look different 
+                self.conical_clog_check_metrics = self.build_ccc_data_metric_dict( ccc_data )
+        except:
+            print('!! Something went wrong when analyzing DebugInfo.json containing postChipClean data. Skipping analysis.')
+            self.hasDebugInfo = False
+            self.foundConicalClogCheck = False
+            return None
+            
+    def extract_pinch_data( self, debugInfo_all ):
+        '''Pulls out pinch data from list of dictionaries from DebugInfo.json (input into function as debugInfo_all). Organizes by lane.'''
+        name_list_all = []
+        for obj in debugInfo_all['objs']:
+            if not obj['name'] in ['end','(null)','PostChipClean','PostRunClean','fluidicsAtCust']: # to isolate dictionaries related to pinch measurements
+                name_list_all.append(obj['name'])  # for example, a name might be 'RP-Pinch MW4 Clearing' 
+        name_list = set(name_list_all) 
+
+        pinch_dict = {}
+        keys = ['timestamp','flowRate', 'manPres', 'regPres', 'tankPres'] # timestamp is first since it is used to determine if a new name is needed for reSeq prerun
+        lanes_all = []
+        for name in name_list:
+            found_first_point = False # boolean used to save first time point for pinch measure of each name. Use to determine if there is a reSeq prerun
+            include_lane = True       # set to false if timestamp is before experiment start time. Will not include this lane in dict used for plotting
+            pinch_dict[name] = { key: [] for key in keys }
+            for point in debugInfo_all['objs']:
+                if point['name']==name:
+                    dict_name = name # dict_name will change if reseq PreRun pinch measure points are found
+                    pinch_dict[dict_name]['valves'] = point['valves']
+                    for key in keys:
+                        if key =='timestamp': # will be the first key
+                            dt_timestamp = datetime.datetime.strptime( point[key] , '%m_%d_%Y_%H:%M:%S' )
+                            if dt_timestamp < self.expt_start:
+                                include_lane = False
+                            if found_first_point:
+                                if (dt_timestamp-first_timestamp).total_seconds() > 200:
+                                    dict_name = name.replace('PreRun','PreRun_ReSeq')# update the name to include ReSeq
+                                    try:
+                                        pinch_dict[dict_name][key] 
+                                    except:
+                                        pinch_dict[dict_name] = { key: [] for key in keys } # need to create the dictionary since it does not yet exist
+                            pinch_dict[dict_name][key].append( dt_timestamp )
+                            if not found_first_point:
+                                first_timestamp = dt_timestamp # use this to determine if there is a large time jump between one PreRun point and the next. If time jump, then the second PreRun is for reseq
+                        else:
+                            pinch_dict[dict_name][key].append(point[key])
+                    found_first_point = True
+            # only append if timestamp shows measurement happened after start of experiment 
+            if include_lane:
+                try:
+                    lanes_all.append( name.split('CW')[1].split(' ')[0] )
+                except:
+                    pass
+        
+        lanes = list(set(lanes_all)) # convert to list to enable indexing
+        if len(lanes)>0:
+            self.pinchMeas = True
+        
+        org_by_lane = {'Lane {}'.format(lane):{} for lane in lanes }
+        for lane in lanes:
+            for name in pinch_dict: 
+                if name.split('W')[1][0]==lane:
+                    org_by_lane['Lane {}'.format(lane)][name.replace(lane, '')] = pinch_dict[name]
+                    try:
+                        org_by_lane['Lane {}'.format(lane)][name.replace(lane, '')]['start time'] = min( pinch_dict[name]['timestamp'] )
+                    except:
+                        pass
+        # Now determine the order that the pinch measurements occured, and generate a list of names in that order. Will be used in html
+        stages = []
+        lane_dict = org_by_lane['Lane {}'.format(lanes[0])] #just use the first lane since it doesn't matter
+        for key in lane_dict:
+            stages.append((key.split(' ')[0], lane_dict[key]['start time']  ))
+        sorted_stages = sorted(stages, key=lambda x:x[1])
+        seen = set()
+        self.stages =  [x[0] for x in sorted_stages if not ( x[0] in seen or seen.add(x[0]) )]  # Remove duplicate stage names while retaining order
+
+        return org_by_lane
+
+    def extract_postRunClean( self, debugInfo_all ):
+        for obj in debugInfo_all['objs']:
+            pr_data = None
+            if obj['name']=='PostRunClean':
+                pr_start = datetime.datetime.strptime( obj['StartTime'], "%Y_%m_%d-%H:%M:%S" )
+                try:
+                    obj['endTime']
+                except:
+                    print('Found PostRunClean dictionary with no end time. Skip.')
+                    continue
+
+                if obj['StartTime']==obj['endTime']:
+                    print('Start time and end time are the same for this PostRunClean dictionary. Assume it is fake.')
+                elif pr_start < self.expt_start: 
+                    print('PostRun Start time is before experiment start time. Skip analysis.')
+                else:
+                    print('found some PostRunClean data')
+                    try: 
+                        obj['checkForClogsInConicals']
+                        print('conical clog check was done in postRun')
+                        pr_data = obj
+                        self.postRunClean  = True  # set to true if there are any PostRunClean stuff 
+                    except:
+                        print('conical clog check not done during postRun')
+                        
+        ccc_data = self.extract_ccc( pr_data )
+        return ccc_data
+
+    def extract_postChipClean( self, debugInfo_all ):
+        pc_data = None
+        for obj in debugInfo_all['objs']:
+            if obj['name']=='PostChipClean':
+                pcc_start = datetime.datetime.strptime( obj['StartTime'], "%Y_%m_%d-%H:%M:%S" )
+                try: 
+                    obj['endTime']
+                except:
+                    print('PostChipClean dictionary found, however it has no end time. Skip.')
+                    continue
+                if obj['StartTime']==obj['endTime']:
+                    print('Start time and end time are the same for this PostChipClean dictionary. Assume it is fake.')
+                elif pcc_start < self.expt_start:
+                    print('PostChip Start time is before experiment start time. Skip analysis.')
+                else:
+                    self.postChipClean = True
+                    pc_data = obj
+                    break
+        
+        ccc_data = self.extract_ccc( pc_data ) # this is treated differently from other postChip checks since it also happens during postRun, therefore functions are shared
+        return pc_data, ccc_data
+    
+    def postChip_check_seq_lines_for_clogs( self, pc_data ):
+        seq_lines = {'PM1': {}, 'PM2': {}, 'PM3': {}, 'PM4': {}, 'PC1': {}, 'PC2': {}, 'PC3': {}, 'PC4': {}}
+        
+        for line in seq_lines:
+            seq_lines[line] = {'clogcheck_pres':[],'clogcheck_limit':None, 'press_pass':'green', 'flowRate':None, 'flowRate_pass':'green', 'is_clogged': False, 'clog_cleared': False, 'attempts': 0 }
+            # First get flow rate
+            flowRateChk_key = '{}W {}'.format(line[1], line)
+            seq_lines[line]['flowRate'] = pc_data['FlowRateCheck'][flowRateChk_key]
+            if seq_lines[line]['flowRate'] > 90:
+                plot_color = 'green'
+            elif seq_lines[line]['flowRate'] > 80:
+                plot_color = 'orange'
+            else:
+                plot_color = 'red'  
+            seq_lines[line]['flowRate_pass'] = plot_color
+            # Then pressure
+            seq_lines[line]['clogcheck_limit'] = pc_data['Checking for Clogs'][line]['limit']
+            for stage in ['start','middle','end']:
+                seq_lines[line]['clogcheck_pres'].append( pc_data['Checking for Clogs'][line][stage] )
+            # If a clog was detected during 'Checking for clogs', then clogCheck will happen. 
+            if line=='PC3':
+                print(seq_lines[line])
+            if 'clogCheck' in pc_data.keys():
+                for check in pc_data['clogCheck']['objs']:
+                    if check['name']==line:
+                        seq_lines[line]['attempts'] = check['interval']+1
+                        updated_pres = []
+                        for stage in ['start','middle','end']:
+                            updated_pres.append( check[stage] )
+                        seq_lines[line]['clogcheck_pres'] = updated_pres
+                        
+            # determine final is_clogged status and press_pass color
+            if (seq_lines[line]['clogcheck_pres'][1] - seq_lines[line]['clogcheck_pres'][2]) > seq_lines[line]['clogcheck_limit']:
+                plot_color = 'green'
+                if seq_lines[line]['attempts'] > 0:
+                    seq_lines[line]['clog_cleared'] = True
+            else:
+                plot_color = 'red'
+                seq_lines[line]['is_clogged']=True
+            seq_lines[line]['press_pass'] = plot_color
+        
+        self.pcc_seq_line_clog_check = seq_lines # later used to build alarm in main block html
+        
+        # Save metrics
+        # for each lane, flowRate_MW, pinchPresTest_is_clogged_MW 
+        metrics_dict = {} 
+        for lane in [1,2,3,4]:
+            metrics_dict['lane_{}'.format(lane)]={}
+            for waste in [('CW','PC{}'.format(lane)), ('MW','PM{}'.format(lane))]:
+                metrics_dict['lane_{}'.format(lane)][waste[0]]={}
+                metrics_dict['lane_{}'.format(lane)][waste[0]]['flowRate'] = seq_lines[waste[1]]['flowRate']
+                metrics_dict['lane_{}'.format(lane)][waste[0]]['is_clogged'] = seq_lines[waste[1]]['is_clogged']
+                metrics_dict['lane_{}'.format(lane)][waste[0]]['clog_cleared'] = seq_lines[waste[1]]['clog_cleared']
+                metrics_dict['lane_{}'.format(lane)][waste[0]]['clog_clearing_attempts'] = seq_lines[waste[1]]['attempts']
+        self.pcc_metrics = metrics_dict
+
+        # make the plot
+        fig = plt.figure(figsize=(8,4))
+        PM1_FR = plt.subplot2grid((2,8), (1,0))
+        PM2_FR = plt.subplot2grid((2,8), (1,1), sharey=PM1_FR)
+        PM3_FR = plt.subplot2grid((2,8), (1,2), sharey=PM1_FR)
+        PM4_FR = plt.subplot2grid((2,8), (1,3), sharey=PM1_FR)
+        PC1_FR = plt.subplot2grid((2,8), (1,4), sharey=PM1_FR)
+        PC2_FR = plt.subplot2grid((2,8), (1,5), sharey=PM1_FR)
+        PC3_FR = plt.subplot2grid((2,8), (1,6), sharey=PM1_FR)
+        PC4_FR = plt.subplot2grid((2,8), (1,7), sharey=PM1_FR)
+        
+        PM1_pres = plt.subplot2grid((2,8), (0,0))
+        PM2_pres = plt.subplot2grid((2,8), (0,1), sharey=PM1_pres)
+        PM3_pres = plt.subplot2grid((2,8), (0,2), sharey=PM1_pres)
+        PM4_pres = plt.subplot2grid((2,8), (0,3), sharey=PM1_pres)
+        PC1_pres = plt.subplot2grid((2,8), (0,4), sharey=PM1_pres)
+        PC2_pres = plt.subplot2grid((2,8), (0,5), sharey=PM1_pres)
+        PC3_pres = plt.subplot2grid((2,8), (0,6), sharey=PM1_pres)
+        PC4_pres = plt.subplot2grid((2,8), (0,7), sharey=PM1_pres)
+
+        PM4_pres.set_title('Sequencing Line Clog Check', fontsize=11)
+        PM1_FR.set_ylabel('flowRate', fontsize=11)
+        PM1_pres.set_ylabel('pinch pressure', fontsize=11)
+
+        for axes in [(PM1_FR, 'PM1'),(PM2_FR, 'PM2'),(PM3_FR, 'PM3'),(PM4_FR, 'PM4'), (PC1_FR, 'PC1'),(PC2_FR, 'PC2'),(PC3_FR, 'PC3'),(PC4_FR, 'PC4')]:
+            axes[0].scatter(0,seq_lines[axes[1]]['flowRate'],color=seq_lines[axes[1]]['flowRate_pass'],s=50) 
+            if axes[1]=='PM1':
+                plt.setp(axes[0].get_yticklabels(),fontsize = 10)
+            else:
+                plt.setp(axes[0].get_yticklabels(),visible=False)
+            axes[0].xaxis.set_ticks_position('none')   
+            axes[0].xaxis.set_ticks([0])
+            axes[0].set_xticklabels([axes[1]],fontsize=10)
+        
+        # Plotting and formatting
+        max_pres = []
+        for axes in [(PM1_pres, 'PM1'),(PM2_pres, 'PM2'),(PM3_pres, 'PM3'),(PM4_pres, 'PM4'), (PC1_pres, 'PC1'),(PC2_pres, 'PC2'),(PC3_pres, 'PC3'),(PC4_pres, 'PC4')]:
+            axes[0].plot([0,1,2],seq_lines[axes[1]]['clogcheck_pres'],color=seq_lines[axes[1]]['press_pass']) 
+            if axes[1]=='PM1':
+                plt.setp(axes[0].get_yticklabels(),fontsize = 10)
+                plt.setp(axes[0].get_xticklabels(),visible=False)
+            else:
+                plt.setp(axes[0].get_yticklabels(),visible=False)
+                plt.setp(axes[0].get_xticklabels(),visible=False)
+            axes[0].set_xlim([-1,3])
+            axes[0].xaxis.set_ticks_position('none')   
+            # get max pressure and add to max_pres list. will be used to determine location of N={} label for clearing attempts. all because axes.get_ylim() is returning nonsense
+            max_pres.append( max(seq_lines[axes[1]]['clogcheck_pres']) )
+        
+        # Add i=N to pressure plots in which clog clearing attempts were made
+        PM1_pres.set_ylim( PM1_pres.get_ylim()[0], max(max_pres)+0.1 ) # so that there is space for the N= 
+        for axes in [(PM1_pres, 'PM1'),(PM2_pres, 'PM2'),(PM3_pres, 'PM3'),(PM4_pres, 'PM4'), (PC1_pres, 'PC1'),(PC2_pres, 'PC2'),(PC3_pres, 'PC3'),(PC4_pres, 'PC4')]:
+            if seq_lines[axes[1]]['attempts']>0:
+                text = 'N={}'.format(seq_lines[axes[1]]['attempts'])
+                loc = max(max_pres)
+                axes[0].text(0,loc,text)
+            
+        fig.subplots_adjust(hspace=0.1, wspace=0)
+        
+        fig.savefig( os.path.join( self.outdir, 'seq_line_clog_check.png'),format='png',bbox_inches='tight')
+        plt.close()
+
+    def postChip_pinchManifoldStuckValve( self, pc_data ):
+        '''
+        Test each pinch regulator for stuck valves. Pressurize, then open valve to confirm pressure drops. 
+        '''
+        try:
+            pc_data['Pinch Manifold Stuck valve test']
+        except:
+            print('Pinch manifold stuck valve test not present in PostChipClean.')
+            self.pcc_stuck_valves_test = None
+            return
+
+        pinchvalves = {'PM1': {}, 'PM2': {}, 'PM3': {}, 'PM4': {}, 'PC1': {}, 'PC2': {}, 'PC3': {}, 'PC4': {}}
+        for valve in pinchvalves:
+            pinchvalves[valve] = { 'pressure':[], 'limit':None, 'is_stuck': False, 'color':'green' }
+            pres_start = pc_data['Pinch Manifold Stuck valve test'][valve]['start']
+            pres_end = pc_data['Pinch Manifold Stuck valve test'][valve]['end']
+            limit = pc_data['Pinch Manifold Stuck valve test'][valve]['limit']
+            pinchvalves[valve]['pressure'].append( pres_start ) 
+            pinchvalves[valve]['pressure'].append( pres_end ) 
+            pinchvalves[valve]['limit'] = limit
+            if pres_end + limit < pres_start:
+                pinchvalves[valve]['is_stuck'] = False
+                pinchvalves[valve]['color'] = 'green'
+            else:
+                pinchvalves[valve]['is_stuck'] = True 
+                pinchvalves[valve]['color'] = 'red'
+        
+        self.pcc_stuck_valves_test = pinchvalves # use later in block html
+
+        # Add is_stuck metric to self.pcc_metrics generated in postChip_check_seq_lines_for_clogs
+        for lane in [1,2,3,4]:
+            for valve in [('CW','PC{}'.format(lane)), ('MW','PM{}'.format(lane))]:
+                self.pcc_metrics['lane_{}'.format(lane)][valve[0]]['is_stuck'] = pinchvalves[valve[1]]['is_stuck']
+        # make separate plot, however group results into Seq line clog check since the categories are the same.
+        fig = plt.figure(figsize=(8,2))
+        pm1 = plt.subplot2grid((1,8), (0,0))
+        pm2 = plt.subplot2grid((1,8), (0,1), sharey=pm1)
+        pm3 = plt.subplot2grid((1,8), (0,2), sharey=pm1)
+        pm4 = plt.subplot2grid((1,8), (0,3), sharey=pm1)
+        pc1 = plt.subplot2grid((1,8), (0,4), sharey=pm1)
+        pc2 = plt.subplot2grid((1,8), (0,5), sharey=pm1)
+        pc3 = plt.subplot2grid((1,8), (0,6), sharey=pm1)
+        pc4 = plt.subplot2grid((1,8), (0,7), sharey=pm1)
+        
+        for axes in [(pm1,'PM1'),(pm2,'PM2'),(pm3,'PM3'),(pm4,'PM4'),(pc1,'PC1'),(pc2,'PC2'),(pc3,'PC3'),(pc4,'PC4')]:
+            axes[0].plot([0,1],pinchvalves[axes[1]]['pressure'],'-o', color=pinchvalves[axes[1]]['color'])
+            axes[0].xaxis.set_ticks([0.5]) 
+            axes[0].set_xticklabels([axes[1]], fontsize=10)
+            axes[0].xaxis.set_ticks_position('none')
+            if axes[1]!='PM1':
+                plt.setp(axes[0].get_yticklabels(),visible=False)
+            axes[0].set_xlim([-0.5,1.5])
+        
+        pm4.set_title('Pinch Manifold Stuck Valve Check', fontsize=11)
+        plt.setp(pm1.get_yticklabels(),fontsize = 10)
+        pm1.set_ylabel('pressure', fontsize=11)
+        
+        fig.subplots_adjust(wspace=0)
+        fig.savefig( os.path.join( self.outdir, 'postChip_pinchStuckValveTest.png'),format='png',bbox_inches='tight')
+        plt.close()
+
+    def postChip_dumpConicals( self, pc_data ):
+        dump = {'unused reagents' :{'debugKeys':['Dumping all unused reagents', 'all unused reagents'], 'data':{}}, # different keys for different TS versions. Going forward, the first one should only be found
+                'W3'  :{'debugKeys':['Dumping all W3 in conicals', 'all W3 in conicals'], 'data':{}},
+                'nuc cartridge residual':{'debugKeys':['Dumping nuc cartridge residual', 'nuc catridge residual', 'Dumping nuc catridge residual'], 'data':{}}
+                }
+        dump_data = {}
+        for reagent in dump: 
+            nuc_dict = {}
+            for key_option in dump[reagent]['debugKeys']:
+                try:
+                    nuc_dict = pc_data[key_option]
+                    break
+                except:
+                    print('{} not sucessful'.format(key_option))
+            dump_data[reagent] = {'W1':{'pres':[],'empty':False}, 'RG':{'pres':[],'empty':False}, 'RC':{'pres':[],'empty':False}, 'RA':{'pres':[],'empty':False}, 'RT':{'pres':[],'empty':False}}
+            for nuc in dump_data[reagent]:
+                startPres   = nuc_dict['{}_ALL'.format(nuc)]['startPres']
+                highestPres = nuc_dict['{}_ALL'.format(nuc)]['highestPres']
+                endPres     = nuc_dict['{}_ALL'.format(nuc)]['endPres']
+                dump_data[reagent][nuc]['pres'].append( startPres )
+                dump_data[reagent][nuc]['pres'].append( highestPres )
+                dump_data[reagent][nuc]['pres'].append( endPres )
+                if endPres + 1 < highestPres:
+                    dump_data[reagent][nuc]['empty']=True
+        self.pcc_dump_data = dump_data # use later in html 
+
+        # Save metrics
+        for conical in [ 'W1','RG', 'RC', 'RA', 'RT' ]:
+            self.pcc_metrics[conical]={}
+            for reagent in [('unused_reagents','unused reagents'),('W3','W3'),('nuc_cart_res','nuc cartridge residual')]:
+                self.pcc_metrics[conical][reagent[0]]={}
+                self.pcc_metrics[conical][reagent[0]]['not_emptied'] = not dump_data[reagent[1]][conical]['empty']
+
+        fig = plt.figure(figsize=(8,2.5))
+        nucs = [ 'W1','RG', 'RC', 'RA', 'RT' ] # get list of nucs
+        unused = plt.subplot2grid((1,3), (0,0))
+        W3     = plt.subplot2grid((1,3), (0,1), sharey=unused)
+        res    = plt.subplot2grid((1,3), (0,2), sharey=unused)
+        nuc_colors = {'W1':'mediumpurple', 'RG': 'dimgray', 'RC': 'royalblue', 'RA': 'mediumseagreen', 'RT': 'indianred'}
+        
+        for nuc in nucs:
+            unused.plot([0,1,2],dump_data['unused reagents'][nuc]['pres'], '-o', color = nuc_colors[nuc]) 
+            W3.plot([0,1,2],dump_data['W3'][nuc]['pres'], '-o', color = nuc_colors[nuc]) 
+            res.plot([0,1,2],dump_data['nuc cartridge residual'][nuc]['pres'],'-o', color = nuc_colors[nuc], label=nuc) 
+        # legend
+        res.legend(loc=(1.05,0.3), fontsize='small',frameon=False)
+
+        # Figure formatting
+        unused.xaxis.set_ticks([0,1,2])
+        W3.xaxis.set_ticks([0,1,2])
+        res.xaxis.set_ticks([0,1,2])
+        xlabel = ['start', 'highest', 'end']
+        unused.set_xticklabels(xlabel, fontsize=10)
+        W3.set_xticklabels(xlabel, fontsize=10)
+        res.set_xticklabels(xlabel, fontsize=10)
+       
+        unused.set_title('1. unused reagents', fontsize=11)
+        W3.set_title('2. W3 rinse', fontsize=11)
+        res.set_title('3. nuc cart. residual', fontsize=11)
+
+        unused.set_ylabel('pressure', fontsize=11)
+        plt.setp(unused.get_yticklabels(),fontsize=10)
+        plt.setp(W3.get_yticklabels(),visible=False)
+        plt.setp(res.get_yticklabels(),visible=False)
+     
+        unused.set_xlim([-0.5,2.5])
+        W3.set_xlim([-0.5,2.5])
+        res.set_xlim([-0.5,2.5])
+
+        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+        fig.savefig( os.path.join( self.outdir, 'postChip_dumpConicals.png'),format='png',bbox_inches='tight')
+        plt.close()
+
+    def postChip_manifoldLeakCheck( self, pc_data ):
+        possible_manifolds = {'PRV':{'debugkey':'PRV leak test'}, 'Pinch':{'debugkey':'Pinch Manifold Leak test'},'REG2':{'debugkey':'REG2 leak test'},'Conical':{'debugkey':'conicalPressureTest'}}
+        manifolds = {}
+        for man in possible_manifolds:
+            if possible_manifolds[man]['debugkey'] in pc_data:
+                print( possible_manifolds[man]['debugkey'] )
+                possible_manifolds[man]['limit'] = pc_data[possible_manifolds[man]['debugkey']]['limit']
+                possible_manifolds[man]['found_leak'] = not (pc_data[possible_manifolds[man]['debugkey']]['state']=='passed')
+                possible_manifolds[man]['pressure']=[]
+                for stage in ['start','end']:
+                    possible_manifolds[man]['pressure'].append( pc_data[possible_manifolds[man]['debugkey']][stage] )
+                manifolds[man] = possible_manifolds[man]
+            else:
+                print('{} not present in PostChipClean'.format(possible_manifolds[man]['debugkey']))
+        print('manifoldLeakCheck: {}'.format(manifolds))
+        #manifolds = possible_manifolds
+        if manifolds == {}:
+            self.pcc_manifoldLeakCheck = None
+        else:
+            self.pcc_manifoldLeakCheck = manifolds # use later in block html
+
+    def extract_ccc( self, data_raw ):
+        '''
+        Re-organizes conical clog check data and determines pass/fail. Conical clog check is done during both postChipClean and postRunClean
+        '''
+        # Set thresholds for W3 for num lanes 1,2,3,4. Each tuple is (value below which W3 flow rate is flagged, lower end of normal, upper end of normal). 
+        # All values set by CTN based on ~85 runs
+        W3_thresholds = [ (75, 100, 130) , (150, 200, 240), (225, 250, 290), (300, 315, 390) ]
+        
+        ccc_data = {'conical':['W1','RG','RC','RA','RT'],'name':[],'W3 and conical':[],'W3 only':None, 'low W3': False, 'num lanes':None, 'W3 thresholds':None, 'ratio':[],'ratioLimit':0.79, 'is clogged':[]} # initialize dictionary of conical clog check data
+        
+        # First check if ConicalClogCheck was skipped due to W3 below 50 uL/s
+        print('Check debug log to see if ConicalClogCheck was skipped due to W3 below 50 uL/s...')
+        for line in self.debug_lines:
+            if 'W3 failed' in line:
+                print(line)
+                ccc_data['low W3'] = None # None for red in block_html, since True will be yellow
+                ccc_data['is_clogged']=[None,None,None,None,None,None] # use to make blocks black in block_html
+                self.foundConicalClogCheck = True # not really true- I suppose
+                return ccc_data
+
+        if data_raw:
+            print('Now extracting conical clog check data')
+            for conical in ccc_data['conical']:
+                for key in data_raw['checkForClogsInConicals']: # iterate over keys, which are names of conicals
+                    self.foundConicalClogCheck = True
+                    if key[:2]==conical:
+                        con_data = data_raw['checkForClogsInConicals'][key]
+                        ccc_data['name'].append( con_data['name'] )
+                        ccc_data['W3 and conical'].append( con_data['FR'] )
+                        ccc_data['W3 only'] = con_data['WFR'] # same for all conicals, measured once at the beginning of test with no valves from conicals open and after flow through WL valves has stabilized
+                        ccc_data['ratio'].append( con_data['FRRatio'] )
+                        if ccc_data['W3 only']<20:
+                            ccc_data['is clogged'].append(None) # W3 flow is very low, and therefore test is not reliable
+                            print('W3 flow is very low')
+                        else:
+                            ccc_data['is clogged'].append( con_data['FRRatio']  > ccc_data['ratioLimit']  ) # Pass = True, Fail = False
+                        print( 'ratio {} and ratioLimit {} for conical {}'.format(con_data['FRRatio'],ccc_data['ratioLimit'],conical) )
+                        
+            ccc_data['num lanes'] = len( [ int(name[2])for name in ccc_data['name'][0].split(',')] ) # normal W3 flow depends on number of lanes in use. Maybe different from active lanes.
+            ccc_data['W3 thresholds'] = W3_thresholds[ ccc_data['num lanes']-1 ] # set equal to touple corresponding to number of lanes used in test
+            if ccc_data['W3 only'] < ccc_data['W3 thresholds'][0]: # first value of tuple gives lower limit of W3 flow rate that is not flagged as too low
+                ccc_data['low W3'] = True
+        else:
+            ccc_data = None
+        return ccc_data
+    
+    def plot_pinch_data( self, pinch_data ):
+        '''Generates plot of pinch cal data from reagent-prime and pre-run'''
+        last_lane = max(pinch_data.keys())
+        for lane in pinch_data.keys():
+            for stage in self.stages:
+                if stage=='(null)':
+                    continue
+                fig = plt.figure(figsize = (4,4))
+                flow = plt.subplot2grid((2,1), (0,0))
+                pres = plt.subplot2grid((2,1), (1,0), sharex=flow)
+            
+                try:
+                    base_MW = pinch_data[lane]['{} MW Clearing'.format(stage)]
+                    base_CW = pinch_data[lane]['{} CW Clearing'.format(stage)]
+                    time_0 = min(base_MW['timestamp'] + base_CW['timestamp'])
+                except:
+                    fig.savefig( os.path.join( self.outdir , 'pinch_{}_{}.png'.format( stage,lane.replace(' ','_') ) ), format='png',bbox_inches='tight' )
+                    return
+
+                CW_diff = [time-time_0 for time in base_CW['timestamp']] # convert to relative time with the first point set to time 0
+                MW_diff = [time-time_0 for time in base_MW['timestamp']]
+                CW_time = [time_point.total_seconds() for time_point in CW_diff]
+                MW_time = [time_point.total_seconds() for time_point in MW_diff]
+                flow_MW, = flow.plot(MW_time, base_MW['flowRate'], 'o', color='gray', label='Main Waste')
+                flow_CW, = flow.plot(CW_time, base_CW['flowRate'], 'o', color='green', label='Chip Waste')
+                man_MW,  = pres.plot(MW_time, base_MW['manPres'], 'o', color='red', label='Mainifold')
+                man_CW,  = pres.plot(CW_time, base_CW['manPres'], 'o', color='red')
+                reg_MW,  = pres.plot(MW_time, base_MW['regPres'], 'o', color='blue', label='Regulator')
+                reg_CW,  = pres.plot(CW_time, base_CW['regPres'], 'o', color='blue')
+                tank_MW, = pres.plot(MW_time, base_MW['tankPres'], 'o', color='black', label='Tank')
+                tank_CW, = pres.plot(CW_time, base_CW['tankPres'], 'o', color='black')
+    
+                flow.set_ylabel('FlowRate')
+                pres.set_ylabel('Pressure')
+                pres.set_xlabel('seconds')
+                flow.locator_params('y',nbins=5)
+                pres.locator_params('y',nbins=5)
+                # Leave out title since labels will be in table of html
+                #flow.set_title('{} {}'.format(lane ,stage), loc='center', fontsize=14)
+                if lane==last_lane:
+                    flow.legend(loc=(1.05,0.5),fontsize='small',numpoints=1,frameon=False)
+                    pres.legend(loc=(1.05,0.5),fontsize='small',numpoints=1,frameon=False)
+                fig.tight_layout()
+                fig.subplots_adjust(hspace=0.1)
+                plt.setp(flow.get_xticklabels(),visible=False)
+                plt.setp(flow.get_yticklabels(),fontsize=10)
+                plt.setp(pres.get_yticklabels(),fontsize=10)
+                plt.setp(pres.get_xticklabels(),fontsize=10)
+                fig.savefig( os.path.join( self.outdir , 'pinch_{}_{}.png'.format( stage,lane.replace(' ','_') ) ), format='png',bbox_inches='tight' )
+
+    def plot_ccc_data(self, ccc_data):
+        fig = plt.figure(figsize = (4.5,4.5))
+        FR_W3_conical = plt.subplot2grid((3,1), (0,1))
+        FR_ratio      = plt.subplot2grid((3,1), (2,0), sharex=FR_W3_conical)
+        
+        # Determine the marker colors. 
+        nuc_colors  = ['mediumpurple','gray','royalblue','mediumseagreen', 'indianred']
+        ratio_colors = []
+        ratio_marker = []
+        last_pass = -1 # use for the legend
+        last_fail = -1
+        last_unknown = -1
+        for i, status in enumerate(ccc_data['is clogged']):
+            if status==None:
+                ratio_colors.append('black') # test is not reliable due to very low W3 flow
+                ratio_marker.append('o')
+                last_unknown = i
+            elif status:
+                ratio_colors.append('red') # suspected to be clogged
+                ratio_marker.append('o')
+                last_fail = i
+            else:
+                ratio_colors.append('green')
+                ratio_marker.append('o')
+                last_pass = i
+        # Scatter plot so we can have a different color for each marker
+        for i in range(len(ccc_data['ratio'])):
+            FR_W3_conical.scatter(i,ccc_data['W3 and conical'][i],  color=nuc_colors[i], s=50)
+            if i==last_pass:
+                FR_ratio.scatter(i,ccc_data['ratio'][i],  color=ratio_colors[i], marker=ratio_marker[i], s=50, label='pass')
+            elif i == last_fail:
+                FR_ratio.scatter(i,ccc_data['ratio'][i],  color=ratio_colors[i], marker=ratio_marker[i], s=50, label='fail')
+            elif i == last_unknown:
+                FR_ratio.scatter(i,ccc_data['ratio'][i],  color=ratio_colors[i], marker=ratio_marker[i], s=50, label='status unknown')
+            else:
+                FR_ratio.scatter(i,ccc_data['ratio'][i],  color=ratio_colors[i], marker=ratio_marker[i], s=50)
+        
+        FR_W3_conical.axhline(y=ccc_data['W3 only'], color='black', linestyle='-', label='W3 only')
+        FR_ratio.axhline(y=ccc_data['ratioLimit'], color='black', linestyle='--', label='pass/fail limit')
+
+            
+        FR_ratio.set_xticklabels(ccc_data['conical'])    
+        FR_ratio.xaxis.set_ticks(np.arange(0,5,1))
+            
+        lanes = [ int(name[2])for name in ccc_data['name'][0].split(',')]
+        FR_W3_conical.set_title('Flow through lanes {}'.format(lanes), loc='center', fontsize=14)
+
+        FR_W3_conical.set_ylabel('W3 + conical')
+        FR_ratio.set_ylabel('Ratio')
+        
+        # Whole lot of figure formatting 
+        FR_ratio.set_ylim([min(0.6,min(ccc_data['ratio'])),1])
+        FR_ratio.set_xlim([-0.5,4.5])
+        
+        low = ccc_data['W3 thresholds'][1]
+        high = ccc_data['W3 thresholds'][2] 
+        FR_W3_conical.fill_between(np.arange(-1,6,1),low,high,color='green',alpha='0.2') # need to make legend for this
+        if ccc_data['low W3']:
+            FR_W3_conical.text(0.25,0.01,'WARNING: low W3 flow', color='red', horizontalalignment='left', verticalalignment='bottom', transform=FR_W3_conical.transAxes,fontsize=12)
+
+        FR_W3_conical.ticklabel_format(axis='y',style='plain',useOffset=False)
+        
+        FR_W3_conical.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
+        FR_ratio.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+        
+        FR_W3_conical.locator_params('y',nbins=5)
+        FR_ratio.locator_params('y',nbins=5)
+
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0.12)
+        plt.setp(FR_W3_conical.get_xticklabels(),visible=False)
+                
+        plt.setp(FR_W3_conical.get_yticklabels(),fontsize=10)
+        plt.setp(FR_ratio.get_yticklabels(),fontsize=10)
+        plt.setp(FR_ratio.get_xticklabels(),fontsize=10)
+        
+        # Build custom legend --- NOT WORKING, not in use.
+        ratio_legend_elements=[
+                        Line2D([0],[0],color='black', label='pass/fail limit',linestyle='--'),
+                        Line2D([0],[0], marker='o',color='w', markerfacecolor='red', markersize=8, label='fail'),
+                        Line2D([0],[0], marker='o',color='w', markerfacecolor='green', markersize=8,label='pass'),
+                              ]
+
+        FR_W3_conical.legend(loc=(1.05,0.5),fontsize='small',numpoints=1,frameon=False)
+        FR_ratio.legend(loc=(1.05,0.35),fontsize='small',scatterpoints=1,frameon=False)
+        #FR_ratio.legend(ratio_legend_elements,loc=(1.05,0.5),fontsize='small',numpoints=1,frameon=False)
+        #fig.savefig( os.path.join( self.outdir, 'postRun_clogcheck.png'),format='png',bbox_extra_artists=ldg,bbox_inches='tight')
+        fig.savefig( os.path.join( self.outdir, 'conical_clog_check.png'),format='png',bbox_inches='tight')
+
+    def write_pinch_data_html( self, pinch_data ):
+        doc = H.Document()
+        doc.add( H.Header('Pinch Clearing Measurements',2) )
+        
+        stages = [stage.split('-')[0] for stage in self.stages]
+        lanes = pinch_data.keys()
+        lanes.sort()
+        table = H.Table( border = '0' )
+        
+        # No need for lane headings since it is in the figure title, however stage (RP-Pinch or PreRun-Pinch) is not in figure.
+        # Lane Headings
+        row_header = H.TableRow()
+        row_header.add_cell( H.TableCell('',True,align='center') )
+        for lane in lanes:
+            lane_header = H.Header(lane, 2)
+            lane_header_cell = H.TableCell(lane_header, True, align='center')
+            row_header.add_cell( lane_header_cell )
+        table.add_row( row_header )
+
+        for stage in stages:
+            row = H.TableRow()
+            stage_name = H.Header(stage.replace('RP','Reagent Prime'),2)
+            stage_name_cell = H.TableCell( stage_name, True, align='right' )
+            row.add_cell( stage_name_cell ) # Rotate?
+            for lane in lanes:
+                #img = H.Image( os.path.join( self.outdir, 'pinch_{}_{}.png'.format(stage,lane.replace(' ','_') ) )
+                img = H.Image( 'pinch_{}_{}.png'.format('{}-Pinch'.format(stage),lane.replace(' ','_') ) )
+                img_cell = H.TableCell( img.as_link() )
+                row.add_cell( img_cell )
+            table.add_row( row )
+        doc.add( table )
+        
+        with open ( os.path.join( self.outdir, 'Pinch_Clearing.html'), 'w') as f:
+            f.write( str(doc) )
+
+    def write_conical_clog_check_html( self ):
+        doc = H.Document()
+        doc.add( H.Header('Conical Clog Check',2) )
+        
+        table = H.Table( border = '0' )
+        
+        # Description
+        row_des = H.TableRow()
+        description = ('Test during postChipClean to look for clogs in the conical lines. First, W3 is' +  
+                      ' flowed through all used lanes with conical valves closed. Then for each' +
+                      ' conical, W3 and nucs are flowed through all used lanes. Since the flow sensor' +
+                      ' only measures W3 flow, the measured flow rate will be lower when nucs are' +
+                      ' flowing. If the flow rate is similar with and without nuc flow (resulting in a' +
+                      ' high flow rate ratio), a clog may be present.')
+        des_cell = H.TableCell( H.Paragraph(description), width='600px' ) 
+        row_des.add_cell( des_cell )
+        table.add_row( row_des )
+
+        # Figure
+        row = H.TableRow()
+        img = H.Image('conical_clog_check.png')
+        img_cell = H.TableCell( img.as_link() )
+        row.add_cell( img_cell )
+        table.add_row( row )
+        doc.add( table )
+        
+        with open ( os.path.join( self.outdir, 'ConicalClogCheck.html'), 'w') as f:
+            f.write( str(doc) )
+
+    def write_PCC_html( self ):
+        doc = H.Document()
+        doc.add( H.Header('PostChipClean Checks',2) )
+        
+        slc_table = H.Table( border = '0' )
+        # Figure: sequencing line clog check
+        row = H.TableRow()
+        img = H.Image('seq_line_clog_check.png')
+        img_cell = H.TableCell( img.as_link() )
+        row.add_cell( img_cell )
+        slc_table.add_row( row )
+        # Description
+        row_des = H.TableRow()
+        description = ('Before PostChipClean: check for clogs using the W3 flow rate. Possible clog if the flow rate is'+
+                        ' less than 90. Even if there is a clog here, it may be removed during PostChipClean.\n'+
+                        'After PostChipClean: check for clogs using the pinch pressure.'+
+                        ' If the final pressure is at least 0.5 less than the middle pressure,'+
+                        ' there is no clog. Green = no clog.')   
+        des_cell = H.TableCell( H.Paragraph(description), width='600px' ) 
+        row_des.add_cell( des_cell )
+        slc_table.add_row( row_des )
+        doc.add( slc_table ) 
+        doc.add( H.HR() )
+
+        
+        if self.pcc_stuck_valves_test !=None:
+            pinch_table = H.Table( border = '0' )
+            # Figure: pinch manifold stuck valve test 
+            row = H.TableRow()
+            img = H.Image('postChip_pinchStuckValveTest.png')
+            img_cell = H.TableCell( img.as_link() )
+            row.add_cell( img_cell )
+            pinch_table.add_row( row )
+            # Description
+            row_des = H.TableRow()
+            description = ('Check if pinch manifold valves are stuck. Valves are not stuck if'+
+                            ' the pressure drops by at least 2 psi after the valves are open.')
+            des_cell = H.TableCell( H.Paragraph(description), width='600px' )
+            row_des.add_cell( des_cell )
+            pinch_table.add_row( row_des )
+            doc.add( pinch_table )
+            doc.add( H.HR() )
+        
+        dump_table = H.Table( border = '0' )
+        # Figure: Dumping Reagents from conicals
+        row = H.TableRow()
+        img = H.Image('postChip_dumpConicals.png')
+        img_cell = H.TableCell( img.as_link() )
+        row.add_cell( img_cell )
+        dump_table.add_row( row )
+        # Description
+        row_des_dump = H.TableRow()
+        description = ('Test to confirm that the nuc conicals have emptied after each conical dumping procedure.'+
+                        ' The conicals are pressurized (close to 12 psi), then valves are opened to allow flow.'+
+                        ' The pressure will drop only if the conicals are empty. Test ends once the final pressure'+
+                        ' is at least 1 psi below highest recorded pressure, or times out.')
+        des_cell = H.TableCell( H.Paragraph(description), width='600px' )
+        row_des_dump.add_cell( des_cell )
+        dump_table.add_row( row_des_dump )
+        doc.add( dump_table )
+        doc.add( H.HR() )
+        
+        with open ( os.path.join( self.outdir, 'PostChipClean.html'), 'w') as f:
+            f.write( str(doc) )
+
+    def build_ccc_data_metric_dict( self, ccc_data ):
+        n_lanes = ccc_data['num lanes']
+        metric_dict = { 'W3_flowRate': ccc_data['W3 only'], 'low_W3': ccc_data['low W3'], 'num_lanes': n_lanes, 'conical':{} }
+        if ccc_data['W3 only']==None:
+            metric_dict['low W3']=True
+        for i, conical in enumerate(ccc_data['conical']):
+            if ccc_data['W3 only']==None:
+                metric_dict['conical'][conical]={}
+                metric_dict['conical'][conical]['flowRate'] = None
+                metric_dict['conical'][conical]['flowRate_ratio'] = None
+                metric_dict['conical'][conical]['is_clogged'] = None
+            else:
+                metric_dict['conical'][conical]={}
+                metric_dict['conical'][conical]['flowRate'] = ccc_data['W3 and conical'][i]
+                metric_dict['conical'][conical]['flowRate_ratio'] = ccc_data['ratio'][i]
+                metric_dict['conical'][conical]['is_clogged'] = ccc_data['is clogged'][i]  
+        self.ccc_metrics = metric_dict
+        return metric_dict
+
+class FlowInfo:
+    '''
+    Class for reading and interacting with pressureInfo.json and flowRateInfo.json. 
+    Grouped together since they should be displayed and analyzed together.
+    Either analyze both files, or none.
+    '''
+    def __init__(self, filepath, outdir, flow_order, do_reseq, reseq_flow_order, true_active=None):
+        self.filepath = filepath
+        print('FILEPATH: {}'.format(self.filepath))
+        self.outdir   = outdir
+        self.do_reseq = do_reseq
+        self.flow_order = flow_order
+        self.reseq_flow_order = reseq_flow_order
+        print('flow order: {}'.format(flow_order) )
+        self.true_active = true_active
+       
+        try:
+            # If resequencing happened according to explog, look for flow data files in reseq folder
+            self.reseqfilepath = os.path.join( self.filepath, 'reseq' ) 
+            print(self.filepath)
+            print(self.reseqfilepath)
+            if self.do_reseq:
+                print('reseq flow order: {}'.format(reseq_flow_order) )
+                print('loading reseq pressureInfo.json...')
+                reseq_pres_data_raw = {}
+                try:
+                    with open( os.path.join( self.reseqfilepath , 'pressureInfo.json' ), 'r' ) as f:
+                        reseq_pres_data_raw = json.load( f, strict = False )
+                except:
+                    print('reseq pressureInfo.json file not found')
+                    print('----Skipping analysis of reseq flow data.')
+                    self.do_reseq = False
+                print('loading reseq flowRateInfo.json...')
+                reseq_flowR_data_raw = {}
+                try:
+                    with open( os.path.join( self.reseqfilepath , 'flowRateInfo.json' ), 'r' ) as f:
+                        reseq_flowR_data_raw = json.load( f, strict = False )
+                except:
+                    print('reseq flowRateInfo.json file not found')
+                    print('----Skipping analysis of reseq flow data.')
+                    self.do_reseq = False
+            
+            # Look for flow data files
+            print('loading pressureInfo.json...')
+            pres_data_raw = {}
+            try:
+                with open( os.path.join( self.filepath , 'pressureInfo.json' ), 'r' ) as f:
+                    pres_data_raw = json.load( f, strict = False )
+            except:
+                print('pressureInfo.json file not found')
+                print('----Skipping analysis of all flow data.')
+                self.hasFlowData = False
+                return None
+            print('loading flowRateInfo.json...')
+            flowR_data_raw = {}
+            try:
+                with open( os.path.join( self.filepath , 'flowRateInfo.json' ), 'r' ) as f:
+                    flowR_data_raw = json.load( f, strict = False )
+            except:
+                print('flowRateInfo.json file not found')
+                print('Skipping analysis of all flow data.')
+                self.hasFlowData = False
+                return None
+            self.hasFlowData = True
+            
+            # Next, group by name, make plots, and generate html page.
+            flow_data_s, flow_data_f, median_end_time = self.combine_flow_data( pres_data_raw, flowR_data_raw, self.flow_order  )
+            if self.do_reseq:
+                reseq_flow_data_s, reseq_flow_data_f, reseq_median_end_time = self.combine_flow_data( reseq_pres_data_raw, reseq_flowR_data_raw, self.reseq_flow_order, reseq=True  )
+                self.plot_flow_data( reseq_flow_data_s, reseq_flow_data_f, reseq_median_end_time, reseq=True )
+                self.plot_per_flow( reseq_flow_data_f, reseq=True )
+            
+            self.plot_flow_data( flow_data_s, flow_data_f, median_end_time )
+            self.plot_per_flow( flow_data_f )
+            self.write_flow_data_html( flow_data_s ) 
+        except:
+            print( '!! Something went wrong when analyzing detailed flow data. Skipping Analysis')
+            self.hasFlowData = False
+            return None
+
+    def combine_flow_data( self, pres_data_raw, flowR_data_raw, flow_order, reseq=False ):
+        flow_data_s = [] # list of dictionaries. Each has flowrate and pressure per sec for each flow
+        flows = [ int(key.split('flow')[1]) for key in flowR_data_raw.keys() if key != 'end' ]
+        flows.sort()
+        end_time = [] # will be used to determine if 11s or 13s flow scripts are being used
+        for flow in flows:
+            flow_dict={}
+            flow_dict['flow'] = flow 
+            flow_dict['flowRate'] = flowR_data_raw['flow{}'.format(flow)]
+            flow_dict['manPres']  = [ point[0] for point in pres_data_raw['flow{}'.format(flow)] ]
+            flow_dict['regPres']  = [ point[1] for point in pres_data_raw['flow{}'.format(flow)] ]
+            flow_dict['tankPres'] = [ point[2] for point in pres_data_raw['flow{}'.format(flow)] ]
+            flow_dict['time']     = [ index*0.1 for index,fl in enumerate(flow_dict['flowRate']) ]
+            end_time.append( 0.1 * len(flow_dict['flowRate']) )
+            flow_data_s.append(flow_dict)
+        # Next, build dictionary of flowrate per flow
+        # Use the final time to determine if we are using 13s flow or 11s flow.
+        print('What do the end times look like?')
+        print('min {}'.format(min(end_time)))
+        print('med {}'.format(np.median(end_time)))
+        print('max {}'.format(max(end_time)))
+        #if np.median(end_time) > 12.5:
+        if min(end_time) >  12.5:
+            print('Looks like we are using the 13s flow script based on end_time median of {}'.format(np.median(end_time)))
+            flow_data_f = {'flow_order':[], 'staging':{'time':2.0,'flowRate':[]}, 'CW+MW':{'time':5.0,'flowRate':[]}, 'CW':{'time':12.0,'flowRate':[]}}
+        else:
+            print('Looks like we are using the 11s flow script based on end_time median of {}'.format(np.median(end_time)))
+            flow_data_f = {'flow_order':[], 'staging':{'time':1.6,'flowRate':[]}, 'CW+MW':{'time':4.3,'flowRate':[]}, 'CW':{'time':10.0,'flowRate':[]}}
+
+        for j,key in enumerate(flow_data_f):
+            if key=='flow_order':
+                break
+            # determine the index that corresponds to the correct time for staging, CW+MW, or CW. Will be used later in plotting
+            for i,time in enumerate(flow_dict['time']):
+                if time >= flow_data_f[key]['time']:
+                    flow_data_f[key]['index']=i
+                    break
+            print('index: {} at time {} for requested time {}'.format(i-1, time, flow_data_f[key]['time']) )
+            for k,flow in enumerate(flows):  # use the index since the first flow might be 1 or might be 0 --> how often is it 1? looks like flow 0 is g, not t
+                #print(k)
+                try:
+                    flow_data_f[key]['flowRate'].append( flow_data_s[k]['flowRate'][i-1] )
+                except: 
+                    flow_data_f[key]['flowRate'].append( None ) # to handle case where somewhere in between 11s flow and 13s flow is chosen.  
+                if j == 0: # only need to do this one time. 
+                    if flow==0:
+                        flow_data_f['flow_order'].append( 'g' )  
+                        print('assigning flow0 to g')
+                    else:
+                        flow_data_f['flow_order'].append( flow_order[(flow-1) % len(flow_order) ] )
+
+        # need to generate metrics for staging flow rate
+        stag_by_nuc = {'g': [] ,'c':[],'a':[],'t':[] }
+        for i, nuc in enumerate(flow_data_f['flow_order']):
+            stag_by_nuc[nuc].append(flow_data_f['staging']['flowRate'][i])
+        metrics_dict = {'g':{}, 'c':{}, 'a':{}, 't':{} }
+        for nuc in metrics_dict:
+            metrics_dict[nuc]['staging_median'] = np.median( stag_by_nuc[nuc]  )
+        print('Staging flow rates: {}'.format(metrics_dict))
+        
+        # CW and MW+CW flow rates will not depend on the nuc. 
+        metrics_dict['CW_median'] = np.median( flow_data_f['CW']['flowRate'] )
+        metrics_dict['CW_std']    = np.std( flow_data_f['CW']['flowRate'] )
+        metrics_dict['CW_MW_median'] = np.median( flow_data_f['CW+MW']['flowRate'] )
+        metrics_dict['CW_MW_std']    = np.std( flow_data_f['CW+MW']['flowRate'] )
+        
+        if not reseq:
+            self.flow_metrics = metrics_dict   
+
+        return flow_data_s, flow_data_f, np.median( end_time ) 
+
+    def plot_flow_data( self, flow_data, flow_data_f, median_end_time, reseq=False ):
+        print('Plotting flow data...')
+        flow_order = flow_data_f['flow_order']
+
+        fig = plt.figure(figsize = (5,9.2))
+        manPres  = plt.subplot2grid((6,1),(0,0))
+        regPres  = plt.subplot2grid((6,1),(1,0), sharex=manPres)
+        tankPres = plt.subplot2grid((6,1),(2,0), sharex=manPres)    
+        flow = plt.subplot2grid((6,1), (3,5), sharex= manPres)
+        nuc_colors = {'g': 'dimgray', 'c': 'royalblue', 'a': 'mediumseagreen', 't': 'indianred'}
+        for i,flow_dict in enumerate(flow_data):
+            time = flow_dict['time']
+            line_color = nuc_colors[ flow_order[i] ] # set the color to match the nuc 
+            if i in [0,1,2,3]:
+                flow.plot(time, flow_dict['flowRate'], color=line_color, label=flow_order[i] )
+            flow.plot(time, flow_dict['flowRate'], color=line_color)
+            manPres.plot(time, flow_dict['manPres'], color=line_color)
+            regPres.plot(time, flow_dict['regPres'],  color=line_color)
+            tankPres.plot(time, flow_dict['tankPres'],  color=line_color)
+        flow.set_ylabel('W2 FlowRate', fontsize=12)
+        manPres.set_ylabel('Man. Pres.', fontsize=11)
+        regPres.set_ylabel('Reg. Pres.', fontsize=11)
+        tankPres.set_ylabel('Tank Pres.', fontsize=11)
+        flow.set_xlabel('seconds', fontsize=11)
+        flow.set_xlim([0,median_end_time+0.5])
+        flow.set_ylim([-15,flow.get_ylim()[1]])
+
+        flow.locator_params('y',nbins=6)
+        
+        # Add vertical lines corresponding to times selected for the flow rate vs flow plot
+        for stage in ['staging','CW+MW','CW']:
+            time = flow_data_f[stage]['time']
+            flow.axvline(time, -15, flow.get_ylim()[1], linestyle='--',color='black')
+
+        if reseq:
+            savename = 'flowRate_Pressure_allFlows_RESEQ.png'
+            title = 'All {} Reseq Flows'.format(len(flow_data))
+        else:
+            savename = 'flowRate_Pressure_allFlows.png'
+            title = 'All {} Flows'.format(len(flow_data))
+        
+        manPres.set_title(title, loc='center', fontsize=12)
+        flow.legend(loc='upper right',fontsize='small',frameon=False)
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0.12)
+
+        for ax in [manPres, regPres, tankPres]:
+            plt.setp(ax.get_xticklabels(),visible=False)
+            plt.setp(ax.get_yticklabels(),fontsize=10)
+            ax.locator_params('y',nbins=4)
+        
+        plt.setp(flow.get_yticklabels(),fontsize=10)
+        plt.setp(flow.get_xticklabels(),fontsize=10)
+        fig.savefig( os.path.join( self.outdir, savename),format='png',bbox_inches='tight') 
+        plt.close()
+
+    def plot_per_flow( self, flow_data_f, lines=False, reseq=False ):
+        '''lines=True in order to connect all flows with the same nuc with a line.'''
+        fig = plt.figure(figsize = (10,9)) 
+        CW    = plt.subplot2grid((3,1), (0,0))
+        CW_MW = plt.subplot2grid((3,1), (1,0), sharex=CW)
+        stage = plt.subplot2grid((3,1), (2,0), sharex=CW) 
+        
+        nuc_colors = {'g': 'dimgray', 'c': 'royalblue', 'a': 'mediumseagreen', 't': 'indianred'}
+
+        # Make thresholds dictionary- for active lanes from 0 to 4. None if no value available.
+        # CW+MW is target +/- 10 percent. CW and staging are based on normal values from recent runs
+        CWMW_low = [None]
+        CWMW_high = [None]
+        for num_active in [1,2,3,4]:
+            CWMW_low.append( .9*num_active*48. )
+            CWMW_high.append( 1.1*num_active*48. )
+        
+        thresh = {'staging': {'low':[None,26,50,None,90], 'high':[None,33,62,None,115]}, 
+                  'CW'     : {'low':[None,17,35,None,74], 'high':[None,20,38,None,80]},
+                  'CW+MW'  : {'low':CWMW_low, 'high':CWMW_high},
+                 }
+        
+        if lines:
+            # Reorganize data, sorting by nuc
+            each_by_nuc = {}
+            for key in ['staging','CW+MW','CW']:
+                by_nuc = {'g': {'flow':[], 'flowRate':[]},'c':{'flow':[], 'flowRate':[]},'a':{'flow':[], 'flowRate':[]},'t':{'flow':[], 'flowRate':[]} }
+                for i, nuc in enumerate(flow_data_f['flow_order']):
+                    by_nuc[nuc]['flow'].append(i)
+                    by_nuc[nuc]['flowRate'].append(flow_data_f[key]['flowRate'][i])
+                each_by_nuc[key]=by_nuc
+            # Then plot
+            for nuc in nuc_colors:
+                CW.plot( each_by_nuc['CW'][nuc]['flow'], each_by_nuc['CW'][nuc]['flowRate'],color=nuc_colors[nuc] )
+                CW_MW.plot( each_by_nuc['CW+MW'][nuc]['flow'], each_by_nuc['CW+MW'][nuc]['flowRate'],color=nuc_colors[nuc] )
+                stage.plot( each_by_nuc['staging'][nuc]['flow'], each_by_nuc['staging'][nuc]['flowRate'],color=nuc_colors[nuc], label=nuc )
+        else:
+            # Scatter plot so each nuc can have its own color
+            stage.plot( np.arange(len(flow_data_f['flow_order'])) , flow_data_f['staging']['flowRate'], color='goldenrod',zorder=1, linewidth=0.5 )
+            CW.plot( np.arange(len(flow_data_f['flow_order'])) , flow_data_f['CW']['flowRate'], color='goldenrod',zorder=1, linewidth=0.5 )
+            CW_MW.plot( np.arange(len(flow_data_f['flow_order'])) , flow_data_f['CW+MW']['flowRate'], color='goldenrod',zorder=1, linewidth=0.5 )
+            for i, nuc in enumerate(flow_data_f['flow_order']):
+                CW.scatter(i, flow_data_f['CW']['flowRate'][i], color=nuc_colors[nuc], s=10,zorder=2 )
+                CW_MW.scatter(i, flow_data_f['CW+MW']['flowRate'][i], color=nuc_colors[nuc], s=10,zorder=2 )
+                if i in [0,1,2,3]:
+                    stage.scatter(i, flow_data_f['staging']['flowRate'][i], color=nuc_colors[nuc], s=10, label=nuc, zorder=2 )
+                else:
+                    stage.scatter(i, flow_data_f['staging']['flowRate'][i], color=nuc_colors[nuc], s=10, zorder=2 )
+        
+        # figure formatting 
+        stage.set_xlabel('flow number',fontsize=11)
+        stage.set_ylabel('staging (t= {} s)'.format(flow_data_f['staging']['time']),fontsize=11)
+        CW.set_ylabel('CW (t= {} s)'.format(flow_data_f['CW']['time']),fontsize=11)
+        CW_MW.set_ylabel('CW+MW (t= {} s)'.format(flow_data_f['CW+MW']['time']),fontsize=11)
+        stage.set_xlim(-5,len(flow_data_f['flow_order'])+5)
+        stage.locator_params('y',nbins=5)
+        CW.locator_params('y',nbins=5)
+        CW_MW.locator_params('y',nbins=5)
+
+        for key, ax in zip(['staging','CW','CW+MW'],[stage,CW,CW_MW]):
+            low  = thresh[key]['low'][self.true_active]
+            high = thresh[key]['high'][self.true_active]
+            if low and high:
+                ax.fill_between(np.arange(len(flow_data_f['flow_order'])),low,high, color='green',alpha=0.2,zorder=0, linewidth=0.0)
+        
+        #plt.xlim(0,40)
+        if reseq:
+            savename = 'flowRate_vs_flow_scatter_RESEQ.png'
+            title = 'Measured W2 Flow Rate for Reseq'
+        else:
+            savename = 'flowRate_vs_flow_scatter.png'
+            title = 'Measured W2 Flow Rate'
+
+        stage.legend(loc=(1.05,1.5), fontsize='small',scatterpoints=1,frameon=False)
+        CW.set_title(title, loc='center', fontsize=12)
+
+        fig.subplots_adjust(hspace=0.12)
+        plt.setp(CW.get_xticklabels(),visible=False)
+        plt.setp(CW_MW.get_xticklabels(),visible=False)
+        plt.setp(stage.get_xticklabels(),fontsize=10)
+        plt.setp(stage.get_yticklabels(),fontsize=10)
+        plt.setp(CW.get_yticklabels(),fontsize=10)
+        plt.setp(CW_MW.get_yticklabels(),fontsize=10)
+        
+        fig.savefig( os.path.join( self.outdir, savename),format='png',bbox_inches='tight')
+        plt.close()
+
+    def write_flow_data_html( self, flow_data ):
+        doc = H.Document()
+        #doc.add( H.Header('Flow Data',2) )
+        table = H.Table( border = '0' ) 
+        row_des = H.TableRow()
+        description = ('CW = flow W2 through chip waste, MW = flow W2 through main waste, '+
+                        'staging = flow W2 through chip waste and nuc through main waste.'+
+                        ' Abnormally high W2 flow during staging may indicate low flow from nuc conical.')
+        des_cell = H.TableCell( H.Paragraph(description), width='600px' ) 
+        row_des.add_cell( des_cell )
+        table.add_row( row_des )
+        
+        row_header = H.TableRow() 
+        header_cell = H.TableCell(H.Header('Sequencing Flow Data',2))
+        row_header.add_cell( header_cell )
+        table.add_row( row_header )
+
+        row = H.TableRow()
+        img_vflow = H.Image( 'flowRate_vs_flow_scatter.png' )
+        img_cell_vflow = H.TableCell( img_vflow.as_link() )
+        row.add_cell( img_cell_vflow )
+        space = H.TableCell( '&nbsp', width="50px" )
+        row.add_cell( space )
+        img_vtime = H.Image( 'flowRate_Pressure_allFlows.png' )
+        img_cell_vtime = H.TableCell( img_vtime.as_link() )
+        row.add_cell( img_cell_vtime )
+        table.add_row( row )
+        
+        if self.do_reseq:
+            row_header = H.TableRow() 
+            header_cell = H.TableCell(H.Header('Resequencing Flow Data',2))
+            row_header.add_cell( header_cell )
+            table.add_row( row_header )
+
+            row = H.TableRow()
+            img_vflow = H.Image( 'flowRate_vs_flow_scatter_RESEQ.png' )
+            img_cell_vflow = H.TableCell( img_vflow.as_link() )
+            row.add_cell( img_cell_vflow )
+            space = H.TableCell( '&nbsp', width="50px" )
+            row.add_cell( space )
+            img_vtime = H.Image( 'flowRate_Pressure_allFlows_RESEQ.png' )
+            img_cell_vtime = H.TableCell( img_vtime.as_link() )
+            row.add_cell( img_cell_vtime )
+            table.add_row( row )
+        
+        doc.add( table )
+
+        with open ( os.path.join( self.outdir, 'Detailed_Flow_Data.html'), 'w') as f:
+            f.write( str(doc) )
+
+class LibPrepLogCSV:
+    def __init__(self, filepath, outdir, expt_start, module_timing=None, seq_end=None):
+        self.expt_start = expt_start
+        self.filepath = filepath 
+        self.outdir   = outdir
+        try:
+            lpl = LibPrepLog( path=self.filepath )
+            self.hasLog = lpl.found
+            self.lpl_metrics = {} # start with it empty, populate if we find metrics we want
+            if not self.hasLog:
+                return None 
+            if module_timing==None:
+                self.hasLog = False # even though we actually have it, we don't want to analyze without module_timing data
+                return None
+            # Make keys for libpreplog_metrics
+            self.save_headers = ['PCRHeatSink','Heatsink1','Heatsink2','Ambient1','Ambient2','Ambient3']
+            for hd in self.save_headers:
+                self.lpl_metrics[hd]={}
+            
+            # Parse module_timing dict from ScriptStatus to get module times and colors
+            module_time_colors = self.build_module_dict( module_timing )
+
+            data_trunc = self.truncate_data( lpl.data, expt_start, seq_end=seq_end )
+            self.figure_names = []
+            self.figure_names_at = [] # amplify target figures
+            for header in lpl.header:
+                if header=='time':
+                    continue
+                self.figure_names.append( self.plot_temperature( data_trunc, header, module_time_colors ) )
+                if 'libprep' in module_time_colors.keys():
+                    if 'amplify target' in module_time_colors['libprep'].keys():
+                        self.figure_names_at.append( self.plot_temperature_at( data_trunc, header, module_time_colors ) )
+            
+            self.write_libPrep_log_html()
+        except:
+            self.hasLog = False
+            print('!! Something went wrong when analyzing LibPrepLog. Skipping Analysis')
+            return None
+    
+    def build_module_dict( self, module_timing ):
+        mods   = ['libprep','templating','sequencing','resequencing']
+        colors = ['blue','green','darkcyan','darkmagenta']
+        module_time_colors = {}
+        for mod, color in zip(mods,colors):
+            try:
+                start = module_timing[mod]['overall']['start'] 
+                end = module_timing[mod]['overall']['end']
+            except:
+                print('LibPrepLog Colors: Missing start or end time for {} module.'.format(mod))
+                continue
+            if (start==None) or (end==None): 
+                continue
+            module_time_colors[mod]={}
+            module_time_colors[mod]['color']=color
+            module_time_colors[mod]['start']=start
+            module_time_colors[mod]['end']=end
+            module_time_colors[mod]['submodule_start'] = [] # use this to add lines for all other submodules in the workflow
+            module_time_colors[mod]['submodule_end'] = []
+            for submod in module_timing[mod]['submodules']:
+                module_time_colors[mod]['submodule_start'].append(module_timing[mod]['submodules'][submod]['start'])
+                module_time_colors[mod]['submodule_end'].append(module_timing[mod]['submodules'][submod]['end'])
+            if mod == 'libprep':
+                try:
+                    at_start = module_timing[mod]['submodules']['Ampliseq amplify target']['start']
+                    at_end   = module_timing[mod]['submodules']['Ampliseq amplify target']['end']
+                except:
+                    try:
+                        at_start = module_timing[mod]['submodules']['Ampliseq HD amplify target']['start']
+                        at_end   = module_timing[mod]['submodules']['Ampliseq HD amplify target']['end']
+                    except:
+                        print('amplify target submodule not found')
+                        continue
+                module_time_colors[mod]['amplify target']={}
+                module_time_colors[mod]['amplify target']['start'] = at_start
+                module_time_colors[mod]['amplify target']['end'] = at_end
+        return module_time_colors
+    
+    def truncate_data( self, data, expt_start, seq_end ):
+        ''' we only care about the data during the run'''
+        # default/starting indicies will be first and last
+        start_index = 0
+        end_index = len(data['time'])-1  
+        for i,time in enumerate( data['time'] ):
+            try:
+                if time > expt_start:
+                    start_index = i
+                    break
+            except:
+                print('something is wrong with this time point {} at index {}'.format(time,i))
+        if seq_end:
+            for i,time in enumerate( data['time'] ):
+                try:
+                    if time > seq_end:
+                        end_index = i
+                        break
+                except:
+                    print('something is wrong with this time point {} at index {}'.format(time,i))
+        print('TRUNCATE libpreplog start_index: {}'.format(start_index))
+        print('TRUNCATE libpreplog   end_index: {}'.format(end_index))
+        print('TRUNCATE libpreplog         len: {}'.format(len(data['time'])))
+        data_trunc = {}
+        for header in data.keys():
+            if end_index:
+                trunc=data[header][start_index:end_index]
+            else:
+                trunc=data[header][start_index:]
+            data_trunc[header] = trunc
+        return data_trunc
+
+    def plot_temperature_at( self, data, header, module_time_colors ): 
+        # plot enlarged amplify target 
+        time = data['time']
+        fig = plt.figure( figsize=(10,2) )
+        ax = fig.add_subplot(1,1,1)
+
+        # only include amplify target region in plot  
+        at_start = module_time_colors['libprep']['amplify target']['start']
+        at_end   = module_time_colors['libprep']['amplify target']['end']
+        
+        i_start = 0
+        i_end = len(time)-1
+        for i,t in enumerate( data['time'] ):
+            if t > at_start:
+                i_start = i
+                break
+        for i,t in enumerate( data['time'] ):
+            if t > at_end:
+                i_end = i
+                break
+        data_at = data[header][i_start:i_end]
+        time    = data['time'][i_start:i_end] 
+        
+        ax.plot( time, data_at, color='black' )
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.set_ylabel( header )
+        ax.set_xlabel( 'time' )
+        
+        ax.set_xlim([time[0], time[-1]])
+        bot, top = ax.get_ylim()
+        spacer = (top - bot)*0.05
+        ax.set_ylim([bot-spacer, top+spacer])
+        
+        # Add text label for amplify target
+        ax.text( at_start + (at_end-at_start)/2 - datetime.timedelta(hours=0.1), top+spacer*1.2, 'Amplify Target', color='black', fontweight='bold', fontsize=8)
+        
+        savename = 'libPrepLog_'+header+'_amplifytarget.png'
+        fig.savefig( os.path.join( self.outdir, savename),format='png',bbox_inches='tight')
+        plt.close()
+        
+        # Here is a good place to save the metrics for the amplify target module
+        if header in self.save_headers:
+            self.lpl_metrics[header]['amplify_target'] = {}
+            # calculate avg, q2, and iqr then save
+            try:
+                self.lpl_metrics[header]['amplify_target']['q2']   = np.median(data_at)
+            except:
+                print('Unable to determine q2 of {} for amplify target submodule'.format(header))
+            try:
+                self.lpl_metrics[header]['amplify_target']['mean'] = data_at.mean()
+            except:
+                print('Unable to determine mean of {} for amplify target submodule'.format(header))
+            try:
+                self.lpl_metrics[header]['amplify_target']['std']  = data_at.std()
+            except:
+                print('Unable to determine std of {} for amplify target submodule'.format(header))
+        return savename 
+    
+    def plot_temperature( self, data, header, module_time_colors ): 
+        time = data['time']
+        fig = plt.figure( figsize=(10,2) )
+        ax = fig.add_subplot(1,1,1)
+        ax.plot( time, data[header], color='black' )
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.set_ylabel( header )
+        ax.set_xlabel( 'time' )
+        x_min = time[0]
+        try:
+            x_max = max(time[-1],module_time_colors['sequencing']['end'])
+        except:
+            x_max = time[-1]
+        ax.set_xlim([x_min,x_max])
+        # Set the y lims to have some space at the top
+        bot, top = ax.get_ylim()
+        spacer = (top - bot)*0.1
+        ax.set_ylim([bot, top+spacer])
+
+        # use ss.self.data module timing to highlight modules  
+        for mod in module_time_colors:
+            mod_start = module_time_colors[mod]['start']
+            mod_end   = module_time_colors[mod]['end']
+            mod_color = module_time_colors[mod]['color']
+            if 'amplify target' in module_time_colors[mod].keys():
+                # calculate lable shift of amplify target label
+                at_start = module_time_colors[mod]['amplify target']['start']
+                at_end   = module_time_colors[mod]['amplify target']['end']
+                at_hours = (at_end-at_start).total_seconds() / 3600.0
+                run_hours= (x_max-x_min).total_seconds() / 3600.0
+                label_hours = 0.625 * run_hours / 5.5 # approximate length of Amplify Target label in hours
+                if label_hours > at_hours:
+                    offset = datetime.timedelta(hours=0)
+                else:
+                    offset = datetime.timedelta(hours=(at_hours-label_hours)/2.0)
+                # want this region to stand out within the overall libprep module
+                ax.axvspan(mod_start,at_start,facecolor=mod_color, alpha=0.5)
+                ax.axvspan(at_end,mod_end,facecolor=mod_color, alpha=0.5)
+                ax.axvspan(at_start,at_end,facecolor=mod_color, alpha=0.7)
+                ax.text(at_start+offset ,top, 'Amplify Target', color='white',fontweight='bold',fontsize=8)
+            else:
+                ax.axvspan(mod_start,mod_end,facecolor=mod_color, alpha=0.4)
+            # Add module text labels
+            ax.text( mod_start + (mod_end-mod_start)/2 - datetime.timedelta(hours=0.6), top+spacer*1.1, mod, color='black', fontweight='bold', fontsize=8)
+            for sm_start, sm_end in zip( module_time_colors[mod]['submodule_start'],module_time_colors[mod]['submodule_end']):
+                ax.axvline(x=sm_start, color=mod_color, zorder=1,linestyle='-',linewidth=0.1)
+                ax.axvline(x=sm_end, color=mod_color, zorder=1,linestyle='-',linewidth=0.1) # should usually overlap with start of next one
+        
+        savename = 'libPrepLog_'+header+'.png'
+        fig.savefig( os.path.join( self.outdir, savename),format='png',bbox_inches='tight')
+        plt.close()
+        return savename 
+
+    def write_libPrep_log_html( self ):
+        doc = H.Document()
+        doc.add( H.Header('LibPrepLog Temperature Data',2) )
+        table = H.Table( border = '0' ) 
+        at = False # at for amplify target
+        if len(self.figure_names_at)>0:
+            at = True
+        for i, figure in enumerate( self.figure_names ):
+            row = H.TableRow()
+            image = H.Image( figure )
+            img_cell = H.TableCell( image.as_link() , align='right')
+            row.add_cell( img_cell )
+            if at:
+                image_at    = H.Image( self.figure_names_at[i] )
+                img_cell_at = H.TableCell( image_at.as_link() , align='right')
+                row.add_cell( img_cell_at )
+            table.add_row( row )
+
+        doc.add( table )
+
+        with open ( os.path.join( self.outdir, 'libPrep_log.html'), 'w') as f:
+            f.write( str(doc) )
+
+#class PipetteTests:
+#    def __init__(self, filepath, outdir, lanes ):
+#        self.filepath = filepath 
+#        self.outdir   = outdir
+#        self.lanes = lanes # active lanes
+
+        # First start with VacuumPressure tests
+#       graphVacPressures(
+
+
+
 class SummaryLog:
     """ Class for reading and interacting with summary log files on Valkyrie TS """
     def __init__( self, filepath, name='' ):
@@ -2207,11 +4313,26 @@ class SummaryLog:
             
     def get_start_time( self ):
         """ Returns the start time of the first module. """
-        return sorted( [self.timing[m]['start'] for m in self.timing] )[0]
+        try:
+            start_time = sorted( [self.timing[m]['start'] for m in self.timing] )[0]
+        except:
+            print('Unable to find start time. Here is the timing dict:')
+            start_time = None
+            print(self.timing)
+        return None
     
     def get_end_time( self ):
         """ Returns the end time of the last module. """
-        return sorted( [self.timing[m]['end'] for m in self.timing] )[-1]
+        total_end = []
+        for m in self.timing:
+            # in case there are m's with no end time
+            try:
+                total_end.append( self.timing[m]['end'] )
+            except:
+                print('{} does not have an end time'.format(m))
+
+        #return sorted( [self.timing[m]['end'] for m in self.timing] )[-1]
+        return sorted( total_end  )[-1]
     
     @staticmethod
     def get_duration( sm_dict ):
@@ -2228,6 +4349,7 @@ class ScriptStatus:
         """
         self.filepath   = filepath
         self.start_time = true_start
+        print( true_start )
         self.set_fieldnames( )
         
         # Initialize timing.  Will be a dictionary of dictionaries.
@@ -2238,9 +4360,12 @@ class ScriptStatus:
                       'templating': { 'overall': {} , 'submodules': {} },
                       'analysis':   { 'overall': {} , 'submodules': {} },
                       'sequencing': { 'overall': {} , 'submodules': {} },
+                      'resequencing': { 'overall': {} , 'submodules': {} },
                       'postrun':    { 'overall': {} , 'submodules': {} },
         }
         
+        # Initialize attributes
+        self.parallelPostLib = None
         
     def set_fieldnames( self, *fieldnames ):
         if fieldnames:
@@ -2290,7 +4415,10 @@ class ScriptStatus:
         
         # Read in and create datetime timestamp
         timestamp = datetime.datetime.strptime( line['time'], "%Y_%m_%d-%H:%M:%S" )
-        
+        if timestamp < self.start_time:
+            print('skipping submodule in ScriptStatus file since it occured before true start time')
+            return None
+
         # Get module.  Ignore if it isn't part of the desired information. (e.g. 'run')
         try:
             module = module_ref[ line['module'].strip() ]
@@ -2303,10 +4431,20 @@ class ScriptStatus:
         submodule = line['submodule'].strip()
         start     = line['status'].strip() == 'started'
         end       = line['status'].strip() == 'completed'
-
+        
+        # Lets make resequencing a proper module
+        if module in ['templating']:
+            if submodule == 'Resequencing':
+                module = 'resequencing'
+                submodule = 'templating' # should line up with resequencing prep in debug get_overall_timing 
+        
         if module in ['postrun']:
             # The postrun info in ScriptStatus is the PostLibClean
-            submodule = 'postlibclean'
+            if submodule == 'main':
+                submodule = 'postlibclean'
+            else:
+                submodule = 'postlibclean {}'.format(submodule)
+                self.parallelPostLib = True
             
         if module in ['sequencing']:
             # There are no sequencing submodules yet
@@ -2327,7 +4465,7 @@ class ScriptStatus:
             sm['start']      = timestamp
             sm['tips_start'] = int( line['used_tips'].strip() )
             if module in ['postrun']:
-                self.data[module]['overall']['start'] = timestamp
+                self.data[module]['overall']['start'] = timestamp  # not accurate when parallel postLibClean is enabled. Update later in code, where seq end is already defined
             
         if end:
             sm['end']        = timestamp
@@ -2338,8 +4476,9 @@ class ScriptStatus:
         return None
     
         
-    def add_overall_timing( self , timing_dict ):
+    def add_overall_timing( self , timing_dict, run_type,reseq=False ):
         """ Adds ValkyrieDebug.timing to the self.data for the 'true' module start/end times. """
+        # This is a mess... 
         for k in timing_dict:
             if '_' in k:
                 m, ts = k.split('_')
@@ -2348,7 +4487,33 @@ class ScriptStatus:
                     module = 'libprep'
                 else:
                     module = m
-                    
+                   
+                if module.split('-')[0]=='resequencing':
+                    submodule = module.split('-')[1]
+                    module = 'resequencing'
+                    if 'sequencing' not in self.data[module]['submodules']:
+                        print('Adding submodule {} to module {} in self.data'.format(submodule,module))
+                        self.data[module]['submodules']['sequencing']      = { 'start': None,
+                                                                              'end': None,
+                                                                              'tips_start': 0,
+                                                                              'tips_end': 0   }
+                    if 'prerun chipcal' not in self.data[module]['submodules']:
+                        print('Adding submodule {} to module {} in self.data'.format(submodule,module))
+                        self.data[module]['submodules']['prerun chipcal']      = { 'start': None,
+                                                                              'end': None,
+                                                                              'tips_start': 0,
+                                                                              'tips_end': 0   }
+                    if submodule=='templating':
+                        if start:
+                            self.data[module]['overall']['start'] = timing_dict[k]
+                    if submodule=='sequencing':
+                        if start:
+                            self.data[module]['submodules'][submodule]['start']=timing_dict[k]
+                        else:
+                            self.data[module]['overall']['end'] = timing_dict[k]
+                            self.data[module]['submodules'][submodule]['end']=timing_dict[k]
+
+                
                 if module == 'sequencing':
                     # Create initial values if needed
                     if module not in self.data[module]['submodules']:
@@ -2360,21 +4525,20 @@ class ScriptStatus:
                                                                               'end': None,
                                                                               'tips_start': 0,
                                                                               'tips_end': 0   }
-                        
                 if start:
                     if m == 'sequencing':
-                        try:
+                        if run_type == 'Sequencing Only':
+                            print('sequencing only run, start time is {}'.format(self.start_time))
+                            self.data[module]['overall']['start'] = self.start_time
+                            self.data[module]['submodules']['prerun chipcal']['start'] = self.start_time
+                        else:
                             seq_start = timing_dict['templating_end']
                             self.data[module]['overall']['start'] = seq_start
                             self.data[module]['submodules']['prerun chipcal']['start'] = seq_start
-                        except KeyError:
-                            # Sequencing only run
-                            self.data[module]['overall']['start'] = self.start_time
-                            self.data[module]['submodules']['prerun chipcal']['start'] = self.start_time
                             
                         # Update submodules
                         self.data[module]['submodules']['sequencing']['start']   = timing_dict[k]
-                        self.data[module]['submodules']['prerun chipcal']['end'] = timing_dict[k]
+                        self.data[module]['submodules']['prerun chipcal']['end'] = timing_dict[k] # this is wrong for reseq runs since seq start is overwritten
                     else:
                         self.data[module]['overall']['start'] = timing_dict[k]
                 else:
@@ -2383,7 +4547,23 @@ class ScriptStatus:
                         self.data[module]['submodules']['sequencing']['end'] = timing_dict[k]
                     else:
                         self.data[module]['overall']['end'] = timing_dict[k]
-                        
+        
+        # For reseq runs, must correct the seq-seq end time. For now, this is the best I can do. 
+        if reseq:
+            if self.data['sequencing']['submodules']['sequencing']['end'] == self.data['resequencing']['submodules']['sequencing']['end']:
+                print('sequencing end time is the same as resequencing end time. Switching it to resequencing templating start time')
+                self.data['sequencing']['submodules']['sequencing']['end'] = self.data['resequencing']['submodules']['templating']['start']
+                self.data['sequencing']['overall']['end'] = self.data['resequencing']['submodules']['templating']['start']
+            self.data['resequencing']['submodules']['prerun chipcal']['start'] = self.data['resequencing']['submodules']['templating']['end']
+            self.data['resequencing']['submodules']['prerun chipcal']['end'] = self.data['resequencing']['submodules']['sequencing']['start']
+            # get resequencing submodule durations
+            for sm in self.data['resequencing']['submodules']:
+                o = self.data['resequencing']['submodules'][sm]
+                try:
+                    o['duration'] = float( (o['end'] - o['start']).seconds / 3600. )
+                except( KeyError, TypeError ):
+                    o['duration'] = 0.
+
         # Update overall durations
         for module in self.data:
             o = self.data[module]['overall']
@@ -2399,7 +4579,8 @@ class ScriptStatus:
                 o['duration'] = float( (o['end'] - o['start']).seconds / 3600. )
             except( KeyError, TypeError ):
                 o['duration'] = 0.
-                
+        
+        print('FINAL SELF.DATA: {}'.format(self.data)) 
 
     def add_postrun_modules( self, postchip, postrun ):
         """ Adds postchip or postrun timing modules to the overall timing.  Should only ever be either-or. """
@@ -2407,7 +4588,7 @@ class ScriptStatus:
             print( "ERROR!  Somehow we detected both postchip and postrun cleans, this should not be possible!" )
             print( " -- No updates made to module timing!" )
             return None
-
+        
         # Add the appropriate submodule then update overall information for postrun module
         o = self.data['postrun']['overall']
         if postchip:
@@ -2425,6 +4606,7 @@ class ScriptStatus:
             o['duration'] = float( (o['end'] - o['start']).seconds / 3600. )
         except( KeyError, TypeError ):
             o['duration'] = 0.
+            print("Setting duration to zero.")
             
             
     def read( self ):
@@ -2444,12 +4626,22 @@ class ScriptStatus:
         
     def get_relative_time( self, timestamp ):
         """ Returns the relative time in hours since the official start time, explog.start_time """
+        #if timestamp == None:
+        #    print('timestamp is none')
+        #    return 0 
+        
         try:
-            rel_time = (timestamp - self.start_time).total_seconds() / 3600.
+            rel_time = (timestamp - self.start_time).total_seconds() / 3600. # convert to hours
         except:  
             timestamp = datetime.datetime.strptime(timestamp, '%m/%d/%Y %H:%M:%S') 
             rel_time = (timestamp - self.start_time).total_seconds() / 3600.
-
+        
+        # The year of module timestamps may be wrong around the new year since the year is guessed in debug_reader get_timestamp
+        # Here we will check if the relative time is excessive, and recalculate the rel_time if it is.
+        if (timestamp - self.start_time).days > 365:
+            corrected_timestamp =  timestamp.replace(self.start_time.year) 
+            rel_time = self.get_relative_time(corrected_timestamp)
+        
         return rel_time 
     
     
@@ -2458,6 +4650,7 @@ class ScriptStatus:
         abbrevs = { 'libprep': 'Lib',
                     'templating': 'Temp',
                     'sequencing': 'Seq',
+                    'resequencing': 'ReSeq',
                     'analysis':'',
                     'postrun':'Postrun'}
         
@@ -2475,9 +4668,16 @@ class ScriptStatus:
                     else:
                         label = sm
                         
-                    submod_tuples.append( ( label, sm_data['duration'] ) )
+                    try:
+                        submod_tuples.append( ( label, sm_data['duration'] ) )
+                    except:
+                        submod_tuples.append( ( label, 0 ) ) # when there is no end time... but where is this set?  
+                        sm_data['duration'] = 0 # i don't know where this is set- but seems like it is needed
             else:
-                submod_tuples.append( ( abb, self.data[module]['overall']['duration'] ) )
+                try:
+                    submod_tuples.append( ( abb, self.data[module]['overall']['duration'] ) )
+                except:
+                    submod_tuples.append( ( abb, 0 ) )  # when there is no end time...
                 
         return submod_tuples
                 
@@ -2485,13 +4685,16 @@ class ScriptStatus:
     def submodule_pareto( self , outdir , count=5 ):
         """ Creates pareto of submodules (or sequencing/postrun) for duration. """
         pareto = sorted( self.get_submodule_times(), key=lambda x: x[1], reverse=True )
+        pareto = [tuple for tuple in pareto if tuple[1]>0 ] # remove submodules with zero duration
+        print(pareto)
         if len(pareto) > count:
             pareto = pareto[:count]
             
         # Simple plot.
         labels, times = zip(*pareto)
-        labels = [ label.replace( 'Ampliseq', 'AS' ).replace(' ', '\n' ) for label in labels ]
-        
+        # Let's use cleanse_submodule function
+        labels = [ self.cleanse_submodule( label ) for label in labels ] 
+
         x     = np.arange( len( pareto ) )
         width = 0.6
         
@@ -2526,7 +4729,7 @@ class ScriptStatus:
                  ( 'Resuspension' , 'Resusp.' ),
                  ( 'Sequencing'   , 'Seq.' ),
                  ('Coca'          , 'COCA'),
-                 ('Hd'            , 'HD'  ),
+                 ('Hd'            , ''  ), # remove HD from submodule name
                  ('Rna'           , 'RNA' ),
                  ('Rt'            , 'RT'  ),
                  ('Udg'           , 'UDG' ),
@@ -2540,6 +4743,7 @@ class ScriptStatus:
                  ( 'Postrunclean' , 'PostRun' ),
                  ( 'Postchipclean', 'PostChip' ),
                  ( 'Samples'      , 'Sample Analysis' ),
+                 ( 'Sample-Level Plugins'      , 'Sample Plugins' ),
                  ]
         
         for (s, r) in mods:
@@ -2548,20 +4752,27 @@ class ScriptStatus:
         return name
     
     
-    def full_timing_plot( self , outdir , init_timing={} , analysis_timing={} ):
+    def full_timing_plot( self , outdir , init_timing={} , analysis_timing={}, reseq=False ):
         """ Test plot showing all submodules under the main module plot... """
         fig = plt.figure( figsize=(12,4) )
         ax  = fig.add_subplot( 111 )
         upper  = True
-        mods   = ['libprep','templating','sequencing','postrun']
-        colors = ['blue','green','darkcyan','orange']
+        mods   = ['libprep','templating','sequencing','resequencing','postrun']
+        colors = ['blue','green','darkcyan','darkmagenta','orange']
         height = 1.5
         
-        if init_timing or analysis_timing:
+        if init_timing or analysis_timing or self.parallelPostLib:
             # We need to account for a second bar for init/analysis
             y     = 4.75
             par_y = 1.75
-
+            
+            if analysis_timing and self.parallelPostLib:
+                # Prevent parallelPostLib and analysis blocks from overlapping. 
+                at_y  = 1    # move analysis block much lower
+                par_y = 2.75 # to have enough space, more parallel blocks closer to main block
+            else:
+                at_y = par_y # have init and analysis at the same height when no parallel postLibClean
+            
             # Make room for legend if we need it for analysis modules.
             if not analysis_timing:
                 ylims = [-1.5, 7]
@@ -2573,20 +4784,29 @@ class ScriptStatus:
             y     = 1.75
             ylims = [-0.25, 3.25]
             mod_y = 0
-            
+         
+        # Update start of postRun module to be when seq ends with parallel postLibClean
+        if self.parallelPostLib:
+            if reseq:
+                self.data['postrun']['overall']['start'] = self.data['resequencing']['overall']['end']
+            else:
+                self.data['postrun']['overall']['start'] = self.data['sequencing']['overall']['end']
+
         for module,color in zip( mods, colors ):
-            print( module )
-            print( self.data[module] )
-            print( self.data[module]['overall'] )
             print( '------' )
+            print( module )
             if not self.data[module]['overall'].get('start',{}):
                 continue
-            
             # Shade background and add text
             o     = self.data[module]['overall']
             start = self.get_relative_time( o['start'] )
-            end   = self.get_relative_time( o['end'] )
-            mid   = start + (end-start)/2
+            try:
+                end   = self.get_relative_time( o['end'] )
+                mid   = start + (end-start)/2
+            except: # necessary when there is module end time is None. Happens when plugin runs too early
+                end = start + 200 # lets see what happens with this
+                mid = start + 100
+                print( 'Missing end for module {}'.format(module))
             ax.axvspan( start, end, color=color, alpha=0.4 )
             ax.text   ( mid , mod_y, '{}\n{}'.format( module.title(), get_hms( o['duration'] ) ), weight='bold',
                         ha='center', va='bottom', color=color, fontsize=10 )
@@ -2594,48 +4814,86 @@ class ScriptStatus:
             # Create submodule bars if they exist
             if 'submodules' in self.data[module]:
                 sm    = self.data[module]['submodules']
-                info  = [ (self.cleanse_submodule( k ), sm[k]['start'], sm[k]['duration'] ) for k in sm ]
-                procs = sorted( info, key=lambda x: x[1] )
+                print(sm, module)
+                #info  = [ (self.cleanse_submodule( k ), sm[k]['start'], sm[k]['duration'] ) for k in sm ]
+                info = []
+                for k in sm:
+                    try:
+                        info.append( (self.cleanse_submodule( k ), sm[k]['start'], sm[k]['duration']) )
+                    except:
+                        print('unable to process submodule {}'.format(k))
+                try:
+                    procs = sorted( info, key=lambda x: x[1] )
+                except: 
+                    print('Encountered an issue when trying to sort submodules by start time. Not sorting')
+                    procs = info
                 for proc in procs:
                     # Let's skip the module if the duration is 0.
                     if proc[2] == 0:
-                        print( 'Skipping module with zero duration . . .' )
+                        print( 'Skipping submodule {} since it has {} duration . . .'.format(sm, proc[2]) )
                         continue
-                    
+                     
                     left = self.get_relative_time( proc[1] )
-                    ax.barh( y, proc[2], height=height, left=left, align='center',
-                             color=color, edgecolor='black', zorder=3 )
+                    
+                    # Move postrun submodules in parallel block with parallel PostLib. 
+                    if self.parallelPostLib and module == 'postrun':
+                        y_ = par_y
+                    else:
+                        y_ = y
+                    
+                    ax.barh( y_, proc[2], height=height, left=left, align='center',
+                         color=color, edgecolor='black', zorder=3 )
                     
                     # If process is too close to start of module, lets bump it forward by 30 minutes
                     label_x_pos = left + proc[2]/2.
                     point_x_pos = left + proc[2]/2.
-                    if (end - label_x_pos ) < 0.5 and proc[2] <= 0.6:
-                        label_x_pos -= 0.25
-                        ha = 'right'
-                    elif (label_x_pos < 1 or (label_x_pos - start) < 1) and (proc[2] <= 0.6):
+                    #if (end - label_x_pos ) < 0.5 and proc[2] <= 0.6:
+                        #label_x_pos -= 0.25
+                    #    ha = 'right'
+                    #elif (label_x_pos < 1 or (label_x_pos - start) < 1) and (proc[2] <= 0.6):
+                    #    label_x_pos += 0.25
+                    #    ha = 'left'
+                    if proc[2] <= 0.6:
                         label_x_pos += 0.25
                         ha = 'left'
                     else:
                         ha = 'center'
-                        
                     # If process is > 0.66 hour, put label inside bar.
                     if proc[2] > 0.66:
-                        ax.text( label_x_pos, y, proc[0], ha='center', va='center', fontsize=8,
+                        ax.text( label_x_pos, y_, proc[0], ha='center', va='center', fontsize=8,
                                   color='white', weight='normal' )
                     else:
-                        arrows = dict(facecolor='black', width=0.75, headwidth=3, shrink=0.1, frac=0.1 )
+                        arrows = dict(facecolor='black', width=0.75, headwidth=3, shrink=0.1, frac=0.1 ) # headlength used to be frac=0.1
+                        if proc[0] in ['PostLib\nDeck\nClean','Postrun']:
+                            upper = False  # for parallel deck clean, put to the side so it does not overlap with seq submodule 
+                            if proc[0]=='Postrun':
+                                ha = 'left'
+                        elif proc[0] in ['PostLib\nVacuum\nClean']:
+                            ha = 'left'
                         if upper:
-                            ax.annotate( proc[0], xy=(point_x_pos,y+height/2.), xycoords='data',
-                                         xytext=(label_x_pos, y+height/2.+0.5), textcoords='data',
+                            if proc[0]=='Templating':
+                                extra = 0.5
+                            elif proc[0]=='Prerun\nChipcal':
+                                extra = -0.2
+                            else:
+                                extra = 0
+                            ax.annotate( proc[0], xy=(point_x_pos,y_+height/2.), xycoords='data',
+                                         xytext=(label_x_pos, y_+height/2.+0.5+extra), textcoords='data',
                                          arrowprops=arrows,
                                          ha=ha, va='bottom', fontsize=8 , weight='normal' )
-                            upper = False
+                            #if self.parallelPostLib and module=='postrun':
+                            #    upper = False  ### Gets in the way when there is parallel postLibClean 
                         else:
-                            ax.annotate( proc[0], xy=(point_x_pos,y-height/2.), xycoords='data',
-                                         xytext=(label_x_pos, y-height/2.-0.5), textcoords='data',
+                            ax.annotate( proc[0], xy=(point_x_pos,y_), xycoords='data',
+                                         xytext=(label_x_pos, y_+0.5), textcoords='data',
                                          arrowprops=arrows,
                                          ha=ha, va='top', fontsize=8 , weight='normal' )
+                            #ax.annotate( proc[0], xy=(point_x_pos,y_-height/2.), xycoords='data',
+                            #             xytext=(label_x_pos, y_-height/2.-0.5), textcoords='data',
+                            #             arrowprops=arrows,
+                            #             ha=ha, va='top', fontsize=8 , weight='normal' )
                             upper = True
+                        print(proc[0], label_x_pos, proc[2], ha)
                             
         seq_done = self.get_relative_time( self.data['sequencing']['overall']['end'] )
         
@@ -2661,29 +4919,42 @@ class ScriptStatus:
             # Plot analysis, again alternating labels above/below.
             upper = True
             info  = [ (self.cleanse_submodule( k ), analysis_timing[k]['start'], analysis_timing[k]['duration'] ) for k in analysis_timing ]
+            print( 'submodules in analysis timing:')
             for i in info:
-                print( i )
+                print(i)
+            
+            print( 'removing submodules with no timestamp...')
+            info_not_none = [e for e in info if e[1] is not None]
                 
-            procs = sorted( info, key=lambda x: x[1] )
+            procs = sorted( info_not_none, key=lambda x: x[1] )
             
             # Need to create value for analysis completion and sample analysis completion.
             final_step      = procs[len(procs)-1]
             analysis_done   = self.get_relative_time( final_step[1] ) + final_step[2]
-            samples_done    = self.get_relative_time( analysis_timing['Samples']['end'] )
-            basecaller_done = self.get_relative_time( analysis_timing['BaseCallingActor']['end'] )
-            
+            try:
+                basecaller_done = self.get_relative_time( analysis_timing['BaseCallingActor']['end'] )
+            except:
+                print('BaseCallingActor end time not found... perhaps BaseCalling failed')
+            samples_found = True
+            try: 
+                samples_done    = self.get_relative_time( analysis_timing['Samples']['end'] )
+            except:
+                samples_found = False
+                print('Samples not found....')
             # Measure finish time, either postrun or analysis
             el_fin  = max( analysis_done, runtime )
-
+            if analysis_done > runtime:
+                ax.axvspan( runtime, analysis_done, color='gray', alpha=0.3 )
+    
             # Setup other details, including a general "analysis" label
             patches = []
             colors  = [matplotlib.cm.Set1(i) for i in np.linspace(0,1,9)]
-            ax.text( self.get_relative_time(procs[0][1])-0.1, par_y, 'Analysis', ha='right', va='center',
+            ax.text( self.get_relative_time(procs[0][1])-0.1, at_y, 'Analysis', ha='right', va='center',
                      fontsize=10, color='black', weight='bold' )
             
             for i,proc in enumerate(procs):
                 left = self.get_relative_time( proc[1] )
-                patch = ax.barh( par_y, proc[2], height=height, left=left, align='center', color=colors[i],
+                patch = ax.barh( at_y, proc[2], height=1, left=left, align='center', color=colors[i],
                                  edgecolor='black', zorder=3 , alpha=0.75, label=proc[0].replace('\n',' ') )
                 patches.append( patch )
                 
@@ -2703,24 +4974,24 @@ class ScriptStatus:
                         
                     # If process is > 30 minutes, put label insize bar.
                     if proc[2] > 0.5:
-                        ax.text( label_x_pos, par_y, proc[0], ha='center', va='center', fontsize=8,
+                        ax.text( label_x_pos, at_y, proc[0], ha='center', va='center', fontsize=8,
                                   color='white', weight='normal' )
                     else:
                         arrows = dict(facecolor='black', width=0.75, headwidth=3, shrink=0.1, frac=0.1 )
                         if upper:
-                            ax.annotate( proc[0], xy=(point_x_pos,par_y+height/2.), xycoords='data',
-                                         xytext=(label_x_pos, par_y+height/2.+0.5), textcoords='data',
+                            ax.annotate( proc[0], xy=(point_x_pos,at_y+height/2.), xycoords='data',
+                                         xytext=(label_x_pos, at_y+height/2.+0.5), textcoords='data',
                                          arrowprops=arrows,
                                          ha=ha, va='bottom', fontsize=8 , weight='normal' )
                             upper = False
                         else:
-                            ax.annotate( proc[0], xy=(point_x_pos,par_y-height/2.), xycoords='data',
-                                         xytext=(label_x_pos, par_y-height/2.-0.5), textcoords='data',
+                            ax.annotate( proc[0], xy=(point_x_pos,at_y-height/2.), xycoords='data',
+                                         xytext=(label_x_pos, at_y-height/2.-0.5), textcoords='data',
                                          arrowprops=arrows,
                                          ha=ha, va='top', fontsize=8 , weight='normal' )
                             upper = True
                 else:
-                    ax.legend( handles=patches, loc='lower center', fontsize=10, ncol=len(patches) )
+                    ax.legend( handles=patches, loc='lower center', fontsize=10, ncol=len(patches), frameon=True, facecolor='whitesmoke', framealpha=1 )
         else:
             el_fin = runtime
             
@@ -2736,8 +5007,14 @@ class ScriptStatus:
         except:
             ttl = 'PostRun not found.' 
         if analysis_timing:
-            ttl += '  |  BaseCaller Complete: {}'.format( get_hms(basecaller_done) )
-            ttl += '  |  Sample Analysis Complete: {}'.format( get_hms(samples_done) )
+            try:
+                ttl += '  |  BaseCaller Complete: {}'.format( get_hms(basecaller_done) )
+            except:
+                ttl += '  |  BaseCaller End not found.'
+            if samples_found:
+                ttl += '  |  Sample Analysis Complete: {}'.format( get_hms(samples_done) )
+            else:
+                ttl += '  |  Sample Analysis Missing.'
         ax.set_title( ttl )
         ax.grid  ( which='major', axis='x', ls=':', color='grey', zorder=0 )
         ax.grid  ( which='minor', axis='x', ls=':', color='grey', zorder=0, alpha=0.5 )

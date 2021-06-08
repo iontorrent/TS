@@ -96,6 +96,8 @@ struct Alignment {
     prefix_bases.clear();
     suffix_bases.clear();
     tag_info.Clear();
+    is_clean_right_primer = false;
+    is_clean_left_primer = false;
   }
 
   BamAlignment          alignment;          //! Raw BamTools alignment
@@ -149,6 +151,8 @@ struct Alignment {
   string                read_group;         //! Read group of this read
   string                prefix_bases;       //! hard clipped start of the read
   string                suffix_bases;       //! hard clipped end of the read
+  bool                  is_clean_right_primer; //! indicate whether the right primer part of the read all matchs the reference.
+  bool                  is_clean_left_primer;  //! indicate whether the left primer part of the read all matchs the reference.
 
   // Post-processing information
   vector<CigarOp>       old_cigar;          //! Cigar information before primer trimming
@@ -201,6 +205,7 @@ public:
   // Processing genomic position
   void SetupPositionTicket(list<PositionInProgress>::iterator& position_ticket) const;
   void BeginPositionProcessingTask(list<PositionInProgress>::iterator& position_ticket);
+  void Fetch_more_reads(list<PositionInProgress>::iterator& position_ticket, int position_increment);
   bool AdvancePosition(int position_increment, int next_hotspot_chr = -1, long next_hotspot_position = -1);
   void FinishPositionProcessingTask(list<PositionInProgress>::iterator& position_ticket);
 

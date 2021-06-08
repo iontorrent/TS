@@ -16,6 +16,10 @@ minCoverage = 15
 minFracHom = 0.8
 minFracHet = 0.3
 
+# GDM: My code here to match the raw allele output to allele table is overkill here.
+# I assume a relic from early dev. that assumed the loci bed might be user defined.
+# A lot is just to employ the python bisection methods for matching positions...
+
 def getLociData(chrom,pos):
     """Find smallest loci containing pos and return its data tuple, or tuple of 'N/A'.
     If a tie on sizes take region where pos is closest to either end.
@@ -63,6 +67,7 @@ def getLociData(chrom,pos):
             pass
     return ("N/A","N/A","N/A")
 
+
 def iupac_code(a,b):
     ab = b+a if a > b else a+b
     if( ab == "AC" ): return "M"
@@ -73,6 +78,11 @@ def iupac_code(a,b):
     if( ab == "GT" ): return "K"
     return "?"
 
+
+# output will be in the input loci order, so that missing data can be filled in
+lociIDs = []
+lociPos = {}
+
 # assumes a BED file sorted by chrom,start,end
 have_bed = (len(sys.argv) >= 4) and (sys.argv[3] != "")
 if have_bed:
@@ -80,8 +90,9 @@ if have_bed:
     for lines in genes:
         if len(lines) == 0:
             continue
+        lines = lines.strip()
         tmp = lines.split('\t')
-        chrom = tmp[0].strip()
+        chrom = tmp[0]
         if chrom.startswith('track '):
             continue
         # avoid 0-length BED regions (un-anchored inserts)
@@ -89,57 +100,78 @@ if have_bed:
         rend = int(tmp[2])
         if rsrt > rend:
             continue
+        # redundancy here since this data is keyed from SNP ID vs. suited for loci matching
+        hid = tmp[3].strip()
+        sid = tmp[-1].strip()
+        aux = tmp[-2].strip()
+        lociIDs.append(sid)
+        lociPos[sid] = "%s\t%d\t%s\t%s"%(chrom,rsrt,sid,hid)
         # tuple with original index used for region_end sorting
         region_srt.setdefault(chrom,[]).append(rsrt)
         region_end.setdefault(chrom,[]).append( (rend,len(region_srt[chrom])-1) )
         if len(tmp) < 6:
             region_ids.setdefault(chrom,[]).append( 'N/A', 0, 'N/A' )
         else:
-            region_ids.setdefault(chrom,[]).append( (tmp[len(tmp)-1].strip(),tmp[len(tmp)-2].strip(),tmp[3].strip()) )
+            region_ids.setdefault(chrom,[]).append( (sid,aux,hid) )
     genes.close()
     for k in region_end.keys():
         sorted_end[k], sorted_idx[k] = zip( *sorted(region_end[k],key=itemgetter(0)) )
 
+
 # assumes input file has forward+reverse read coverage (Uppercase fields) and reverse coverage (Lowercase fields)
 inf = open(sys.argv[1],'r')
-out = open(sys.argv[2],'w')
-out.write("Chrom\tPosition\tTarget ID\tTaqMan Assay ID\tCall\tRef\tAF\tCov\tA Reads\tC Reads\tG Reads\tT Reads\t+Cov\t-Cov\tDeletions\n")
-
 bcov = {}
 major = ''
+repLines = {}
 for lines in inf:
     if lines[0]=='#':
         continue
-    else:
-        (contig,position,ref,cov,cov_A,cov_C,cov_G,cov_T,cov_D,cov_a,cov_c,cov_g,cov_t,cov_d) = lines.split('\t')
-        (region_id,aux_id,hotspot_id) = getLociData( contig, int(position) )
-        # forward/reverse coverage does not include coverage by deletions
-        cov_r = int(cov_a) + int(cov_c) + int(cov_g) + int(cov_t)
-        cov_f = int(cov) - int(cov_D) - cov_r
-        # determine major/minor alleles for allele frequency
-        bcov['A'] = int(cov_A)
-        bcov['C'] = int(cov_C)
-        bcov['G'] = int(cov_G)
-        bcov['T'] = int(cov_T)
-        bcov['D'] = int(cov_D)
-        scov = sorted(bcov.items(),key=itemgetter(1),reverse=True)
-        major = scov[0][0]
-        minor = scov[1][0]
-        denom = int(scov[0][1]) + int(scov[1][1])
-        ratio = 0
-        if denom > 0:
-            ratio = 100.0 * float(scov[0][1]) / denom
-        # make call based on simplistic rules
-        call = '?'
-        if int(cov) >= minCoverage:
-            fMajor = int(scov[0][1]) / float(cov)
-            fMinor = int(scov[1][1]) / float(cov)
-            if major != 'D' and fMajor+fMinor >= minFracHom:
-                if fMajor >= minFracHom:
-                    call = major
-                elif minor != 'D' and fMinor >= minFracHet:
-                    call = iupac_code(major,minor)
-        out.write("%s\t%s\t%s\t%s\t%s\t%s\t%.1f\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s\n" %
-            (contig,position,region_id,hotspot_id,call,ref,ratio,cov,cov_A,cov_C,cov_G,cov_T,cov_f,cov_r,cov_D))
-out.close()
+    (contig,position,ref,cov,cov_A,cov_C,cov_G,cov_T,cov_D,cov_a,cov_c,cov_g,cov_t,cov_d) = lines.split('\t')
+    (region_id,aux_id,hotspot_id) = getLociData( contig, int(position) )
+    # forward/reverse coverage does not include coverage by deletions or adjacent inserts for 5.14
+    # also as of 5.14 cov_D includes deletions plus inserts and cov_d is for the inserts alone
+    cov_r = int(cov_a) + int(cov_c) + int(cov_g) + int(cov_t)
+    cov_f = int(cov) - int(cov_D) - cov_r
+    inss  = int(cov_d); # has extra CR
+    dels  = int(cov_D) - inss
+    # determine major/minor alleles for allele frequency
+    bcov['A'] = int(cov_A)
+    bcov['C'] = int(cov_C)
+    bcov['G'] = int(cov_G)
+    bcov['T'] = int(cov_T)
+    bcov['D'] = dels
+    scov = sorted(bcov.items(),key=itemgetter(1),reverse=True)
+    major = scov[0][0]
+    maj_r = scov[0][1]
+    minor = scov[1][0]
+    min_r = scov[1][1]
+    # reported AF is always for top 2 alleles, even if one is a deletion so call is '?'
+    af = 100.0 * maj_r / float(maj_r+min_r) if maj_r+min_r > 0 else 0
+    # allele test denominator no longer considers ignored insert reads
+    denom = float(int(cov)-inss)
+    maj_f = maj_r / denom if denom > 0 else 0
+    min_f = min_r / denom if denom > 0 else 0
+    # make call based on simplistic rules
+    call = '?'
+    if denom >= minCoverage:
+        if major != 'D' and maj_f+min_f >= minFracHom:
+            if maj_f >= minFracHom:
+                call = major
+            elif minor != 'D' and min_f >= minFracHet:
+                call = iupac_code(major,minor)
+    # defer output
+    repLines[region_id] = "%s\t%s\t%s\t%s\t%s\t%s\t%.2f\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\n" % (
+        contig, position, region_id, hotspot_id, call, ref, af, cov,
+        cov_A, cov_C, cov_G, cov_T, dels, inss, cov_f, cov_r )
 inf.close()
+
+# output in original SNP# order and fill in for missing mpileup data
+out = open(sys.argv[2],'w')
+out.write("Chrom\tPosition\tTarget ID\tTaqMan Assay ID\tCall\tRef\tAF\tCov\tA Reads\tC Reads\tG Reads\tT Reads\tDeletions\tInserts\tCov+\tCov-\n")
+for sid in lociIDs:
+    if sid in repLines:
+        out.write(repLines[sid])
+    else:
+        out.write("%s\t?\t?\t0\t0\t0\t0\t0\t0\t0\t0\t0\t0\n"%lociPos[sid])
+out.close()
+

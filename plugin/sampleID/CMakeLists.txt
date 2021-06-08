@@ -17,6 +17,19 @@ SET(CPACK_DEBIAN_PACKAGE_DEPENDS "python, ion-pipeline")
 SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Brian Bourke-Martin")
 
 # this will include the entire directory contents into the package
-include(../cmake/CMakeLists.PluginInstallEverything.txt)
+# except for bin directory as well as build files
+
+INSTALL(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}"
+        USE_SOURCE_PERMISSIONS
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/build" EXCLUDE
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt" EXCLUDE
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/debian" EXCLUDE
+		REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/bin" EXCLUDE
+       )
+INSTALL(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/bin/wkhtmltopdf-amd64"
+        DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}/${PLUGIN_NAME}/bin"
+       )
+
 
 INCLUDE(CPack)

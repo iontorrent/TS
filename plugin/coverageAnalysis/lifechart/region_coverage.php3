@@ -38,7 +38,15 @@ if( $outfile != "" && $outfile != "-" ) {
   header("Content-disposition: attachment;filename=$outfile");
 }
 # check for local-version override: if fail use system version
-$bbctools = '../bin/bbctools';
+# if Genexus, use local bbctools binary(IRS-16741)
+$isGx = "/share/apps/IR/apps/";
+if(is_dir($isGx)){
+  $bbctools = './bbctools';
+}
+else {
+  $bbctools = '../bin/bbctools';
+}
+
 if( !file_exists($bbctools) ) {
   $bbctools = "bbctools";
 }

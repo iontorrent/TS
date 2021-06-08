@@ -28,15 +28,21 @@ class PrecomputeTDistOddN{
 public:
     PrecomputeTDistOddN();
     void SetV(int _half_n);
+    void SetAdjustSigma(bool adjust_sigma);
     float TDistOddN(float res, float sigma, float skew) const;
     float LogTDistOddN(float res, float sigma, float skew) const;
+    float GetSigmaFactor() const { return sigma_factor_;};
+    int GetHeavyTailed() const { return half_n_;};
+    bool GetAdjustSigma() const { return adjust_sigma_;};
 private:
-	float v_;  // Degree of freedom of the t-dist, i.e., v_ = 2 * half_n_ - 1
+    float v_;  // Degree of freedom of the t-dist, i.e., v_ = 2 * half_n_ - 1
     float log_v_;
     float pi_factor_;
     float v_factor_;
     float log_factor_;
+    float sigma_factor_; // std is actually not the "sigmal" in t-dist. We need s_sigma_factor_ to fix the problem.
     int   half_n_;  // aka heavy_tailed
+    bool  adjust_sigma_; // Do you want to fix long standing tvc bug about the sigma in t-dist?
 };
 
 class HiddenBasis{
@@ -73,7 +79,6 @@ public:
   vector<string>         instance_of_read_by_state;       // this read, modified by each state of a variant
   vector<vector<float> > predictions;             // Predicted signal for test flows
   vector<float>          normalized;                       // Normalized signal for test flows, it is the same for all hypotheses
-  vector<bool>           same_as_null_hypothesis; // indicates whether a ref or alt hypothesis equals the read as called
   vector<float>          measurement_var;          // measurements var for a consensus read
   vector<int>            test_flow;  //  vector of flows to examine for this read and the hypotheses for efficiency
 
@@ -116,7 +121,7 @@ public:
   int strand_key;
   int read_counter;      // Indicating how many reads form this read (>1 means it is a consensus read)
   bool success;
-  bool at_least_one_same_as_null;
+  int hyp_same_as_null;  // indicates the index of the non-null hypothesis that is identical to null. 0 for ref, 1 for first alt, etc, implying instance_of_read_by_state[0]==instance_of_read_by_state[hyp_same_as_null]
   string const * ptr_query_name;    // Just for debug purpose.
 
   // Flow information
@@ -160,16 +165,11 @@ public:
   int   MostResponsible() const;
   void  FillInFlowDisruptivenessMatrix(const ion::FlowOrder& flow_order, const Alignment& my_alignment);
   bool  OutlierByFlowDisruptiveness(unsigned int stringency_level) const;
-  int   GetHeavyTailed() const {return s_heavy_tailed_;};
-  static void SetHeavyTailed(int heavy_tailed, bool adjust_sigma);
-  static void ApplyHeavyTailed();
+  int   GetHeavyTailed() const{ return my_t_dist_->GetHeavyTailed(); };
+  void  SetMyTDist(const PrecomputeTDistOddN * const t_dist){ my_t_dist_ = t_dist; };
 
 private:
-  // Private Static Variables: These variables are dependent and they must be handled very carefully
-  static PrecomputeTDistOddN s_my_t_;
-  static int s_heavy_tailed_; // (2*heavy_tailed - 1) = DoF of t-dist
-  static bool s_adjust_sigma_; // Do you want to fix long term tvc bug about the sigma in t-dist?
-  static float s_sigma_factor_; // std is actually not the "sigmal" in t-dist. We need s_sigma_factor_ to fix the problem.
+  PrecomputeTDistOddN const *my_t_dist_;
 };
 
 
@@ -182,7 +182,7 @@ public:
 	~EvalFamily(){};
 	int CountFamSizeFromValid();
 	int CountFamSizeFromAll();
-	void InitializeEvalFamily(unsigned int num_hyp);
+	void InitializeEvalFamily(unsigned int num_hyp, const PrecomputeTDistOddN * const t_dist);
 	void CleanAllocate(unsigned int num_hyp);
 	void InitializeFamilyResponsibility();
 	void ComputeFamilyLogLikelihoods(const vector<CrossHypotheses>& my_hypotheses);
@@ -195,6 +195,7 @@ public:
 	vector<float> GetFamilyScaledLikelihood() const { return my_family_cross_.scaled_likelihood; };
 	void FillInFlowDisruptivenessMatrix(const vector<CrossHypotheses> &my_hypotheses);
 	int GetFlowDisruptiveness(int i_hyp, int j_hyp) const { return my_family_cross_.local_flow_disruptiveness_matrix[i_hyp][j_hyp]; };
+	int FamilyOutlierFilteringByFlowDisruption(vector<CrossHypotheses>& my_hypotheses);
 private:
 	const vector<const Alignment *>* const read_stack_; // Used to calculate family size
 	// The calculation of log-likelihood etc. of a family is pretty much the same as a single read.

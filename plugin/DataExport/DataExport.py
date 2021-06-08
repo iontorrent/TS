@@ -8,15 +8,16 @@ import sys
 import json
 import urllib
 import traceback
-from ion.plugin import PluginCLI, IonPlugin, RunLevel
+from ion.plugin import *
 
 
 class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.14.0.1'
+    version = '5.16.0.0'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
+    runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
     runlevels = [RunLevel.LAST]
     requires_configuration = True
 
@@ -91,7 +92,7 @@ class DataExport(IonPlugin):
             return True
 
         data_categories = [
-            {self.SIG: False if sigproc == 'off' or sigproc == False  else True},
+            {self.SIG: False if sigproc == 'off' or sigproc == False else True},
             {self.BASE: False if basecalling == 'off' or basecalling == False else True},
             {self.OUT: False if output == 'off' or output == False else True},
             {self.INTR: False if intermediate == 'off' or intermediate == False else True},

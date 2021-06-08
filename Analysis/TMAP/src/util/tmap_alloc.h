@@ -4,6 +4,11 @@
 
 #include "tmap_error.h"
 
+#if defined (__cplusplus)
+extern "C"
+{
+#endif 
+
 /*! 
   Memory Allocation Routines. 
   */
@@ -58,9 +63,6 @@
 #define tmap_strdup(_str) \
   tmap_strdup1(_str, __func__)
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*! 
   wrapper function for posix_memalign
@@ -120,3 +122,4 @@ tmap_strdup1(const char *str, const char *function_name);
 #endif
 
 #endif // TMAP_ALLOC_H
+

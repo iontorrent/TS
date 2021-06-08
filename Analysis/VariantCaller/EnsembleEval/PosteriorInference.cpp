@@ -213,7 +213,7 @@ float ScanSpace::LogDefiniteIntegral(float _alpha, float _beta) {
   if (isnan(integral_log)) {
     // trap!
     integral_log = -999999999.0f + local_max_ll;
-    cout << "Warning: generated nan when integrating" << _alpha << " " << _beta << " " << n_reads << " " << local_max_ll << endl;
+    cout << "Warning: generated nan when integrating " << _alpha << " " << _beta << " " << n_reads << " " << local_max_ll << endl;
   }
 
   return(integral_log);
@@ -324,6 +324,18 @@ void ScanSpace::DoFullScan_(){
     max_index = (int) argmax_log_posterior_scanned_;
 }
 
+float ScanSpace::LogLikelihoodAdjustment() const {
+	// TS-17947
+  if (max_index == 0 or max_index == (int) log_posterior_by_frequency.size() - 1){
+    return 0.0f;
+  }
+	float max_left_right = max(sum_likelihood_right, sum_likelihood_left);
+	if (max_left_right <= 0.0f or (not scan_ref_done)){
+		return 0.0f;
+	}
+	return log(sum_likelihood_right + sum_likelihood_left) - log(max_left_right);
+}
+
 void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref) {
 //    cout << "ScanningFrequency" << endl;
 //    posterior frequency inference given current data/likelihood pairing
@@ -358,15 +370,27 @@ void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &b
 
     // Do normalization
     double linear_sum = 0.0;
-    double log_sum = (double) max_ll;
-	for (vector<float>::const_iterator it = log_posterior_by_frequency.begin(); it != log_posterior_by_frequency.end(); ++it){
+    double double_max_ll = (double) max_ll;
+    double log_sum = 0.0;
+    // linear_sum_likelihoodl_left_tmp = 0.5*exp(log_posterior_by_frequency[max_index] + \sum_{i=0}^{max_index-1} exp(log_posterior_by_frequency[i])
+    // where 0.5*exp(log_posterior_by_frequency[max_index] is for the fairness to log_sum_likelihoodl_right and log_sum_likelihoodl_left.
+    double linear_sum_likelihoodl_left_tmp = 0.5; // 0.5 comes from 0.5*exp(max_ll) / exp(max_ll)
+    int f_idx = 0;
+	for (vector<float>::const_iterator it = log_posterior_by_frequency.begin(); it != log_posterior_by_frequency.end(); ++it, ++f_idx){
 		// Cusum of small numbers needs better floating point accuracy. Do it in double.
-		linear_sum += exp((double) (*it) - log_sum);
+		double val = exp((double) (*it) - double_max_ll);
+		linear_sum += val;
+		if (f_idx < max_index){
+			linear_sum_likelihoodl_left_tmp += val;
+		}
 	}
-	log_sum += log(linear_sum);
+	log_sum = double_max_ll + log(linear_sum);
 	for (vector<float>::iterator it = log_posterior_by_frequency.begin(); it != log_posterior_by_frequency.end(); ++it){
     	(*it) -= (float) log_sum;
     }
+	// Calculate sum_likelihood_left, sum_likelihood_right
+	sum_likelihood_left = min((float) exp(-(log_sum - (double_max_ll + log(linear_sum_likelihoodl_left_tmp)))), 1.0f);
+    sum_likelihood_right = max(1.0f - sum_likelihood_left, 0.0f);
 	// Remember to normalize max_ll
     max_log_posterior_scanned_ -= (float) log_sum;
     max_ll -= (float) log_sum;
@@ -388,7 +412,7 @@ void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &b
 
     if (DEBUG > 1){
         cout << "    + Posterior frequency scan done. Processing time = " << (double) (clock() - t0) / 1E6 << " sec." << endl;
-        float f_resolution_debug = 0.05f;
+        float f_resolution_debug = 0.01f;
         unsigned int num_freq_debug = (unsigned int) (1.0f / f_resolution_debug) + 1;
         if (num_freq_debug >= log_posterior_by_frequency.size()){
             cout << "      - Scan results: (f, log-posterior(f)) = ";
@@ -405,6 +429,8 @@ void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &b
         }
         cout << endl;
         cout << "      - max(log-posterior(f)) = " << max_ll << " @ f = "<< eval_at_frequency[max_index] << endl;
+        cout << "      - sum_likelihood_left = " << sum_likelihood_left << endl;
+        cout << "      - sum_likelihood_right = " << sum_likelihood_right << endl;
     }
 }
 
@@ -620,7 +646,7 @@ void ScanSpace::DoFastScan_(){
 
 	unsigned int detail_level = eval_at_frequency.size() - 1;
 	is_scanned_.assign(detail_level + 1, false);
-	max_log_posterior_scanned_ = -999999999999.0f;  // anything is better than this
+	max_log_posterior_scanned_ = -1E32;  // anything is better than this
 	argmax_log_posterior_scanned_ = 0;
 
 	if(DEBUG > 1){
@@ -668,7 +694,7 @@ void ScanSpace::DoFastScan_(){
 		unsigned int i_left = croase_argmax_log_posterior == 0? coarse_scan_indices[0] : coarse_scan_indices[croase_argmax_log_posterior - 1];
 		unsigned int i_right = croase_argmax_log_posterior == coarse_scan_indices.size() - 1? coarse_scan_indices[coarse_scan_indices.size() - 1] : coarse_scan_indices[croase_argmax_log_posterior + 1];
 		unsigned int i_eval = FibonacciSearchMax_(i_left, i_right);
-		UpdateMaxPosteior_(croase_argmax_log_posterior); // in case croase_max_log_posterior still beats the search results, although it shouldn't happen.
+		UpdateMaxPosteior_(coarse_scan_indices[croase_argmax_log_posterior]); // in case croase_max_log_posterior still beats the search results, although it shouldn't happen.
 		UpdateMaxPosteior_(i_eval);
 	}
 

@@ -5,7 +5,6 @@
 //! @brief    BED loader
 
 #include "TargetsManager.h"
-
 #include <stdlib.h>
 #include <algorithm>
 #include <fstream>
@@ -50,11 +49,34 @@ bool CompareTargets(TargetsManager::UnmergedTarget *i, TargetsManager::UnmergedT
 //   - Save region name to read's tags, maybe other primer-trimming info
 
 
+string TargetsManager::ChrIndexToName(int chr_idx) const{
+	return chr_idx_to_name_.at(chr_idx);
+}
+
+int TargetsManager::ChrNameToIndex(const string& chr_name) const{
+	// Basically return chr_name_to_idx_[chr_name], but I can't use the [] operator of chr_name_to_idx in a const member function.
+	// Further, the key chr_name will be created when chr_name_to_idx_[chr_name] is called if chr_name is not the key.
+	map<string, int>::const_iterator my_chr_finder = chr_name_to_idx_.find(chr_name);
+	// return -1 if I can't find chr_name
+	return my_chr_finder != chr_name_to_idx_.end()? my_chr_finder->second : -1;
+}
 
 void TargetsManager::Initialize(const ReferenceReader& ref_reader, const string& _targets, float min_cov_frac, bool _trim_ampliseq_primers /*const ExtendParameters& parameters*/)
 {
   min_coverage_fraction = min_cov_frac;
   chr_to_merged_idx.assign(ref_reader.chr_count(), -1);
+
+  //
+  // Step 0. Initialize chr_name_to_chr_idx and chr_idx_to_name from ref_reader
+  //
+  chr_name_to_idx_.clear();
+  chr_idx_to_name_.assign(ref_reader.chr_count(), "");
+  for (int chr_idx = 0; chr_idx < ref_reader.chr_count(); ++chr_idx){
+	  string chr_name = ref_reader.chr_str(chr_idx);
+	  chr_name_to_idx_[chr_name] = chr_idx;
+	  chr_idx_to_name_[chr_idx] = chr_name;
+  }
+
   //
   // Step 1. Retrieve raw target definitions
   //
@@ -271,51 +293,206 @@ void TargetsManager::ParseBedInfoField(UnmergedTarget& target, const string info
   if (ParseInfoKey("HS_ONLY=", info, temp)){
     target.hotspots_only = temp;
   }
-
-  target.read_mismatch_limit = 0;
-  target.read_mismatch_limit_override = false;
+  target.amplicon_param.has_override = false;
+  // Parsing overriding parameters of amplicon_param
+  // read_mismatch_limit
+  target.amplicon_param.read_mismatch_limit = 0;
+  target.amplicon_param.read_mismatch_limit_override = false;
   // 5.12 and earlier uses upper case. To be consistent with the overriding format in hotspot BED, we will use lower case key in 5.14 and beyond.
   if (ParseInfoKey("READ_MISMATCH_LIMIT=", info, temp)){
-    target.read_mismatch_limit = temp;
-    target.read_mismatch_limit_override = temp >= 0;
+    target.amplicon_param.read_mismatch_limit = temp;
+    target.amplicon_param.read_mismatch_limit_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.read_mismatch_limit_override;
   }else if (ParseInfoKey("read_mismatch_limit=", info, temp)){
-	target.read_mismatch_limit = temp;
-    target.read_mismatch_limit_override = temp >= 0;
+	target.amplicon_param.read_mismatch_limit = temp;
+    target.amplicon_param.read_mismatch_limit_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.read_mismatch_limit_override;
   }
-
-  target.read_snp_limit = 0;
-  target.read_snp_limit_override = false;
+  // read_snp_limit
+  target.amplicon_param.read_snp_limit = 0;
+  target.amplicon_param.read_snp_limit_override = false;
   if (ParseInfoKey("read_snp_limit=", info, temp)){
-    target.read_snp_limit = temp;
-    target.read_snp_limit_override = temp >= 0;
+    target.amplicon_param.read_snp_limit = temp;
+    target.amplicon_param.read_snp_limit_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.read_snp_limit_override;
   }
-
-  target.min_mapping_qv = 0;
-  target.min_mapping_qv_override = false;
+  // min_mapping_qv
+  target.amplicon_param.min_mapping_qv = 0;
+  target.amplicon_param.min_mapping_qv_override = false;
   if (ParseInfoKey("min_mapping_qv=", info, temp)){
-    target.min_mapping_qv = temp;
-    target.min_mapping_qv_override = temp >= 0;
+    target.amplicon_param.min_mapping_qv = temp;
+    target.amplicon_param.min_mapping_qv_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.min_mapping_qv_override;
   }
-
-  target.min_tag_fam_size = 0;
-  target.min_tag_fam_size_override = false;
-  if (ParseInfoKey("min_tag_fam_size=", info, temp)){
-    target.min_tag_fam_size = temp;
-    target.min_tag_fam_size_override = temp >= 0;
-  }
-
-  target.min_fam_per_strand_cov = 0;
-  target.min_fam_per_strand_cov_override = false;
-  if (ParseInfoKey("min_fam_per_strand_cov=", info, temp)){
-    target.min_fam_per_strand_cov = temp;
-    target.min_fam_per_strand_cov_override = temp >= 0;
-  }
-
-  target.min_cov_fraction = -1.0f;
-  target.min_cov_fraction_override = false;
+  // min_cov_fraction
+  target.amplicon_param.min_cov_fraction = -1.0f;
+  target.amplicon_param.min_cov_fraction_override = false;
   if (ParseInfoKey("min_cov_fraction=", info, temp_f)){
-    target.min_cov_fraction = temp_f;
-    target.min_cov_fraction_override = temp_f >= 0.0f and temp_f <= 1.0f;
+    target.amplicon_param.min_cov_fraction = temp_f;
+    target.amplicon_param.min_cov_fraction_override = temp_f >= 0.0f and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.min_cov_fraction_override;
+  }
+
+  // Parsing overriding parameters of amplicon_param.variant_param
+  // min_tag_fam_size
+  target.amplicon_param.variant_param.min_tag_fam_size = 0;
+  target.amplicon_param.variant_param.min_tag_fam_size_override = false;
+  if (ParseInfoKey("min_tag_fam_size=", info, temp)){
+    target.amplicon_param.variant_param.min_tag_fam_size = temp;
+    target.amplicon_param.variant_param.min_tag_fam_size_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_tag_fam_size_override;
+  }
+  // min_fam_per_strand_cov
+  target.amplicon_param.variant_param.min_fam_per_strand_cov = 0;
+  target.amplicon_param.variant_param.min_fam_per_strand_cov_override = false;
+  if (ParseInfoKey("min_fam_per_strand_cov=", info, temp)){
+    target.amplicon_param.variant_param.min_fam_per_strand_cov = temp;
+    target.amplicon_param.variant_param.min_fam_per_strand_cov_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_fam_per_strand_cov_override;
+  }
+  // min_allele_freq
+  target.amplicon_param.variant_param.min_allele_freq = 0.0f;
+  target.amplicon_param.variant_param.min_allele_freq_override = false;
+  if (ParseInfoKey("min_allele_freq=", info, temp_f)){
+    target.amplicon_param.variant_param.min_allele_freq = temp_f;
+    target.amplicon_param.variant_param.min_allele_freq_override = temp_f > 0.0f and temp_f < 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_allele_freq_override;
+  }
+  // strand_bias
+  target.amplicon_param.variant_param.strand_bias = 0.0f;
+  target.amplicon_param.variant_param.strand_bias_override = false;
+  if (ParseInfoKey("strand_bias=", info, temp_f)){
+    target.amplicon_param.variant_param.strand_bias = temp_f;
+    target.amplicon_param.variant_param.strand_bias_override = temp_f >= 0.0f and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.strand_bias_override;
+  }
+  // strand_bias_pval
+  target.amplicon_param.variant_param.strand_bias_pval = 0.0f;
+  target.amplicon_param.variant_param.strand_bias_pval_override = false;
+  if (ParseInfoKey("strand_bias_pval=", info, temp_f)){
+    target.amplicon_param.variant_param.strand_bias_pval = temp_f;
+    target.amplicon_param.variant_param.strand_bias_pval_override = temp_f >= 0.0f and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.strand_bias_pval_override;
+  }
+  // min_coverage
+  target.amplicon_param.variant_param.min_coverage = 0;
+  target.amplicon_param.variant_param.min_coverage_override = false;
+  if (ParseInfoKey("min_coverage=", info, temp)){
+    target.amplicon_param.variant_param.min_coverage = temp;
+    target.amplicon_param.variant_param.min_coverage_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_coverage_override;
+  }
+  // min_coverage_each_strand
+  target.amplicon_param.variant_param.min_coverage_each_strand = 0;
+  target.amplicon_param.variant_param.min_coverage_each_strand_override = false;
+  if (ParseInfoKey("min_coverage_each_strand=", info, temp)){
+    target.amplicon_param.variant_param.min_coverage_each_strand = temp;
+    target.amplicon_param.variant_param.min_coverage_each_strand_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_coverage_each_strand_override;
+  }
+  // min_var_coverage
+  target.amplicon_param.variant_param.min_var_coverage = 0;
+  target.amplicon_param.variant_param.min_var_coverage_override = false;
+  if (ParseInfoKey("min_var_coverage=", info, temp)){
+    target.amplicon_param.variant_param.min_var_coverage = temp;
+    target.amplicon_param.variant_param.min_var_coverage_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_var_coverage_override;
+  }
+  // min_variant_score
+  target.amplicon_param.variant_param.min_variant_score = 0.0f;
+  target.amplicon_param.variant_param.min_variant_score_override = false;
+  if (ParseInfoKey("min_variant_score=", info, temp_f)){
+    target.amplicon_param.variant_param.min_variant_score = temp_f;
+    target.amplicon_param.variant_param.min_variant_score_override = temp_f >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.min_variant_score_override;
+  }
+  // data_quality_stringency
+  target.amplicon_param.variant_param.data_quality_stringency = 0.0f;
+  target.amplicon_param.variant_param.data_quality_stringency_override = false;
+  if (ParseInfoKey("data_quality_stringency=", info, temp_f)){
+    target.amplicon_param.variant_param.data_quality_stringency = temp_f;
+    target.amplicon_param.variant_param.data_quality_stringency_override = temp_f >= 0.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.data_quality_stringency_override;
+  }
+  // position_bias
+  target.amplicon_param.variant_param.position_bias = 0.0f;
+  target.amplicon_param.variant_param.position_bias_override = false;
+  if (ParseInfoKey("position_bias=", info, temp_f)){
+    target.amplicon_param.variant_param.position_bias = temp_f;
+    target.amplicon_param.variant_param.position_bias_override = temp_f >= 0 and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.position_bias_override;
+  }
+  // position_bias_pval
+  target.amplicon_param.variant_param.position_bias_pval = 0.0f;
+  target.amplicon_param.variant_param.position_bias_pval_override = false;
+  if (ParseInfoKey("position_bias_pval=", info, temp_f)){
+    target.amplicon_param.variant_param.position_bias_pval = temp_f;
+    target.amplicon_param.variant_param.position_bias_pval_override = temp_f >= 0 and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.position_bias_pval_override;
+  }
+  // hp_max_length
+  target.amplicon_param.variant_param.hp_max_length = 0;
+  target.amplicon_param.variant_param.hp_max_length_override = false;
+  if (ParseInfoKey("hp_max_length=", info, temp)){
+    target.amplicon_param.variant_param.hp_max_length = temp;
+    target.amplicon_param.variant_param.hp_max_length_override = temp >= 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.hp_max_length_override;
+  }
+  // filter_unusual_predictions
+  target.amplicon_param.variant_param.filter_unusual_predictions = 0.0f;
+  target.amplicon_param.variant_param.filter_unusual_predictions_override = false;
+  if (ParseInfoKey("filter_unusual_predictions=", info, temp_f)){
+    target.amplicon_param.variant_param.filter_unusual_predictions = temp_f;
+    target.amplicon_param.variant_param.filter_unusual_predictions_override = temp_f >= 0.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.filter_unusual_predictions_override;
+  }
+  // filter_insertion_predictions
+  target.amplicon_param.variant_param.filter_insertion_predictions = 0.0f;
+  target.amplicon_param.variant_param.filter_insertion_predictions_override = false;
+  if (ParseInfoKey("filter_insertion_predictions=", info, temp_f)){
+    target.amplicon_param.variant_param.filter_insertion_predictions = temp_f;
+    target.amplicon_param.variant_param.filter_insertion_predictions_override = temp_f >= 0.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.filter_insertion_predictions_override;
+  }
+  // filter_deletion_predictions
+  target.amplicon_param.variant_param.filter_deletion_predictions = 0.0f;
+  target.amplicon_param.variant_param.filter_deletion_predictions_override = false;
+  if (ParseInfoKey("filter_deletion_predictions=", info, temp_f)){
+    target.amplicon_param.variant_param.filter_deletion_predictions = temp_f;
+    target.amplicon_param.variant_param.filter_deletion_predictions_override = temp_f >= 0.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.filter_deletion_predictions_override;
+  }
+  // filter_deletion_predictions
+  target.amplicon_param.variant_param.gc_motif_filter_multiplier = 0.0f;
+  target.amplicon_param.variant_param.gc_motif_filter_multiplier_override = false;
+  if (ParseInfoKey("gc_motif_filter_multiplier=", info, temp_f)){
+    target.amplicon_param.variant_param.gc_motif_filter_multiplier = temp_f;
+    target.amplicon_param.variant_param.gc_motif_filter_multiplier_override = temp_f > 0.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.gc_motif_filter_multiplier_override;
+  }
+  // sse_prob_threshold
+  target.amplicon_param.variant_param.sse_prob_threshold = 0.0f;
+  target.amplicon_param.variant_param.sse_prob_threshold_override = false;
+  if (ParseInfoKey("sse_prob_threshold=", info, temp_f)){
+    target.amplicon_param.variant_param.sse_prob_threshold = temp_f;
+    target.amplicon_param.variant_param.sse_prob_threshold_override = temp_f >= 0 and temp_f <= 1.0f;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.sse_prob_threshold_override;
+  }
+  // heavy_tailed
+  target.amplicon_param.variant_param.heavy_tailed = 0;
+  target.amplicon_param.variant_param.heavy_tailed_override = false;
+  if (ParseInfoKey("heavy_tailed=", info, temp)){
+    target.amplicon_param.variant_param.heavy_tailed = temp;
+    target.amplicon_param.variant_param.heavy_tailed_override = temp > 0;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.heavy_tailed_override;
+  }
+  // adjust_sigma
+  target.amplicon_param.variant_param.adjust_sigma = false;
+  target.amplicon_param.variant_param.adjust_sigma_override = false;
+  if (ParseInfoKey("adjust_sigma=", info, temp)){
+    target.amplicon_param.variant_param.adjust_sigma = temp;
+    target.amplicon_param.variant_param.adjust_sigma_override = temp == 0 or temp == 1;
+    target.amplicon_param.has_override += target.amplicon_param.variant_param.adjust_sigma_override;
   }
 }
 
@@ -378,7 +555,7 @@ void TargetsManager::GetBestTargetIndex(Alignment *rai, int unmerged_target_hint
     int fit_penalty = 100;
 
     float overlap_ratio = (float) overlap / (float) (unmerged[target_idx].end - unmerged[target_idx].begin);
-    float eff_min_coverage_fraction = unmerged[target_idx].min_cov_fraction_override? unmerged[target_idx].min_cov_fraction : min_coverage_fraction;
+    float eff_min_coverage_fraction = unmerged[target_idx].amplicon_param.min_cov_fraction_override? unmerged[target_idx].amplicon_param.min_cov_fraction : min_coverage_fraction;
     if (overlap_ratio >= eff_min_coverage_fraction){
       rai->target_coverage_indices.push_back(target_idx);
     }
@@ -684,6 +861,26 @@ bool TargetsManager::IsBreakingIntervalInMerged(int merged_idx, int chr, long po
 	return true;
 }
 
+bool TargetsManager::FindPossibleBreakIntervalInMerge(int chr, long pos, long &end_cur, long &start_next) const {
+	int merged_idx = FindMergedTargetIndex(chr, pos);
+	if (merged_idx < 0) return false;
+	long next_s = 0, cur_end = 0; 
+	for (int unmerged_idx = merged[merged_idx].first_unmerged; unmerged_idx < (int) unmerged.size(); ++unmerged_idx){
+                if (unmerged[unmerged_idx].merged != merged_idx){
+                        break;
+                }
+		if (pos < unmerged[unmerged_idx].begin) {
+		    if (next_s == 0 or next_s > unmerged[unmerged_idx].begin) next_s = unmerged[unmerged_idx].begin;
+		} else if (pos < unmerged[unmerged_idx].end) {
+		    if (cur_end == 0 or cur_end < unmerged[unmerged_idx].end) cur_end = unmerged[unmerged_idx].end;
+		}
+	}
+	if (next_s == 0 or cur_end == 0) return false; 
+	//if (next_s <= cur_end) return false;
+	end_cur = cur_end; start_next = next_s;
+	return true;
+}
+
 int TargetsManager::FindMergedTargetIndex(int chr, long pos) const{
 	// merged_idx_start is the first index of merged of the chromosome
 	int merged_idx_start = chr_to_merged_idx[chr];
@@ -779,4 +976,165 @@ void TargetsManager::AddCoverageToRegions(const map<int, TargetStats>& stat_of_t
 		unmerged[target_idx].my_stats.read_coverage_in_families_by_best_target += stat_it->second.read_coverage_in_families_by_best_target;
 	}
 	pthread_mutex_unlock(&coverage_counter_mutex_);
+}
+
+// Propagate amplicon overriding parameters (not including min_tag_fam_size, min_fam_per_strand_cov) to allele specific parameters.
+// (Rule 1): If a parameter has been overridden by hotspot specific overriding, then amplicon overriding won't be applied.
+// (Rule 2): If a variant is covered by multiple amplicons and a parameter is overriden in multiple amplicons, then the overriding parameter in the "first" amplicon will be used.
+void TargetsManager::OverrideVariantSpecificParams(const vcf::Variant &variant, vector<VariantSpecificParams> &variant_specific_params) const {
+	// variant_window_start_0 is the start of the variant window in 0-based coordination (note that variant.position is 0-based)
+	long variant_window_start_0 = variant.position - 1;
+	// variant_window_end_0 is the end of the variant window in 0-based coordination
+	long variant_window_end_0 = variant.position - 1 + (long) variant.ref.size();
+	// candidate_variant.variant only stores the name of the chrom, but I'll need the index of the chrom in TargetsManager.
+	int my_chr_idx = ChrNameToIndex(variant.sequenceName);
+	// start_merged_idx is the "unique" merged idx that covers the start of the variant
+	int start_merged_idx = -1;
+	// end_merged_idx is the "unique" merged idx that covers the end of the variant
+	int end_merged_idx = -1;
+
+	// Find the merged regions that cover the variant
+	// Note that start_merged_idx should be the same as end_merged_idx, but I handle the more general case.
+	start_merged_idx = FindMergedTargetIndex(my_chr_idx, variant_window_start_0);
+	// variant_window_end_0 - 1 is the last base of the variant_window
+	end_merged_idx = FindMergedTargetIndex(my_chr_idx, variant_window_end_0 - 1);
+
+	// Do noting if the variant is not covered by any merged region.
+	// TODO: Handle the case where a DEL starts from the begin of a merged region while its "VCF" position (w/ padding) is one bp less.
+	if (min(start_merged_idx, end_merged_idx) < 0){
+		return;
+	}
+
+	int start_unmerged_idx = merged[start_merged_idx].first_unmerged;
+	int end_unmerged_idx = (end_merged_idx == (int) merged.size() - 1)? (int) unmerged.size() : merged[end_merged_idx + 1].first_unmerged;
+
+	// Iterate over unmerged regions that cover the variant
+	// TODO: Some panels have huge list of unmerged regions. Implementing better searching algorithm for unmerged regions is more efficient.
+	for (int unmerged_idx = start_unmerged_idx; unmerged_idx < end_unmerged_idx; ++unmerged_idx){
+		if (not unmerged[unmerged_idx].amplicon_param.has_override){
+			// Typical case: No overriding found.
+			continue;
+		}
+		const VariantSpecificParams &variant_param_in_amplicon = unmerged[unmerged_idx].amplicon_param.variant_param;
+		//Iterate over ALT alleles
+		for (unsigned int i_alt = 0; i_alt < variant.alt.size(); ++i_alt){
+			// Use PPD/SPD to remove padding
+			long allele_start_0 = variant_window_start_0 + (long) variant.alt_orig_padding[i_alt].first;
+			long allele_end_0 = variant_window_end_0 - (long) variant.alt_orig_padding[i_alt].second;
+			// Skip the ALT allele if not fully covered
+			if (not IsFullyCoveredByUnmerged(unmerged_idx, my_chr_idx, allele_start_0, allele_end_0)){
+				continue;
+			}
+			// The VariantSpecificParams object for the ALT allele
+			VariantSpecificParams &allele_param = variant_specific_params[i_alt];
+
+			// min_allele_freq
+			if (variant_param_in_amplicon.min_allele_freq_override and (not allele_param.min_allele_freq_override)){
+				allele_param.min_allele_freq_override = true;
+				allele_param.min_allele_freq = variant_param_in_amplicon.min_allele_freq;
+			}
+
+			// strand_bias
+			if (variant_param_in_amplicon.strand_bias_override and (not allele_param.strand_bias_override)){
+				allele_param.strand_bias_override = true;
+				allele_param.strand_bias = variant_param_in_amplicon.strand_bias;
+			}
+
+			// strand_bias_pval
+			if (variant_param_in_amplicon.strand_bias_pval_override and (not allele_param.strand_bias_pval_override)){
+				allele_param.strand_bias_pval_override = true;
+				allele_param.strand_bias_pval = variant_param_in_amplicon.strand_bias_pval;
+			}
+
+			// min_coverage
+			if (variant_param_in_amplicon.min_coverage_override and (not allele_param.min_coverage_override)){
+				allele_param.min_coverage_override = true;
+				allele_param.min_coverage = variant_param_in_amplicon.min_coverage;
+			}
+
+			// min_coverage_each_strand
+			if (variant_param_in_amplicon.min_coverage_each_strand_override and (not allele_param.min_coverage_each_strand_override)){
+				allele_param.min_coverage_each_strand_override = true;
+				allele_param.min_coverage_each_strand = variant_param_in_amplicon.min_coverage_each_strand;
+			}
+
+			// min_var_coverage
+			if (variant_param_in_amplicon.min_var_coverage_override and (not allele_param.min_var_coverage_override)){
+				allele_param.min_var_coverage_override = true;
+				allele_param.min_var_coverage = variant_param_in_amplicon.min_var_coverage;
+			}
+
+			// min_variant_score
+			if (variant_param_in_amplicon.min_variant_score_override and (not allele_param.min_variant_score_override)){
+				allele_param.min_variant_score_override = true;
+				allele_param.min_variant_score = variant_param_in_amplicon.min_variant_score;
+			}
+
+			// data_quality_stringency
+			if (variant_param_in_amplicon.data_quality_stringency_override and (not allele_param.data_quality_stringency_override)){
+				allele_param.data_quality_stringency_override = true;
+				allele_param.data_quality_stringency = variant_param_in_amplicon.data_quality_stringency;
+			}
+
+			// position_bias
+			if (variant_param_in_amplicon.position_bias_override and (not allele_param.position_bias_override)){
+				allele_param.position_bias_override = true;
+				allele_param.position_bias = variant_param_in_amplicon.position_bias;
+			}
+
+			// position_bias_pval
+			if (variant_param_in_amplicon.position_bias_pval_override and (not allele_param.position_bias_pval_override)){
+				allele_param.position_bias_pval_override = true;
+				allele_param.position_bias_pval = variant_param_in_amplicon.position_bias_pval;
+			}
+
+			// hp_max_length
+			if (variant_param_in_amplicon.hp_max_length_override and (not allele_param.hp_max_length_override)){
+				allele_param.hp_max_length_override = true;
+				allele_param.hp_max_length = variant_param_in_amplicon.hp_max_length;
+			}
+
+			// filter_unusual_predictions
+			if (variant_param_in_amplicon.filter_unusual_predictions_override and (not allele_param.filter_unusual_predictions_override)){
+				allele_param.filter_unusual_predictions_override = true;
+				allele_param.filter_unusual_predictions = variant_param_in_amplicon.filter_unusual_predictions;
+			}
+
+			// filter_insertion_predictions
+			if (variant_param_in_amplicon.filter_insertion_predictions_override and (not allele_param.filter_insertion_predictions_override)){
+				allele_param.filter_insertion_predictions_override = true;
+				allele_param.filter_insertion_predictions = variant_param_in_amplicon.filter_insertion_predictions;
+			}
+
+			// filter_deletion_predictions
+			if (variant_param_in_amplicon.filter_deletion_predictions_override and (not allele_param.filter_deletion_predictions_override)){
+				allele_param.filter_deletion_predictions_override = true;
+				allele_param.filter_deletion_predictions = variant_param_in_amplicon.filter_deletion_predictions;
+			}
+
+			// gc_motif_filter_multiplier
+			if (variant_param_in_amplicon.gc_motif_filter_multiplier_override and (not allele_param.gc_motif_filter_multiplier_override)){
+				allele_param.gc_motif_filter_multiplier_override = true;
+				allele_param.gc_motif_filter_multiplier = variant_param_in_amplicon.gc_motif_filter_multiplier;
+			}
+
+			// sse_prob_threshold
+			if (variant_param_in_amplicon.sse_prob_threshold_override and (not allele_param.sse_prob_threshold_override)){
+				allele_param.sse_prob_threshold_override = true;
+				allele_param.sse_prob_threshold = variant_param_in_amplicon.sse_prob_threshold;
+			}
+
+			// heavy_tailed
+			if (variant_param_in_amplicon.heavy_tailed_override and (not allele_param.heavy_tailed_override)){
+				allele_param.heavy_tailed_override = true;
+				allele_param.heavy_tailed = variant_param_in_amplicon.heavy_tailed;
+			}
+
+      // adjust_sigma
+      if (variant_param_in_amplicon.adjust_sigma_override and (not allele_param.adjust_sigma_override)){
+        allele_param.adjust_sigma_override = true;
+        allele_param.adjust_sigma = variant_param_in_amplicon.adjust_sigma;
+      }
+		}
+	}
 }

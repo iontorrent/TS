@@ -4,9 +4,9 @@
 <base target="_parent"/>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
 <head>
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
-<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+<link type="text/css" rel="stylesheet" href="css/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="css/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="css/print.css" media="print" />
 
 <link type="text/css" rel="stylesheet" href="lifegrid/pseudo-bootstrap.css" />
 
@@ -27,7 +27,7 @@
 <script src="lifegrid/columnpicker.js"></script>
 
 <script src="lifegrid/sampleIDalleleCoverageTable.js"></script>
-{% if full_report %}
+{% if full_report and not isDx %}
 <script src="lifegrid/fileLinksTable.js"></script>
 {% endif %}
 
@@ -88,7 +88,7 @@
   <tr><th><span title="Coverage summary for reads mapped to the enriched regions used for gender and sample identification. ">Sample ID Regions</span></th><th><span title="Coverage summary for reads mapped over sample identification SNP loci. ">Sample ID SNPs</span></th></tr>
   <tr><td><div class="statsdata"><table>
   <tr><td class="inleft"><span title="The total number of bases in all sample ID regions of the reference. ">Bases in target regions</span></td> <td class="inright">{{target_cov.Bases_in_target_regions|intcomma}}</td></tr>
-  <tr><td class="inleft"><span title="The average number of reads of all targeted reference bases. This is the total number of base reads on target divided by the number of targeted bases and therefore includes any bases that had no coverage. ">Average base coverage depth</span></td> <td class="inright">{{target_cov.Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The average number of aligned base reads over all target identification regions covered by amplicon inserts. This is the total number of base reads as reported by samtools depth divided by the number of targeted bases. Unlike coverage at the SNV loci themselves, all reads are considered. ">Average base coverage depth</span></td> <td class="inright">{{target_cov.Average_base_coverage_depth|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least 0.2x the average base coverage depth. ">Uniformity of coverage</span></td> <td class="inright">{{target_cov.Uniformity_of_coverage}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least one read. ">Coverage at 1x</span></td> <td class="inright">{{target_cov.Coverage_at_1x}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least twenty reads. ">Coverage at 20x</span></td> <td class="inright">{{target_cov.Coverage_at_20x}}</td></tr>
@@ -96,7 +96,7 @@
 </table></div></td>
 <td><div class="statsdata"> <table>
   <tr><td class="inleft"><span title="The total number of bases in all sample ID regions of the reference. ">Bases in target regions</span></td> <td class="inright">{{loci_cov.Bases_in_target_regions|intcomma}}</td></tr>
-  <tr><td class="inleft"><span title="The average number of reads of all targeted reference bases. This is the total number of base reads on target divided by the number of targeted bases and therefore includes any bases that had no coverage. ">Average base coverage depth</span></td> <td class="inright">{{loci_cov.Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The average number of reads of all targeted sampleID SNV loci. This is the total number of base reads, not including aligned deletions or reads that had adjacent insertions, dividied by the number of loci.">Average base coverage depth</span></td> <td class="inright">{{loci_cov.Average_base_coverage_depth|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least 0.2x the average base coverage depth. ">Uniformity of coverage</span></td> <td class="inright">{{loci_cov.Uniformity_of_coverage}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least one read. ">Coverage at 1x</span></td> <td class="inright">{{loci_cov.Coverage_at_1x}}</td></tr>
   <tr><td class="inleft"><span title="The percentage of target bases covered by at least twenty reads. ">Coverage at 20x</span></td> <td class="inright">{{loci_cov.Coverage_at_20x}}</td></tr>
@@ -111,6 +111,7 @@
 
 <div id="sampleIDalleleCoverageTable" fileurl="{{allele_table}}" class="center"></div>
 <br/>
+{% if not isDx %}
 {% if full_report %}
 <div id="fileLinksTable" fileurl="{{file_links}}" class="center"></div>
 
@@ -124,6 +125,7 @@
     <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
   </div>
 </div> </div> </div> </div>
+{% endif %}
 {% endif %}
 <br/>
 </body>

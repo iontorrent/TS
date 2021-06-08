@@ -40,7 +40,7 @@ int main(int argc, const char *argv[])
 
   string tvcutils_command = argv[1];
 
-  if      (tvcutils_command == "prepare_hotspots") return PrepareHotspots(argc-1, argv+1);
+  if      (tvcutils_command == "prepare_hotspots") return PrepareHotspot::PrepareHotspots(argc-1, argv+1);
   else if (tvcutils_command == "validate_bed") return ValidateBed(argc-1, argv+1);
   else if (tvcutils_command == "unify_vcf") return UnifyVcf(argc-1, argv+1);
   else if (tvcutils_command == "split_vcf") return SplitVcf(argc-1, argv+1);

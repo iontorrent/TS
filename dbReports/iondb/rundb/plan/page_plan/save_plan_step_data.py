@@ -116,6 +116,7 @@ class SavePlanFieldNames:
     IR_WITNESS = "irWitness"
 
     IR_WORKFLOW = "irWorkflow"
+    IR_MULTIPLE_WORKFLOW_SINGLE_SAMPLE = "irMultipleWorkflowSelected"
     IR_ISFACTORY = "tag_isFactoryProvidedWorkflow"
     IR_DOWN = "irDown"
     IR_RELATION_ROLE = "irRelationRole"
@@ -177,6 +178,78 @@ class SavePlanFieldNames:
 class MonitoringFieldNames:
     QC_TYPES = "qcTypes"
 
+def get_ir_userinput_dict(row, irWorkflow):
+    sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME, "").strip()
+    ir_userinput_dict = {
+        SavePlanFieldNames.SAMPLE: sample_name,
+        SavePlanFieldNames.SAMPLE_NAME: sample_name.replace(" ", "_"),
+        SavePlanFieldNames.SAMPLE_EXTERNAL_ID: row.get(
+            SavePlanFieldNames.SAMPLE_EXTERNAL_ID, ""
+        ),
+        SavePlanFieldNames.SAMPLE_DESCRIPTION: row.get(
+            SavePlanFieldNames.SAMPLE_DESCRIPTION, ""
+        ),
+        SavePlanFieldNames.SAMPLE_COLLECTION_DATE: row.get(
+            SavePlanFieldNames.IR_SAMPLE_COLLECTION_DATE, ""
+        ),
+        SavePlanFieldNames.SAMPLE_RECEIPT_DATE: row.get(
+            SavePlanFieldNames.IR_SAMPLE_RECEIPT_DATE, ""
+        ),
+        SavePlanFieldNames.WORKFLOW: irWorkflow,
+        SavePlanFieldNames.IR_ISFACTORY: row.get(
+            SavePlanFieldNames.IR_ISFACTORY
+        ),
+        SavePlanFieldNames.RELATION_ROLE: row.get(
+            SavePlanFieldNames.IR_RELATION_ROLE, ""
+        ),
+        SavePlanFieldNames.RELATIONSHIP_TYPE: row.get(
+            SavePlanFieldNames.IR_RELATIONSHIP_TYPE, ""
+        ),
+        SavePlanFieldNames.SET_ID: row.get(SavePlanFieldNames.IR_SET_ID, ""),
+        SavePlanFieldNames.GENDER: row.get(SavePlanFieldNames.IR_GENDER, ""),
+        SavePlanFieldNames.POPULATION: row.get(
+            SavePlanFieldNames.IR_POPULATION, ""
+        ),
+        SavePlanFieldNames.MOUSE_STRAINS: row.get(
+            SavePlanFieldNames.IR_MOUSE_STRAINS, ""
+        ),
+        SavePlanFieldNames.NUCLEOTIDE_TYPE: row.get(
+            SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ""
+        ),
+        SavePlanFieldNames.CANCER_TYPE: row.get(
+            SavePlanFieldNames.IR_CANCER_TYPE, ""
+        ),
+        SavePlanFieldNames.CELLULARITY_PCT: row.get(
+            SavePlanFieldNames.IR_CELLULARITY_PCT, ""
+        ),
+        SavePlanFieldNames.BIOPSY_DAYS: row.get(
+            SavePlanFieldNames.IR_BIOPSY_DAYS, ""
+        ),
+        SavePlanFieldNames.CELL_NUM: row.get(
+            SavePlanFieldNames.IR_CELL_NUM, ""
+        ),
+        SavePlanFieldNames.COUPLE_ID: row.get(
+            SavePlanFieldNames.IR_COUPLE_ID, ""
+        ),
+        SavePlanFieldNames.EMBRYO_ID: row.get(
+            SavePlanFieldNames.IR_EMBRYO_ID, ""
+        ),
+        SavePlanFieldNames.BACTERIAL_MARKER_TYPE: row.get(SavePlanFieldNames.IR_BACTERIAL_MARKER_TYPE, ""),
+        SavePlanFieldNames.WITNESS: row.get(SavePlanFieldNames.IR_WITNESS, ""),
+        SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(
+            SavePlanFieldNames.IR_APPLICATION_TYPE, ""
+        ),
+    }
+    barcode_id = row.get(SavePlanFieldNames.BARCODE_SAMPLE_BARCODE_ID_UI_KEY)
+    if barcode_id:
+        ir_userinput_dict[KitsFieldNames.BARCODE_ID] = barcode_id
+        endBarcode_id = row.get(
+            SavePlanFieldNames.BARCODE_SAMPLE_END_BARCODE_ID_UI_KEY
+        )
+        if endBarcode_id:
+            ir_userinput_dict[SavePlanFieldNames.END_BARCODE_ID] = endBarcode_id
+    return ir_userinput_dict
+
 
 def update_ir_plugin_from_samples_table(samplesTable):
     # save IR fields for non-barcoded and barcoded plans
@@ -184,79 +257,18 @@ def update_ir_plugin_from_samples_table(samplesTable):
     for row in samplesTable:
         sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME, "").strip()
         if sample_name:
-            ir_userinput_dict = {
-                SavePlanFieldNames.SAMPLE: sample_name,
-                SavePlanFieldNames.SAMPLE_NAME: sample_name.replace(" ", "_"),
-                SavePlanFieldNames.SAMPLE_EXTERNAL_ID: row.get(
-                    SavePlanFieldNames.SAMPLE_EXTERNAL_ID, ""
-                ),
-                SavePlanFieldNames.SAMPLE_DESCRIPTION: row.get(
-                    SavePlanFieldNames.SAMPLE_DESCRIPTION, ""
-                ),
-                SavePlanFieldNames.SAMPLE_COLLECTION_DATE: row.get(
-                    SavePlanFieldNames.IR_SAMPLE_COLLECTION_DATE, ""
-                ),
-                SavePlanFieldNames.SAMPLE_RECEIPT_DATE: row.get(
-                    SavePlanFieldNames.IR_SAMPLE_RECEIPT_DATE, ""
-                ),
-                SavePlanFieldNames.WORKFLOW: row.get(
-                    SavePlanFieldNames.IR_WORKFLOW, ""
-                ),
-                SavePlanFieldNames.IR_ISFACTORY: row.get(
-                    SavePlanFieldNames.IR_ISFACTORY
-                ),
-                SavePlanFieldNames.RELATION_ROLE: row.get(
-                    SavePlanFieldNames.IR_RELATION_ROLE, ""
-                ),
-                SavePlanFieldNames.RELATIONSHIP_TYPE: row.get(
-                    SavePlanFieldNames.IR_RELATIONSHIP_TYPE, ""
-                ),
-                SavePlanFieldNames.SET_ID: row.get(SavePlanFieldNames.IR_SET_ID, ""),
-                SavePlanFieldNames.GENDER: row.get(SavePlanFieldNames.IR_GENDER, ""),
-                SavePlanFieldNames.POPULATION: row.get(
-                    SavePlanFieldNames.IR_POPULATION, ""
-                ),
-                SavePlanFieldNames.MOUSE_STRAINS: row.get(
-                    SavePlanFieldNames.IR_MOUSE_STRAINS, ""
-                ),
-                SavePlanFieldNames.NUCLEOTIDE_TYPE: row.get(
-                    SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ""
-                ),
-                SavePlanFieldNames.CANCER_TYPE: row.get(
-                    SavePlanFieldNames.IR_CANCER_TYPE, ""
-                ),
-                SavePlanFieldNames.CELLULARITY_PCT: row.get(
-                    SavePlanFieldNames.IR_CELLULARITY_PCT, ""
-                ),
-                SavePlanFieldNames.BIOPSY_DAYS: row.get(
-                    SavePlanFieldNames.IR_BIOPSY_DAYS, ""
-                ),
-                SavePlanFieldNames.CELL_NUM: row.get(
-                    SavePlanFieldNames.IR_CELL_NUM, ""
-                ),
-                SavePlanFieldNames.COUPLE_ID: row.get(
-                    SavePlanFieldNames.IR_COUPLE_ID, ""
-                ),
-                SavePlanFieldNames.EMBRYO_ID: row.get(
-                    SavePlanFieldNames.IR_EMBRYO_ID, ""
-                ),
-                SavePlanFieldNames.BACTERIAL_MARKER_TYPE: row.get(SavePlanFieldNames.IR_BACTERIAL_MARKER_TYPE, ""),
-                SavePlanFieldNames.WITNESS: row.get(SavePlanFieldNames.IR_WITNESS, ""),
-                SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(
-                    SavePlanFieldNames.IR_APPLICATION_TYPE, ""
-                ),
-            }
-
-            barcode_id = row.get(SavePlanFieldNames.BARCODE_SAMPLE_BARCODE_ID_UI_KEY)
-            if barcode_id:
-                ir_userinput_dict[KitsFieldNames.BARCODE_ID] = barcode_id
-                endBarcode_id = row.get(
-                    SavePlanFieldNames.BARCODE_SAMPLE_END_BARCODE_ID_UI_KEY
-                )
-                if endBarcode_id:
-                    ir_userinput_dict[SavePlanFieldNames.END_BARCODE_ID] = endBarcode_id
-
-            userInputInfo.append(ir_userinput_dict)
+            multiWorkflowSelectedObj = row.get(SavePlanFieldNames.IR_MULTIPLE_WORKFLOW_SINGLE_SAMPLE) or []
+            if multiWorkflowSelectedObj and isinstance(multiWorkflowSelectedObj[0], dict):
+                multiWorkflowSelectedList = [obj.get('workflow') for obj in multiWorkflowSelectedObj]
+                if "Upload Only" not in multiWorkflowSelectedList:
+                    for obj in multiWorkflowSelectedObj:
+                        row[SavePlanFieldNames.IR_ISFACTORY] = obj["tag"]
+                        ir_userinput_dict = get_ir_userinput_dict(row, obj["workflow"])
+                        userInputInfo.append(ir_userinput_dict)
+            else:
+                irWorflowSelected = row.get(SavePlanFieldNames.IR_WORKFLOW, "")
+                ir_userinput_dict = get_ir_userinput_dict(row, irWorflowSelected)
+                userInputInfo.append(ir_userinput_dict)
 
     return userInputInfo
 

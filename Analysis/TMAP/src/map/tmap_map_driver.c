@@ -267,7 +267,7 @@ unsigned trim_cigar_right (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsign
                 fprintf (stderr, "Internal Cigar trimming error\n");
                 tmap_bug ();
             }
-            constype = bam_cigar_type (cigar [opno]);
+            constype = bam_cigar_type (bam_cigar_op (cigar [opno]));
             prev_tail_beg = tail_beg;
             if (constype & CONSUME_QRY) 
                 tail_beg += bam_cigar_oplen (cigar [opno]);
@@ -295,7 +295,7 @@ unsigned trim_cigar_right (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsign
         // if reached beginning of cigar, return 0 (reject entire read)
         while (bam_cigar_op (cigar [opno]) != BAM_CMATCH)
         {
-            if (bam_cigar_type (cigar [opno]) & 1) // consumes query
+            if (bam_cigar_type (bam_cigar_op (cigar [opno])) & 1) // consumes query
                 new_tail_soft_clip += bam_cigar_oplen (cigar [opno]);
             if (opno == 0)
                 return 0;
@@ -368,7 +368,7 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
                 return 0; // reached the clipped tail of the alignment but not the trim position
 
             // update op_beg and op_end to coordinates of current cigar item
-            constype = bam_cigar_type (cigar [op_idx]);
+            constype = bam_cigar_type (bam_cigar_op (cigar [op_idx]));
             oplen = bam_cigar_oplen (cigar [op_idx]);
             if (constype & CONSUME_QRY) 
                 op_end += oplen;
@@ -418,7 +418,7 @@ unsigned trim_cigar_left (uint32_t** cigar_buff, unsigned orig_cigar_sz, unsigne
         while (op_idx + 1 < orig_cigar_sz && bam_cigar_op (cigar [op_idx + 1]) != BAM_CMATCH)
         {
             ++ op_idx;
-            constype = bam_cigar_type (cigar [op_idx]);
+            constype = bam_cigar_type (bam_cigar_op (cigar [op_idx]));
             oplen = bam_cigar_oplen (cigar [op_idx]);
             if (constype & CONSUME_QRY) // consumes query
             {
@@ -1378,7 +1378,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                         continue;
 
                     // map to amplicons (if BED is given and parameters override enabled)
-                    if (index->refseq->bed_exist && (stage->opt->use_param_ovr || stage->opt->use_bed_in_end_repair))
+                    if (index->refseq->bed_exist && (stage->opt->use_param_ovr || stage->opt->use_bed_in_end_repair || stage->opt->use_bed_read_ends_stat))
                         tmap_map_find_amplicons (
                                                     stage_ord,                  // stage index
                                                     stage->opt,         // stage options
@@ -1480,6 +1480,21 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             seq,                // read
                             seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
                             stage->opt,         // tmap parameters
+                            &target,            // target cache control structure
+                            &path_buf,          // buffer for traceback path
+                            &path_buf_sz,       // used portion and allocated size of traceback path. 
+                            stat
+                        );
+                    // REPAiR
+                    if (stage->opt->use_bed_read_ends_stat != 0 || stage->opt->use_param_ovr)
+                        tmap_map_util_REPAiR_bulk 
+                        (
+                            index->refseq,      // reference server
+                            sams,               // mappings to compute alignments for
+                            seq,                // read
+                            seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                            stage->opt,         // tmap parameters
+                            stage_ord,          // processing stage index
                             &stage->sw_param,   // swage SW parameters
                             &target,            // target cache control structure
                             &path_buf,          // buffer for traceback path
@@ -2017,6 +2032,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
   struct RealignProxy* context = NULL;
 #endif
 
+  init_repair_clip_hist_lowerb ();
 
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_rand_t *rand_core = tmap_rand_init(13); // random # generator for sampling
@@ -2351,7 +2367,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
         tmap_file_fprintf (tmap_file_stderr, "             After dups removal:  %llu\n", stat->num_after_rmdup);
         tmap_file_fprintf (tmap_file_stderr, "                After filtering:  %llu\n", stat->num_after_filter);
 
-        if (!driver->opt->do_realign)
+        if (!driver->opt->do_realign && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr,   "No realignment perormed\n");
         else
         {
@@ -2372,7 +2388,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             tmap_file_fprintf (tmap_file_stderr, "\n");
         }
 
-        if (!driver->opt->do_hp_weight)
+        if (!driver->opt->do_hp_weight  && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr, "No realignment with context-dependent gap cost performed\n");
         else
         {
@@ -2391,7 +2407,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             tmap_file_fprintf (tmap_file_stderr, "              Altered positions:  %llu\n", stat->num_hpcost_shifted);
         }
 
-        if (!(0 < driver->opt->pen_gapl))
+        if (!(0 < driver->opt->pen_gapl)  && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr, "No edge long indel salvage performed\n");
         else
         {
@@ -2419,9 +2435,9 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
                               stat->num_salvaged [R3P]?(((double) stat->score_salvaged_total [R3P]) / stat->num_salvaged [R3P]):0.);
         }
 
-        if (!driver->opt->end_repair)
+        if (!driver->opt->end_repair  && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr, "No end repair performed\n");
-        else if (driver->opt->end_repair <= 2)
+        else if (driver->opt->end_repair <= 2 && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr, "\"Old-style\" end repair performed, no statistics collected\n");
         else
         {
@@ -2453,9 +2469,10 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
                               stat->num_end_repair_extended [R5P]?(((double) stat->total_end_repair_indel [R5P]) / stat->num_end_repair_extended [R5P]):0.,
                               stat->num_end_repair_extended [R3P]?(((double) stat->total_end_repair_indel [R3P]) / stat->num_end_repair_extended [R3P]):0.);
         }
-        if (driver->opt->end_repair)
+
+        if (driver->opt->end_repair || (index->refseq->bed_exist && driver->opt->use_param_ovr))
         {
-            if (driver->opt->end_repair_5_prime_softclip)
+            if (driver->opt->end_repair_5_prime_softclip && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
                 tmap_file_fprintf (tmap_file_stderr, "5' soft-clipping is allowed for end repair, no softclip removal performed\n");
             else if  (driver->opt->softclip_type != 2 && driver->opt->softclip_type != 3)
                 tmap_file_fprintf (tmap_file_stderr, "5' soft-clipping is explicitly allowed through option \"-g %d\" on command line, no softclip removal performed\n", driver->opt->softclip_type);
@@ -2478,7 +2495,38 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             }
         }
 
-        if (!driver->opt->do_repeat_clip)
+        if (index->refseq->bed_exist && (driver->opt->use_bed_read_ends_stat || driver->opt->use_param_ovr))
+        {
+            uint64_t tot_ends = 0;
+            for (unsigned t = 0; t != sizeof (stat->ends_REPAiRed)/sizeof (*(stat->ends_REPAiRed)); ++t) tot_ends += stat->ends_REPAiRed [t]; 
+            tmap_file_fprintf (tmap_file_stderr, "Read-End Position Alignment Repair: changed %d ends in %d reads.\n", tot_ends, stat->reads_REPAiRed);
+            tmap_file_fprintf (tmap_file_stderr, "                                  %8s %8s \n", "3'fwd", "3'rev");
+            tmap_file_fprintf (tmap_file_stderr, "              Ends repaired:      %8llu %8llu\n",
+                              stat->ends_REPAiRed [0], 
+                              stat->ends_REPAiRed [1]);
+            tmap_file_fprintf (tmap_file_stderr, "              Ends clipped:      %8llu %8llu\n",
+                              stat->ends_REPAiR_clipped [0], 
+                              stat->ends_REPAiR_clipped [1]);
+            tmap_file_fprintf (tmap_file_stderr, "              Ends extended:      %8llu %8llu\n",
+                              stat->ends_REPAiR_extended [0], 
+                              stat->ends_REPAiR_extended [1]);
+            tmap_file_fprintf (tmap_file_stderr, "              Matches added:      %8llu %8llu\n",
+                              stat->matches_added_by_REPAiR [0], 
+                              stat->matches_added_by_REPAiR [1]);
+            tmap_file_fprintf (tmap_file_stderr, "              Indels added:       %8llu %8llu\n", 
+                              stat->total_indel_added_by_REPAiR [0], 
+                              stat->total_indel_added_by_REPAiR [1]);
+        }
+        else if (driver->opt->use_bed_read_ends_stat && !index->refseq->bed_exist)
+        {
+            tmap_file_fprintf (tmap_file_stderr, "Read-End Position Alignment Repair (REPAiR) enabled but no BED file is specified\n");
+        }
+        else
+        {
+            tmap_file_fprintf (tmap_file_stderr, "Read-End Position Alignment Repair (REPAiR) not enabled\n");
+        }
+
+        if (!driver->opt->do_repeat_clip && !(index->refseq->bed_exist && driver->opt->use_param_ovr))
             tmap_file_fprintf (tmap_file_stderr, "No tail repeat clipping performed\n");
         else
         {

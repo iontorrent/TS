@@ -83,22 +83,36 @@ else
 fi
 OUTFILEROOT="$WORKDIR/$FILESTEM"
 
+if [ $CHIP_LEVEL_ANALYSIS_PATH ]; then
+  samtoolsPath="${DIRNAME}/bin/samtools"
+else
+  samtoolsPath="samtools"
+fi
+
+
+
 #--------- End command arg parsing ---------
     
 # Generate allele counts if hotspots loci BED provided
 echo "Generating base pileup for SNP loci..." >&2
 RAW_COV_OUT="${WORKDIR}/snps_raw_cov.txt"
-samtools mpileup -BQ0 -d1000000 -f $REFERENCE -l $SNPS_BEDFILE ${BAMFILE} 2> /dev/null | ${RUNDIR}/allele_from_mpileup.py > "$RAW_COV_OUT"
+MPILEUP_EXE="${WORKDIR}/mpileup.sh"
+MPILEUP_OUT="${WORKDIR}/mpileup.txt"
+awk -v ref="$REFERENCE" -v bam="$BAMFILE" '$0!~/^track/ {print "${samtoolsPath} mpileup -BQ0 -d1000000 -f "ref" -r "$1":"$2"-"$3" "bam}' "$SNPS_BEDFILE" > "$MPILEUP_EXE"
+source "$MPILEUP_EXE" > "$MPILEUP_OUT" 2> /dev/null
+# mpileup is no longer piped because separating bed targets into separate calls per region is >17x faster
+${RUNDIR}/allele_from_mpileup.py "$MPILEUP_OUT" > "$RAW_COV_OUT"
+
 # Note: if not already done or unecessary, SNPs BED file should be left aligned using the following command:
 # java -jar -Xmx1500m $RUNDIR/LeftAlignBed.jar "$SNPS_BEDFILE" "${WORKDIR}/leftalign.bed" $RUNDIR/GenomeAnalysisTK.jar $REFERENCE
-${RUNDIR}/writeAlleles.py "$RAW_COV_OUT" ${WORKDIR}/$ALLELE_COV_OUT "$SNPS_BEDFILE"
-rm -f "$RAW_COV_OUT"
+${RUNDIR}/writeAlleles.py "$RAW_COV_OUT" "${WORKDIR}/$ALLELE_COV_OUT" "$SNPS_BEDFILE"
 
 # Generate simple coverage statistics, including number of male/female reads
 echo "Generating coverage statistics and sample identification calls..." >&2
 
 ${RUNDIR}/read_analysis.sh $LOGOPT -g -T "sample ID region" -O "$READ_STATS_OUT" -B "$TARGETS_BEDFILE" -D "$WORKDIR" "$REFERENCE" "$BAMFILE"
 
+echo "Completed read_analysis.sh" >&2
 # Make the sample ID call string - including gender
 HAPLOCODE=`${RUNDIR}/extractBarcode.pl -R "${WORKDIR}/$READ_STATS_OUT" "${WORKDIR}/$ALLELE_COV_OUT"`
 
@@ -119,25 +133,40 @@ if [[ "$HAPLOCODE" =~ ^F ]]; then
 fi
 OUTCMD=">> \"${WORKDIR}/$TARGET_STATS_OUT\""
 gnm_size=`awk 'BEGIN {gs = 0} NR>1 {gs += $3-$2} END {printf "%.0f",gs+0}' "$TARGETS_BED"`
-COVERAGE_ANALYSIS="samtools depth -G 4 -b \"$TARGETS_BED\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
+
+#COVERAGE_ANALYSIS="\"${samtoolsPath}\" depth -G 4 -b \"$TARGETS_BED\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
+# as with mpileup, samtools dept is much quicker using multiple region analysis than bed files
+STDEPTH_EXE="${WORKDIR}/stdepth.sh"
+awk -v sam=$samtoolsPath -v bam="$BAMFILE" '$0!~/^track/ {print sam" depth -G 4 -r "$1":"$2+1"-"$3" "bam}' "$TARGETS_BEDFILE" > "$STDEPTH_EXE"
+COVERAGE_ANALYSIS="source '$STDEPTH_EXE' 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
+
 eval "$COVERAGE_ANALYSIS $OUTCMD" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: Command failed:" >&2
   echo "\$ $COVERAGE_ANALYSIS $OUTCMD" >&2
   exit 1;
-fi
-if [[ "$HAPLOCODE" =~ ^F ]]; then
-  rm -f "$TARGETS_BED"
 fi
 
 # SNPs coverage stats
 OUTCMD=">> \"${WORKDIR}/$SNP_STATS_OUT\""
 gnm_size=`awk 'BEGIN {gs = 0} NR>1 {gs += $3-$2} END {printf "%.0f",gs+0}' "$SNPS_BEDFILE"`
-COVERAGE_ANALYSIS="samtools depth -G 4 -b \"$SNPS_BEDFILE\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
+
+#COVERAGE_ANALYSIS="\"${samtoolsPath}\" depth -G 4 -b \"$SNPS_BEDFILE\" \"$BAMFILE\" 2> /dev/null | awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size"
+# SNV coverage is measured now from Cov+ + Cov-, since inserts are ignored and deletions do not count by definition (samtools depth)
+STDEPTH_OUT="${WORKDIR}/stdepth.out"
+awk 'NR>1 {print $1,$2,$15+$16}' "${WORKDIR}/$ALLELE_COV_OUT" > "$STDEPTH_OUT"
+COVERAGE_ANALYSIS="awk -f ${RUNDIR}/coverage_analysis.awk -v genome=$gnm_size '$STDEPTH_OUT'"
+
 eval "$COVERAGE_ANALYSIS $OUTCMD" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nERROR: Command failed:" >&2
   echo "\$ $COVERAGE_ANALYSIS $OUTCMD" >&2
   exit 1;
 fi
+
+# temporary file clean
+if [[ "$HAPLOCODE" =~ ^F ]]; then
+  rm -f "$TARGETS_BED"
+fi
+rm -f "$RAW_COV_OUT" "$MPILEUP_EXE" "$MPILEUP_OUT" "$STDEPTH_EXE" "$STDEPTH_OUT"
 

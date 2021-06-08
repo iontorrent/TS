@@ -6,6 +6,7 @@
 #include <assert.h>
 #include "../../util/tmap_alloc.h"
 #include "../../util/tmap_error.h"
+#include "../../util/tmap_histo.h"
 #include "../../util/tmap_sam_convert.h"
 #include "../../util/tmap_progress.h"
 #include "../../util/tmap_sort.h"
@@ -21,7 +22,9 @@
 #include "samtools/bam.h"
 #include "tmap_map_opt.h"
 #include "tmap_map_util.h"
+#include "tmap_map_align_util.h"
 #include "../../sw/tmap_sw.h"
+#include "../../util/tmap_histo.h"
 
 // #define CONCURRENT_PARAMETERS_CACHE 1
 #ifdef CONCURRENT_PARAMETERS_CACHE
@@ -1280,6 +1283,21 @@ static int32_t matrix_iupac_mask [IUPAC_MATRIX_SIZE] = {
 */
 int32_t matrix_iupac [IUPAC_MATRIX_SIZE]; // this does not change, can be global
 
+void tmap_map_util_populate_sw_par_iupac_direct (tmap_sw_param_t* par, int32_t score_match, int32_t pen_mm, int32_t pen_gapo, int32_t pen_gape, int32_t bw)
+{
+    int32_t i;
+    for (i = 0; i < IUPAC_MATRIX_SIZE; ++i)
+    {
+        if (0 < matrix_iupac_mask [i]) par->matrix [i] = score_match;
+        else par->matrix [i] = -pen_mm;
+    }
+    par->gap_open = pen_gapo;
+    par->gap_ext =  pen_gape;
+    par->gap_end =  pen_gape;
+    par->row = IUPAC_MATRIX_ROWSIZE;
+    par->band_width = bw;
+}
+
 void tmap_map_util_populate_sw_par_iupac (tmap_sw_param_t* par, tmap_map_opt_t* opt)
 {
     int32_t i;
@@ -2486,11 +2504,16 @@ tmap_map_util_one_gap
     {
         int last_M = -1;  // last_mismatch
         int nM = 0;       // number_of_mismatches
-	if (tlen-i < 5) {max_q = 0; max_MM = 0;}
-	else if (tlen-i-max_q < 8*max_MM) { 
-	    max_MM = (tlen-i-max_q)/8;
-	}
-	    
+        if (tlen - i < 5)
+        {
+            max_q = 0;
+            max_MM = 0;
+        }
+        else if (tlen - i - max_q < 8 * max_MM)
+        {
+            max_MM = (tlen - i - max_q) / 8;
+        }
+
         for (j = i, q = 0, qq = qini, tt = t; j < tlen && q < qlen; j++, q++, qq += inc, tt+= inc)
         {
             if (query [qq] == target [tt])
@@ -2512,8 +2535,8 @@ tmap_map_util_one_gap
             *extra_match = 0;
             if (j == tlen)
             {
-                    *indel_size = qlen-q;
-                    *is_ins = 1;
+                *indel_size = qlen-q;
+                   *is_ins = 1;
             }
             else
             {
@@ -2646,7 +2669,6 @@ tmap_map_util_end_repair
     tmap_refseq_t *refseq,
     tmap_map_sam_t *s,
     tmap_map_opt_t *opt,
-    tmap_sw_param_t * stage_swpar,
     int repair5p,
     tmap_map_stats_t* stat
 )
@@ -2934,7 +2956,7 @@ tmap_map_util_end_repair
             nCC -= adj;
         }
         nCC /= 2;
-        int maxMM = (nCC - 2) * end_repair / 100 + 2;  // DK: integer arithmetics !
+        int maxMM = (nCC - 2) * end_repair / 100 + 2;  // maximal tolerable number of mismatches // DK: integer arithmetics !
         if (maxMM < 2)
             maxMM = 2; // no need? always at least 2
         if (nCC < maxMM)
@@ -3007,7 +3029,7 @@ tmap_map_util_end_repair
             int min_anchor = min_anchor_large_indel_rescue;
             int half_anchor = min_anchor / 2;
             if (refseq->bed_exist && use_bed_in_end_repair && total_scl >= half_anchor && s->ampl_start != 0)
-                // tmap_map_get_amplicon (refseq, s->seqid, start_o, end_o, &ampl_start, &ampl_end, NULL, o_strand)) // DK: id bed exists and coords use in end repair enabled, the amplicon coords are cached within *s (tmap_map_sam_t)
+                // tmap_map_get_amplicon (refseq, s->seqid, start_o, end_o, &ampl_start, &ampl_end, NULL, o_strand)) // DK: if bed exists and coords use in end repair enabled, the amplicon coords are cached within *s (tmap_map_sam_t)
             {
                 //total_scl is desired to be larger than 5
                 //fprintf(stderr, "%d %d %d qlen=%d\n", ampl_start, ampl_end, total_scl, qlen);
@@ -3587,12 +3609,1155 @@ tmap_map_util_end_repair
     return repaired;
 }
 
+typedef struct __REPAiR_params
+{
+    // general alignment scoring
+    tmap_sw_param_t* sw_param;
+    // selection
+    int32_t repair_min_freq; // presently not overridable (does not make sense to override as relates to BED stored value, not to anything that comes from alignment)
+    int32_t repair_min_count; // presently not overridable
+    int32_t repair_min_adapter;
+    int32_t repair_max_overhang;
+    int32_t max_adapter_bases_for_soft_clipping;
+    double  repair_identity_drop_limit;
+    int32_t repair_max_primer_zone_dist;
+    int32_t repair_clip_ext;
+}
+REPAiR_params;
+
+// fills in parameters used in REPAiR considering global/stage opts and local overrides
+// returns 0 if REPAiR is not enabled
+static uint32_t evalualte_REPAiR_params (tmap_map_opt_t* stage_opt, tmap_sw_param_t* stage_swpar, tmap_map_locopt_t* loc_opt, int32_t stage_ord, int32_t use_le, REPAiR_params* dest)
+{
+    // first check if repair is needed at all (skip the rest of parameters preparation if not)
+    int32_t repair = stage_opt->use_bed_read_ends_stat;
+    if (loc_opt)
+    {
+        if (loc_opt->repair.over)
+            repair = loc_opt->repair.value;
+        if (use_le)
+        {
+            if (loc_opt->repair_le.over)
+                repair = loc_opt->repair_le.value;
+        }
+        else
+        {
+            if (loc_opt->repair_he.over)
+                repair = loc_opt->repair_he.value;
+        }
+    }
+    if (!repair)
+        return repair;
+
+    // we are here if repair is enabled for this 
+    // general alignment scoring
+    dest->sw_param = stage_swpar;
+    // copy global values from stage opt
+    dest->repair_min_freq = stage_opt->repair_min_freq;
+    dest->repair_min_count = stage_opt->repair_min_count;
+    dest->repair_min_adapter = stage_opt->repair_min_adapter;
+    dest->repair_max_overhang = stage_opt->repair_max_overhang;
+    dest->max_adapter_bases_for_soft_clipping = stage_opt->max_adapter_bases_for_soft_clipping;
+    dest->repair_identity_drop_limit = stage_opt->repair_identity_drop_limit;
+    dest->repair_max_primer_zone_dist = stage_opt->repair_max_primer_zone_dist;
+    dest->repair_clip_ext = stage_opt->repair_clip_ext;
+    if (loc_opt)
+    {
+        if (loc_opt->repair.over)
+            repair = loc_opt->repair.value;
+        dest->sw_param = tmap_map_locopt_get_stage_sw_params (loc_opt, stage_ord);
+        if (!dest->sw_param)
+            dest->sw_param = stage_swpar;
+        // if (local_sw_param !!!
+
+        if (use_le) // lower-coordinate end of the amplicon
+        {
+            if (loc_opt->repair_le.over)
+                repair = loc_opt->repair_le.value;
+            else if (loc_opt->repair.over)
+                repair = loc_opt->repair.value;
+            if (repair)
+            {
+                if (loc_opt->repair_min_adapter_le.over)
+                    dest->repair_min_adapter = loc_opt->repair_min_adapter_le.value;
+                else if (loc_opt->repair_min_adapter.over)
+                    dest->repair_min_adapter = loc_opt->repair_min_adapter.value;
+
+                if (loc_opt->repair_max_overhang_le.over)
+                    dest->repair_max_overhang = loc_opt->repair_max_overhang_le.value;
+                else if (loc_opt->repair_max_overhang.over)
+                    dest->repair_max_overhang = loc_opt->repair_max_overhang.value;
+
+                if (loc_opt->max_adapter_bases_for_soft_clipping_le.over)
+                    dest->max_adapter_bases_for_soft_clipping = loc_opt->max_adapter_bases_for_soft_clipping_le.value;
+                else if (loc_opt->max_adapter_bases_for_soft_clipping.over)
+                    dest->max_adapter_bases_for_soft_clipping = loc_opt->max_adapter_bases_for_soft_clipping.value;
+
+                if (loc_opt->repair_identity_drop_limit_le.over)
+                    dest->repair_identity_drop_limit = loc_opt->repair_identity_drop_limit_le.value;
+                else if (loc_opt->repair_identity_drop_limit.over)
+                    dest->repair_identity_drop_limit = loc_opt->repair_identity_drop_limit.value;
+
+                if (loc_opt->repair_max_primer_zone_dist_le.over)
+                    dest->repair_max_primer_zone_dist = loc_opt->repair_max_primer_zone_dist_le.value;
+                else if (loc_opt->repair_max_primer_zone_dist.over)
+                    dest->repair_max_primer_zone_dist = loc_opt->repair_max_primer_zone_dist.value;
+
+                if (loc_opt->repair_clip_ext_le.over)
+                    dest->repair_clip_ext = loc_opt->repair_clip_ext_le.value;
+                else if (loc_opt->repair_clip_ext.over)
+                    dest->repair_clip_ext = loc_opt->repair_clip_ext.value;
+
+            }
+        }
+        else // higher-coordinate end of the amplicon
+        {
+            if (loc_opt->repair_he.over)
+                repair = loc_opt->repair_he.value;
+            else if (loc_opt->repair.over)
+                repair = loc_opt->repair.value;
+
+            if (repair)
+            {
+                if (loc_opt->repair_min_adapter_he.over)
+                    dest->repair_min_adapter = loc_opt->repair_min_adapter_he.value;
+                else if (loc_opt->repair_min_adapter.over)
+                    dest->repair_min_adapter = loc_opt->repair_min_adapter.value;
+
+                if (loc_opt->repair_max_overhang_he.over)
+                    dest->repair_max_overhang = loc_opt->repair_max_overhang_he.value;
+                else if (loc_opt->repair_max_overhang.over)
+                    dest->repair_max_overhang = loc_opt->repair_max_overhang.value;
+
+                if (loc_opt->max_adapter_bases_for_soft_clipping_he.over)
+                    dest->max_adapter_bases_for_soft_clipping = loc_opt->max_adapter_bases_for_soft_clipping_he.value;
+                else if (loc_opt->max_adapter_bases_for_soft_clipping.over)
+                    dest->max_adapter_bases_for_soft_clipping = loc_opt->max_adapter_bases_for_soft_clipping.value;
+
+                if (loc_opt->repair_identity_drop_limit_he.over)
+                    dest->repair_identity_drop_limit = loc_opt->repair_identity_drop_limit_he.value;
+                else if (loc_opt->repair_identity_drop_limit.over)
+                    dest->repair_identity_drop_limit = loc_opt->repair_identity_drop_limit.value;
+
+                if (loc_opt->repair_max_primer_zone_dist_he.over)
+                    dest->repair_max_primer_zone_dist = loc_opt->repair_max_primer_zone_dist_he.value;
+                else if (loc_opt->repair_max_primer_zone_dist.over)
+                    dest->repair_max_primer_zone_dist = loc_opt->repair_max_primer_zone_dist.value;
+
+                if (loc_opt->repair_clip_ext_he.over)
+                    dest->repair_clip_ext = loc_opt->repair_clip_ext_he.value;
+                else if (loc_opt->repair_clip_ext.over)
+                    dest->repair_clip_ext = loc_opt->repair_clip_ext.value;
+            }
+        }
+    }
+    return repair;
+}
+
+#if 0
+/*
+ * computes position of worst alignment score starting from the end of the alignment
+ * returns position on query, 
+ * fills in:
+ *   cigar_op_index
+ *   cigar_op_offset
+ *   clip_diff
+ *   clip_len
+ *   target_red
+ * returns new SW score
+ */
+static 
+int32_t 
+worst_score_pos_in_alignment
+(
+    const uint32_t* cigar,
+    uint32_t cigar_len,
+    uint32_t score,
+    uint8_t strand,
+    const uint8_t* query,
+    uint32_t query_len,
+    const uint8_t* ref,
+    uint32_t ref_len,
+    tmap_sw_param_t* sw_param,
+    uint8_t softclip_as_insertion, // true for REPAiR, false for (possible future implementation) regular end-repair (presently regular end repair does not properly treat the softclips, works only if they are passed as INSs.)
+    int32_t* cigar_op_index,  // index of cigar operation where worst alignment score position is located
+    int32_t* cigar_op_offset, // offset into cigar batch to the worst alignment score position
+    uint32_t* clip_diff,      // number of edit operations in the zone of alignment before the position of worst score
+    uint32_t* clip_len,       // offset on query to the position of worst score
+    uint32_t* target_red,      // offset on target to the position of worst score (target reduction)
+    int32_t* clip_score
+)
+{
+    int32_t i, cigar_i;
+    int32_t op, op_len, cur_len;
+    int32_t cur_op, cur_op_len, cur_cigar_i, cur_cur_len, target_adj;
+    int32_t softclip_start, softclip_end;
+
+    int32_t start_pos, end_pos;
+
+
+    int tb, qb, inc;  // target position, query position, increment (+1 | -1) for walking along target / query
+    int i_c; // index of the cigar operation
+    // int i;   // index of base within cigar operation
+    *cigar_op_index = -1;  // cigar operation index where worst alignment score is achieved
+    *cigar_op_offset = 0;  // index of base within the cigar operation where worst alignment score is achieved
+    *clip_diff = 0; // number of edit operations (mismatches, indels) in the part of alignment before worst score position
+    *clip_len = 0;  // offset on query to the position of worst score
+    *target_red = 0; // offset on target to the position of worst score (target reduction)
+    *clip_score = 0;
+    int found = 0; // number of non-matches (mismatches, inserts, deletes) found in alignment
+    int worst = 0; // worst alignment score encountered along the alignment
+    // int ind = 0; // index of base within the cigar operation where worst alignment score is achieved
+    int nqb = 0; // number of query bases seen
+    int ntb = 0; // number of target bases seen
+
+    int cur_clip_score = 0;
+
+    // Getting match and mismatch scores:
+    // proper way (inplemented):
+    //     compare the query to ref base using the matrix. For that, the inconsistency related to assymery of the IUPAC matrix should be corrected
+    //     (the sequences whose bases are used as horisontal matrix coordinate allow IUPAC bases, while on the vertical one only standard + 'N' are allowed.)
+    //     It is the reference that is considered having nono-standard bases in TMAP regular alignment. Keeping this assumption here.
+    //     Thus, the formula to retrieve score is (read_base_num * row_len + ref_base_num)
+    // Alternates are: 
+    // 1) pass match/mismatch as separate fields in the sw_params (modify tmap_sw_param_t): lot of hassle, little sense
+    // 2) use the following is hack (seemingly safe one)
+    // to get mathch and mismatch score, respectfully, use the first and second elements in the SW scoring matrix.
+    //    possible drawback: if 'iupac_matrix' used for matrix population is very weird, say, declares A/C as match, this will fail
+    //    int32_t match = sw_param->matrix [0], mism = -sw_param->matrix [1];
+
+    if (0 != strand) // strand: 0 == forward, 1 == reverse
+    {   // reverse
+        tb = qb = 0;
+        inc = 1;
+    }
+    else
+    {   // forward
+        tb = ref_len - 1;
+        qb = query_len - 1;
+        inc = -1;
+    }
+    for (i_c = 0; i_c < cigar_len; i_c++)
+    {
+        cigar_i = strand ? i_c : cigar_len - 1 - i_c;
+        op = TMAP_SW_CIGAR_OP (cigar [cigar_i]);
+        op_len = TMAP_SW_CIGAR_LENGTH (cigar [cigar_i]);
+
+        if (op == BAM_CMATCH)
+        {
+            for (i = 0; i < op_len; ++i, qb += inc, tb += inc, nqb++, ntb++)
+            {
+                if (qb == -1 || tb == -1)
+                    tmap_bug ();
+
+                cur_clip_score += sw_param->matrix [query [qb] * sw_param->row + ref [tb]];
+                if (query [qb] != ref [tb])
+                    found++;
+                if (cur_clip_score <= worst) // use farthest of the equally bad positions
+                {
+                    worst = cur_clip_score;
+                    *cigar_op_offset = i + 1;
+                    *clip_diff = found;
+                    *target_red = ntb + 1;
+                    *cigar_op_index = i_c;
+                    *clip_len = nqb + 1;
+                }
+            }
+        }
+        else
+        {
+            if (op == BAM_CDEL)
+            {
+                ntb += op_len;
+                tb += inc * op_len;
+            }
+            else if (op == BAM_CINS || (softclip_as_insertion && op == BAM_CSOFT_CLIP)) // count soft clip as insertion. 
+            {
+                nqb += op_len;
+                qb  += inc * op_len;
+            }
+            else
+                break;
+            cur_clip_score -= sw_param->gap_open + sw_param->gap_ext * op_len;
+            found += op_len;
+            if (cur_clip_score < worst)
+            {
+                worst = cur_clip_score;
+                *cigar_op_offset = 0;
+                *clip_diff = found;
+                *target_red = ntb;
+                *cigar_op_index = i_c;
+                *clip_len = nqb;
+            }
+        }
+    }
+    *clip_score = worst;
+    return score - worst;
+}
+#endif
+// computes SW score on the alignment segment starting at a given position of given length along the query sequence
+// the parameters are redundant, as this is a helper function that is called when any needed values are already pre-calculated
+// returns the SW score computed according to a passed in SW parameters
+uint32_t
+tmap_util_cigar_segment_score
+(
+    const uint32_t* cigar,
+    uint32_t cigar_len,
+    uint8_t strand,   //? DO I NEED TO INVERSE/COMPLEMENT THE QUERY FOR strand == 1?
+    const uint8_t* query,
+    uint32_t query_len,
+    const uint8_t* ref,
+    uint32_t ref_len,
+    int32_t query_off, // -1 to compute from the hints
+    int32_t query_segment_len, // set to -1 to calc score to the end
+    int32_t ref_off,  // set to -1 to compute from the other parameters
+    int32_t ref_segment_len, // set to -1 to calc score to the end
+    uint32_t from_beg, // if set to fasle, walks alignment in reverse direction. In this case, the query_off, ref_off and cigar index/offset are for the last position in the alignment segment
+    int32_t cigar_op_index, // set to -1 to ignore; trusted if provided
+    int32_t cigar_op_offset, // set to -1 to ignore; trusted if provided
+    uint32_t clip_as_ins, // treat softclips as inserts
+    tmap_sw_param_t* sw_param, // parameters scoring scheme
+    uint32_t* edit_ops, // if not NULL, receiver for the number of edit operations. The number of mismatches = edit_ops - indels_length
+    uint32_t* indels_count, // if not NULL, receiver for the count of indels (gap openings
+    uint32_t* indels_length // if not NULL, receiver for the total length of indels 
+)
+{
+    int32_t q_pos, r_pos, cigar_op_cur, cigar_seg_cur;
+    int32_t q_sent, r_sent, cigar_op_sent, cigar_seg_sent;
+    int32_t q_low = 0, q_high = query_len - 1, r_low = 0, r_high = ref_len - 1;
+    // uint32_t hints_complete = 1;
+    int32_t incr = from_beg?1:-1;
+    uint32_t seen_query_bases = 0, seen_ref_bases = 0;
+    // if offset hints not fully specified (at least one of the hints is not defined), then re-calculate them
+    if (cigar_op_index == -1 || cigar_op_offset == -1 || ref_off == -1 || query_off == -1)
+    {
+        q_pos  = from_beg?0:(query_len-1);
+        q_sent = from_beg?query_len:-1;
+        r_pos  = from_beg?0:(ref_len-1); 
+        r_sent = from_beg?ref_len:-1;
+        cigar_op_cur = from_beg?0:(cigar_len-1);
+        cigar_op_sent = from_beg?cigar_len:-1;
+        cigar_seg_cur = from_beg?0:(TMAP_SW_CIGAR_LENGTH (cigar [cigar_op_cur]) - 1);
+        // hints_complete = 0;
+    }
+    else // all hints are defined
+    {
+        q_pos = query_off;
+        q_sent = (query_segment_len == -1) ? (from_beg ? query_len : -1) : (query_off + incr * query_segment_len);
+        r_pos = ref_off; 
+        r_sent = from_beg ? ref_len : -1;
+        cigar_op_cur = cigar_op_index;
+        cigar_op_sent = from_beg ? cigar_len : -1;;
+        cigar_seg_cur = cigar_op_offset;
+        // hints_complete = 1;
+    }
+
+    if (edit_ops) *edit_ops = 0;
+    if (indels_count) *indels_count = 0;
+    if (indels_length) *indels_length = 0;
+
+    uint32_t in_cigar_seg = 0, done = 0;
+    int32_t sw_score = 0;
+    for (; cigar_op_cur != cigar_op_sent && !done; cigar_op_cur += incr)
+    {
+        int32_t cigar_opcode = TMAP_SW_CIGAR_OP (cigar [cigar_op_cur]);
+        int32_t cigar_oplen = TMAP_SW_CIGAR_LENGTH (cigar [cigar_op_cur]);
+        cigar_seg_sent = from_beg?cigar_oplen:-1;
+        int32_t cigar_seg_beg = cigar_seg_cur;
+        for (; cigar_seg_cur != cigar_seg_sent && !done; cigar_seg_cur += incr)
+        {
+            if (!in_cigar_seg && cigar_op_cur == cigar_op_index && cigar_seg_cur == cigar_op_offset) 
+            {   // never happens if one of cigar_op_index or cigar_op_offset is passed as -1. As it should be.
+                in_cigar_seg = 1;
+            }
+
+            switch (cigar_opcode)
+            {
+                case BAM_CMATCH:
+                    if (seen_query_bases || seen_ref_bases || q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        // either segment being scored started earlier (seen_query_bases || seen_ref_bases), or this is the start (q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        ++seen_query_bases, ++seen_ref_bases;
+                    if (seen_query_bases)
+                    {
+                        sw_score += sw_param->matrix [query [q_pos] * sw_param->row + ref [r_pos]];
+                        if (query [q_pos] != ref [r_pos])
+                            ++edit_ops;
+                    }
+                    ++q_pos;
+                    ++r_pos;
+                    break;
+                case BAM_CDEL:
+                    if (seen_query_bases || seen_ref_bases || q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        // either segment being scored started earlier (seen_query_bases || seen_ref_bases), or this is the start (q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        ++seen_ref_bases;
+                    // if we are in segment being scored
+                    if (seen_ref_bases)
+                    {
+                        // if this is the first step in CDEL segment, add GIP (negated)
+                        if (cigar_seg_beg == cigar_seg_cur)
+                            ++indels_count, sw_score -= sw_param->gap_open;
+                        // add GEP (negated)
+                        sw_score -= sw_param->gap_ext;
+                        ++indels_length;
+                    }
+                    ++ref_off;
+                    break;
+                case BAM_CINS:
+                    if (seen_query_bases || seen_ref_bases || q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        // either segment being scored started earlier (seen_query_bases || seen_ref_bases), or this is the start (q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        ++seen_query_bases;
+                    // if we are in segment being scored
+                    if (seen_query_bases)
+                    {
+                        // if this is the first step in CINS segment, add GIP (negated)
+                        if (cigar_seg_beg == cigar_seg_cur)
+                            ++indels_count , sw_score -= sw_param->gap_open;
+                        // add GEP (negated)
+                        sw_score -= sw_param->gap_ext;
+                        ++indels_length;
+                    }
+                    ++ ref_off;
+                    break;
+                case BAM_CSOFT_CLIP:
+                    if (seen_query_bases || seen_ref_bases || q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        // either segment being scored started earlier (seen_query_bases || seen_ref_bases), or this is the start (q_pos == query_off || r_pos == ref_off || in_cigar_seg)
+                        ++seen_query_bases;
+                    // if we are in segment being scored
+                    if (seen_query_bases && clip_as_ins)
+                    {
+                        // if this is the first step in CSOFT_CLIPL segment, add GIP (negated)
+                        if (cigar_seg_beg == cigar_seg_cur)
+                            ++indels_count, sw_score -= sw_param->gap_open;
+                        // add GEP (negated)
+                        sw_score -= sw_param->gap_ext;
+                        ++indels_length;
+                    }
+                    ++ ref_off;
+                    break;
+                default:
+                    ;
+            }
+            if (seen_query_bases == query_segment_len 
+                || seen_ref_bases == ref_segment_len
+                || q_pos == q_sent
+                || r_pos == r_sent)
+                done = 1;
+        }
+        cigar_seg_cur = 0;
+    }
+
+    return sw_score;
+}
+
+#if 0
+// OLDWAY REPAiR
+// actually performs REPAiR (sunf the prepared parametrization and cached reference sequence)
+// returns 0 if no repair performed, 1 if original alignment zone clipped, 2 if original alignment zone extended
+// #pragma GCC diagnostic ignored "-Wunused_function"
+static uint32_t
+tmap_map_util_REPAiR
+(
+    tmap_seq_t *seq, 
+    uint8_t *query, 
+    int32_t qlen,
+    ref_buf_t* target,
+    int8_t strand,
+    tmap_sw_path_t **path_buf,
+    int32_t* path_buf_sz,
+    tmap_map_sam_t *s,
+    REPAiR_params* par,
+    tmap_map_stats_t* stat
+)
+{
+    int32_t repaired = 0; // return value: 0 for no change, 1 for softclip only, 2 for indel salvage.
+
+
+    // perform REPAiR
+
+    // Jingwei's proposal:
+    // If one end does not fit any of the defined anchor sites (including S and L in addition to O), 
+    // try placing the end at each of the anchor sites, then extends inwards into the amplicon.
+    // primer portion bases have to perfectly match reference, 
+    // extend further until a mismatch is found, or extend further by allowing up to 1 mismatch/indel every 7 base (calculated by --end-repair 15) for the anchor bases (except primer portion where no mismatch is allowed).
+
+    // measurable heuristics:
+    // extend the soft clip same way as Zheng's end_repair does - to the position of the worst alignment score from the end being repaired
+    // for each end position:
+    //    perform true global (Needleman-Wunch-like) alignment with negative gap extansion scoring, gap score zero-bound (starts with GIP then reduces by gep every base until reached zero?)
+
+    // try to repair even if softclip is allowed (end-repair tries to modify sofclipped alignment for a better one)
+
+
+    // we need to remove softclip, as prior alignment post-processing could have introduced it
+    // @ remove softclip
+        // in Zheng's end_repair, softclip is replaced by M. From SW and Denis's preparation for end_repair, 
+        // softclip is replaced by I. Seems like both are legit? 
+        // - check the calculation of the worst alignment score point in Zheng's end_repair
+        //   - Zheng's method od S->I conversion is never actually invoked, and is unsafe with the assumption of reference (target) buffer. There was a bug (fixed in 2017(?)) manifested when softclipped read was passed to end_repair. 
+        //   : need to use INS. The calculation for the worst point will be different for these two methods, but Ins is what is always used => assume it is Ok.
+        //   - also need to figure out how to cut the alignment with respect to read end positions that are to be tried.
+        //     : no need to actually remove. Just count it az zero cost in calculation of worst score alignment point
+
+    // find the position in the alignment where the SW score reaches minimum. 
+    int32_t cigar_op_idx; // cigar operation index where worst alignment score is achieved 
+    int32_t cigar_op_off; // index of base within the cigar operation where worst alignment score is achieved
+    uint32_t clip_diff;   // number of edit operations (mismatches, indels) in the part of alignment before worst score position
+    uint32_t clip_len;    // offset on query to the position of worst score
+    uint32_t target_red;  // offset on target to the position of worst score (target reduction)
+    int32_t clip_score;  // the score of the clipped zone
+    int32_t new_score = worst_score_pos_in_alignment 
+        (
+            s->cigar,
+            s->n_cigar,
+            s->score,
+            strand,
+            query,
+            qlen,
+            target->data + (s->pos - target->position),
+            s->target_len,
+            par->sw_param,
+            1, // softclip_as_insertion
+            &cigar_op_idx,
+            &cigar_op_off,
+            &clip_diff,
+            &clip_len,  // this is offset from the read's 3'.
+            &target_red, // this is offset from the target end
+            &clip_score
+        );
+
+    // add requested number of bases to the clip
+
+
+    add_to_hist64i (stat->repair_clip_histo, REPAIR_CLIP_HIST_BINNO, repair_clip_hist_lowerb, clip_len);
+    if (clip_len  == 0)
+        return 0;
+
+    double clip_identity = ((double) (clip_score)) / (clip_len * par->sw_param->matrix [0]);
+
+    // operate on the read/reference zones downstream of the location of worst alignment score. 
+    // perform "global" alignment from the worst alignment zone position on 5' to the factual read end paired to each read end position on reference
+    // (alternatively when the read end is beyond the amplicon end, we may first enforce the perfect match within the primer - but this could turn out to be just arbitrary restrictive)
+
+    // reserve space for best result
+    uint32_t* best_addition_cigar = NULL;
+    uint32_t best_addition_cigar_len = 0;
+    uint32_t best_addition_score = UINT32_MAX;
+    uint32_t best_read_end_pos = UINT32_MAX;
+
+    // read_end current pointer and sentinel
+    tmap_map_endpos_t *re_p = s->read_ends.positions;
+    tmap_map_endpos_t *re_sent = re_p;
+    if (s->strand) 
+        re_sent += s->read_ends.starts_count;
+    else 
+        re_p += s->read_ends.starts_count,
+        re_sent += s->read_ends.starts_count + s->read_ends.ends_count;
+
+    // loop over read ends
+    for (; re_p != re_sent; ++re_p)
+    {
+        /// check if selection conditions are satisfied
+        if ((re_p->fraction * 100) <= par->repair_min_freq)
+            continue;
+        if (re_p->count <= par->repair_min_count)
+            continue;
+
+        /// prepare coordinates for SW
+        int32_t read_beg, read_end, ref_beg, ref_end;
+        if (strand == 0)
+        {
+            read_beg = qlen - clip_len;
+            read_end = qlen;
+            ref_beg  = s->pos + s->target_len - target_red;
+            ref_end  = re_p->coord - 1; // one-based!
+        }
+        else
+        {
+            read_beg = 0;
+            read_end = clip_len;
+            ref_beg  = re_p->coord - 1; // one-based!
+            ref_end  = s->pos + target_red;
+        }
+        if (ref_end <= ref_beg) // we should still treat this as a valid case and try to realign, with longer read/target zone. later.
+            continue;
+        if (read_end <= read_beg)
+            continue;
+
+        assert (target->position <= ref_beg);
+        int32_t target_beg = ref_beg - target->position;
+        assert (target->position <= ref_end);
+        int32_t target_end = ref_end - target->position;
+        assert (target_end > target_beg);
+        assert (read_end > read_beg);
+
+        // make sure enough memory is allocated for the path
+        int32_t plen_needed = (target_end - target_beg) + (read_end - read_beg);
+        if (*path_buf_sz <= plen_needed)
+        {   // lengthen the path
+            *path_buf_sz = plen_needed;
+            tmap_roundup32 (*path_buf_sz);
+            *path_buf = tmap_realloc (*path_buf, sizeof (tmap_sw_path_t) * *path_buf_sz, "path_buf");
+        }
+        /// call global alignment routine
+        int32_t path_len;
+        int32_t add_score = tmap_sw_clipping_core2 (
+                                                    target->data + target_beg,
+                                                    target_end - target_beg,
+                                                    query + read_beg,
+                                                    read_end - read_beg,
+                                                    par->sw_param,
+                                                    0, 0, // do not allow either end of the target to be skipped
+                                                    0, 0, // do not allow any softclips
+                                                    *path_buf,
+                                                    &path_len,
+                                                    0
+                                                   );
+        if (path_len == 0) // alignment failure - REPAiR attempt failed at this read_end. 
+            continue;
+
+        if (!best_addition_cigar || add_score > best_addition_score)  // do we need to restrict to positive scores only? or to scores over the score of removed portion? (the latter sounds appropriate)
+        {
+            // perform checks on suitability of the alignment
+            // check if this score makes sense: compare identities
+            double addition_identity = ((double) add_score) / (read_end - read_beg);
+            if (addition_identity < clip_identity * par->repair_identity_drop_limit)
+                continue;
+
+            // build the cigar
+            int32_t addition_len;
+            uint32_t* addition = tmap_sw_path2cigar (*path_buf, path_len, &addition_len);
+            if (addition_len == 0) // alignment failure - REPAiR attempt failed. This happens if aligner sets path_len to 0
+                continue;
+            assert (addition);
+
+            // check if the primer zone (amplicon end to read end position) aligns well enough
+            if (strand == 0)
+            {
+                if (s->ampl_end < re_p->coord) // both are 1 - based
+                {
+                    // starting from the end of alignment to the amplicon end going downward by the cigar string,
+                    // count the number of edit operations;
+                    // if going over the MAX_PRIMER_ZONE_DIST, abandon this read end
+                    int32_t op_idx, op_off, op, ol;
+                    int32_t tpos = re_p->coord - 1 - target->position, qpos = qlen - 1; 
+                    uint32_t num_edits = 0;
+                    for (op_idx = addition_len - 1; op_idx > 0 && num_edits <= par->repair_max_primer_zone_dist && target->position + tpos > s->ampl_end - 1; --op_idx)
+                    {
+                        op = TMAP_SW_CIGAR_OP (addition [op_idx]);
+                        ol = TMAP_SW_CIGAR_LENGTH (addition [op_idx]);
+                        if (op == BAM_CINS)
+                        {
+                            num_edits += ol;
+                            qpos -= ol;
+                        }
+                        else 
+                        {
+                            for (op_off = ol - 1; op_off > 0 && num_edits <= par->repair_max_primer_zone_dist && target->position + tpos > s->ampl_end - 1; --op_off)
+                            {
+                                switch (op)
+                                {
+                                    case BAM_CDEL:
+                                        ++ num_edits;
+                                        -- tpos;
+                                        break;
+                                    case BAM_CMATCH:
+                                        num_edits += (query [qpos] != target->data [tpos]);
+                                        -- tpos;
+                                        -- qpos;
+                                }
+                            }
+                        }
+                    }
+                    if (num_edits > par->repair_max_primer_zone_dist)
+                    {
+                        free (addition);
+                        continue;
+                    }
+                }
+            }
+            else
+            {
+                if (re_p->coord < s->ampl_start) // both are 1 - based
+                {
+                    // starting from the start of the alignment to the amplicon start, going forward by the cigar string,
+                    // count the number of edit operations;
+                    // if going over the MAX_PRIMER_ZONE_DIST, abandon this read end
+                    int32_t op_idx, op_off, op, ol;
+                    int32_t tpos = re_p->coord - 1 - target->position, qpos = 0; 
+                    uint32_t num_edits = 0;
+                    for (op_idx = 0; op_idx != addition_len && num_edits <= par->repair_max_primer_zone_dist && target->position + tpos < s->ampl_start - 1; ++op_idx)
+                    {
+                        op = TMAP_SW_CIGAR_OP (addition [op_idx]);
+                        ol = TMAP_SW_CIGAR_LENGTH (addition [op_idx]);
+                        if (op == BAM_CINS)
+                        {
+                            num_edits += ol;
+                            qpos += ol;
+                        }
+                        else 
+                        {
+                            for (op_off = 0; (op_off != ol - 1) && num_edits <= par->repair_max_primer_zone_dist && target->position + tpos < s->ampl_start - 1; ++op_off)
+                            {
+                                switch (op)
+                                {
+                                    case BAM_CDEL:
+                                        ++ num_edits;
+                                        ++ tpos;
+                                        break;
+                                    case BAM_CMATCH:
+                                        num_edits += (query [qpos] != target->data [tpos]);
+                                        ++ tpos;
+                                        ++ qpos;
+                                }
+                            }
+                        }
+                    }
+                    if (num_edits > par->repair_max_primer_zone_dist)
+                    {
+                        free (addition);
+                        continue;
+                    }
+                }
+            }
+
+            if (best_addition_cigar)
+                free (best_addition_cigar);
+            best_addition_score = add_score;
+            best_addition_cigar = addition;
+            best_addition_cigar_len = addition_len;
+            best_read_end_pos = re_p->coord;
+        }
+    }
+    if (best_addition_cigar == NULL)
+        return 0;
+
+    // merge the addition into original cigar and adjust the score
+    if (strand == 0)  // original then addition
+    {
+        int32_t addition_first_op = TMAP_SW_CIGAR_OP (best_addition_cigar [0]);
+        int32_t last_orig_op = TMAP_SW_CIGAR_OP (s->cigar [cigar_op_idx]);
+        int32_t last_orig_op_len = TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+
+        if (addition_first_op == last_orig_op)
+        {
+            int32_t merged_len = TMAP_SW_CIGAR_LENGTH (best_addition_cigar [0]) + TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+            TMAP_SW_CIGAR_STORE (best_addition_cigar [0], addition_first_op, merged_len);
+            --cigar_op_idx; // last operation from original cigar now merged into the addition
+            if (addition_first_op == BAM_CINS || addition_first_op == BAM_CDEL) // cannot be sofclip by the parameters to sw_clipping_core2
+                best_addition_score -= par->sw_param->gap_open; // no opening, indel operation continues
+        }
+        int32_t new_cigar_len = cigar_op_idx + 1 + best_addition_cigar_len;
+        if (new_cigar_len > s->n_cigar)
+            s->cigar = tmap_realloc (s->cigar, new_cigar_len * sizeof (*(s->cigar)), "cigar");
+        memcpy (s->cigar + cigar_op_idx + 1, best_addition_cigar, best_addition_cigar_len * sizeof (*(s->cigar)));
+        s->n_cigar = new_cigar_len;
+        s->score = new_score + best_addition_score;
+        free (best_addition_cigar);
+
+        // adjust target coords, len and alignment box.
+        // starts do not change; target end changes to the best read end position; query end changes to the very end of read
+        repaired = (best_read_end_pos - s->pos - s->target_len > 0)?2:1;
+        s->target_len = best_read_end_pos - s->pos;
+        s->result.target_end = s->target_len; // a bit of a hack, the convention is that target_beg is always zero
+        s->result.query_end = qlen;
+    }
+    else  // addition then original
+    {
+        // check if last op of addition matches first (remaining) op of original cigar; merge ops if yes
+        int32_t orig_shift = best_addition_cigar_len - cigar_op_idx;
+        int32_t addition_last_op = TMAP_SW_CIGAR_OP (best_addition_cigar [best_addition_cigar_len - 1]);
+        int32_t first_orig_op = TMAP_SW_CIGAR_OP (s->cigar [cigar_op_idx]);
+        if (addition_last_op == first_orig_op) // merge into addidion's last op
+        {
+            int32_t merged_len = TMAP_SW_CIGAR_LENGTH (best_addition_cigar [best_addition_cigar_len - 1]) + TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+            TMAP_SW_CIGAR_STORE (best_addition_cigar [best_addition_cigar_len - 1], addition_last_op, merged_len);
+            --orig_shift;
+            if (addition_last_op == BAM_CINS || addition_last_op == BAM_CDEL) // cannot be sofclip by the parameters to sw_clipping_core2
+                best_addition_score -= par->sw_param->gap_open; // no opening, indel operation continues
+        }
+        int32_t new_cigar_len = s->n_cigar + orig_shift;
+        if (new_cigar_len > s->n_cigar)
+            s->cigar = tmap_realloc (s->cigar, new_cigar_len * sizeof (*(s->cigar)), "cigar");
+        if (orig_shift > 0)
+            memmove (s->cigar + orig_shift, s->cigar, s->n_cigar * sizeof (*(s->cigar)));
+        if (orig_shift < 0)
+            memmove (s->cigar, s->cigar - orig_shift, (s->n_cigar + orig_shift) * sizeof (*(s->cigar)));
+        memcpy (s->cigar, best_addition_cigar, best_addition_cigar_len * sizeof (*(s->cigar)));
+        s->n_cigar = new_cigar_len;
+        s->score = new_score + best_addition_score;
+        free (best_addition_cigar);
+
+        // adjust target coords, len and alignment box. 
+        // ends do not change; target start changes to the best read end position; query start changes zero
+        repaired = (s->pos + s->target_len - best_read_end_pos - s->target_len > 0)?2:1;
+        s->target_len = s->pos + s->target_len - best_read_end_pos;
+        s->pos = best_read_end_pos;
+        s->result.query_start = 0;
+    }
+
+    return repaired; // for now ignored by the caller's caller
+}
+#endif
+
+// actually performs REPAiR (sunf the prepared parametrization and cached reference sequence)
+// returns 0 if no repair performed, 1 if original alignment zone clipped, 2 if original alignment zone extended
+
+static uint32_t
+tmap_map_util_REPAiR_new
+(
+    tmap_seq_t *seq, 
+    uint8_t *query, 
+    int32_t qlen,
+    ref_buf_t* target,
+    int8_t strand,
+    tmap_sw_path_t **path_buf,
+    int32_t* path_buf_sz,
+    tmap_map_sam_t *s,
+    REPAiR_params* par,
+    tmap_map_stats_t* stat
+)
+{
+    int32_t repaired = 0; // return value: 0 for no change, 1 for softclip only, 2 for indel salvage.
+
+    // check if there is end stats data in needed direction. (This actually already checked by the caller)
+    if (s->strand && !s->read_ends.ends_count)
+        return 0;
+    if (!s->strand && !s->read_ends.starts_count)
+        return 0;
+
+    // check if alignment already ends at one of the read ends
+    tmap_map_endpos_t *re_p = s->read_ends.positions;
+    tmap_map_endpos_t *re_sent = re_p;
+    if (s->strand == 0) // forward read mapped to the forward ref strand. The alignment is to "read ends"
+    {
+        assert (s->n_cigar);
+        if (bam_cigar_op (s->cigar [s->n_cigar - 1]) != BAM_CSOFT_CLIP)
+        {
+            uint32_t end_coord = s->pos + s->target_len;
+            re_p += s->read_ends.starts_count,
+            re_sent += s->read_ends.starts_count + s->read_ends.ends_count;
+            for (; re_p != re_sent; ++re_p)
+            {
+                // check if aligned (not softclipped) zone ends at this read-end position
+                if ( re_p->coord /*+1(read-end is inclusive but end_coord is not) -1(one-based)*/ == end_coord) // assuming end position is inclusive (position where last read base maps) and one-based
+                    return 0;                      // TODO: check specs, by examining data or with Jingwei
+                                                   // TODO: check if adding some allowance interval here makes sense
+            }
+        }
+    }
+    else // reverse read mapped to the forward ref strand: actual 3' is on the left. The alignment is to "read starts"
+    {
+        assert (s->n_cigar);
+        if (bam_cigar_op (s->cigar [0]) != BAM_CSOFT_CLIP)
+        {
+            uint32_t beg_coord = s->pos;
+            re_sent += s->read_ends.starts_count;
+            for (; re_p != re_sent; ++re_p)
+            {
+                // check if aligned (not softclipped) zone ends at this read-end position
+                if ( re_p->coord - 1/*one-based*/ == beg_coord) // assuming start position is inclusive (position where last base in the reverse read maps to the reference) and one-based
+                    return 0;                  // TODO: see forward chain case
+            }
+        }
+    }
+    // we are here means we need to try to realign
+
+    // find the position in the alignment where the SW score reaches minimum. 
+    // if no such zone exists, clip the given number of bases
+
+    tmap_map_alignment al;
+    init_alignment_x 
+    (
+        &al,
+        s->cigar,
+        s->n_cigar,
+        query,
+        0,
+        qlen,
+        target->data + (s->pos - target->position),
+        0,
+        s->result.target_end - s->result.target_start + 1 // target_end is inclusize
+    );
+    tmap_map_alignment_segment cropped_al;
+    tmap_map_alignment_segment clip_al;
+    tmap_map_alignment_stats cropped_stats;
+    tmap_map_alignment_stats clip_stats;
+
+    // from_beg == strand: strand 0(fwd)=>from_beg == false, strand 1(rev)=>from_beg == true
+    uint8_t worst_found = tmap_map_find_worst_score_pos_x 
+    (
+        &al, 
+        par->sw_param,
+        strand, 
+        &cropped_al,
+        &clip_al,
+        &cropped_stats,
+        &clip_stats,
+        NULL,NULL,NULL,NULL
+    );
+
+    int32_t clip_len = clip_al.q_end - clip_al.q_start;
+    add_to_hist64i (stat->repair_clip_histo, REPAIR_CLIP_HIST_BINNO, repair_clip_hist_lowerb, clip_len);
+
+    if (par->repair_clip_ext && clip_len < par->repair_clip_ext)
+    {
+        int32_t add_bases = par->repair_clip_ext - clip_len;
+        // int32_t bases_added;
+        // add more space for the realignment: move bases from cropped into clip
+        if (strand) // reverse: clip then cropped
+            tmap_map_alignment_segment_move_bases (&clip_al, &cropped_al, -add_bases, par->sw_param, &cropped_stats, &clip_stats);
+        else // forward: cropped then clip
+            tmap_map_alignment_segment_move_bases (&cropped_al, &clip_al, add_bases, par->sw_param, &cropped_stats, &clip_stats);
+        clip_len = clip_al.q_end - clip_al.q_start;
+        // TODO: check validity of the bases_added?
+    }
+    if (!clip_len)
+        return 0;
+
+    double clip_identity = ((double) (clip_stats.score)) / (clip_len * par->sw_param->matrix [0]); // A:A match score :) We may want to actually compute self score, but in TMAP it does not make sense - all 'real' matches are generated equal
+
+    // operate on the read/reference zones downstream of the location of worst alignment score. 
+    // perform "global" alignment from the worst alignment zone position on 5' to the factual read end paired to each read end position on reference
+    // (alternatively when the read end is beyond the amplicon end, we may first enforce the perfect match within the primer - but this could turn out to be just arbitrary restrictive)
+
+    // reserve space for best result
+    uint32_t* best_addition_cigar = NULL;
+    uint32_t best_addition_cigar_len = 0;
+    uint32_t best_addition_score = UINT32_MAX;
+    uint32_t best_read_end_pos = UINT32_MAX;
+
+    // read_end current pointer and sentinel
+    re_p = s->read_ends.positions;
+    re_sent = re_p;
+    if (s->strand) // reverse - check starts
+        re_sent += s->read_ends.starts_count;
+    else // forward - check ends
+        re_p += s->read_ends.starts_count,
+        re_sent += s->read_ends.starts_count + s->read_ends.ends_count;
+
+    // loop over end positions
+    for (; re_p != re_sent; ++re_p)
+    {
+        /// check if selection conditions are satisfied
+        if ((re_p->fraction * 100) <= par->repair_min_freq)
+            continue;
+        if (re_p->count <= par->repair_min_count)
+            continue;
+
+        /// prepare coordinates for SW
+        int32_t read_beg, read_end, ref_beg, ref_end;
+        read_beg = clip_al.q_start;
+        read_end = clip_al.q_end;
+        if (strand == 0) // forward => look in higher coord zone (clip after cropped)
+        {
+            ref_beg  = s->pos + clip_al.r_start; 
+            ref_end  = re_p->coord - 1; // read end coordinates are one-based, so subtract 1
+        }
+        else // reverse =? look in lower coord zone (clip before cropped)
+        {
+            ref_beg  = re_p->coord - 1; // read end coordinates are one-based, so subtract 1
+            ref_end  = s->pos + clip_al.r_end;
+        }
+        if (ref_end <= ref_beg) // we should still treat this as a valid case and try to realign, with longer read/target zone. later.
+            continue;
+
+        assert (target->position <= ref_beg);
+        int32_t target_beg = ref_beg - target->position;
+        assert (target->position <= ref_end);
+        int32_t target_end = ref_end - target->position;
+        assert (target_end > target_beg);
+        assert (read_end > read_beg);
+
+        // make sure enough memory is allocated for the path
+        int32_t plen_needed = (target_end - target_beg) + (read_end - read_beg);
+        if (*path_buf_sz <= plen_needed)
+        {   // lengthen the path
+            *path_buf_sz = plen_needed;
+            tmap_roundup32 (*path_buf_sz);
+            *path_buf = tmap_realloc (*path_buf, sizeof (tmap_sw_path_t) * *path_buf_sz, "path_buf");
+        }
+        /// call global alignment routine
+        int32_t path_len;
+#if 0
+        // tmap_sw_clipping_core2 does not disallow the clipping of the sequence1 (reference) when instructed to do so.
+        int32_t add_score = tmap_sw_clipping_core2 (
+                                                    target->data + target_beg,
+                                                    target_end - target_beg,
+                                                    query + read_beg,
+                                                    read_end - read_beg,
+                                                    par->sw_param,
+                                                    0, 0, // do not allow either end of the target to be skipped
+                                                    0, 0, // do not allow any softclips
+                                                    *path_buf,
+                                                    &path_len,
+                                                    0
+                                                   );
+#endif
+        int32_t add_score = tmap_sw_global_core (
+                                                    target->data + target_beg,
+                                                    target_end - target_beg,
+                                                    query + read_beg,
+                                                    read_end - read_beg,
+                                                    par->sw_param,
+                                                    *path_buf,
+                                                    &path_len,
+                                                    0
+                                                   );
+        if (path_len == 0) // alignment failure - REPAiR attempt failed at this read_end. 
+            continue;
+
+        if (!best_addition_cigar || add_score > best_addition_score)  // do we need to restrict to positive scores only? or to scores over the score of removed portion? (the latter sounds appropriate)
+        {
+            // perform checks on suitability of the alignment
+            // check if this score makes sense: compare identities
+            double addition_identity = ((double) add_score) / (read_end - read_beg);
+            if (addition_identity < clip_identity * par->repair_identity_drop_limit)
+                continue;
+
+            // build the cigar
+            int32_t addition_len;
+            uint32_t* addition = tmap_sw_path2cigar (*path_buf, path_len, &addition_len);
+            if (addition_len == 0) // alignment failure - REPAiR attempt failed. This happens if aligner sets path_len to 0
+                continue;
+            assert (addition);
+
+            // check if the primer zone (amplicon end to read end position) aligns well enough
+
+            // make alignment
+            tmap_map_alignment candidate;
+            init_alignment_x (&candidate, addition, addition_len, query + read_beg, 0, read_end - read_beg, target->data + target_beg,  0, target_end - target_beg);
+            // make primer match == segment between alignment end and amplicon end
+            tmap_map_alignment_segment primer_match;
+            primer_match.alignment = &candidate;
+            init_segment (&primer_match); // segment includes entire alignment
+
+            if (strand == 0)
+            {
+                // check if amplicon end is within (re)aligned zone
+                if (target->position + primer_match.r_start <= s->ampl_end - 1 && s->ampl_end - 1 < target->position + primer_match.r_end)
+                {
+                    // isolate out the primer match zone (between ampl end and alignment end)
+                    int32_t ampl_end_pos = s->ampl_end - 1 - target->position;
+                    tmap_map_segment_clip_to_ref_base (&primer_match, 1, ampl_end_pos);
+                    // compute stats on the primer match zone (no sw score)
+                    tmap_map_alignment_stats stats;
+                    tmap_map_alignment_segment_score (&primer_match, NULL, &stats);
+                    uint32_t num_edits = stats.mismatches + stats.gaplen;
+                    if (num_edits > par->repair_max_primer_zone_dist)
+                    {
+                        free (addition);
+                        continue;
+                    }
+                }
+            }
+            else
+            {
+                // check if amplicon end is within (re)aligned zone
+                if (target->position + primer_match.r_start <= s->ampl_start - 1 && s->ampl_start - 1 < target->position + primer_match.r_end)
+                {
+                    // isolate out the primer match zone (between ampl end and alignment end)
+                    int32_t ampl_start_pos = s->ampl_start - 1 - target->position;
+                    tmap_map_segment_clip_to_ref_base (&primer_match, 0, ampl_start_pos);
+                    // compute stats on the primer match zone (no sw score)
+                    tmap_map_alignment_stats stats;
+                    tmap_map_alignment_segment_score (&primer_match, NULL, &stats);
+                    uint32_t num_edits = stats.mismatches + stats.gaplen;
+                    if (num_edits > par->repair_max_primer_zone_dist)
+                    {
+                        free (addition);
+                        continue;
+                    }
+                }
+            }
+
+            if (best_addition_cigar)
+                free (best_addition_cigar);
+            best_addition_score = add_score;
+            best_addition_cigar = addition;
+            best_addition_cigar_len = addition_len;
+            best_read_end_pos = re_p->coord;
+        }
+    }
+    if (best_addition_cigar == NULL)
+        return 0;
+
+    int32_t cigar_op_idx = (strand == 0) ? cropped_al.last_op : cropped_al.first_op;
+    int32_t new_score = cropped_stats.score;
+
+    // merge the addition into original cigar and adjust the score
+    if (strand == 0)  // original then addition
+    {
+        int32_t addition_first_op = TMAP_SW_CIGAR_OP (best_addition_cigar [0]);
+        int32_t last_orig_op = TMAP_SW_CIGAR_OP (s->cigar [cigar_op_idx]);
+        int32_t last_orig_op_len = TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+
+        if (addition_first_op == last_orig_op)
+        {
+            int32_t merged_len = TMAP_SW_CIGAR_LENGTH (best_addition_cigar [0]) + TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+            TMAP_SW_CIGAR_STORE (best_addition_cigar [0], addition_first_op, merged_len);
+            --cigar_op_idx; // last operation from original cigar now merged into the addition
+            if (addition_first_op == BAM_CINS || addition_first_op == BAM_CDEL) // cannot be sofclip by the parameters to sw_clipping_core2
+                best_addition_score -= par->sw_param->gap_open; // no opening, indel operation continues
+        }
+        int32_t new_cigar_len = cigar_op_idx + 1 + best_addition_cigar_len;
+        if (new_cigar_len > s->n_cigar)
+            s->cigar = tmap_realloc (s->cigar, new_cigar_len * sizeof (*(s->cigar)), "cigar");
+        memcpy (s->cigar + cigar_op_idx + 1, best_addition_cigar, best_addition_cigar_len * sizeof (*(s->cigar)));
+        s->n_cigar = new_cigar_len;
+        s->score = new_score + best_addition_score;
+        free (best_addition_cigar);
+
+        // adjust target coords, len and alignment box.
+        // starts do not change; target end changes to the best read end position; query end changes to the very end of read
+        repaired = (best_read_end_pos - s->pos - s->target_len > 0)?2:1;
+        s->target_len = best_read_end_pos - s->pos;
+        s->result.target_end = s->target_len; // a bit of a hack, the convention is that target_beg is always zero
+        s->result.query_end = qlen;
+    }
+    else  // addition then original
+    {
+        // check if last op of addition matches first (remaining) op of original cigar; merge ops if yes
+        int32_t orig_shift = best_addition_cigar_len - cigar_op_idx;
+        int32_t addition_last_op = TMAP_SW_CIGAR_OP (best_addition_cigar [best_addition_cigar_len - 1]);
+        int32_t first_orig_op = TMAP_SW_CIGAR_OP (s->cigar [cigar_op_idx]);
+        if (addition_last_op == first_orig_op) // merge into addidion's last op
+        {
+            int32_t merged_len = TMAP_SW_CIGAR_LENGTH (best_addition_cigar [best_addition_cigar_len - 1]) + TMAP_SW_CIGAR_LENGTH (s->cigar [cigar_op_idx]);
+            TMAP_SW_CIGAR_STORE (best_addition_cigar [best_addition_cigar_len - 1], addition_last_op, merged_len);
+            --orig_shift;
+            if (addition_last_op == BAM_CINS || addition_last_op == BAM_CDEL) // cannot be sofclip by the parameters to sw_clipping_core2
+                best_addition_score -= par->sw_param->gap_open; // no opening, indel operation continues
+        }
+        int32_t new_cigar_len = s->n_cigar + orig_shift;
+        if (new_cigar_len > s->n_cigar)
+            s->cigar = tmap_realloc (s->cigar, new_cigar_len * sizeof (*(s->cigar)), "cigar");
+        if (orig_shift > 0)
+            memmove (s->cigar + orig_shift, s->cigar, s->n_cigar * sizeof (*(s->cigar)));
+        if (orig_shift < 0)
+            memmove (s->cigar, s->cigar - orig_shift, (s->n_cigar + orig_shift) * sizeof (*(s->cigar)));
+        memcpy (s->cigar, best_addition_cigar, best_addition_cigar_len * sizeof (*(s->cigar)));
+        s->n_cigar = new_cigar_len;
+        s->score = new_score + best_addition_score;
+        free (best_addition_cigar);
+
+        // adjust target coords, len and alignment box. 
+        // ends do not change; target start changes to the best read end position; query start changes zero
+        repaired = (s->pos + s->target_len - best_read_end_pos - s->target_len > 0)?2:1;
+        s->target_len = s->pos + s->target_len - best_read_end_pos;
+        s->pos = best_read_end_pos;
+        s->result.query_start = 0;
+    }
+
+    return repaired; // for now ignored by the caller's caller
+}
+
 void target_cache_init (ref_buf_t* target)
 {
     target->buf = NULL;
     target->buf_sz = 0;
     target->data = NULL;
     target->data_len = 0;
+    target->position = 0;
     target->seqid = 0; // for reference access the sequence ids are 1-based, so 0 is always invalid
     target->seq_start = 0xFFFFFFFF;
     target->seq_end = 0xFFFFFFFF;
@@ -3611,6 +4776,7 @@ void cache_target (ref_buf_t* target, tmap_refseq_t *refseq, uint32_t seqid, uin
     {
         target->data = target->buf + (seq_start - target->seq_start);
         target->data_len = tlen;
+        target->position = seq_start - 1;
     }
     else
     {
@@ -3631,6 +4797,7 @@ void cache_target (ref_buf_t* target, tmap_refseq_t *refseq, uint32_t seqid, uin
         target->seq_end = seq_end;
         target->data = target->buf;
         target->data_len = tlen;
+        target->position = seq_start - 1;
     }
 }
 
@@ -3842,7 +5009,7 @@ void compute_alignment (
     int32_t j;
     for (j = 0, cigar_pos = dest_sam->cigar; j != dest_sam->n_cigar; ++j, ++cigar_pos)
     {
-        if (bam_cigar_type (bam_cigar_op (*cigar_pos)) & 2)
+        if (bam_cigar_type (bam_cigar_op (*cigar_pos)) & CONSUME_REF) // operation consumes reference
             dest_sam->target_len += bam_cigar_oplen (*cigar_pos);
     }
 
@@ -4403,7 +5570,6 @@ static int32_t end_repair_helper
     int32_t softclip_start,       // softclip allowed at read 5'
     int32_t softclip_end,         // softclip allowed at read 3'
     tmap_map_opt_t* opt,          // tmap options
-    tmap_sw_param_t* stage_swpar, // default sw parameters
     tmap_map_stats_t *stat,       // statistics
     int32_t five_prime            // 1 to repair 5', 0 to repairt 3'
 )
@@ -4415,7 +5581,7 @@ static int32_t end_repair_helper
 
     // tmap_map_util_end_repair expects no softclips if they are not explicitely allowed;
     // if there are such, replace them with INSs
-    // TS-15331: only change S->I on the read side thatiws being repaired in this call. Otherwise, lead/trail softclips introduced in first call get replaced with INS during second call.
+    // TS-15331: only change S->I on the read side that is being repaired in this call. Otherwise, lead/trail softclips introduced in first call get replaced with INS during second call.
     if (TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP && // the cigar starts with softclip
         ((softclip_start == 0 && dest_sam->strand == 0 && five_prime != 0) || // (reparing 5') and (5' softclip is not allowed) && (cigar start is 5' end, as the read is forward)
          (softclip_end   == 0 && dest_sam->strand == 1 && five_prime == 0)))  // (reparing 3') and (3' softclip is not allowed) && (cigar start is 3' end, as the read is reverse)
@@ -4443,7 +5609,10 @@ static int32_t end_repair_helper
     if (dest_sam->n_cigar > 1 && TMAP_SW_CIGAR_OP (dest_sam->cigar [dest_sam->n_cigar - 1]) == BAM_CSOFT_CLIP)
         sc3 = TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [dest_sam->n_cigar - 1]);
 
-    // the cigar is in the query direction, convert 5' - 3' to target coords
+    // the cigar is in the query direction, convert 5' - 3' to target coords // DK 11/2019 : Is the cigar really is in query direction? It should be in reference one
+    // DK 12/30//2019: It is in reference direction (in case of reverse strand, in the direction of inverse-complemented query, which is same as refetence's, 
+    //   as invers-complemented query is aligned to forward reference
+    // so for reverse we need to swap 5' and 3': 5' is at the left side on the alignment
     if (dest_sam->strand == 1)
     {
         uint32_t t = sc5;
@@ -4467,7 +5636,91 @@ static int32_t end_repair_helper
     target->data = orig_data + (dest_sam->pos + 1 - start_pos);
     target->data_len = dest_sam->target_len;
 
-    int32_t result = tmap_map_util_end_repair (seq, adjusted_query, qlen, target->data, target->data_len, dest_sam->strand, path_buf, path_buf_sz, refseq, dest_sam, opt, stage_swpar, five_prime, stat);
+    int32_t result = tmap_map_util_end_repair (seq, adjusted_query, qlen, target->data, target->data_len, dest_sam->strand, path_buf, path_buf_sz, refseq, dest_sam, opt, /* stage_swpar, */ five_prime, stat);
+
+    assert (dest_sam->n_cigar);
+    dest_sam->result.query_start = (TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP) ? (TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [0])) : 0;
+    dest_sam->result.query_end = (TMAP_SW_CIGAR_OP (dest_sam->cigar [dest_sam->n_cigar - 1]) == BAM_CSOFT_CLIP) ? (orig_qlen - TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [dest_sam->n_cigar - 1]) - 1) : orig_qlen - 1;
+    dest_sam->result.target_start = 0;
+    dest_sam->result.target_end = dest_sam->target_len - 1;
+
+    return result;
+}
+
+#define smaller_number(X,Y) (((X)<(Y))?(X):(Y))
+#define larger_number(X,Y) (((X)>(Y))?(X):(Y))
+
+// prepares target buffers so that they contain enough reference sequence to do a repair for all relevant start or end positions
+// as a 'side product' evaluates if there are read ends for the repair, if not, just returns 0 ('no repair performed')
+static int32_t REPAiR_helper
+(
+    tmap_map_sam_t* dest_sam,     // mapping being trimmed
+    tmap_seq_t** seqs,            // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_seq_t* seq,              // read
+    tmap_refseq_t* refseq,        // reference server
+    ref_buf_t* target,            // reference data
+    tmap_sw_path_t** path_buf,    // buffer for traceback path
+    int32_t* path_buf_sz,         // used portion and allocated size of traceback path.
+    REPAiR_params* par,           // repair parameters, adjusted for any override
+    tmap_map_stats_t *stat       // statistics
+)
+{
+    int32_t result = 0;
+    uint8_t* orig_query = (uint8_t*) tmap_seq_get_bases (seqs [dest_sam->strand])->s; // forward genomic strand
+    int32_t orig_qlen = tmap_seq_get_bases_length (seqs [0]);
+    // int32_t qlen = dest_sam->result.query_end - dest_sam->result.query_start + 1; // update query length
+    // uint8_t* adjusted_query = orig_query + dest_sam->result.query_start;
+
+    // extend cached reference enough to support convertion of softclips to matches (tmap_map_util_end_repair assumes they are in)
+    // and extending to the end of the amplicon or the farthest read end in the read's 3' direction
+    uint32_t sc_low = 0, sc_high  = 0;
+    if (dest_sam->n_cigar && TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP)
+        sc_low = TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [0]);
+    if (dest_sam->n_cigar > 1 && TMAP_SW_CIGAR_OP (dest_sam->cigar [dest_sam->n_cigar - 1]) == BAM_CSOFT_CLIP)
+        sc_high = TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [dest_sam->n_cigar - 1]);
+    // so for reverse we need to swap 5' and 3': 5' is at the left side on the alignment
+
+    // find if read_start or read_end applies 
+    // assuming read_start applies when the read is aligned in reverse direction, so 3' points towards left end of the amplicon, and vice versa
+    uint32_t pos_low, pos_high;
+    if (dest_sam->strand == 1)
+    {
+        if (dest_sam->read_ends.starts_count == 0) // no read starts - no REPAiR
+            return result;
+        pos_low = (dest_sam->pos < sc_low)?0:(dest_sam->pos - sc_low);
+        pos_high = dest_sam->pos + dest_sam->result.target_end;
+        tmap_map_endpos_t* re_position = dest_sam->read_ends.positions;
+        tmap_map_endpos_t* re_sent = re_position + dest_sam->read_ends.starts_count;
+        for (; re_position != re_sent; ++re_position)
+            pos_low = smaller_number (re_position->coord - 1, pos_low);
+    }
+    else
+    {
+        if (dest_sam->read_ends.ends_count == 0) // no read ends - no REPAiR
+            return result;
+        pos_low = dest_sam->pos;
+        pos_high = smaller_number (dest_sam->pos + dest_sam->result.target_end + sc_high, refseq->annos [dest_sam->seqid].len);
+        tmap_map_endpos_t* re_position = dest_sam->read_ends.positions + dest_sam->read_ends.starts_count;
+        tmap_map_endpos_t* re_sent = re_position + dest_sam->read_ends.ends_count;
+        for (; re_position != re_sent; ++re_position)
+            pos_high = larger_number (re_position->coord - 1, pos_high);
+    }
+    cache_target (target, refseq, dest_sam->seqid + 1, pos_low + 1, pos_high); // inclusive one-based. Isn't that a bit dull?
+
+    result =
+    tmap_map_util_REPAiR_new 
+    (
+        seq, 
+        orig_query, 
+        orig_qlen, 
+        target,
+        dest_sam->strand, 
+        path_buf, 
+        path_buf_sz, 
+        dest_sam, 
+        par,
+        stat
+    );
 
     assert (dest_sam->n_cigar);
     dest_sam->result.query_start = (TMAP_SW_CIGAR_OP (dest_sam->cigar [0]) == BAM_CSOFT_CLIP) ? (TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [0])) : 0;
@@ -4483,7 +5736,6 @@ void end_repair (
     tmap_seq_t** seqs,            // array of size 4 that contains pre-computed inverse / complement combinations
     tmap_seq_t* seq,              // read
     tmap_refseq_t* refseq,        // reference server
-    tmap_sw_param_t* stage_swpar, // stage sw parameters (not overriden)
     tmap_map_opt_t* opt,          // tmap options
     ref_buf_t* target,            // reference data
     tmap_sw_path_t** path_buf,    // buffer for traceback path
@@ -4517,7 +5769,7 @@ void end_repair (
         }
     }
     tmap_map_util_set_softclip (opt, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
-    int32_t r3 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, stage_swpar, stat, 0);
+    int32_t r3 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, /* stage_swpar, */ stat, 0);
 
     max_adapter_bases_for_soft_clipping = opt->max_adapter_bases_for_soft_clipping;
     if (dest_sam->param_ovr)
@@ -4538,7 +5790,7 @@ void end_repair (
         }
     }
     tmap_map_util_set_softclip (opt, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
-    int32_t r5 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, stage_swpar, stat, 1);
+    int32_t r5 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, /* stage_swpar, */ stat, 1);
 
     // update alignment box (dest_sam->result), as it may be used downstream
     // assume alignment is correct here - covers entire read and softclips are properly extended
@@ -4546,6 +5798,66 @@ void end_repair (
         stat->reads_end_repair_clipped++;
     if (r3 == 2 || r5 == 2)
         stat->reads_end_repair_extended++;
+}
+
+// checks if repair is needed on a single mapped location; calls REPAiR_helper if yes
+int32_t REPAiR (
+    tmap_map_sam_t* dest_sam,     // mapping being trimmed
+    tmap_seq_t** seqs,            // array of size 4 that contains pre-computed inverse / complement combinations
+    tmap_seq_t* seq,              // read
+    tmap_refseq_t* refseq,        // reference server
+    int32_t stage_ord,            // processing stage index
+    tmap_sw_param_t* stage_swpar, // stage sw parameters (not overriden)
+    tmap_map_opt_t* opt,          // tmap options
+    ref_buf_t* target,            // reference data
+    tmap_sw_path_t** path_buf,    // buffer for traceback path
+    int32_t* path_buf_sz,         // used portion and allocated size of traceback path.
+    tmap_map_stats_t *stat        // statistics
+)
+{
+    // check if read ends data is present for this side of the amplicon
+    if (!dest_sam->read_ends.positions)
+        return 0;
+    if (!dest_sam->read_ends.starts_count && dest_sam->strand == 1)
+        return 0;
+    if (!dest_sam->read_ends.ends_count && dest_sam->strand == 0)
+        return 0;
+
+    // collect overrides for repair (for the end where read's 3' is situated)
+    REPAiR_params par;
+    if (!evalualte_REPAiR_params (opt, stage_swpar, dest_sam->param_ovr, stage_ord, dest_sam->strand, &par))
+        return 0; // repair is disabled after override
+
+    // check read-based filters
+    tmap_sam_t *sam = seq->data.sam;
+    int32_t zb = tmap_sam_get_zb (sam);
+    int32_t za = tmap_sam_get_za (sam);
+    int32_t overhang = dest_sam->ampl_end - (dest_sam->ampl_start - 1) - za;
+    if (zb < par.repair_min_adapter)
+        return 0;
+    if (overhang > par.repair_max_overhang)
+        return 0;
+
+    // we are to do REPAiR in general (if any of the end positions pass filter)
+    int32_t r = REPAiR_helper 
+    (
+        dest_sam,
+        seqs,
+        seq,
+        refseq,
+        target,
+        path_buf,
+        path_buf_sz,
+        &par,
+        stat
+    );
+    if (r)
+        stat->ends_REPAiRed [dest_sam->strand]++;
+    if (r == 1)
+        stat->ends_REPAiR_clipped [dest_sam->strand]++;
+    if (r == 2)
+        stat->ends_REPAiR_extended [dest_sam->strand]++;
+    return r;
 }
 
 tmap_map_sams_t*
@@ -4803,7 +6115,6 @@ void tmap_map_util_end_repair_bulk
     tmap_seq_t *seq,            // read
     tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
     tmap_map_opt_t *opt,        // tmap parameters
-    tmap_sw_param_t* swpar,     // Smith-Waterman scoring parameters
     ref_buf_t* target,          // reference data cache
     tmap_sw_path_t** path_buf,  // buffer for traceback path
     int32_t* path_buf_sz,       // used portion and allocated size of traceback path.
@@ -4819,7 +6130,6 @@ void tmap_map_util_end_repair_bulk
                 seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
                 seq,           // read
                 refseq,        // reference server
-                swpar,         // default alignment parameters
                 opt,           // tmap options
                 target,        // pointer to reference cache control structure
                 path_buf,      // address of the pointer to buffer for traceback path,
@@ -4827,6 +6137,47 @@ void tmap_map_util_end_repair_bulk
                 stat           // statistics
         );
     }
+}
+
+// REPAiR (Read End Position AlIgnment Repair
+void tmap_map_util_REPAiR_bulk
+(
+    tmap_refseq_t* refseq, 
+    tmap_map_sams_t* sams, 
+    tmap_seq_t* seq, 
+    tmap_seq_t** seqs, 
+    tmap_map_opt_t* opt, 
+    int32_t stage_ord, 
+    tmap_sw_param_t* swpar, 
+    ref_buf_t* target, 
+    tmap_sw_path_t** path_buf, 
+    int32_t* path_buf_sz, 
+    tmap_map_stats_t* stat
+)
+{
+    uint32_t i;
+    int32_t r = 0, rr = 0;
+    for (i = 0; i < sams->n; ++i) // for each placement
+    {
+        tmap_map_sam_t* dest_sam = sams->sams + i;
+        r = REPAiR (
+                dest_sam,      // mapping being trimmed
+                seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
+                seq,           // read
+                refseq,        // reference server
+                stage_ord,     // processing stage index
+                swpar,         // default alignment parameters
+                opt,           // tmap options
+                target,        // pointer to reference cache control structure
+                path_buf,      // address of the pointer to buffer for traceback path,
+                path_buf_sz,   // pointer to the integer holding allocated size of traceback path.
+                stat           // statistics
+        );
+        if (r)
+            rr = 1;
+    }
+    if (rr)
+        stat->reads_REPAiRed++;
 }
 
 #if 0
@@ -5446,7 +6797,7 @@ int32_t tmap_map_util_remove_5_prime_softclip
             }
             assert (addition);
             assert (dest_sam->n_cigar > 1);
-            // compute and apply pos, target_len amd alignment box adjustment
+            // compute and apply pos, target_len and alignment box adjustment
             int32_t cp, addition_ref_len = 0;
             for (cp = 0; cp != addition_len; ++cp)
             {
@@ -5479,7 +6830,7 @@ int32_t tmap_map_util_remove_5_prime_softclip
 
             // merge addition with the cigar
             // check if last op of addition matches first op of orig cigar; merge ops if yes
-            int32_t old_shift = addition_len - 1;
+            int32_t old_shift = addition_len - 1;  // -1 because we are not copying softclip, it is always replaced with the addition
             int32_t addition_last_op = TMAP_SW_CIGAR_OP (addition [addition_len - 1]);
             int32_t old_first_nonsc_op = TMAP_SW_CIGAR_OP (dest_sam->cigar [1]);
             if (addition_last_op == old_first_nonsc_op)
@@ -5487,6 +6838,9 @@ int32_t tmap_map_util_remove_5_prime_softclip
                 int32_t merged_len = TMAP_SW_CIGAR_LENGTH (addition [addition_len - 1]) + TMAP_SW_CIGAR_LENGTH (dest_sam->cigar [1]);
                 TMAP_SW_CIGAR_STORE (addition [addition_len - 1], addition_last_op, merged_len);
                 --old_shift;
+                // DK 01/15/2020 seems like the following score adjustment was missing unintentionally 
+                if (addition_last_op == BAM_CINS || addition_last_op == BAM_CDEL) // cannot be sofclip by the parameters to sw_clipping_core2
+                    add_score -= opt->pen_gapo; // no additional gap opening, indel operation continues from addition into original alignment
             }
             int32_t new_cigar_len = dest_sam->n_cigar + old_shift;
             if (new_cigar_len > dest_sam->n_cigar)
@@ -5577,7 +6931,7 @@ int32_t tmap_map_util_remove_5_prime_softclip
             dest_sam->result.target_end += addition_ref_len;
             dest_sam->result.query_end = orig_query_len - 1;
             // merge addition with the cigar
-            int32_t addition_pos = dest_sam->n_cigar - 1;
+            int32_t addition_pos = dest_sam->n_cigar - 1; // -1 to replace original softclip
             assert (addition_len);
             assert (dest_sam->n_cigar > 1);
             int32_t addition_first_op = TMAP_SW_CIGAR_OP (addition [0]);
@@ -6014,7 +7368,7 @@ void cigar_log
                 schar = 'I';
                 break;
             case BAM_CDEL:
-                schar = 'I';
+                schar = 'D';
                 break;
             default:
                 schar = '?';
@@ -6023,7 +7377,8 @@ void cigar_log
     }
 }
 
-uint32_t cigar_to_batches
+uint32_t
+cigar_to_batches
 (
     const uint32_t* cigar,
     uint32_t cigar_sz,

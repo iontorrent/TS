@@ -218,11 +218,13 @@ int EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantCa
   EnsembleEval my_ensemble(candidate_variant.variant);
 
   // Allele preparation
-  my_ensemble.SetupAllAlleles(*vc.parameters, *vc.global_context, *vc.ref_reader);
-  my_ensemble.FilterAllAlleles(vc.parameters->my_controls, candidate_variant.variant_specific_params); // put filtering here in case we want to skip below entries
+  my_ensemble.SetupAllAlleles(*vc.parameters, *vc.global_context, *vc.ref_reader, candidate_variant.variant_specific_params);
 
-  // set parameters for the evaluator
+  // Set parameters for the evaluator (including variant_specific_params)
   my_ensemble.SetAndPropagateParameters(vc.parameters, use_molecular_tag, candidate_variant.variant_specific_params, vc.targets_manager);
+
+  // Filter out alleles
+  my_ensemble.FilterAllAlleles(vc.parameters->my_controls, candidate_variant.variant_specific_params); // put filtering here in case we want to skip below entries
 
   // We read in one stack per multi-allele variant
   if (use_molecular_tag){
@@ -356,7 +358,7 @@ void CandidateExaminer::QuickExamFD(vector<const Alignment *>& test_read_stack, 
 			continue;
 		}
 		for (int i_hyp = 0; i_hyp < num_hyp_not_null; ++i_hyp){
-			if (read_it->same_as_null_hypothesis[i_hyp + 1]){
+			if (i_hyp == read_it->hyp_same_as_null){
 				flow_disruptive_code_it->at(i_hyp) = 0;
 			}
 			else if (read_it->local_flow_disruptiveness_matrix[0][i_hyp + 1] >= 0){
@@ -395,7 +397,7 @@ void CandidateExaminer::ClearVariantCandidate(){
 
 // Allele preparing/filtering steps
 void CandidateExaminer::PrepareAlleles_(VariantCandidate& candidate_variant){
-	my_ensemble_->SetupAllAlleles(*(vc_->parameters), *(vc_->global_context), *(vc_->ref_reader));
+	my_ensemble_->SetupAllAlleles(*(vc_->parameters), *(vc_->global_context), *(vc_->ref_reader), candidate_variant.variant_specific_params);
 	my_ensemble_->FilterAllAlleles(vc_->parameters->my_controls, candidate_variant.variant_specific_params); // put filtering here in case we want to skip below entries
 }
 

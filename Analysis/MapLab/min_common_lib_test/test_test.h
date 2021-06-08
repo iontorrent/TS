@@ -25,6 +25,7 @@ class TestTest : public Test
         bool process () 
         {
             o_ << "Running " << name () << std::endl;
+            o_ << "Checking output << overloading: " <<  *this << std::endl;
             if (should_throw_)
             {
                 o_ << "Throwing an exeption" << std::endl;
@@ -52,7 +53,6 @@ public:
         sub2.add_subord (&sub22);
         sub2.add_subord (&sub23);
         sub2.add_subord (&sub24);
-        
     }
     bool process () 
     {

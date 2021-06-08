@@ -1,0 +1,10 @@
+Seems like I figured out an algorithm to implement hp-only gap cost reduction, with complexity same as SW. The modifications to the current "context" algorithm are:
+
+1) additional attribute to the sequence position is added, the distance from last prior HP start to the position (HPExt, 0 for first occurrence of current base)
+2) additional rolling column computed while evaluation DP matrix, the weight of the path ending at previous H position with HP-only gap on the H axis
+3) two additional costs are compared (together with original five): for path ending at CP with H and V HP-only gaps. These costs are computed using the HPLen attributes at current H and V axis positions, using same formula as in 'context'. (These attributes are already present in the 'context' algorithm)
+4) two a,ditional values added to 'stored direction' enumeration: VerHPgap and HorHPgap. They are stored when corresponding costs (above) are below others
+5) while tracing back the path, when the VerHPgap or HorHPgap values are seen, the path is extended by the HPExt value from corresponding axis
+
+The algorithm seem to be correct and robust while the gap function meets reasonable assumptions (it is positive, monotonous, and HP gap cost is below non-HP gap cost for same length gap)
+

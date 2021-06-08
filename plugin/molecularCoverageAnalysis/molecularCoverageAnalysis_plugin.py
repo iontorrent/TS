@@ -149,12 +149,17 @@ def printStartupMessage():
   printlog('  Reference Name:   %s' % pluginParams['genome_id'])
   printlog('  Library  Type:     %s' % config['librarytype_id'])
   printlog('  Target Regions:   %s' % config['targetregions_id'])
-  #if config['barcodebeds'] == 'Yes':
-    #target_files = pluginParams['target_files']
-    #for bctrg in sorted(target_files):
-      #trg = fileName(target_files[bctrg])
-      #if trg == "": trg = "None"
-      #printlog('    %s  %s' % (bctrg,trg))
+  
+  if config['barcodebeds'] == 'Yes':
+    target_files = config['barcodetargetregions'].split(';')
+    for bctrg in sorted(target_files):
+        printlog ('test\t%s'%(bctrg))
+        det_list = bctrg.split('=')
+        if  len(det_list) == 2 :
+           trg = fileName(det_list[1])
+           printlog('    %s  %s' % (det_list[0],trg))
+
+
   printlog('Data files used:')
   printlog('  Parameters:     %s' % pluginParams['jsonInput'])
   printlog('  Reference:      %s' % pluginParams['reference'])
@@ -981,7 +986,19 @@ def loadPluginParams():
   pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S')
   pluginParams['target_files'] = targetFiles()
   pluginParams['have_targets'] = (config['targetregions'] or pluginParams['target_files'])
-  if 'targetregions' in config :	pluginParams['target_files']=config['targetregions']
+  
+  if 'targetregions' in config :
+    pluginParams['target_files']=config['targetregions']
+    for bc in bc_details:
+        bc_details[bc]['target_region_filepath'] = config['targetregions']
+  if 'barcodetargetregions' in config :
+    bedlist = config['barcodetargetregions'].split(';')
+    for bc_config in bedlist :
+        det_list = bc_config.split('=')
+        if len(det_list) == 2 :
+             if det_list[0] in bc_details :
+                bc_details[det_list[0]]['target_region_filepath'] = det_list[1]
+
   pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
 
   # loading tvc_configuration file

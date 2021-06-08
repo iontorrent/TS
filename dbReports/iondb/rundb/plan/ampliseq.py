@@ -24,6 +24,7 @@ import datetime
   the Plan schema, or the BED publisher might necessitate changes here.
 """
 
+isPostSuccess = [False]
 
 class AmpliSeqPanelImport(object):
     def __init__(self, data=None, meta=None, arg_path=None):
@@ -344,7 +345,8 @@ def convert_AS_to_TS_plan_and_post(
 
     # From 5.12 onwards, there is no selection of chip/instrument types,
     # So, create plan templates for all the available options in the plan.json
-
+    success = None
+    isUploadFailed = None
     if meta.get("legacy"):
         if isBED_Encrypted:
             run_type = meta["design"]["plan"].get("runType", "")
@@ -358,12 +360,21 @@ def convert_AS_to_TS_plan_and_post(
             hotspots_bed_path,
             sse_bed_path,
         )
-        success, isUploadFailed, errMsg = post_TS_plan(
-            plan_prototype, alignmentargs_override, args
-        )
+        if plan_prototype.get("platform") not in ['pgm', 'proton']:
+            success, isUploadFailed, errMsg = post_TS_plan(
+                plan_prototype, alignmentargs_override, args
+            )
+        else:
+            isUploadFailed = True
+            errMsg = "5.14 is the last supported release for PGM and Proton. PGM/Proton templates will not be created"
+
     else:
         for choice, plan_dict in list(meta["design"]["plan"].items()):
             if choice in ["hotspot_bed", "designed_bed", "sse_bed"]:
+                continue
+            if choice in ["pgm", "proton"]:
+                isUploadFailed = True
+                errMsg = "5.14 is the last supported release for PGM and Proton. PGM/Proton templates will not be created."
                 continue
             if isBED_Encrypted:
                 run_type = meta["design"]["plan"].get("runType", "")
@@ -379,11 +390,14 @@ def convert_AS_to_TS_plan_and_post(
                 hotspots_bed_path,
                 sse_bed_path,
             )
-            success, isUploadFailed, errMsg = post_TS_plan(
-                plan_prototype, alignmentargs_override, args
-            )
-            if not success:
-                break
+            if plan_prototype.get("platform") not in ['pgm', 'proton']:
+                success, isUploadFailed, errMsg = post_TS_plan(
+                    plan_prototype, alignmentargs_override, args
+                )
+                if not success:
+                    break
+            else:
+                errMsg = "5.14 is the last supported release for PGM and Proton. PGM/Proton templates will not be created."
     return success, isUploadFailed, errMsg
 
 
@@ -413,35 +427,44 @@ def check_plan_exists(plan_prototype):
 
     return plan_prototype
 
-
 def post_TS_plan(plan_prototype, alignmentargs_override, args):
     isUploadFailed = False
     errMsg = None
-    error_messages = None
     try:
         plan_prototype = check_plan_exists(plan_prototype)
         success, response, content = api.post("plannedexperiment", **plan_prototype)
-        if not success:
+        isPostSuccess[0] = success
+        if not isPostSuccess[0]:
+            err_content = json.loads(content)
+            error_message_array = []
+            if "error" in err_content:
+                try:
+                    error_json = json.loads(str(err_content["error"][3:-2]))
+                    print error_json
+                    if isinstance((error_json), list) and len(error_json) > 1:
+                        for k in error_json:
+                            for j in range(len(error_json[k])):
+                                err_message = str(error_json[k][j])
+                                err_message = err_message.replace("&gt;", ">")
+                                error_message_array.append(err_message)
+                        errMsg = ",".join(error_message_array)
+                    else:
+                        errMsg = error_json.get("Error") or error_json
+                except:
+                    error_messages = err_content.get("error").get('Error') or "Unknown Error"
+                    inCompatibleStr = "is not one of the available choices"
+                    # Ex Error: chipType value is not valid with templatingKitName value of Ion Chef S540 V1.
+                    # 520 is not one of the available choices 540, 541v2, 560, GX5v2
+                    if "chipType value is not valid" in error_messages:
+                        fallBackChip = error_messages.partition(inCompatibleStr)[2].split(',')[0]
+                        plan_prototype["chipType"] = fallBackChip
+                        post_TS_plan(plan_prototype, alignmentargs_override, args)
+        if not isPostSuccess[0]:
             api.patch(
                 "contentupload",
                 args.upload_id,
                 status="Error: unable to create TS Plan",
             )
-            err_content = json.loads(content)
-            error_message_array = []
-            if "error" in err_content:
-                error_json = json.loads(str(err_content["error"][3:-2]))
-                if isinstance((error_json), list) and len(error_json) > 1:
-                    for k in error_json:
-                        for j in range(len(error_json[k])):
-                            err_message = str(error_json[k][j])
-                            err_message = err_message.replace("&gt;", ">")
-                            error_message_array.append(err_message)
-                    error_messages = error_message_array
-                    error_messages = ",".join(error_message_array)
-                else:
-                    error_messages = error_json.get("Error") or error_json
-            raise Exception(str(error_messages))
         if alignmentargs_override:
             content_dict = json.loads(content)
             api.patch(
@@ -450,8 +473,7 @@ def post_TS_plan(plan_prototype, alignmentargs_override, args):
                 alignmentargs=alignmentargs_override,
                 thumbnailalignmentargs=alignmentargs_override,
             )
-
     except Exception as err:
         isUploadFailed = True
         errMsg = err
-    return success, isUploadFailed, errMsg
+    return isPostSuccess[0], isUploadFailed, errMsg

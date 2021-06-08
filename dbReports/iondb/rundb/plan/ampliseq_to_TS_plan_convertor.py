@@ -180,7 +180,7 @@ class processAmpliSeqPanel(object):
                     plugin_details["variantCaller"]["userInput"]["meta"][
                         "user_selections"
                     ] = {
-                        "chip": "pgm",
+                        "chip": "s5",
                         "frequency": "germline",
                         "library": "ampliseq",
                         "panel": "/rundb/api/v1/contentupload/"
@@ -250,31 +250,15 @@ class processAmpliSeqPanel(object):
         plan_name = metaData["plan_name"]
         instrument_type = metaData["choice"]
         # "choice": "None" will be in the JSON from 3.6 schema imports
-        chip_type = ""
         decoratedInstType = None
-        if run_type == "AMPS_EXOME":
-            chip_type = "P1.1.17"
         if instrument_type == "None":
-            if run_type == "AMPS_EXOME":
-                instrument_type = "proton"
-            else:
-                instrument_type = "pgm"
-
-        if app and app.applicationGroup:
-            if app.applicationGroup:
-                if (
-                    app.applicationGroup.description == "Pharmacogenomics"
-                    and instrument_type == "pgm"
-                ):
-                    chip_type = app.defaultChipType
-                    # self.chipType = chip_type
-        elif instrument_type == "p1" or instrument_type.lower() == "proton":
-            chip_type = "P1.1.17"
-            instrument_type = "proton"
-        elif instrument_type in self.get_s5_chips():
+            instrument_type = "s5"
+        if instrument_type in self.get_s5_chips():
             decoratedInstType = self.decorate_S5_instruments(instrument_type)
             chip_type = instrument_type
             instrument_type = "s5"
+        else:
+            chip_type = "540"
 
         self.platform = instrument_type
         self.chipType = chip_type
@@ -402,7 +386,6 @@ def plan_json(
     app, app_group_name, instrument_type, chip_type = (
         ampliSeqTemplate.get_applProductObj()
     )
-
     ampliSeqTemplate.update_chip_inst_type(app=app)
 
     plugin_details, alignmentargs_override = ampliSeqTemplate.get_pluginDetails()

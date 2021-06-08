@@ -70,46 +70,50 @@ var columns = [{
   id: "hotspotid", name: "TaqMan Assay ID", field: "hotspotid", width: 110, minWidth: 40, maxWidth: 200, sortable: true, formatter: TaqmanAssay,
   toolTip: "TaqMan Assay ID string associated with the marker variant. Click the link to place an order for this assay."
 },{
-  id: "call", name: "Call", field: "call", width: 30, minWidth: 26, maxWidth: 40,
+  id: "call", name: "Call", field: "call", width: 30, minWidth: 20, maxWidth: 40,
   toolTip: "Call based on reads at variant locus. Heterozygous calls use IUPAC SNP codes: M = A/C, R = A/G, W = A/T, S = C/G, Y = C/T, K = G/T."
 },{
-  id: "reference", name: "Ref", field: "reference", width: 30, minWidth: 26, maxWidth: 40,
+  id: "reference", name: "Ref", field: "reference", width: 30, minWidth: 20, maxWidth: 40,
   toolTip: "The reference base."
 },{
-  id: "allelefreq", name: "AF", field: "allelefreq", width: 45, minWidth: 26, maxWidth: 74, sortable: true, formatter: fracToPC,
-  toolTip: "Allele frequency: Percentage of major to major+minor allele reads. The major and minor alleles are those with the highest and second highest number of reads."
+  id: "allelefreq", name: "AF", field: "allelefreq", width: 52, minWidth: 36, maxWidth: 74, sortable: true, formatter: fracToPC,
+  toolTip: "Allele frequency: Percentage of major to major plus minor allele reads. The major and minor alleles are those with the highest and second highest number of reads, after discounting any reads with adjacent insertions."
 },{
-  id: "coverage", name: "Cov", field: "coverage", width: 55, minWidth: 40, maxWidth: 74, sortable: true,
-  toolTip: "The total reads covering the position, including deletions."
+  id: "coverage", name: "Cov", field: "coverage", width: 52, minWidth: 36, maxWidth: 74, sortable: true,
+  toolTip: "The total reads covering the SNV locus, including reads with aligned deletions and adjacent insertions."
 },{
-  id: "cov_a", name: "A Reads", field: "cov_a", width: 57, minWidth: 26, maxWidth: 74,
+  id: "cov_a", name: "A Reads", field: "cov_a", width: 52, minWidth: 36, maxWidth: 74,
   toolTip: "Number of reads calling A."
 },{
-  id: "cov_c", name: "C Reads", field: "cov_c", width: 57, minWidth: 26, maxWidth: 74,
+  id: "cov_c", name: "C Reads", field: "cov_c", width: 52, minWidth: 36, maxWidth: 74,
   toolTip: "Number of reads calling C."
 },{
-  id: "cov_g", name: "G Reads", field: "cov_g", width: 57, minWidth: 26, maxWidth: 74,
+  id: "cov_g", name: "G Reads", field: "cov_g", width: 52, minWidth: 36, maxWidth: 74,
   toolTip: "Number of reads calling G."
 },{
-  id: "cov_t", name: "T Reads", field: "cov_t", width: 57, minWidth: 26, maxWidth: 74,
+  id: "cov_t", name: "T Reads", field: "cov_t", width: 52, minWidth: 36, maxWidth: 74,
   toolTip: "Number of reads calling T."
 },{
-  id: "cov_d", name: "Deletions", field: "cov_d", width: 67, minWidth: 40, maxWidth: 74, sortable: true,
-  toolTip: "Number of reads calling deletion at this base location."
+  id: "cov_d", name: "Deletions", field: "cov_d", width: 55, minWidth: 36, maxWidth: 74,
+  toolTip: "Number of reads calling deletion at the SNV locus. Deletion reads may be considered as the minor allele for the reported homozygous mahor allele frequency. But if there are sufficient deletion reads to make a heterozygous or homozygous deletion genotype call a '?' sampleID genotype is reported since this is unexpected."
 },{
-  id: "cov_f", name: "+Cov", field: "cov_f", width: 55, minWidth: 34, maxWidth: 74,
-  toolTip: "Number of forward reads aligned over the reference base that did not produce a base deletion call."
+  id: "cov_i", name: "Insertions", field: "cov_i", width: 57, minWidth: 36, maxWidth: 74,
+  toolTip: "Number of reads with an insertion aligned adjancent to the SNV locus. Insertion reads are ignored for genotyping and only contibute to the total coverage count, Cov. These have previously caused incorrect or uncalled genotypes due to ambiguous alignment at the SNV locus."
 },{
-  id: "cov_r", name: "-Cov", field: "cov_r", width: 55, minWidth: 34, maxWidth: 74,
-  toolTip: "Number of reverse reads aligned over the reference base that did not produce a base deletion call."
+  id: "cov_f", name: "Cov+", field: "cov_f", width: 52, minWidth: 36, maxWidth: 74, sortable: true,
+  toolTip: "Number of forward reads aligned over the reference base excluding deletions and insertion alignments."
+},{
+  id: "cov_r", name: "Cov-", field: "cov_r", width: 52, minWidth: 36, maxWidth: 74, sortable: true,
+  toolTip: "Number of reverse reads aligned over the reference base excluding deletions and insertion alignments."
 }];
 
-$("#sampleIDalleleCoverageTable").css('width','893');
+$("#sampleIDalleleCoverageTable").css('width','899');
 
 // define the grid and attach head/foot of the table
 var options = {
   editable: true,
   autoEdit: false,
+  forceFitColumns: false,
   enableCellNavigation: true,
   multiColumnSort: true
 };
@@ -245,9 +249,10 @@ function loadtable() {
           cov_c : Number(fields[9]),
           cov_g : Number(fields[10]),
           cov_t : Number(fields[11]),
-          cov_f : Number(fields[12]),
-          cov_r : Number(fields[13]),
-          cov_d : Number(fields[14])
+          cov_d : Number(fields[12]),
+          cov_i : Number(fields[13]),
+          cov_f : Number(fields[14]),
+          cov_r : Number(fields[15])
         };
         // record unique identifies and order of chromosomes from source
         if( selectAppendUnique('#SIDAC-selectChrom',chr,chr) ) { chrMap[chr] = chrNum++; }

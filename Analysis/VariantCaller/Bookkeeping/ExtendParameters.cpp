@@ -205,6 +205,8 @@ void VariantCallerHelp() {
   printf("     --filter-unusual-predictions       FLOAT       posterior log likelihood threshold for accepting bias estimate [0.3]\n");
   printf("     --filter-deletion-predictions      FLOAT       check post-evaluation systematic bias in deletions; a high value like 100 effectively turns off this filter [100.0]\n");
   printf("     --filter-insertion-predictions     FLOAT       check post-evaluation systematic bias in insertions; a high value like 100 effectively turns off this filter [100.0]\n");
+  printf("     --gc-motif-filter-multiplier       FLOAT       the multiplier for filter_unusual_predictions, filter_insertion/deletion_predictions when applying to GC homopolymer motifes [0.7 if no sse-vcf else 1]\n");
+
   // XXX Not applicable in TS 5.4 since merging and post processing is not run in TVC
   //printf("\nVCF record filters (applied during merge):\n");
   //printf("     --filter-by-target                 on/off      Filter vcf records by meta information in the target bed file [on]\n");
@@ -329,6 +331,8 @@ void EnsembleEvalTuningParameters::SetOpts(OptArgs &opts, Json::Value& tvc_param
   soft_clip_bias_checker                = RetrieveParameterDouble(opts, tvc_params, '-', "soft-clip-bias-checker", 0.1f);
   filter_deletion_bias                  = RetrieveParameterDouble(opts, tvc_params, '-', "filter-deletion-predictions", 100.0f);
   filter_insertion_bias                 = RetrieveParameterDouble(opts, tvc_params, '-', "filter-insertion-predictions", 100.0f);
+  float default_gc_motif_filter_multiplier = opts.GetFirstString('l', "sse-vcf", "").empty()? 0.7f : 1.0f;
+  gc_motif_filter_multiplier            = RetrieveParameterDouble(opts, tvc_params, '-', "gc-motif-filter-multiplier", default_gc_motif_filter_multiplier);
   max_detail_level                      = RetrieveParameterInt(opts, tvc_params, '-', "max-detail-level", 0);
   min_detail_level_for_fast_scan        = RetrieveParameterInt(opts, tvc_params, '-', "min-detail-level-for-fast-scan", 0);
   try_few_restart_freq                  = RetrieveParameterBool(opts, tvc_params, '-', "try-few-restart-freq", false);
@@ -355,6 +359,7 @@ void EnsembleEvalTuningParameters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("soft-clip-bias-checker",        soft_clip_bias_checker, 0.0f, 1.0f);
   CheckParameterLowerBound<float>     ("filter-deletion-predictions",   filter_deletion_bias,         0.0f);
   CheckParameterLowerBound<float>     ("filter-insertion-predictions",  filter_insertion_bias,        0.0f);
+  CheckParameterLowerBound<float>     ("gc-motif-filter-multiplier",    gc_motif_filter_multiplier,   0.0f);
   CheckParameterLowerUpperBound<int>  ("max-detail-level",    max_detail_level,   0, 10000);
   CheckParameterLowerBound<int>       ("min-detail-level-for-fast-scan",min_detail_level_for_fast_scan,   0);
 

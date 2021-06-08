@@ -35,7 +35,11 @@
                         <span class="tab">(A - H : Pool
                             {% if multiLibraryPoolPlanData.pool1 %} 1 {% endif %}
                             {% if multiLibraryPoolPlanData.pool1 and multiLibraryPoolPlanData.pool2 %} , {% endif %}
-                            {% if multiLibraryPoolPlanData.pool2 %} 2 {% endif %})</span>
+                            {% if multiLibraryPoolPlanData.pool2 %} 2 {% endif %})
+                            {% if multiLibraryPoolPlanData.warning %}
+                                <i class="icon-info-sign" rel="tooltip" data-placement="right" data-original-title="{{ multiLibraryPoolPlanData.warning }}"></i>
+                            {% endif %}
+                        </span>
                     </label>
                 {% endif %}
                 {% if multiLibraryPoolPlanData.pool1 %}

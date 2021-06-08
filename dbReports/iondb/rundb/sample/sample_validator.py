@@ -248,7 +248,6 @@ def validate_barcoding_samplesetitems(
         if id1 and samplesetitem_id and int(id1) == int(samplesetitem_id):
             continue
 
-        # ensure only 1 barcode kit for the whole sample set
         if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
             if not pcrPlateRow:
                 errorMessage = validation.format(
@@ -260,22 +259,19 @@ def validate_barcoding_samplesetitems(
                 return False, errorMessage
 
         # ensure only 1 barcode id_str per sample
-        if barcode and barcode1 and barcode == barcode1:
+        # TODO: Make sure CSV and API plan creation works as expected
+        if pcrPlateRow and barcode and barcode1 and barcode == barcode1:
             # TODO : change the localization key field to sample name
             # errorMessage = validation.format(ugettext_lazy('samplesets.samplesetitem.messages.validate.barcode.unique.withplateposition'), {'barcode': barcode, 'pcrPlateRow': item_name}, include_error_prefix=True)  # "Error, A barcode can be assigned to only one sample in the sample set. %s has been assigned to another sample at PCR plate position (%s)" % (barcode, item_pcrPlate)
             errorMessage = (
                 "Error, A barcode can be assigned to only one sample in the sample set. %s has been assigned to another sample (%s)"
                 % (barcode, item_name)
             )
-
-            if pcrPlateRow:
-                if item.pcrPlateRow not in allPcrPlates:
-                    return False, errorMessage
-                else:
-                    return True, ""
-
+            if item.pcrPlateRow not in allPcrPlates:
+                return False, errorMessage
+            else:
+                return True, ""
             return False, errorMessage
-
     return True, None
 
 
@@ -1399,8 +1395,8 @@ def validate_sampleBarcodeMapping(queryDict, sampleSet):
         allBarcodeKits[0] == elem for elem in allBarcodeKits
     )
 
-    # validate if same barcode is being used for multiple samples
-    if len(allBarcodes) != len(set(allBarcodes)):
+    # # validate if same barcode is being used for multiple samples
+    if allPcrPlates and len(allBarcodes) != len(set(allBarcodes)):
         dupBarcode = [x for x in allBarcodes if allBarcodes.count(x) >= 2]
         errordict = {
             "result": "1",
@@ -1631,18 +1627,19 @@ def validate_sampleset_items_limit(pending_samplesetitems, sampleSet):
 # validation for chef Multi Pool support for OCAv4
 def validate_multi_pool_support_samples(all_plates_mapping, sampleSets):
     errors = []
-    allSamplesInOnePlan = []
+    warning = None
 
     allSamples = [sampleSet.samples.all() for sampleSet in sampleSets]
     allSampleSetItems = [item for sublist in allSamples for item in sublist]
-    if len(allSampleSetItems) <= 8:
-        allSamplesInOnePlan = allSampleSetItems
+    if len(allSampleSetItems) > 8:
+        warning = "Note: Both Pool1 and Pool2 samples combined are greater than 8 samples."
+    allSamplesInOnePlan = allSampleSetItems
 
     sample_set_config = [sample_set_config.keys() for sample_set_config in all_plates_mapping]
     sampleSetConfigPlates = [item for sublist in sample_set_config for item in sublist]
     if len(sampleSetConfigPlates) != len(set(sampleSetConfigPlates)):
-        isValid = False
-        errors.append("Duplicate plate%s found in combined sampleset. "
-                      "Samplesets must originate from unique plates to be combined for this application." %
-                      [str(plateName) for plateName in sampleSetConfigPlates])
-    return allSamplesInOnePlan, errors
+        errors.append("Duplicate plate%s found in combined sampleset"
+                      "Samplesets must originate from unique plates to be combined for this application." % [
+                          str(plateName) for plateName in
+                          sampleSetConfigPlates])
+    return allSamplesInOnePlan, errors, warning

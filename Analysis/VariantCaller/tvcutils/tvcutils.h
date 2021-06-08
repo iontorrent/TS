@@ -3,7 +3,7 @@
 #ifndef TVCUTILS_H
 #define TVCUTILS_H
 
-int PrepareHotspots(int argc, const char *argv[]);
+namespace PrepareHotspot {int PrepareHotspots(int argc, const char *argv[]); }
 int ValidateBed(int argc, const char *argv[]);
 int UnifyVcf(int argc, const char *argv[]);
 int SplitVcf(int argc, const char *argv[]);

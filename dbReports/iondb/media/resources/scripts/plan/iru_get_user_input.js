@@ -1,9 +1,10 @@
-/**
-    NOTE:  IRU and TS terminology differs slightly.  In IRU, the column "Relation" is equivalent to TS' "RelationRole",
-    and IRU's column RelationshipType is TS' "Relation" in the JSON blob that is saved to the selectedPlugins BLOB.
-*/
-var USERINPUT = USERINPUT || {};
 
+
+/**
+ NOTE:  IRU and TS terminology differs slightly.  In IRU, the column "Relation" is equivalent to TS' "RelationRole",
+ and IRU's column RelationshipType is TS' "Relation" in the JSON blob that is saved to the selectedPlugins BLOB.
+ */
+var USERINPUT = USERINPUT || {};
 USERINPUT.user_input_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/userInput/";
 USERINPUT.workflows = [];
 USERINPUT.relations = [];
@@ -12,16 +13,13 @@ USERINPUT.cancerTypes = [];
 USERINPUT.populations = [];
 USERINPUT.mouseStrains = [];
 USERINPUT.relations_with_gender = {};
-
 var SEPARATOR = " | ";
 var ION_PRELOADED_LABEL = "Ion Torrent";
-
 
 function getIonReporterFields(){
     if (!USERINPUT.account_id || USERINPUT.account_id == "0" || USERINPUT.account_id == "-1"){
         return [];
     }
-    
     var iru_fields = {
         // Oncology
         ircancerType:   { type: "string", defaultValue: "",
@@ -34,7 +32,7 @@ function getIonReporterFields(){
         ircoupleID:     { type: "string", defaultValue: ""},
         irembryoID:     { type: "string", defaultValue: ""},
         // IR Workflow
-        irWorkflow:     { type: "string", defaultValue: USERINPUT.workflow,
+        irWorkflow:     { type: "array", defaultValue: USERINPUT.workflow,
             editable:function(){return USERINPUT.is_ir_connected}
         },
         irtag_isFactoryProvidedWorkflow: { type: "bool", defaultValue: USERINPUT.tag_isFactoryProvidedWorkflow },
@@ -67,12 +65,10 @@ function getIonReporterFields(){
     return iru_fields;
 }
 
-
 function getIonReporterColumns(){
     if (!USERINPUT.account_id || USERINPUT.account_id == "0" || USERINPUT.account_id == "-1"){
         return [];
     }
-
     var iru_columns = [
         {
             field: "_annotations", width: "22px",
@@ -137,18 +133,53 @@ function getIonReporterColumns(){
             attributes: { "name": "irembryoID" },
             hidden: !$('#isPgs').is(':checked')
         },
+
         // IR Workflow
-        {
+    ];
+    var irWorkflowField;
+    var headerText = 'Ion Reporter Workflow <label class="checkbox inline" style="font:inherit;" ' +
+                'title="Show all available or show filtered IR workflows">' +
+                '<input id="irWorkflowShowAll" type="checkbox" style="margin:0;">Show All Workflows</label>'
+    if (!($('[name=planCategories]').val() === 'onco_immune;immunology')){
+        irWorkflowField = {
+            field: "irWorkflow", title: "Ion Reporter Workflow",
+            width: '350px',
+            attributes: {"name": "irWorkflow"},
+            editor: irWorkflowEditor,
+            headerTemplate: headerText,
+            template: dropDnTemplate({'html': $('#irWorkflowColumnTemplate').html()}),
+            hidden: ($('[name=planCategories]').val() === 'onco_immune;immunology')
+        };
+    } else {
+        irWorkflowField = {
             field: "irWorkflow", title: "Ion Reporter Workflow",
             width: '350px',
             attributes: { "name": "irWorkflow" },
-            editor: irWorkflowEditor,
-            headerTemplate: 'Ion Reporter Workflow <label class="checkbox inline" style="font:inherit;" ' +
-                'title="Show all available or show filtered IR workflows">' +
-                '<input id="irWorkflowShowAll" type="checkbox" style="margin:0;">Show All Workflows</label>',
-            template: dropDnTemplate({'html': $('#irWorkflowColumnTemplate').html()})
-        },
-        {
+            editor: irMultiWorkflowEditor,
+            headerTemplate: headerText,
+            template: function (item) {
+                 var irMultipleWorkflowSelected = [];
+                 var selectedworkflowObj;
+                 if ('irMultipleWorkflowSelected' in item) {
+                     selectedworkflowObj = JSON.parse(JSON.stringify(item.irMultipleWorkflowSelected));
+                 }
+                 if(selectedworkflowObj) {
+                     $.each(selectedworkflowObj, function (key, value) {
+                         irMultipleWorkflowSelected.push(value['workflow']);
+                     });
+                 }
+                 if(irMultipleWorkflowSelected && Array.isArray(irMultipleWorkflowSelected) && (irMultipleWorkflowSelected.length > 1)) {
+                    return irMultipleWorkflowSelected.length + " IR workflows selected";
+                 } else {
+                    var workflowObj = getWorkflowObj(item.irWorkflow, item.irtag_isFactoryProvidedWorkflow);
+                    var workflow = workflowObj ? workflowObj.display : "";
+                    return workflow;
+                }
+            }
+        };
+    }
+    iru_columns.push(irWorkflowField);
+    iru_columns.push({
             field: "irRelationRole", title: "Relation",
             width: '100px',
             attributes: { "name": "irRelationRole" },
@@ -192,28 +223,35 @@ function getIonReporterColumns(){
             attributes: { "name": "irWitness" },
             hidden: planCategories.indexOf("repro") < 0,
         },
-
         {
             field: "irSetID", title: "IR Set ID",
             width: '60px',
             attributes: { "name": "irSetID" },
             headerAttributes: { "rel": "tooltip", "data-original-title": "After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank)."},
             headerTemplate: '<i class="icon-info-sign"></i> IR Set ID'
-        }
-    ];
+        });
+
     return iru_columns;
 }
 
-function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow){
+
+function getWorkflowObj(workflow, tag_isFactoryProvidedWorkflow) {
     if (!workflow || workflow == "Upload Only") workflow = "";
-    var match = $.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == workflow && obj.tag_isFactoryProvidedWorkflow == tag_isFactoryProvidedWorkflow });
-    if (match.length == 0){
-        match = $.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == workflow });
+    var match = $.grep(USERINPUT.workflows, function (obj) {
+        return obj.Workflow == workflow && obj.tag_isFactoryProvidedWorkflow == tag_isFactoryProvidedWorkflow
+    });
+    if (match.length == 0) {
+        match = $.grep(USERINPUT.workflows, function (obj) {
+            return obj.Workflow == workflow
+        });
     }
     //console.log('getWorkflowObj', workflow, tag_isFactoryProvidedWorkflow, match);
     return (match.length > 0) ? match[0] : null;
 }
-
+function onSelect(e) {
+    var dataItem = this.dataItem(e.node);
+    console.log("Selected node with id=" + dataItem.id);
+}
 function irWorkflowEditor(container, options) {
     $('<input id="irWorkflowEditor" name="irWorkflowEditor" data-bind="value:' + options.field + '"/>')
         .appendTo(container)
@@ -221,62 +259,56 @@ function irWorkflowEditor(container, options) {
             dataSource: USERINPUT.workflows,
             dataTextField: "display",
             dataValueField: "Workflow",
-            open: function(e){
+            open: function (e) {
                 var filters = [];
                 var reference = options.model.get('reference');
-                if (reference){
+                if (reference) {
                     filters.push({
                         logic: "or",
                         filters: [
-                            { field: "Reference", value: reference },
-                            { field: "Reference", value: "" },
+                            {field: "Reference", value: reference},
+                            {field: "Reference", value: ""},
                         ]
                     });
                 }
                 var nucleotideType = options.model.get('nucleotideType');
-                if (nucleotideType){
+                if (nucleotideType) {
                     filters.push({
                         logic: "or",
                         filters: [
-                            { field: "nucleotideType", value: nucleotideType },
-                            { field: "nucleotideType", value: "" },
+                            {field: "nucleotideType", value: nucleotideType},
+                            {field: "nucleotideType", value: ""},
                         ]
                     });
                 }
-
-                if (!$('#irWorkflowShowAll').is(':checked')){
+                if (!$('#irWorkflowShowAll').is(':checked')) {
                     e.sender.dataSource.filter({
                         logic: "and",
                         filters: filters
                     });
                 }
-
                 // save next grid row to update for RNA/DNA plans
                 this.nextGridItem = $("#grid").data("kendoGrid").dataItem(this.element.closest("tr").next());
             },
-            change: function(e){
+            change: function (e) {
                 var workflowObj = this.dataItem();
                 var relation = workflowObj.relations_list.length == 1 ? workflowObj.relations_list[0] : "";
-
                 options.model.set('irtag_isFactoryProvidedWorkflow', workflowObj.tag_isFactoryProvidedWorkflow);
                 options.model.set('irRelationRole', relation);
                 if (hasGender(relation)) options.model.set('irGender', '');
-
                 // fill in irSetID value
                 var data = $("#grid").data("kendoGrid").dataSource.data().toJSON();
                 data.splice(options.model.row, 1); // get rows other than this one
                 var setid = generate_set_id(workflowObj, options.model, data);
                 options.model.set('irSetID', setid);
-
                 // update fields for RNA row if same sample for dual nuc type
                 var nextGridItem = this.nextGridItem;
                 var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
-                if (planOpt.isDualNucleotideType && isSameSampleForDual && nextGridItem){
+                if (planOpt.isDualNucleotideType && isSameSampleForDual && nextGridItem) {
                     nextGridItem.set('irRelationRole', relation);
                     if (hasGender(relation)) nextGridItem.set('irGender', '');
-                            nextGridItem.set('irSetID', setid);
+                    nextGridItem.set('irSetID', setid);
                 }
-
                 // change IR validation errors to warnings
                 updateIRvalidationErrors(options.model.row, ['irWorkflow', 'irRelationRole', 'irGender', 'irSetID']);
             },
@@ -291,18 +323,18 @@ function irRelationEditor(container, options) {
             dataTextField: "display",
             dataValueField: "Relation",
             optionLabel: "---",
-            open: function(e) {
+            open: function (e) {
                 var workflowObj = getWorkflowObj(options.model.irWorkflow, options.model.irtag_isFactoryProvidedWorkflow);
                 var irRelationshipType = workflowObj ? workflowObj.RelationshipType : "";
                 e.sender.dataSource.filter({
                     field: "RelationshipType", operator: "contains", value: irRelationshipType
                 });
             },
-            change: function(e){
-                if (hasGender(options.model.irRelationRole)){
+            change: function (e) {
+                if (hasGender(options.model.irRelationRole)) {
                     options.model.set('irGender', '');
                 }
-                if (irSetIdNotValid(options.model)){
+                if (irSetIdNotValid(options.model)) {
                     options.model.set('irSetID', '');
                 }
                 updateIRvalidationErrors(options.model.row, ['irRelationRole', 'irGender']);
@@ -318,17 +350,60 @@ function irGenderEditor(container, options) {
             dataTextField: "display",
             dataValueField: "Gender",
             optionLabel: "---",
-            open: function(e) {
-                if (hasGender(options.model.irRelationRole)){
+            open: function (e) {
+                if (hasGender(options.model.irRelationRole)) {
                     e.sender.dataSource.filter({
                         field: "Relation", operator: "contains", value: options.model.irRelationRole
                     });
                 }
             },
-            change: function(e){
+            change: function (e) {
                 updateIRvalidationErrors(options.model.row, ['irGender']);
             }
         });
+}
+
+function irMultiWorkflowEditor(container, options) {
+    var multiselectWorkflowInput = $('<input id="irWorkflowEditor" name="irWorkflowEditor"/>').appendTo(container);
+    var selectedworkflowList = options.model.get('irMultipleWorkflowSelected');
+    var selectedworkflow = (selectedworkflowList && selectedworkflowList.length > 1) ? selectedworkflowList : options.model.get('irWorkflow');
+
+    if(!selectedworkflow) {
+        selectedworkflow = [""];
+    }
+    var irWorkflows = USERINPUT.workflows;
+    var filteredWorkflows;
+    if (!$('#irWorkflowShowAll').is(':checked')) {
+        filteredWorkflows = irWorkflows.filter(function (item) {
+            var reference = options.model.get('reference');
+            var nucleotideType = options.model.get('nucleotideType');
+            var applicationType = item.ApplicationType;
+            if(applicationType === "UploadOnly") {
+                return item;
+            }
+            if (nucleotideType && reference) {
+                if(item.nucleotideType === nucleotideType && item.Reference === reference || item.nucleotideType === nucleotideType){
+                    return item;
+                }
+            } else if (nucleotideType && item.nucleotideType === nucleotideType) {
+                return item;
+            }
+
+        });
+    }
+    multiselectWorkflowInput.kendoMultiSelectBox({
+        dataSource: filteredWorkflows || irWorkflows,
+        dataTextField: "display",
+        dataValueField: "Workflow",
+        emptySelectionLabel: "Select workflow",
+        value: JSON.parse(JSON.stringify(selectedworkflow))
+    });
+    multiselectWorkflowInput.data("kendoMultiSelectBox").bind("selectionChanged", function (e) {
+        // console.log("selected item count: " + e.newValue.length);
+        options.model.set("irWorkflow", e.newValue[0]);
+        options.model.set("irMultipleWorkflowSelected", e.newValue);
+
+    });
 }
 
 function irPopulationEditor(container, options) {
@@ -339,7 +414,7 @@ function irPopulationEditor(container, options) {
             dataTextField: "display",
             dataValueField: "value",
             optionLabel: "---",
-            change: function(e){
+            change: function (e) {
                 updateIRvalidationErrors(options.model.row, ['irPopulation']);
             }
         });
@@ -381,26 +456,25 @@ function ircellularityPctEditor(container, options) {
 function irSampleCollectionDateEditor(container, options) {
     $('<input id="irSampleCollectionDateEditor" name="irSampleCollectionDateEditor" data-bind="value:' + options.field +'" />')
         .appendTo(container)
-          .kendoDatePicker({format: "yyyy MMMM dd",
-          change: function(e){
-            /* validate: Sample Receipt date must be later than or the same as the sample collection date */
-              var collectDate = this.value();
-              var receiptDate = options.model.irSampleReceiptDate;
-              if ((receiptDate) && (Date.parse(collectDate) > Date.parse(receiptDate))) {
-                options.model.set('irSampleReceiptDate', '')
-              }
-          }
-          });
+        .kendoDatePicker({format: "yyyy MMMM dd",
+            change: function(e){
+                /* validate: Sample Receipt date must be later than or the same as the sample collection date */
+                var collectDate = this.value();
+                var receiptDate = options.model.irSampleReceiptDate;
+                if ((receiptDate) && (Date.parse(collectDate) > Date.parse(receiptDate))) {
+                    options.model.set('irSampleReceiptDate', '')
+                }
+            }
+        });
 }
 
 function irSampleReceiptDateEditor(container, options) {
     $('<input id="irSampleReceiptDateEditor" name="irSampleReceiptDateEditor" data-bind="value:' + options.field +'" />')
         .appendTo(container)
-          .kendoDatePicker({format: "yyyy MMMM dd",
-              min: new Date(options.model.irSampleCollectionDate)
-          });
+        .kendoDatePicker({format: "yyyy MMMM dd",
+            min: new Date(options.model.irSampleCollectionDate)
+        });
 }
-
 
 function irBacterialMarkerTypeEditor(container, options) {
     $('<input id="irBacterialMarkerTypeEditor" name="irBacterialMarkerTypeEditor" data-bind="value:' + options.field + '"/>')
@@ -450,7 +524,6 @@ function irSetIdNotValid(row){
         if (workflowObj.RelationshipType == "DNA_RNA"){
             var relations_list_length = 2;
         }
-
         if (relations_list_length > 1){
             var otherRows = $("#grid").data("kendoGrid").dataSource.data().toJSON();
             otherRows.splice(row.row, 1); // get rows other than this one
@@ -474,12 +547,10 @@ function irSetIdNotValid(row){
 function generate_set_id(workflowObj, thisRow, otherRows){
     var setid = thisRow.irSetID || '';
     var relation = thisRow.irRelationRole || '';
-
     var relations_list_length = workflowObj.relations_list.length;
     if (workflowObj.RelationshipType == "DNA_RNA"){
         var relations_list_length = 2;
     }
-
     var foundSetID = false;
     if (relations_list_length > 1){
         // count workflow groups by set id for this row's workflow
@@ -490,12 +561,11 @@ function generate_set_id(workflowObj, thisRow, otherRows){
                 workflow_groups[obj.irSetID].push(obj)
             }
         });
-
         $.each(workflow_groups, function(id,data){
             if (data && data.length < relations_list_length){
                 if (workflowObj.RelationshipType == "DNA_RNA"){
                     // find if this matches for DNA/RNA nuc type
-                    foundSetID = thisRow.nucleotideType != data[0].nucleotideType;                    
+                    foundSetID = thisRow.nucleotideType != data[0].nucleotideType;
                 } else {
                     // find if Relation Role is not already used
                     foundSetID = $.grep(data,function(obj){
@@ -509,7 +579,6 @@ function generate_set_id(workflowObj, thisRow, otherRows){
             }
         });
     }
-
     if (!foundSetID){
         var other_setids = otherRows.map(function(obj){ return obj.irSetID});
         if (!setid || ( $.inArray(setid, other_setids) >= 0) ){
@@ -517,7 +586,6 @@ function generate_set_id(workflowObj, thisRow, otherRows){
             setid = Math.max.apply(Math, other_setids) + 1;
         }
     }
-
     return setid;
 }
 
@@ -534,8 +602,8 @@ function updateIRvalidationErrors(row, fields){
 }
 
 /**
-    This function searches the API returned result for a relationship type 
-    for a given workflow
+ This function searches the API returned result for a relationship type
+ for a given workflow
 */
 function find_relationship_type(workflow, columns_map) {
     var relationshipType = "";
@@ -555,7 +623,6 @@ function check_selected_values(){
     var errors = [];
     var samplesTableJSON = $("#grid").data("kendoGrid").dataSource.data().toJSON();
     var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
-
     $.each(samplesTableJSON, function(i,row){
         if( row.irWorkflow && ($.grep(USERINPUT.workflows, function(obj){ return obj.Workflow == row.irWorkflow } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Previous Workflow for this plan is no longer available: " + row.irWorkflow)
@@ -569,7 +636,6 @@ function check_selected_values(){
             row.irWorkflow = "";
             row.irRelationRole = "Self"; */
         }
-
         if (row.irRelationRole && ($.grep(USERINPUT.relations, function(obj){ return obj.Relation == row.irRelationRole } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Relation not found: " + row.irRelationRole);
             row.irRelationRole = "";
@@ -579,7 +645,6 @@ function check_selected_values(){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Relation not compatible: " + row.irRelationRole);
             row.irRelationRole = "";
         }
-
         if (row.irGender && ($.grep(USERINPUT.genders, function(obj){ return obj.Gender == row.irGender } ).length == 0) ){
             errors.push("<br>Row "+ (row.row+1) + ": Selected Gender not found: " + row.irGender);
             row.irGender = "";
@@ -610,29 +675,24 @@ function check_selected_values(){
             }
         }
     });
-
     // update via local data to run dataSource initialization
     samplesTableInit = samplesTableJSON;
     $("#grid").data("kendoGrid").dataSource.read();
-
     $("#error").html(errors.toString());
     if (errors.length > 0) $('html, body').animate({scrollTop : $('#error').prop("scrollHeight")},500);
 }
 
-
 /**
-    Parse data returned from IRU and save in USERINPUT
+ Parse data returned from IRU and save in USERINPUT
 **/
 function populate_userinput_from_response(data){
     var columns = data["sampleRelationshipsTableInfo"]["columns"];
     var column_map = data["sampleRelationshipsTableInfo"]["column-map"];
     var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
-    
     //sorts the columns by the Order key
     columns.sort(function(columnA, columnB){
         return columnA.Order - columnB.Order;
     });
-
     // parse restriction rules
     var relation_to_relationshipType = {};
     var gender_to_relation = {};
@@ -647,8 +707,7 @@ function populate_userinput_from_response(data){
                 if (!('AndFor' in restriction)){
                     relationshipType_to_relations[restriction["For"]["Value"]] = restriction["Valid"]["Values"];
                 }
-            }
-            else if (restriction["For"]["Name"] == 'Relation') {
+            } else if (restriction["For"]["Name"] == 'Relation') {
                 $.each(restriction["Valid"]["Values"], function(i, value){
                     gender_to_relation[value] = gender_to_relation[value] || [];
                     gender_to_relation[value].push(restriction["For"]["Value"]);
@@ -658,7 +717,6 @@ function populate_userinput_from_response(data){
             }
         }
     });
-
     // Workflow
     $.each(column_map, function(i, cm){
         var workflow = cm["Workflow"];
@@ -667,15 +725,12 @@ function populate_userinput_from_response(data){
         var reference = (irReference == "GRCh38") ? "GRCh38.p2.mask1" : irReference
         var relationshipType = cm["RelationshipType"];
         var nucleotideType = cm["DNA_RNA_Workflow"] || "";
-
         var tagImmuneRepertoire = cm["tag_IMMUNE_REPERTOIRE_SHORT_ASSAY"] || "";
         var tagDNA = cm["tag_DNA"] || "";
         var tagRNA = cm["tag_RNA"] || "";
-        
         var DNA_RNA = (tagImmuneRepertoire.toLowerCase() == "true" && tagDNA.toLowerCase() == "true") ? "DNA" : nucleotideType;
         DNA_RNA = (tagImmuneRepertoire.toLowerCase() == "true" && tagRNA.toLowerCase() == "true") ? "RNA" : DNA_RNA;
         nucleotideType = DNA_RNA;
-
         USERINPUT.workflows.push({
             "Workflow": workflow != "Upload Only" ? workflow : "",
             "display": get_decorated_workflow_name(cm, workflow, irReference, ION_PRELOADED_LABEL, SEPARATOR),
@@ -687,7 +742,6 @@ function populate_userinput_from_response(data){
             "relations_list": relationshipType_to_relations[relationshipType] || []
         });
     });
-
     // Relation and Gender
     $.each(columns, function(i, column){
         if (column["Name"] == "Relation"){
@@ -738,16 +792,15 @@ function populate_userinput_from_response(data){
 }
 
 /**
-    Main function to call IRU and process the response
+ Main function to call IRU and process the response
 **/
 function load_and_set_ir_fields() {
     var myURL = get_workflow_url(USERINPUT.user_input_url, USERINPUT.account_id);
-
     $.blockUI();
     var jqhxhr = $.ajax({
         type : "get",
         url : myURL,
-        timeout: 6000,//in milliseconds
+        timeout: 12000,//in milliseconds
         success: function(data){
             if (typeof data["sampleRelationshipsTableInfo"] == 'undefined') {
                 // failed to retrieve info
@@ -756,24 +809,19 @@ function load_and_set_ir_fields() {
                 $("#error").text("Cannot contact Ion Reporter Server!");
                 $("input[name=irDown]").val('1');
                 return;
-            }
-            else {
+            } else {
                 USERINPUT.is_ir_connected = true;
             }
             $("#error").text("");
             $("input[name=irDown]").val('0');
-
             // parse data and fill in USERINPUT fields
             populate_userinput_from_response(data);
-            
             // set application type hidden input from selected workflow
             var default_workflow = getWorkflowObj(USERINPUT.workflow, USERINPUT.tag_isFactoryProvidedWorkflow);
             if (default_workflow)
                 $("input[name=applicationType]").val(default_workflow.ApplicationType);
-
             // make sure existing selections are valid
             check_selected_values();
-
             hide_summary_view();
             $("#loading").hide();
         },
@@ -784,22 +832,16 @@ function load_and_set_ir_fields() {
                 $("#error").text('The IR Server connection has timed out');
                 $("input[name=irDown]").val('1');
                 return;
-            }
-            else {
+            } else {
                 console.log("iru_get_user_input - textStatus=", textStatus);
             }
         }
     });
-
-
-
-
 }
 
 $(document).ready(function(){
     //handler for asynchroneous Ajax calls to block and unblock the UI
     $(document).ajaxStop($.unblockUI);
-
     if (USERINPUT.account_id != "0" && USERINPUT.account_id != "-1"){
         load_and_set_ir_fields();
     }

@@ -31,6 +31,11 @@
 #include <string.h>
 #include "tmap_alloc.h"
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   Generic Sort Library
   */
@@ -323,5 +328,9 @@ typedef const char *ksstr_t;
   @details  this will define functions with the name "str" and using the generic string-based comparison function.
   */
 #define TMAP_SORT_INIT_STR TMAP_SORT_INIT(str, ksstr_t, tmap_sort_lt_str)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_SORT_H

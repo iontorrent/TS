@@ -5,12 +5,14 @@
 #include <cassert>
 #include <ctime>
 #include <stdexcept>
+#include <alloca.h>
+#include <stdarg.h>
 #include "test_case.h"
 #include "test_selection.h"
 
 static const char* def_hdr = "Unnamed";
 static const char* tststr = "test";
-static const char* reppr  =  "|   ";
+static const char* reppr  =  "| ";
 
 StreamWrap TestCase::o_ = nullstream;
 bool TestCase::stop_on_error_ = false;
@@ -46,7 +48,7 @@ void TestCase::print_header ()
 void TestCase::print_footer (bool success, bool subords_success, time_t init_time, time_t beg_time, time_t done_time, time_t cleanup_time)
 {
     std::ostringstream s;
-    s << (full_name ()) << tststr << " finished in " << done_time - beg_time << " sec. (initialization took " << beg_time - init_time << " sec, cleanup took " << cleanup_time - done_time << " sec)";
+    s << (full_name ()) << " " << tststr << " finished in " << done_time - beg_time << " sec. (initialization took " << beg_time - init_time << " sec, cleanup took " << cleanup_time - done_time << " sec)";
     unsigned ll = s.str ().length () + strlen (reppr);
     o_ << "\n" << std::setfill ('-') << std::setw (ll) << "" << std::setfill (' ') << "\n";
     o_ << reppr << s.str ();
@@ -70,6 +72,83 @@ void TestCase::err (const char* filename, int lineno, const char* message)
         stro << "Stop on error enabled. Error occured: in file " << filename << ", line " << lineno << ": " << (message?message:"") << std::endl;
         throw std::runtime_error (stro.str ().c_str ());
     }
+}
+
+size_t TestCase::compute_msg_size (const char* what, const char* fmt, va_list args)
+{
+    size_t msize = vsnprintf (nullptr, 0, fmt, args) + 1; // Extra space for '\0'
+    if  (msize <= 0)
+        throw std::runtime_error ("Error during formatting.");
+    return strlen (what) + 2 + msize + 1;
+}
+
+size_t TestCase::format_msg (char* buf, size_t bufsz, const char* what, const char* fmt, va_list args)
+{
+    char* p = buf;
+    size_t reminder = bufsz - 1;
+    size_t whatlen = strlen (what);
+    size_t tocopy = std::min (whatlen, reminder);
+    strncpy (p, what, tocopy);
+    p += tocopy;
+    reminder -= tocopy;
+    if (reminder >= 2)
+    {
+        *p = ':'; ++p; --reminder;
+        *p = ' '; ++p; --reminder;
+    }
+    size_t written = vsnprintf (p, reminder, fmt, args);
+    p += written;
+    reminder -= written;
+    *p = 0;
+    return bufsz - reminder;
+}
+
+void TestCase::errx (const char* filename, int lineno, const char* what, const char* fmt, ...)
+{
+    // form a string
+    va_list arglist;
+
+    va_start (arglist, fmt);
+    const size_t tbsize = compute_msg_size (what, fmt, arglist);
+    va_end (arglist);
+
+    char tb [tbsize];
+
+    va_start (arglist, fmt);
+    format_msg (tb, tbsize, what, fmt, arglist);
+    va_end (arglist);
+
+    errors_.resize (errors_.size () + 1);
+    errors_.rbegin ()->file_ = filename;
+    errors_.rbegin ()->line_ = lineno;
+    errors_.rbegin ()->message_ = tb;
+    if (stop_on_error_)
+    {
+        std::ostringstream stro;
+        stro << "Stop on error enabled. Error occured: in file " << filename << ", line " << lineno << ": " << tb << std::endl;
+        throw std::runtime_error (stro.str ().c_str ());
+    }
+}
+
+void TestCase::quit (const char* filename, int lineno, const char* fmt, ...)
+{
+    const char what [] = "Critical error";
+    // form a string
+    va_list arglist;
+
+    va_start (arglist, fmt);
+    const size_t tbsize = compute_msg_size (what, fmt, arglist);
+    va_end (arglist);
+
+    char tb [tbsize];
+
+    va_start (arglist, fmt);
+    format_msg (tb, tbsize, what, fmt, arglist);
+    va_end (arglist);
+
+    std::ostringstream stro;
+    stro << "Failure in file " << filename << ", line " << lineno << ": " << tb << std::endl;
+    throw std::runtime_error (stro.str ().c_str ());
 }
 
 TestCase::TestCase (const char* name, bool name_indivisible)
@@ -267,4 +346,10 @@ void TestCase::print (std::ostream& ostr, unsigned nest) const
     for (TestCaseVec::const_iterator itr = subords_.begin (), sent = subords_.end (); itr != sent; ++itr)
         if ((*itr))
             (*itr)->print (ostr, nest);
+}
+
+std::ostream& operator << (std::ostream& o, const TestCase& tc)
+{
+    o << tc.full_name ();
+    return o;
 }

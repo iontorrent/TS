@@ -43,10 +43,11 @@ class JSONEncoder( _json.JSONEncoder ):
             # Arrays:
             try:
                 # Numpy items
-                return obj.item()
+                return damn_nans( obj.item() )
             except (AttributeError,ValueError):
                 if isinstance( obj, ( _np.ndarray, _np.ma.core.MaskedArray ) ):
-                    return tuple( obj )
+                    return damn_nans( tuple( obj ) )
+            print( 'to string' )
             return str( obj )
 
         # Decimal Objects
@@ -75,15 +76,47 @@ def serialize( jsondict ):
         except AttributeError:
             pass
 
+def damn_nans( obj ):
+    ''' Remove NaNs from nested data '''
+    if isinstance( obj, dict ):
+        output = {}
+        for key, val in obj.items():
+            key = damn_nans( key )
+            val = damn_nans( val )
+            output[key] = val
+        return output
+    if isinstance( obj, (list,tuple) ):
+        newobj = [ damn_nans(o) for o in obj ]
+        if isinstance( obj, tuple ):
+            newobj = tuple( newobj )
+        return newobj
+    try:
+        if obj != obj:
+            return None
+    except:
+        pass
+    try:
+        if obj == float( 'inf' ):
+            return None
+    except ValueError:
+        pass
+    try:
+        if obj == -float( 'inf' ):
+            return None
+    except ValueError:
+        pass
+    return obj
+
 def dumps( obj ):
     ''' 
     Safely returns a json string using the custom encoder.
     If an error is encountered, it is reported and an empty string is returned
     '''
+    obj = damn_nans( obj )
     try:
-        return _json.dumps( obj, cls=JSONEncoder, encoding='latin1' ) # python 2
+        return _json.dumps( obj, cls=JSONEncoder, encoding='latin1', allow_nan=False ) # python 2
     except TypeError:
-        return _json.dumps( obj, cls=JSONEncoder ) # Python 3
+        return _json.dumps( obj, cls=JSONEncoder, allow_nan=False ) # Python 3
     except:
         tb = _tb.format_exc()
         print(tb)    

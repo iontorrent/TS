@@ -18,7 +18,10 @@ class SeparatorSpatialMetricExtractor(object):
             bead, empty, ignore, pinned, reference, tf, lib, dud, soft_filt, 
             buff_clust_conf, sig_clust_conf
     '''
-    def __init__( self, sigproc_dir, filename='separator.spatial.h5', height=None, width=None, thumbnail=False ):
+    def __init__( self, sigproc_dir, filename='separator.spatial.h5', results_dir='.', height=None, width=None, thumbnail=False ):
+        # define output directory
+        self.results_dir = results_dir
+
         # define a tuple of available metrics
         self.metric_names   = ( 't0', 'snr', 'mad', 'sd', 'bf_metric', 'tau_e', 'tau_b', 
                 'peak_sig', 'trace_sd', 'bead', 'empty', 'ignore', 'pinned', 'reference',
@@ -241,7 +244,7 @@ class SeparatorSpatialMetricExtractor(object):
             plt.colorbar( shrink=0.7 )
             plt.xlabel( 'Superpixel Columns' )
             plt.ylabel( 'Superpixel Rows' )
-            plt.savefig( 'FullchipMask.png' )
+            plt.savefig( os.path.join( self.results_dir, 'FullchipMask.png' ) )
             plt.close()
 
     def plot_and_save_metric_array( self ):
@@ -265,7 +268,7 @@ class SeparatorSpatialMetricExtractor(object):
             plt.colorbar( shrink=0.7 )
             plt.xlabel( 'Superpixel Columns' )
             plt.ylabel( 'Superpixels Rows' )
-            plt.savefig( self.selected_metric + '_NoMask.png' )
+            plt.savefig( os.path.join( self.results_dir, self.selected_metric + '_NoMask.png' ) )
             plt.close()
 
     def plot_and_save_masked_metric_array( self ):
@@ -290,7 +293,7 @@ class SeparatorSpatialMetricExtractor(object):
             plt.colorbar( shrink=0.7 )
             plt.xlabel( 'Superpixel Columns' )
             plt.ylabel( 'Superpixels Rows' )
-            plt.savefig( self.selected_metric + '_masked.png' )
+            plt.savefig( os.path.join( self.results_dir, self.selected_metric + '_masked.png' ) )
             plt.close()
 
 

@@ -50,7 +50,7 @@ class TestFacets : public Test
         {
             o_ << "Running process () for SubTest " << name () << std::endl;
             TestFacet* tf = find_facet (TFDER_name);
-            TEST_ASSERTX (tf != NULL, "Failed to fine facet by name");
+            TEST_ASSERTX (tf != NULL, "Failed to find facet by name");
             if (tf)
                 o_ << "Found facet by name: " << tf->name () << std::endl;
             else

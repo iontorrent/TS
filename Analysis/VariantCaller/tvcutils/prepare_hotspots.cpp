@@ -23,7 +23,7 @@
 
 using namespace std;
 
-
+namespace PrepareHotspot {
 void PrepareHotspotsHelp()
 {
   printf ("\n");
@@ -1023,28 +1023,8 @@ int PrepareHotspots(int argc, const char *argv[])
 		    A->ref.erase(0, opos-A->pos);
 		    A->alt.erase(0, opos-A->pos);
 		    A->pos = opos;
-		    //ref_end = ref_end_orig;
-		    //alt_end = alt_end_orig;
-		    // try right align for indel only, no complex
-	  	    if (ref_end == ref_end_orig) {
-		    	while (A->pos+ref_end < ref_index[chr_idx].size) {
-			    char nuc = ref_index[chr_idx].base(A->pos+ref_end);
-			    if (ref_end > 0 and A->ref[0] != nuc) break;
-			    if (alt_end > 0 and A->alt[0] != nuc) break;
-			    if (ref_end > 0) A->ref = A->ref.substr(1)+string(1, nuc);
-			    if (alt_end > 0) A->alt = A->alt.substr(1)+string(1, nuc);
-			    A->pos++;
-		        }
-			if (junc.contain(chr_idx, A->pos, ref_end) or not junc.contained_in_ampl(chr_idx, A->pos, ref_end)) {
-			    // right alignment is also not in amplicon, keep the original
-			    A->ref.erase(0, opos-A->pos);
-                    	    A->alt.erase(0, opos-A->pos);
-                    	    A->pos = opos;
-			}
-		    } else {
-		        ref_end = ref_end_orig;
-                        alt_end = alt_end_orig;
-		    }
+		    ref_end = ref_end_orig;
+		    alt_end = alt_end_orig;
 		}
 	  }
        }
@@ -1107,6 +1087,7 @@ int PrepareHotspots(int argc, const char *argv[])
 	   if (I->ref.size() == I->alt.size() or I->ref[0] == I->alt[0]) // mnp or complex with leading match
          	continue;
 	   // complex with no leading match also need to add a padding base
+	   if (I->custom_tags.find("BSTRAND") != I->custom_tags.end()) continue; // complex or mnp in of SVB allele need no padding.
 	}
         if (I->pos == 0) {
           I->filtered = true;
@@ -1319,4 +1300,4 @@ int PrepareHotspots(int argc, const char *argv[])
 }
 
 
-
+} //namespace

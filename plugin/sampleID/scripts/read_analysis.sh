@@ -113,16 +113,24 @@ else
   OUTFILE="/dev/stdout"
 fi
 
+if [ $CHIP_LEVEL_ANALYSIS_PATH ]; then
+  samtoolsPath="${DIRNAME}/bin/samtools"
+else
+  samtoolsPath="samtools"
+fi
 ############
 
 # Basic on-target stats
+TMPFILE="${WORKDIR}/covAnal.sh"
 if [ -n "$OUTFILE" ]; then
   MREADS=`samtools view -c -F 4 "$BAMFILE"`
   TREADS=$MREADS
   PTREADS="100.0%"
   echo "Number of mapped reads:    $MREADS" > "$OUTFILE"
   if [ -n "$BEDFILE" ]; then
-    TREADS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
+    # long winded way using regions is much fast than using -L
+    awk -v bam="$BAMFILE" '$0!~/^track/ {print "samtools view -c -F 4 "bam" "$1":"$2+1"-"$3}' "$BEDFILE" > "$TMPFILE"
+    TREADS=`source "$TMPFILE" | awk '{n+=$1} END {printf "%.0f",n+0}'`
     if [ "$TREADS" -gt 0 ]; then
       PTREADS=`echo "$TREADS $MREADS" | awk '{printf("%.2f%%"),100*$1/$2}'`
     else
@@ -131,9 +139,10 @@ if [ -n "$OUTFILE" ]; then
   fi
   echo "Number of reads in ${TARGID}s: $TREADS" >> "$OUTFILE"
   echo "Percent reads in ${TARGID}s:   $PTREADS" >> "$OUTFILE"
-  MREADS=`samtools depth -G 4 "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
+  MREADS=`"$samtoolsPath" depth -G 4 "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
   if [ -n "$BEDFILE" ]; then
-    TREADS=`samtools depth -G 4 -b "$BEDFILE" "$BAMFILE" | awk '{c+=$3} END {printf "%.0f",c+0}'`
+    awk -v sam="$samtoolsPath" -v bam="$BAMFILE" '$0!~/^track/ {print sam" depth -G 4 -r "$1":"$2+1"-"$3" "bam}' "$BEDFILE" > "$TMPFILE"
+    TREADS=`source "$TMPFILE" | awk '{n+=$3} END {printf "%.0f",n+0}'`
     if [ "$TREADS" -gt 0 ]; then
       PTREADS=`echo "$TREADS $MREADS" | awk '{printf("%.2f%%"),100*$1/$2}'`
     else
@@ -156,4 +165,5 @@ if [ -n "$OUTFILE" ]; then
     echo "Female ${TARGID} reads: $XREADS" >> "$OUTFILE"
   fi
 fi
+rm -f "$TMPFILE"
 

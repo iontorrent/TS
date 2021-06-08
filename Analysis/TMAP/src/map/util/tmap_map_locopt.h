@@ -54,8 +54,26 @@ typedef struct __tmap_map_locopt_t
     tmap_map_opt_ovr_i_t max_adapter_bases_for_soft_clipping_he; /*!< specifies to perform 3' soft-clipping on higher coordinate end of the amplicon (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
     tmap_map_opt_ovr_i_t max_adapter_bases_for_soft_clipping_le; /*!< specifies to perform 3' soft-clipping on lower coordinate end of the amplicon (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
     tmap_map_opt_ovr_i_t end_repair_5_prime_softclip; /*!< end-repair is allowed to introduce 5' softclip*/
-    tmap_map_opt_ovr_i_t end_repair_5_prime_softclip_he; /*!< end-repair is allowed to introduce 5' softclip on higher coordinate end of the amplicon*/
-    tmap_map_opt_ovr_i_t end_repair_5_prime_softclip_le; /*!< end-repair is allowed to introduce 5' softclip on lower coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t end_repair_5_prime_softclip_he; /*!< end-repair is allowed to introduce 5' softclip on higher coordinate end of the amplicon */
+    tmap_map_opt_ovr_i_t end_repair_5_prime_softclip_le; /*!< end-repair is allowed to introduce 5' softclip on lower coordinate end of the amplicon */
+    tmap_map_opt_ovr_i_t repair; /*!< perform REPAiR regardless of frequency/count filtering */
+    tmap_map_opt_ovr_i_t repair_he; /*!< perform REPAiR regardless of frequency/count filtering on higher coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_le; /*!< perform REPAiR regardless of frequency/count filtering on lower coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_min_adapter; /*!< REPAiR minimal adapter size (ZB tag) */
+    tmap_map_opt_ovr_i_t repair_min_adapter_he; /*!< REPAiR minimal adapter size (ZB tag)  on higher coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_min_adapter_le; /*!< REPAiR minimal adapter size (ZB tag)  on lower coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_max_overhang; /*!< REPAiR maximal distance from the template end to the amplicon end (ampl_len - ZA) */
+    tmap_map_opt_ovr_i_t repair_max_overhang_le; /*!< REPAiR maximal distance from the template end to the amplicon end (ampl_len - ZA)  on higher coordinate end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_max_overhang_he; /*!< REPAiR maximal distance from the template end to the amplicon end (ampl_len - ZA)  on lower coordinate end of the amplicon*/
+    tmap_map_opt_ovr_f_t repair_identity_drop_limit; /*!< REPAiR the identity score of the newly aligned zone should be above IDENTITY_DROP_LIMIT*(removed_portion_identity) */
+    tmap_map_opt_ovr_f_t repair_identity_drop_limit_le; /*!< REPAiR the identity score of the newly aligned zone should be above IDENTITY_DROP_LIMIT*(removed_portion_identity) on lower end of the amplicon */
+    tmap_map_opt_ovr_f_t repair_identity_drop_limit_he; /*!< REPAiR the identity score of the newly aligned zone should be above IDENTITY_DROP_LIMIT*(removed_portion_identity)  on higher end of the amplicon*/
+    tmap_map_opt_ovr_i_t repair_max_primer_zone_dist; /*!< REPAiR maximal number of errors in the primer zone (between amplicon end and the read end if read end is inside amplicon) */
+    tmap_map_opt_ovr_i_t repair_max_primer_zone_dist_le; /*!< REPAiR maximal number of errors in the primer zone (between amplicon end and the read end if read end is inside amplicon) on lower end of the amplicon */
+    tmap_map_opt_ovr_i_t repair_max_primer_zone_dist_he; /*!< REPAiR maximal number of errors in the primer zone (between amplicon end and the read end if read end is inside amplicon) on higher end of the amplicon */
+    tmap_map_opt_ovr_i_t repair_clip_ext; /*!< number of bases to extend the clip beyond the worst alignment position*/
+    tmap_map_opt_ovr_i_t repair_clip_ext_le; /*!< number of bases to extend the clip beyond the worst alignment position on lower end of the amplicon */
+    tmap_map_opt_ovr_i_t repair_clip_ext_he; /*!< number of bases to extend the clip beyond the worst alignment position on higher end of the amplicon */
     tmap_map_opt_ovr_i_t do_realign; /*!< perform realignment after mapping */
     tmap_map_opt_ovr_i_t realign_mat_score; /*!< realignment match score */
     tmap_map_opt_ovr_i_t realign_mis_score; /*!< realignment mismatch score */

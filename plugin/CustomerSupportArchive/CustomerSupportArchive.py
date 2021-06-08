@@ -18,7 +18,7 @@ import makeCSA
 
 class CustomerSupportArchive(IonPlugin):
     """Generate an enhanced FSA"""
-    version = "0.3.1"
+    version = "0.4.4"
     allow_autorun = True # if true, no additional user input
     runtypes = [ RunType.FULLCHIP]
     depends = [] 
@@ -36,7 +36,7 @@ class CustomerSupportArchive(IonPlugin):
         # #         "*.log"
         # #     ]
         # # },
-        # # tested
+        # tested
         "rawTrace": {
             "files":[
                 "*png",
@@ -133,11 +133,20 @@ class CustomerSupportArchive(IonPlugin):
                 "*html"
             ]
         },
+        # tested
+        "NucStepSpatialV2": {
+            "files":[
+                "*png",
+                "*log",
+                "*html"
+            ]
+        },
     }
 
 
     def launch(self):
         """ main """
+        version = "0.4.4"
         print "Running the FieldSupport plugin."
         print "Reading startpluginjson"
         start_json = getattr(self, 'startpluginjson', None)
@@ -235,8 +244,13 @@ class CustomerSupportArchive(IonPlugin):
                         for pattern in options["files"]:
                             for file_name in fnmatch.filter(file_names, pattern):
                                 f.add(os.path.join(root, file_name), os.path.join(name, file_name))
-
-        # 
+        try:
+            with tarfile.TarFile.open(zip_path, dereference=True, mode='a') as f:
+                f.add(os.path.join(self.results_dir, "CustomerSupportArchive_" + version + ".log"))
+        except:
+            print "cannot include CSA log - " + os.path.join(self.results_dir, "CustomerSupportArchive_" + version + ".log")
+            pass
+        
         # cmd = 'XZ_OPT="-9e" tar cJf '+ zip_path[:-4] + '.tar.xz -C ' + os.path.dirname(zip_path) + ' ' + os.path.basename(zip_path)
         cmd = 'xz -9vf '+ zip_path
         print 'compressing tar file - ' + cmd
@@ -273,12 +287,13 @@ class CustomerSupportArchive(IonPlugin):
             "TSP_CHIPBARCODE": self.efuse.encode('utf-8'),
             "TSP_RUNID": self.runid,
             "explog_path": os.path.join(self.analysis_dir, 'explog.txt'),
-            "TSP_LIMIT_OUTPUT": "1"  # Tells plugins they are being run by FieldSupport instead of the pipeline
+            "TSP_LIMIT_OUTPUT": "1",  # Tells plugins they are being run by FieldSupport instead of the pipeline
+            "CSA": "True"
         }
         
     
         # some plugins need barcodes.json
-        if plugin_name in  ('flowErr', 'Lane_Diagnostics', 'chipDiagnostics', 'ValkyrieWorkflow', 'libPrepLog', 'autoCal'):
+        if plugin_name in  ('flowErr', 'Lane_Diagnostics', 'chipDiagnostics', 'ValkyrieWorkflow', 'libPrepLog', 'autoCal', 'NucStepSpatialV2'):
             print "coping barcodes.json" # and startplugin.json"
             p = Popen(["cp", os.path.join(self.results_dir, "barcodes.json"), output_dir])
             output = p.communicate()[0]
@@ -286,7 +301,7 @@ class CustomerSupportArchive(IonPlugin):
             output = p.communicate()[0]
 
         # call plugins:
-        if plugin_name in ('True_loading', 'flowRate', 'Lane_Diagnostics', 'chipDiagnostics', 'ValkyrieWorkflow', 'libPrepLog', 'autoCal'):  
+        if plugin_name in ('True_loading', 'flowRate', 'Lane_Diagnostics', 'chipDiagnostics', 'ValkyrieWorkflow', 'libPrepLog', 'autoCal', 'NucStepSpatialV2'):  
             cmd = ["python", "-u", plugin_dir + "/" + plugin_name + ".py", "-vv"]
             p = Popen(cmd, stdout = subprocess.PIPE, cwd = plugin_dir, env = env)
             while True:

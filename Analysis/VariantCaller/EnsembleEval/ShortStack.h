@@ -61,6 +61,8 @@ public:
     bool GetIsMolecularTag() const { return is_molecular_tag_; };
 
 private:
+    // my_t_ is the resource shared by all entries in my_hypotheses
+    PrecomputeTDistOddN my_t_;
     // Very important: Must call SetIsMolecularTag(bool is_mol_tag) to set the value of is_molecular_tag_!
     bool is_molecular_tag_ = false;
     // functional family counts

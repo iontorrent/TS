@@ -1,24 +1,29 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+#define TMAP_MAP_STATS_C
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <config.h>
 #include <unistd.h>
 #include <memory.h>
 #include <string.h>
+#include <assert.h>
 #include "../../util/tmap_error.h"
 #include "../../util/tmap_alloc.h"
 #include "../../util/tmap_definitions.h"
+#include "../../util/tmap_histo.h"
 #include "tmap_map_stats.h"
+
+size_t  repair_clip_hist_binsz  [REPAIR_CLIP_HIST_BINNO] = {1, 1, 4, 4, 10, 10, 10, 10, 0};
+int64_t repair_clip_hist_lowerb [REPAIR_CLIP_HIST_BINNO];
 
 tmap_map_stats_t*
 tmap_map_stats_init()
 {
   tmap_map_stats_t* r = tmap_calloc (1, sizeof(tmap_map_stats_t), "stats");
-
   // DVK - guarantee initialization to zero of all members (actually calloc does this anyway)
   tmap_map_stats_zero (r);
-
   return r;
 }
 
@@ -34,6 +39,10 @@ tmap_map_stats_zero(tmap_map_stats_t *s)
   memset (s, 0, sizeof (tmap_map_stats_t));
 }
 
+void init_repair_clip_hist_lowerb ()
+{
+    init_ihist_lowerb (repair_clip_hist_binsz, REPAIR_CLIP_HIST_BINNO, repair_clip_hist_lowerb, 0);
+}
 
 void
 tmap_map_stats_add(tmap_map_stats_t *dest, tmap_map_stats_t *src)
@@ -73,6 +82,13 @@ tmap_map_stats_add(tmap_map_stats_t *dest, tmap_map_stats_t *src)
   for (i = 0; i != 4; ++i) dest->num_end_repair_extended [i] += src->num_end_repair_extended [i];
   for (i = 0; i != 4; ++i) dest->bases_end_repair_extended [i] += src->bases_end_repair_extended [i];
   for (i = 0; i != 4; ++i) dest->total_end_repair_indel [i] += src->total_end_repair_indel [i];
+  dest->reads_REPAiRed += src->reads_REPAiRed;
+  for (i = 0; i != 2; ++i) dest->ends_REPAiRed [i] += src->ends_REPAiRed [i];
+  for (i = 0; i != 2; ++i) dest->ends_REPAiR_clipped [i] += src->ends_REPAiR_clipped [i];
+  for (i = 0; i != 2; ++i) dest->ends_REPAiR_extended [i] += src->ends_REPAiR_extended [i];
+  for (i = 0; i != 2; ++i) dest->matches_added_by_REPAiR [i] += src->matches_added_by_REPAiR [i];
+  for (i = 0; i != 2; ++i) dest->total_indel_added_by_REPAiR [i] += src->total_indel_added_by_REPAiR [i];
+  for (i = 0; i != REPAIR_CLIP_HIST_BINNO; ++i) dest->repair_clip_histo [i] += src->repair_clip_histo [i];
 
   for (i = 0; i != 2; ++i) dest->num_5_softclips [i] += src->num_5_softclips [i];
   for (i = 0; i != 2; ++i) dest->bases_5_softclips_qry [i] += src->bases_5_softclips_qry [i];
@@ -171,6 +187,29 @@ tmap_map_stats_print(tmap_map_stats_t *s)
             (unsigned long long int) s->total_end_repair_indel [R5P],
             (unsigned long long int) s->total_end_repair_indel [R3P]);
 
+  fprintf (stderr, "num_REPAiRed [reads, fwd3', rev3']=[%llu, %llu, %llu]\n", 
+            (unsigned long long int) s->reads_REPAiRed,
+            (unsigned long long int) s->ends_REPAiRed [0],
+            (unsigned long long int) s->ends_REPAiRed [1]);
+
+  fprintf (stderr, "num_REPAiR_clipped [total, fwd3', rev3']=[%llu, %llu, %llu]\n", 
+            (unsigned long long int) s->ends_REPAiR_clipped [0] + s->ends_REPAiR_clipped [1],
+            (unsigned long long int) s->ends_REPAiR_clipped [0],
+            (unsigned long long int) s->ends_REPAiR_clipped [1]);
+
+  fprintf (stderr, "num_REPAiR_extended [total, fwd3', rev3']=[%llu, %llu, %llu]\n", 
+            (unsigned long long int) s->ends_REPAiR_extended [0] + s->ends_REPAiR_extended [1],
+            (unsigned long long int) s->ends_REPAiR_extended [0],
+            (unsigned long long int) s->ends_REPAiR_extended [1]);
+
+  fprintf (stderr, "matches_added__by_REPAiR [fwd3', rev3']=[%llu, %llu]\n", 
+            (unsigned long long int) s->matches_added_by_REPAiR [0],
+            (unsigned long long int) s->matches_added_by_REPAiR [1]);
+
+  fprintf (stderr, "total_indel_added_by_REPAiR [fwd3', rev3']=[%llu, %llu]\n", 
+            (unsigned long long int) s->total_indel_added_by_REPAiR [0],
+            (unsigned long long int) s->total_indel_added_by_REPAiR [1]);
+
   fprintf (stderr, "num_5_softclips [fwd, rev]=[%llu, %llu]\n", 
             (unsigned long long int) s->num_5_softclips [0],
             (unsigned long long int) s->num_5_softclips [1]);
@@ -197,7 +236,6 @@ tmap_map_stats_print(tmap_map_stats_t *s)
   fprintf (stderr, "bases_tailclipped=%llu\n", (unsigned long long int)s->bases_tailclipped);
   fprintf (stderr, "num_fully_tailclipped=%llu\n", (unsigned long long int)s->num_fully_tailclipped);
   fprintf (stderr, "bases_fully_tailclipped=%llu\n", (unsigned long long int)s->bases_fully_tailclipped);
-  
 
   fprintf (stderr, "num_filtered_als=%llu\n", (unsigned long long int)s->num_filtered_als);
 

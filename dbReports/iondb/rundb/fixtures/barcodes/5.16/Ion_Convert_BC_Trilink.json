@@ -1,0 +1,433 @@
+[{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 1,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "CTAAGGTAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_001",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 2,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TAAGGAGAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_002",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 3,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "AAGAGGATTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_003",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 4,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TACCAAGATC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_004",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 5,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "CAGAAGGAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_005",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+   {
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 6,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "CTGCAAGTTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_006",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 7,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TTCGTGATTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_007",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 8,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TTCCGATAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_008",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 9,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TGAGCGGAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_009",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 10,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "CTGACCGAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_010",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 11,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCCTCGAATC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_011",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 12,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TAGGTGGTTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_012",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+  {
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 13,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCTAACGGAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_013",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 14,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TTGGAGTGTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_014",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 15,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCTAGAGGTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_015",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 16,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCTGGATGAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_016",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 17,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCTATTCGTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_017",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 18,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "AGGCAATTGC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_018",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 19,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TTAGTCGGAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_019",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+  {
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 20,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "CAGATCCATC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_020",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 21,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TCGCAATTAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_021",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 22,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TTCGAGACGC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_022",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 23,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "TGCCACGAAC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_023",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	},
+	{
+		"pk": null,
+		"model": "rundb.dnabarcode",
+		"fields": {
+			"index": 24,
+			"name": "TriLink Small RNA Barcode Set",
+			"sequence": "AACCTCATTC",
+			"adapter": "GTTCAGAGTT",
+			"score_cutoff": 2,
+			"length": 10,
+			"id_str": "TriLink_024",
+			"active": true,
+			"score_mode": 1,
+			"type": "rna",
+			"annotation": "",
+            "system": true
+		}
+	}
+]

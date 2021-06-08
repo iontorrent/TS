@@ -2,6 +2,12 @@
 #ifndef TMAP_FSW_H
 #define TMAP_FSW_H
 
+
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 // We have 6-bits total, so 3-bits for above, and 3-bits for below
 #define TMAP_FSW_MAX_OFFSET 7
 
@@ -318,4 +324,9 @@ tmap_fsw_flowseq_destroy(tmap_fsw_flowseq_t *flowseq);
 int
 tmap_fsw_main(int argc, char *argv[]);
 #endif
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // TMAP_FSW_H

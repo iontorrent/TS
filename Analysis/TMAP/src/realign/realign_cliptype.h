@@ -10,6 +10,5 @@ enum CLIPTYPE
     SEMI_SOFT_KEY = 3,
     SEMI_SOFT_BOTH = 4
 };
-    
+
 #endif // REALIGN_CLIPTYPE_H
-    

@@ -215,6 +215,185 @@ void AlleleIdentity::IdentifyClearlyNonFD(const LocalReferenceContext &reference
 	status.isClearlyNonFD = hp_removed_ref == hp_removed_alt;
 }
 
+// Example:
+// base_seq = "TTAAACGGGG"
+// return {{'T', 2}, {'A', 3}, {'C', 1}, {'G', 4}}
+vector<pair<char, int> > CalulateHpCompressed(const string& base_seq){
+	vector<pair<char, int> > my_hp_compress;
+	char current_nuc = 0;
+	for (string::const_iterator nuc_it = base_seq.begin(); nuc_it != base_seq.end(); ++nuc_it){
+		if (current_nuc == *nuc_it){
+			++(my_hp_compress.back().second);
+		}else{
+			my_hp_compress.push_back({*nuc_it, 1});
+			current_nuc = *nuc_it;
+		}
+	}
+	return my_hp_compress;
+}
+
+// isPossibleGCMotif for 0->1 INS or 1->0 DEL of G or C and it has vicinity C or G
+void AlleleIdentity::IdentifyPossibleGCMotif(const LocalReferenceContext& reference_context, const ReferenceReader &ref_reader) {
+	// Starts with not isPossibleGCMotif until I find concrete evidence.
+	status.isPossibleGCMotif = false;
+
+	if (abs(inDelLength) != 1 or status.isClearlyNonFD){
+		return;
+	}
+
+	const string &shorter_allele = status.isDeletion? altAllele : reference_context.reference_allele;
+  const string &longer_allele = status.isDeletion? reference_context.reference_allele : altAllele;
+
+  if ( ((int) longer_allele.size() - num_padding_added.first - num_padding_added.second != 2)
+      or ((int) shorter_allele.size() - num_padding_added.first - num_padding_added.second != 1)){
+    // Simple INDEL must be len(padding removed longer) == 2 and len(padding removed shorter) == 1
+    return;
+  }
+
+  if (shorter_allele[num_padding_added.first] != longer_allele[num_padding_added.first]
+      or longer_allele[num_padding_added.first + 1] == 'A'
+      or longer_allele[num_padding_added.first + 1] == 'T'){
+    // Not a simple INDEL of G or C
+    return;
+  }
+  // Left anchor is available
+  if (longer_allele[num_padding_added.first] == 'C' or longer_allele[num_padding_added.first] == 'G'){
+    status.isPossibleGCMotif = true;
+    return;
+  }else{
+    int right_anchor_pos = status.isDeletion? (position0 + num_padding_added.first + 2) : (position0 + num_padding_added.first + 1);
+    char right_anchor = right_anchor_pos < ref_reader.chr_size(chr_idx)? ref_reader.base(chr_idx, right_anchor_pos) : 0;
+    status.isPossibleGCMotif = right_anchor == 'G' or right_anchor == 'C';
+    return;
+  }
+}
+
+// Determine is a GC motive that satisfies all the following conditions
+// 1) isClearlyNonFD must be true.
+// 2) HP changes must be on G or C and it has vicinity C or G, e.g., (YES) CCCGGGG -> CCGGG, (NO) ACCCT -> ACCT
+// 3) Every HP length diff must be <= max_hp_diff_allowed
+//TODO: There are some repeated steps in the function but I don't have time to integrate them in the first place.
+void AlleleIdentity::IdentifyGCMotif(const LocalReferenceContext& reference_context, const ReferenceReader &ref_reader) {
+	ReferenceReader::iterator ref_it;
+	string left_anchors;
+	string right_anchors;
+	long ref_it_pos;
+	int max_hp_diff_allowed = 2;
+	// Starts with not isGCMotive until I find concrete evidence.
+	status.isGCMotif = false;
+	status.isPossibleGCMotif = false;
+	// Common trivial cases for not isGCMotive
+	// (Trivial cases 1): isGCMotive implies isClearlyNonFD
+	if (not status.isClearlyNonFD){
+		IdentifyPossibleGCMotif(reference_context, ref_reader);
+		return;
+	}
+
+	// (Trivial cases 2): SNP is not isGCMotive if not G>C and not C>G
+	if ((status.isSNP or status.isPaddedSNP) and ref_length == (int) altAllele.size()){
+    string::const_iterator ref_allele_it = reference_context.reference_allele.begin();
+		for (string::const_iterator alt_allele_it = altAllele.begin(); alt_allele_it != altAllele.end(); ++alt_allele_it, ++ref_allele_it){
+			if (*ref_allele_it != *alt_allele_it){
+				if (*ref_allele_it == 'A' or *ref_allele_it == 'T' or *alt_allele_it == 'A' or *alt_allele_it == 'T'){
+					return;
+				}
+			}
+		}
+	}
+
+	// (Trivial cases 3): HP-INDEL not on G or C HP implies isClearlyNonFD = false
+	if (status.isHPIndel and ref_length != (int) altAllele.size()){
+		// Not isClearlyNonFD if a HP-INDEL with indel_length > max_hp_diff_allowed
+		if (abs(ref_length - (int) altAllele.size()) > max_hp_diff_allowed){
+			return;
+		}
+		// Not isClearlyNonFD if INDEL on a non-GC HP
+		int min_len = min(ref_length, (int) altAllele.size());
+		for (int base_idx = 0; base_idx < min_len; ++base_idx){
+			if (reference_context.reference_allele[base_idx] != altAllele[base_idx] or base_idx == min_len - 1){
+			  char indel_nuc = ref_length > (int) altAllele.size()? reference_context.reference_allele[base_idx+1] : altAllele[base_idx+1];
+				if (indel_nuc != 'C' and indel_nuc != 'G'){
+				  return;
+				}
+			}
+		}
+	}
+
+	// Now handle the general case
+	// Calculate left anchors until I reach to a different HP of the start of ref allele
+	ref_it_pos = (long) position0 - 1;
+	ref_it = ref_reader.iter(chr_idx, ref_it_pos);
+	while (ref_it_pos >= 0){
+		left_anchors.push_back(*ref_it);
+		if (*ref_it != reference_context.reference_allele[0]){
+			break;
+		}
+		--ref_it;
+		--ref_it_pos;
+	}
+	// Remember to reverse because I use push_back
+	reverse(left_anchors.begin(), left_anchors.end());
+
+	// Calculate right anchors until I reach to a different HP of the end of ref allele
+	long chr_size = (long) ref_reader.chr_size(chr_idx);
+	ref_it_pos =  (long) position0 + (long) reference_context.reference_allele.size();
+	ref_it = ref_reader.iter(chr_idx, ref_it_pos);
+	while (ref_it_pos < chr_size){
+		right_anchors.push_back(*ref_it);
+		if (*ref_it != reference_context.reference_allele.back()){
+			break;
+		}
+		++ref_it;
+		++ref_it_pos;
+	}
+
+	// Walk through every HP
+	vector<pair<char, int> > alt_context = CalulateHpCompressed(left_anchors + altAllele + right_anchors);
+	vector<pair<char, int> > ref_context = CalulateHpCompressed(left_anchors + reference_context.reference_allele + right_anchors);
+
+	// In fact, this is implied by isClearlyNonFD. Do it again for safety.
+	if (alt_context.size() != ref_context.size()){
+		return;
+	}
+
+	for (int hp_idx = 0; hp_idx < (int) ref_context.size(); ++hp_idx){
+		const pair<char, int>& ref_hp_pair = ref_context[hp_idx];
+		const pair<char, int>& alt_hp_pair = alt_context[hp_idx];
+
+		// Exact HP matching, keep going
+		if (ref_hp_pair == alt_hp_pair){
+			continue;
+		}
+		// ref_hp_pair->first != alt_hp_pair->first  is actually implied by isClearlyNonFD
+		if (ref_hp_pair.first != alt_hp_pair.first or abs(ref_hp_pair.second - alt_hp_pair.second) > max_hp_diff_allowed){
+			return;
+		}
+		// Now we must have the same nuc but with different length
+		// Is it the change of HP on A or T?
+		if (ref_hp_pair.first == 'A' or ref_hp_pair.first == 'T'){
+			return;
+		}
+		// Now this nuc must be 'C' or 'G'. Looking for neighbor nuc
+		bool found_neighbor_gc = false;
+		if (hp_idx > 0){
+			if (ref_context[hp_idx-1].first == 'G' or ref_context[hp_idx-1].first == 'C'){
+				found_neighbor_gc = true;
+			}
+		}
+		if (hp_idx != (int) ref_context.size()-1){
+			if (ref_context[hp_idx+1].first == 'G' or ref_context[hp_idx+1].first == 'C'){
+				found_neighbor_gc = true;
+			}
+		}
+		// Couldn't find a vicinity G or C, so it is not a GC motive.
+		if (not found_neighbor_gc){
+			return;
+		}
+	}
+
+	// Now I pass all tests. It is a is a GC motive
+	status.isGCMotif = true;
+}
 
 
 // Test whether this is an HP-InDel
@@ -443,6 +622,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
   }
 
   IdentifyClearlyNonFD(reference_context, ref_reader); // Must be done after identifying HP-INDEL.
+  IdentifyGCMotif(reference_context, ref_reader); // Must be done after identifying ClearlyNonFD.
   return (is_ok);
 }
 

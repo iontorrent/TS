@@ -11,7 +11,7 @@
         "analysisDir",
         "pluginOutputDir"
     ],
-    "isThumbnail":"true",
+    "isThumbnail":"false",
     "name":"Lane_Diagnostics",
     "outputs":[
         "./outputs"
@@ -29,5 +29,5 @@
         "type"
     ],
     "vendorActivation":"/share/apps/",
-    "ver":"1.4.4"
+    "ver":"2.3.14"
 }

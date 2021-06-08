@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import copy 
+import math
 from .chipinfo import params, aliases
 
 #TODO:  Need to incorperate by-chip functions
@@ -78,7 +79,8 @@ class ChipType(object):
                         'spa'    :  Data is a spatial thumbnail
         '''
         # Check if __new__ caught this as an existing instance.  If so, we don't need to init
-        if isinstance( name, ChipType ):
+        #if isinstance( name, ChipType ):
+        if isinstance( name, self.__class__ ):
             return
 
         self.blockdir = blockdir
@@ -144,8 +146,18 @@ class ChipType(object):
         for key in record:
             setattr( self, key, record[key] )
 
+        self.record = record.copy()
+
         # Set multilane properties
         self.reset_lanes()
+
+    @property
+    def thumbnail( self ):
+        return self.__class__( record=self.record, tn=True )
+
+    @property
+    def tn_spa( self ):
+        return self.__class__( record=self.record, tn='spa' )
 
     def _apply_tn( self, record, tntype='tn' ):
         '''
@@ -368,6 +380,56 @@ class ChipType(object):
 
         return newchip
 
+def make_ct_from_dir( blockdir, base_ct=None ):
+    # Get list of blocks files in self.blockdir
+    dirlist = listdir( blockdir )
+
+    # Look for block names.  hopefully only one of these patterns is present
+    blocknames  = [ d for d in dirlist if seq_block.match( d ) ]
+    blocknames += [ d for d in dirlist if ecc_block.match( d ) ]
+
+    # Get the XY coordinates
+    y_vals = sorted( list ( set( [ int( bn.split('_')[-1][1:] ) for bn in blocknames ] ) ) )
+    x_vals = sorted( list ( set( [ int( bn.split('_')[-2][1:] ) for bn in blocknames ] ) ) )
+
+    blockR = y_vals[1]
+    chipR  = y_vals[1]*len(y_vals)
+    blockC = x_vals[1]
+    chipC  = x_vals[1]*len(x_vals)
+    return make_ct_from_rc( chipR, chipC, blockR, blockC, base_ct )
+
+def make_ct_from_rc( rows, cols, blockR=None, blockC=None, base_ct=None ):
+    if blockR is None:
+        blockR = rows / 8
+    if blockC is None:
+        blockC = cols / 12
+    def get_closest( val, target ):
+        # Find the closest factor to the target. Distance is measured in log-space
+        opts  = [ v for v in range(1,val) if float(val)/v == int(val)/int(v) ]
+        dists = [ abs(math.log(v/float(target))) for v in opts ]
+        od = zip( opts, dists )
+        od.sort( key=lambda k: k[1] )
+        return od[0][0]
+    miniT = 100
+    microT = 10
+    miniR  = get_closest( blockR, miniT )
+    miniC  = get_closest( blockC, miniT )
+    microR = get_closest( blockR, microT )
+    microC = get_closest( blockC, microT )
+    if not base_ct:
+        base_ct = ChipType( 'dummy' )
+    ct = copy.deepcopy( base_ct )
+    ct.chipR = rows
+    ct.chipC = cols
+    ct.blockR = blockR
+    ct.blockC = blockC
+    ct.miniR = miniR
+    ct.miniC = miniC
+    ct.microR = microR
+    ct.microC = microC
+
+    return ct
+
 def get_ct_from_dir( blockdir, records=None, tn=False ):
     '''
     Function to guess the chip type from the block parameters
@@ -508,16 +570,25 @@ def validate_block_sizes():
     else:
         print( '\nALL CHIPS PASS' )
 
-def validate_chiptype( chiptype, blockdir=None, rc=None ):
+def validate_chiptype( chiptype, blockdir=None, rc=None, infer=False ):
     ''' Provides a method to validate the provided chip type against
         either the underlying directory structure or a tuple (rows, cols) '''
     try:
-        read_chiptype = get_ct_from_dir( blockdir )
+        try:
+            read_chiptype = get_ct_from_dir( blockdir )
+        except:
+            if infer:
+                read_chiptype = make_ct_from_dir( blockdir, chiptype )
+            else:
+                raise
     except: # there are no blocks, or blockdir is None
         try:
             read_chiptype = get_ct_from_rc( rc[0], rc[1] )
         except:
-            raise ValueError( 'unable to determine chiptype from provided info' )
+            if infer:
+                read_chiptype = make_ct_from_rc( rc[0], rc[1] )
+            else:
+                raise ValueError( 'unable to determine chiptype from provided info' )
     if chiptype.chipR == read_chiptype.chipR and chiptype.chipC == read_chiptype.chipC:
         ''' Chip types are close enough to allow most code to continue '''
         return chiptype

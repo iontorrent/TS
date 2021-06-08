@@ -198,8 +198,12 @@ void BarcodeDatasets::EnumerateReadGroups()
       num_barcodes_++;
       start_barcode_names_[rg] = datasets_json_["read_groups"][read_group_id_to_name_[rg]]["barcode"].get("barcode_name", "NoName").asString();
     }
-    else
-      start_barcode_names_[rg] = "NoMatch";
+    else {
+      if (num_read_groups_ ==1)
+        start_barcode_names_[rg] = "Library";
+      else
+        start_barcode_names_[rg] = "NoMatch";
+    }
   }
   if (num_read_groups_ == 0) {
     cerr << "BarcodeDatasets ERROR: no read groups found." << endl;

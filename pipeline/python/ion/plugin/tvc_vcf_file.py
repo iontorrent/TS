@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 # Copyright (C) 2017 Thermo Fisher Scientific Inc. All Rights Reserved
+__version__ = '0.9'
 
 import copy
 from functools import wraps
@@ -84,7 +85,7 @@ class TvcVcfFile:
             raise ValueError('mode must be wither \"r\" or \"w\". Not \"%s\"' %mode)
         self.__f_vcf = open(vcf_path, self.__mode)
         if self.__mode == 'r':
-            self. __get_header()
+            self.__get_header()
             if self.is_missing_header():
                 raise IOError('Missing header information in %s' %self.__vcf_path)
             self.seek(0)
@@ -109,7 +110,7 @@ class TvcVcfFile:
         """
         return self
 
-    def __exit__(self, type, msg, traceback):
+    def __exit__(self, err_type, err_msg, err_traceback):
         """
         __exit__() -> bool
         Enable with statement
@@ -493,14 +494,23 @@ class TvcVcfFile:
     def __read_contig_from_header(self, line):
         find_text_list = ['ID=', ',length=', ',assembly=']
         find_indices = [line.index(find_text) for find_text in find_text_list]
-        my_dict = {'ID': line[find_indices[0] + len(find_text_list[0]) : find_indices[1]],
-                   'length': int(line[find_indices[1] + len(find_text_list[1]) : find_indices[2]]),
-                   'assembly': line[find_indices[2] + len(find_text_list[2]) : -1]}
-        self.contig_list.append(my_dict)
-        if my_dict['ID'] in self.__contig_id_list:
-            raise ValueError('The header has duplicated contig id: %s' %my_dict['ID'])
-        self.__contig_id_list.append(my_dict['ID'])
+        my_dict = {
+            'ID': line[find_indices[0] + len(find_text_list[0]) : find_indices[1]],
+            'length': int(line[find_indices[1] + len(find_text_list[1]) : find_indices[2]]),
+            'assembly': line[find_indices[2] + len(find_text_list[2]) : -1]
+        }
 
+        try:
+            idx_in_contig_id_list = self.__contig_id_list.index(my_dict['ID'])
+            # IR might merge headers of multiple VCF files and may have duplicated contig dicts.
+        except ValueError:
+            idx_in_contig_id_list = None
+        if idx_in_contig_id_list is not None and my_dict != self.contig_list[idx_in_contig_id_list]:
+            raise ValueError('The header has duplicated contig id with conflicted entries: %s' %my_dict['ID'])
+
+        # Append contig information
+        self.__contig_id_list.append(my_dict['ID'])
+        self.contig_list.append(my_dict)
 
     def __read_header_line(self, line):
         if line.startswith("##FORMAT=<") and line.endswith('>'):
@@ -551,7 +561,10 @@ class TvcVcfFile:
 
     def __encode_one_value(self, value):
         # The convention is to set 0.0 and 1.0 to be '0' and '1' in the vcf record
-        return str(int(value)) if value in [0.0, 1.0] else str(value)
+        if isinstance(value, float):
+            int_value = int(value)
+            return str(int_value) if value == int_value else str(value)
+        return str(value)
 
     def __encode_values(self, my_value, my_dict, num_alt):
         self.__check_length(my_value, my_dict, num_alt)
@@ -567,7 +580,7 @@ class TvcVcfFile:
         try:
             return self.info_field_dict[key] if is_info_field else self.format_tag_dict[key]
         except KeyError:
-            raise KeyError('Unknow key \"%s\" in %s: not specified in the header.' %(key, 'INFO' if is_info_field else 'FORMAT'))
+            raise KeyError('Unknown key \"%s\" in %s: not specified in the header.' %(key, 'INFO' if is_info_field else 'FORMAT'))
             return None
 
     def __is_multiple_entries(self, format_dict):
@@ -912,6 +925,55 @@ class TestTvcVcfFileReadMode:
             except IOError as err:
                 msg = str(err)
                 assert 'File not open in write (w) mode for flush' in msg
+
+def simple_vcf_parser(vcf_line):
+    """
+    Parse the VCF tags heursitcally. Didn't further split or convert INFO and FORMAT to the right type.
+    """
+    # Note that there is a bug that an SVB allele might contain empty REF or ALT. It could be wrong if I use  split_vcf_line = vcf_line.split().
+    split_vcf_line = vcf_line.strip().split('\t')
+    # INFO tags
+    info_dict = {}
+    if split_vcf_line[7] != '.':
+        info_dict = dict([info_entry.split('=') if '=' in info_entry else (info_entry, None) for info_entry in split_vcf_line[7].split(';')])
+
+    # QUAL
+    try:
+        qual = float(split_vcf_line[5])
+    except ValueError:
+        qual = split_vcf_line[5]
+
+    # Create basic vcf dict
+    vcf_dict = {
+        'CHROM': split_vcf_line[0],
+        'POS': int(split_vcf_line[1]),
+        'ID': split_vcf_line[2],
+        'REF': split_vcf_line[3],
+        'ALT': split_vcf_line[4].split(','),
+        'QUAL': qual,
+        'FILTER': split_vcf_line[6],
+        'INFO': info_dict,
+        'FORMAT': []
+    }
+
+    # FORMAT tags
+    if len(split_vcf_line) < 9:
+        return vcf_dict
+        
+    format_dict_list = []
+    format_key_list = split_vcf_line[8].split(':') if split_vcf_line[8] != '.' else []
+    for sample_format_tag in split_vcf_line[9:]:
+        split_sample_format_tag = sample_format_tag.split(':')
+        if len(format_key_list) != len(split_sample_format_tag):
+            format_dict_list.append({})
+            continue
+        
+        format_dict = dict(zip(format_key_list, split_sample_format_tag))
+        format_dict_list.append(format_dict)
+        
+    vcf_dict['FORMAT'] = format_dict_list
+    
+    return vcf_dict
 
 
 if __name__ == '__main__':

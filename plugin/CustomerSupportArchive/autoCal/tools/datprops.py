@@ -213,6 +213,10 @@ def reshape( data, chiptype, size=None ):
               [ chiptype.blockR,                 -1 ],    # If you  know the data is going to match this, you might need to input it with the size parameter
               [ chiptype.blockC,                 -1 ] ]   # to avoid it being acidentally caught by [chipR,-1]
 
+    # handles py3 division behavior which implicitly returns floats
+    # NOTE: Needs to happen before checking if "size" is not none to pass in any size value
+    sizes = [ (int(x[0]),int(x[1]),) for x in sizes ]
+
     # Prepend the list with the manual input size
     if size is not None:
         sizes = [size] + sizes
@@ -269,4 +273,4 @@ def archive_dat( filename, metric ):
 
 def annotate( msg, level=1 ):
     if level <= verbose:
-        print msg
+        print( msg )

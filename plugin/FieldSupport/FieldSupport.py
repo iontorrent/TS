@@ -11,14 +11,15 @@ import subprocess
 import fnmatch
 import shutil
 
+from subprocess import *
 from ion.plugin import PluginCLI, IonPlugin, RunLevel, RunType
 from ion.utils import makeCSA
 
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.14.0.0'
-    runtypes = [RunType.THUMB]
+    version = '5.16.11.0'
+    runtypes = [RunType.THUMB, RunType.FULLCHIP]
     runlevels = [RunLevel.LAST]
 
     plugin_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)))
@@ -38,6 +39,25 @@ class FieldSupport(IonPlugin):
                 "*.csv",
                 "*.gif",
                 "*.html",
+                "*.log"
+            ]
+        }
+    }
+
+    plugin_options_fc = {
+        "GBU_HBU_Analysis": {
+            "files": [
+                "*.png",
+                "*.xls",
+                "*.json",
+                "*.csv",
+                "*.txt",
+                "*.html",
+                "*.css",
+                "*.js",
+                "*flot",
+                "*lifechart",
+                "*slickgrid",
                 "*.log"
             ]
         }
@@ -112,10 +132,39 @@ class FieldSupport(IonPlugin):
     def fetch_thumbnail_report_pdf(self):
         return self.fetch_pdf(self.start_plugin['runinfo']['pk'])
 
+    def edit_startpluginjson(self, starpluginfile, dependent, plugin_name):
+        with open(starpluginfile, 'r+') as start_plugin_file:
+            start_plugin = json.load(start_plugin_file)
+            plugin_result_base =  os.path.dirname(start_plugin["runinfo"]["results_dir"])
+            all_subdirs = []
+            for d in os.listdir(plugin_result_base):
+                if os.path.isdir(os.path.join(plugin_result_base, d)) and dependent in d:
+                    all_subdirs.append(os.path.join(plugin_result_base, d))
+            latest_subdir = max(all_subdirs, key=os.path.getmtime)
+            start_plugin["pluginconfig"]["coverage_analysis_path"] = str(latest_subdir) + '/'
+            start_plugin["pluginconfig"]["dup_resolve"] = "Mean"
+            start_plugin["pluginconfig"]["launch_mode"] = "Manual"
+            results_dir = self.start_plugin['runinfo']['results_dir']
+            rdir = os.path.join(results_dir, 'FieldSupport',plugin_name)
+            pdir = os.path.join(self.plugin_dir, "rndplugins", plugin_name)
+            start_plugin['runinfo']['results_dir'] = rdir
+            start_plugin['runinfo']['plugin_dir'] = pdir
+            start_plugin['runinfo']['plugin_name'] = plugin_name
+            start_plugin['runinfo']['plugin']['depends'] = dependent
+            start_plugin['runinfo']['plugin']['name'] = plugin_name
+            start_plugin['runinfo']['plugin']['path'] = pdir
+            start_plugin['depends'] = {}
+            start_plugin['depends']['coverageAnalysis'] = {}
+            start_plugin['depends']['coverageAnalysis']['pluginresult_path'] = start_plugin["pluginconfig"]["coverage_analysis_path"] 
+            start_plugin_file.seek(0)
+            json.dump(start_plugin, start_plugin_file, indent=2,sort_keys=True)
+            
+
     def run_rndplugin(self, plugin_name):
         plugin_dir = os.path.join(self.plugin_dir, "rndplugins", plugin_name)
         output_dir = os.path.join(self.start_plugin["runinfo"]["results_dir"], "FieldSupport", plugin_name)
         os.mkdir(output_dir)
+        print output_dir
         env = {
             "DIRNAME": plugin_dir,
             "SIGPROC_DIR": self.start_plugin["runinfo"]["sigproc_dir"],
@@ -125,21 +174,38 @@ class FieldSupport(IonPlugin):
             "TSP_FILEPATH_PLUGIN_DIR": output_dir,
             "TSP_LIMIT_OUTPUT": "1"  # Tells plugins they are being run by FieldSupport instead of the pipeline
         }
-        subprocess.check_output(["bash", "launch.sh"], cwd=plugin_dir, env=env)
+
+        if plugin_name in ('GBU_HBU_Analysis') and not self.thumbnail:
+            print "coping barcodes.json and startplugin.json"
+            p = Popen(["cp", os.path.join(self.start_plugin["runinfo"]["results_dir"], "barcodes.json"), output_dir])
+            output = p.communicate()[0]
+            p = Popen(["cp", os.path.join(self.start_plugin["runinfo"]["results_dir"], "startplugin.json"), output_dir])
+            output = p.communicate()[0]
+            self.edit_startpluginjson(os.path.join(output_dir, "startplugin.json"), "coverageAnalysis", "GBU_HBU_Analysis")
+
+            version = '5.10.0.0'
+            plugin = Popen([
+            '%s/GBU_HBU_Analysis_plugin.py' % plugin_dir, '-V', version,
+            os.path.join(output_dir, 'startplugin.json'), os.path.join(output_dir,'barcodes.json') ], stdout=PIPE, shell=False )
+            print plugin.communicate()[0]
+
+        else:
+            subprocess.check_output(["bash", "launch.sh"], cwd=plugin_dir, env=env)
 
     def launch(self, data=None):
         self.log.info("Launching Field Support.")
-
+        self.thumbnail = True
         with open('startplugin.json', 'r') as start_plugin_file:
             self.start_plugin = json.load(start_plugin_file)
 
         # Exit early if this is not a thumbnail run
         if self.start_plugin["runplugin"]["run_type"] != "thumbnail" and self.start_plugin['runinfo']['platform'] != "pgm":
-            self.state["warning"] = "This plugin can only be run on thumbnail or PGM reports. " \
-                                    "Please rerun this plugin on this run's thumbnail report."
-            self.write_status()
-            self.log.info("Field Support Aborted.")
-            return False
+            # self.state["warning"] = "This plugin can only be run on thumbnail or PGM reports. " \
+            #                        "Please rerun this plugin on this run's thumbnail report."
+            # self.write_status()
+            # self.log.info("Field Support Aborted.")
+            # return False
+            self.thumbnail = False
 
         self.state["progress"] = 10
         self.write_status()
@@ -149,21 +215,31 @@ class FieldSupport(IonPlugin):
         zip_path = os.path.join(results_dir, zip_name)
 
         # Make CSA zip using pipeline utils makeCSA
-        makeCSA.makeCSA(
-            self.start_plugin["runinfo"]["report_root_dir"],
-            self.start_plugin["runinfo"]["raw_data_dir"],
-            zip_path,
-            self.start_plugin.get('chefSummary', dict()).get('chefLogPath', '')
-        )
+        try:
+            makeCSA.makeCSA(
+                self.start_plugin["runinfo"]["report_root_dir"],
+                self.start_plugin["runinfo"]["raw_data_dir"],
+                zip_path,
+                self.start_plugin.get('chefSummary', dict()).get('chefLogPath', '')
+            )
+        except IOError as e:
+            self.log.info("I/O error({0}): {1}".format(e.errno, e.strerror))
+        except Exception as e:
+            self.log.info("Unknown Exception:", e)
 
         self.state["progress"] = 30
         self.write_status()
 
         os.mkdir(os.path.join(results_dir, "FieldSupport"))
+        print os.path.join(results_dir, "FieldSupport")
 
         # Now run each rndplugin
-        for name, options in self.plugin_options.items():
-            self.run_rndplugin(name)
+        if self.thumbnail:
+            for name, options in self.plugin_options.items():
+                self.run_rndplugin(name)
+        else:
+            for name, options in self.plugin_options_fc.items():
+                self.run_rndplugin(name)
 
         self.state["progress"] = 70
         self.write_status()
@@ -190,11 +266,25 @@ class FieldSupport(IonPlugin):
                     self.log.exception(e)
 
             # Add rndplugin files
-            for name, options in self.plugin_options.items():
-                for root, _, file_names in os.walk(os.path.join(results_dir, "FieldSupport", name)):
-                    for pattern in options["files"]:
-                        for file_name in fnmatch.filter(file_names, pattern):
-                            f.write(os.path.join(root, file_name), os.path.join("FieldSupport", name, file_name))
+            if self.thumbnail:
+                for name, options in self.plugin_options.items():
+                    for root, _, file_names in os.walk(os.path.join(results_dir, "FieldSupport", name)):
+                        for pattern in options["files"]:
+                            for file_name in fnmatch.filter(file_names, pattern):
+                                f.write(os.path.join(root, file_name), os.path.join("FieldSupport", name, file_name))
+            else: # GBU
+                relroot = os.path.abspath(os.path.join(os.path.join(results_dir, "FieldSupport"), os.pardir))
+                for name, options in self.plugin_options_fc.items():
+                    for root, _, file_names in os.walk(os.path.join(results_dir, "FieldSupport", name), followlinks=True):
+                        f.write(root, os.path.relpath(root, relroot))
+                        for pattern in options["files"]:
+                            for file_name in fnmatch.filter(file_names, pattern):
+                                arcname = os.path.join(os.path.relpath(root, relroot), file_name)
+                                f.write(os.path.join(root, file_name), arcname)
+                                # if os.path.basename(root) not in name:
+                                #     f.write(os.path.join(root, file_name), os.path.join("FieldSupport", name, os.path.basename(root), file_name))
+                                # else:
+                                #     f.write(os.path.join(root, file_name), os.path.join("FieldSupport", name, file_name))
 
         # Remove rndplugins output
         shutil.rmtree(os.path.join(results_dir, "FieldSupport"))
@@ -210,7 +300,10 @@ class FieldSupport(IonPlugin):
         subprocess.check_call(["tar", "cfJ", tar_name, "-C", temp_dir, "."], env={"XZ_OPT": "-9"})
 
         # Remove temp dir and zip archive
-        shutil.rmtree(temp_dir)
+        try:
+            shutil.rmtree(temp_dir)
+        except:
+            pass
         os.unlink(zip_path)
 
         # Link up the zip

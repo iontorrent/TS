@@ -94,13 +94,18 @@ class Explog( object ):
             self.parse_efuse()
 
         # Assign attributes
-        if self.final:
-            self.DR = self.metrics['DynamicRange']
-        elif not self.final:
-            self.DR = self.metrics['DynamicRangeAfterBF']
+        # Jan 2020 - 'DynamicRange' is the correct DR key, it was a datacollect bug that confused us.  - PW
+        # Feb 2020 - Not so much.  The above was isolated to Valkyrie.  On other systems (560, for instance)
+        #                the AfterBF number is right.  *sigh*  - PW
+        #if self.final:
+        #    self.DR = self.metrics['DynamicRange']
+        #elif not self.final:
+        #    self.DR = self.metrics['DynamicRangeAfterBF']
+        self.DR = self.metrics['DynamicRangeAfterBF']
+        
         self.isRaptor   = self.metrics['Platform'].lower() in [ 's5', 's5xl']
         self.isValkyrie = self.metrics['Platform'].lower() in [ 'valkyrie' ]
-
+        
         # Advanced parsers
         self.get_run_time( )
         self.parse_advscriptfeatures()
@@ -172,13 +177,16 @@ class Explog( object ):
         misc = 0
 
         for line in self.lines:
+            if section and line.strip() and ( line.lstrip() == line ):
+                # We were in an indented section
+                # But now we have reached an unindented line
+                # we must have reached the end of the section
+                section = None
             try:
                 key, val = line.split( ':', 1 )
             except:
                 line = line.strip().rstrip( ':' )
                 if not line:
-                    # Must have reached the end of the section
-                    section = None
                     continue
                 key   = 'msg {}'.format( misc )
                 misc += 1
@@ -246,7 +254,12 @@ class Explog( object ):
         def filesorter( filename ):
             if '_' in filename:
                 section = '_'.join(filename.split( '_' )[:-1])
-                index   = int( filename.split( '_' )[-1] )
+                try:
+                    index   = int( filename.split( '_' )[-1] )
+                except ValueError:
+                    # Very non standard acquisitions
+                    section = filename.split('.')[0]
+                    index = 0
             else:
                 section = filename.split('.')[0]
                 index   = 0
@@ -382,24 +395,30 @@ class Explog( object ):
         """
         start_str = self.find( 'Start Time' )
         end_str   = self.find( 'End Time'   )
-        print( start_str, end_str )
+        print( 'Start Time from explog: {}'.format(start_str))
+        print(   'End Time from explog: {}'.format( end_str ))
         
-        if start_str and end_str:
-            start     = datetime.datetime.strptime( start_str , '%m/%d/%Y %H:%M:%S' )
-            end       = datetime.datetime.strptime( end_str   , '%m/%d/%Y %H:%M:%S' )
+        try:
+            start = datetime.datetime.strptime( start_str , '%m/%d/%Y %H:%M:%S' )
+        except:
+            start = None
+        try:    
+            end   = datetime.datetime.strptime( end_str   , '%m/%d/%Y %H:%M:%S' )
+        except:
+            end   = None
+        
+        # Leave these as strings so that they are json serializable.
+        self.metrics['start_time'] = start_str
+        self.metrics['end_time']   = end_str
+            
+        # Assign datetime objects as explog attributes for future reference and no need for recalling strptime
+        self.start_time = start
+        self.end_time   = end
+        
+        if start and end:
             delta     = end - start
             run_hours = (24. * delta.days) + (delta.seconds / 3600.)
-
-            # Leave these as strings so that they are json serializable.
-            self.metrics['start_time'] = start_str
-            self.metrics['end_time']   = end_str
-            
-            # Assign datetime objects as explog attributes for future reference and no need for recalling strptime
-            self.start_time = start
-            self.end_time   = end
         else:
-            start     = None
-            end       = None
             run_hours = 0.
             
         # Note that anything > 5 hours on Valkyrie probably means end-to-end
@@ -572,8 +591,13 @@ class Explog( object ):
                 (                       'doHarpoon',                'doHarpoon',  True, make_bool ), 
                 (                'doTemplatingPrep',         'doTemplatingPrep',  True, make_bool ), 
                 (                  'doPostLibClean',           'doPostLibClean',  True, make_bool ), 
+                (                 'doParallelClean',          'doParallelClean',  True, make_bool ), 
+                (                   'doVacuumClean',            'doVacuumClean',  True, make_bool ), 
                 (                 'doPostChipClean',          'doPostChipClean',  True, make_bool ), 
                 (                    'postRunClean',             'postRunClean',  True, make_bool ), 
+                (                      'flow_order',                'Image Map', 'n/a',   str ), 
+                (                'reseq_flow_order',                'Reseq Map', 'n/a',   str ), 
+                (                  'doResequencing',           'doResequencing',  True, make_bool ), 
               )
 
     PGM_METRICS =( (                           'PGMHW',              'PGM HW:',     0, float ),

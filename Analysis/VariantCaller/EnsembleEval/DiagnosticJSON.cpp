@@ -40,7 +40,8 @@ void DiagnosticJsonFrequency(Json::Value &json, const PosteriorInference &cur_po
     json["AllFreq"][i_val] = cur_posterior.clustering.max_hyp_freq[i_val];
   }
 
-  json["MaxLL"] = cur_posterior.ref_vs_all.max_ll;
+  json["MaxLL"] = cur_posterior.ReturnJustLL();
+  json["LLAdjustment"] = cur_posterior.ReturnLLAdjustment();
   json["ParamLL"] = cur_posterior.params_ll;
 
   for (unsigned int i_val = 0; i_val < cur_posterior.ref_vs_all.log_posterior_by_frequency.size(); i_val++) {

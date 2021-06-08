@@ -11,12 +11,12 @@
 #include <string>
 
 /// \file
-/// Base classes for test facets are defined here.\n
+/// Base classes for test facets are defined here.
 /// The facet is a resource that is acquired (or created) before running the test or benchmark, 
 /// used within a test/benchmark and then destroyed / released. \n
 /// The example of a facet-controlled resource is a file with certain context used by a test case that 
 /// checks functionaluty of file reading function.\n
-/// The reason for mantaining a base classe for facets is lifetime management (ordered automated destruction).
+/// The reason for mantaining a base class for facets is lifetime management (ordered automated destruction).
 
 /// Base class for test facets
 /// 
@@ -29,10 +29,10 @@ class TestFacet
     std::string name_;
 public:
     static const char* separator;
-    /// Constructor\n
+    /// Constructor \n
     /// All facets are named to facilitate search in combined facet sets
     /// \param name the name of a facet. The uniquiness is not enforced, but duplicate names 
-    /// would prevent access to all but one similarly named facets
+    /// would prevent by-name access to all but one similarly named facets
     TestFacet (const char* name)
     {
         // make sure no separator is in the name - Ok to drop in 'release' test
@@ -101,10 +101,11 @@ public:
     /// adds facet to a tree. TestFacetSet can be added and will become a facet tree component 
     void add (TestFacet* facet);
     /// name-based access
+    /// the facets registered in master tests are available in subordinates, can be searched from there.
     /// the name of the facet may be segmented, in this case the levels are searched explicitely.
     /// segments are separated with (spans of) "/" character (as in unix path)
     /// the non-segmented names are searched in entire tree
-    /// \param name   the name for the searched facet
+    /// \param name the name for the searched facet
     /// \param force_segmented disables global search, searches only in immediate subordinates
     TestFacet* find (const char* name, bool force_segmented = false);
     FVIter begin () { return facets_.begin (); }

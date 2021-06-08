@@ -6,7 +6,7 @@ import re
 import subprocess
 from warnings import warn
 
-from . import average, stats
+from . import stats
 from . import convolve as conv
 
 # Modules which may not be on all servers but are not necessary for all functions
@@ -15,7 +15,7 @@ for m in modules:
     try:
         globals()[m] = __import__( m )
     except ImportError as e:
-        warn( e.message, ImportWarning )
+        warn( getattr( e, 'message', 'message not found' ), ImportWarning )
 
 #---------------------------------------------------------------------------#
 # Define classes
@@ -164,7 +164,7 @@ class BamFile:
         Function for logging output by verbosity
         """
         if level <= self.verbose:
-            print string
+            print( string )
     
     def save( self, directory='.' ):
         self.save_indels( directory )
@@ -428,11 +428,11 @@ class Bfmask:
             arr[start[0]:start[0]+new.shape[0],
                 start[1]:start[1]+new.shape[1]] = new
         except:
-            print 'Error inserting into array.  Likely a shape-mismatch.'
-            print '   arr.shape:   %s, %s' % ( arr.shape )
-            print '   new.shape:   %s, %s' % ( new.shape )
-            print '   start:       %s, %s' % ( start )
-            print '   end:         %s, %s' % ( start[0]+new.shape[0], start[1]+new.shape[1] )
+            print( 'Error inserting into array.  Likely a shape-mismatch.')
+            print( '   arr.shape:   %s, %s' % ( arr.shape ))
+            print( '   new.shape:   %s, %s' % ( new.shape ))
+            print( '   start:       %s, %s' % ( start ))
+            print( '   end:         %s, %s' % ( start[0]+new.shape[0], start[1]+new.shape[1] ) )
             raise
 
     def _interpret( self ):
@@ -461,7 +461,7 @@ class Bfmask:
     def heatmap( self , bfmask , path='' ):
         """ Plots a heatmap of the desired beadfind mask """
         msk  = getattr( self , bfmask )
-        x = average.block_avg( np.array( msk , float ) , self.miniblock , np.ones( msk.shape ))
+        x = stats.block_avg( np.array( msk , float ) , self.miniblock , np.ones( msk.shape ))
         plt.imshow   ( x , interpolation='nearest' , origin='lower' , clim=[0,1] )
         # Might want to turn off axis ticks since we're block averaging...?
         plt.xticks   ( np.arange( 0 , x.shape[1] + 1 , x.shape[1] / 6 ) , np.arange( 0 , self.cols + 1 , self.cols / 6 ) )
@@ -619,6 +619,192 @@ class Bfmask:
                 output['fc_x'] , output['%s_col_avg' % mask ] = self.linear( mask , path=outdir )
         return output
 
+class BfmaskStats:
+    """ Class for interaction with analysis.bfmask.stats files """
+    def __init__( self, stats_file=None, body='' ):
+        """ 
+        stats_file is the path to the file (includes the name of the file)
+        Reads in the analysis.bfmask.stats file for reading. Lives in sigproc_results.
+        Not all values are very helpful but will still be pulled into memory.
+        filtering data doesn't match front page report.
+        """
+        self.data = {}
+        
+        # First check to see if we directly supplied the file body text:
+        if body:
+            for line in body.splitlines():
+                self.read_line( line )
+        elif stats_file:
+            with open( stats_file, 'r' ) as f:
+                for line in f.readlines():
+                    self.read_line( line )
+                    
+    def calc_loading( self ):
+        """ Returns loading percentage (ignores ignored wells) """
+        available_wells = self.data['Total Wells'] - self.data['Excluded Wells']
+        return 100. * float( self.data['Bead Wells'] ) / available_wells
+    
+    def read_line( self, line ):
+        line = line.strip()
+        if '=' in line:
+            key = line.split('=')[0].strip()
+            val = line.split('=')[1].strip()
+            if '.' in val:
+                self.data[key] = float( val )
+            else:
+                self.data[key] = int( val )
+                
+class DatasetsBasecaller:
+    """ Class for interaction with the basecaller dataset """
+    def __init__( self, basecaller_dir, planned_barcodes=[] ):
+        """ 
+        basecaller_dir:   Directory where datasets_basecaller.json lives OR a sequencing run link from base to the actual basecaller_dir.
+        planned_barcodes: list of barcode names from plan, if not supplied this will read all barcodes!
+        """
+        try:
+            with open( os.path.join( basecaller_dir, 'datasets_basecaller.json' ), 'r' ) as f:
+                self.data = json.load( f )
+        except:
+            print( 'Failed to find local data . . . trying the web.' )
+            pass
+        
+        try:
+            _apiuser = 'ionadmin'
+            _apipwd  = 'ionadmin'
+            _apiauth = requests.auth.HTTPBasicAuth( _apiuser, _apipwd )
+            
+            # Add some error proofing to allow use of TS run links and permutations thereof
+            if '/metal' in basecaller_dir:
+                run_url = basecaller_dir.split('/metal')[0]
+            else:
+                run_url = basecaller_dir
+                
+            full_url = '{}/metal/basecaller_results/datasets_basecaller.json'.format( basecaller_dir )
+            print( full_url )
+            ans = requests.get( full_url, auth=_apiauth ) 
+            self.data = ans.json()
+            print( 'Loaded from web url' )
+        except:
+            print( "Error!  There is no datasets_basecaller file!" )
+            return None
+        
+        self.all_barcodes     = [ g.split('.')[1] for g in self.data['read_groups'].keys() ]
+        self.planned_barcodes = planned_barcodes
+        self.metrics = {}
+        self.barcode_data = {}
+
+        # High level metrics
+        self.metrics['total_reads'] = np.sum( [self.data['read_groups'][g]['read_count'] for g in self.data['read_groups']] )
+        
+    def get_barcode_data( self, barcodes=[] ):
+        """
+        Gets Q20 data from all the barcodes unless planned barcodes are supplied.
+        """
+        rgs = self.data['read_groups']
+        
+        # If no barcodes are supplied, use planned barcodes.
+        if not barcodes:
+            if self.planned_barcodes:
+                barcodes = self.planned_barcodes
+            else:
+                # Default to all.....
+                barcodes = self.all_barcodes
+                
+        try:
+            runid = self.data['read_groups'].keys()[0].split('.')[0]
+        except TypeError:
+            for k in self.data['read_groups'].keys():
+                runid = k.split('.')[0]
+                break
+            
+        for bc in barcodes:
+            key = '{}.{}'.format( runid, bc )
+            self.barcode_data[bc] = { 'total_bases' : rgs[key].get('total_bases', 0),
+                                      'Q20_bases'   : rgs[key].get('Q20_bases', 0),
+                                      'read_count'  : rgs[key].get('read_count', 0) }
+            
+            if self.barcode_data[bc]['total_bases'] > 0:
+                self.barcode_data[bc]['percent_Q20'] = 100.*self.barcode_data[bc]['Q20_bases']/self.barcode_data[bc]['total_bases']
+            else:
+                self.barcode_data[bc]['percent_Q20'] = 0.
+
+    def get_nomatch_data( self ):
+        """ Reads nomatch dataset for non-barcoded reads. """
+        try:
+            key = [ k for k in self.data['read_groups'] if 'nomatch' in k ][0]
+        except IndexError:
+            print( 'Did not find any data for nomatch barcodes . . . hoping it really is zero.' )
+            self.metrics['non_barcoded_reads'] = 0
+            
+        nonbc_data = self.data['read_groups'][key]
+        
+        self.non_barcoded_data = nonbc_data
+        self.metrics['non_barcoded_reads'] = nonbc_data['read_count']
+        
+    def calc_unexpected_barcodes( self, planned_bc=[] ):
+        """ Calculates sum of reads from unexpected barcodes we found """
+        if not planned_bc:
+            planned_bc = self.planned_barcodes
+            
+        expected = np.sum( [self.data['read_groups'][g]['read_count'] for g in self.data['read_groups'] if g.split('.')[1] in planned_bc ] )
+        
+        try:
+            nomatch = self.metrics['non_barcoded_reads']
+        except KeyError:
+            self.get_nomatch_data( )
+            nomatch = self.metrics['non_barcoded_reads']
+            
+        unexpected = self.metrics['total_reads'] - nomatch - expected
+        self.metrics['unexpected_barcoded_reads'] = unexpected
+        
+    def analyze_q20_data ( self, outdir='' ):
+        """ Does analysis of the q20 data from datasets_basecaller """
+        # Calculate overall metrics.  Realized we don't know if they do plain average or weighted average.
+        lazy_average = np.mean( [self.barcode_data[bc]['percent_Q20'] for bc in self.barcode_data ] )
+        
+        total_bases  = np.sum( [self.barcode_data[bc]['total_bases'] for bc in self.barcode_data ] )
+        Q20_bases    = np.sum( [self.barcode_data[bc]['Q20_bases'] for bc in self.barcode_data ] )
+        
+        total_reads  = np.sum( [self.barcode_data[bc]['read_count'] for bc in self.barcode_data ] )
+        weighted_sum = np.sum( [self.barcode_data[bc]['read_count'] * self.barcode_data[bc]['percent_Q20'] for bc in self.barcode_data ] )
+        
+        self.metrics['percent_Q20_mean']     = lazy_average
+        self.metrics['percent_Q20_raw' ]     = float( Q20_bases ) / total_bases
+        self.metrics['percent_Q20_weighted'] = weighted_sum / total_reads
+        
+        # metadata list
+        metadata = [ (self.barcode_data[bc]['percent_Q20'], bc) for bc in sorted( self.barcode_data ) ]
+        N = len( metadata )
+        x = []
+        y = []
+        yticklabels = []
+        
+        for i, md in enumerate( metadata ):
+            x.append( md[0] )
+            y.append( N - i )
+            yticklabels.append( md[1] )
+            
+        # Make a plot.  Woohoo!
+        if N < 32:
+            plt.figure( figsize=(8, int(N/2)+1 ) )
+        else:
+            plt.figure( figsize=(10, 20) )
+            
+        plt.plot( x, y, 'o' )
+        plt.yticks( np.arange( 1, N+1 ), yticklabels[::-1] )
+        plt.xlim( 0, 100 )
+        plt.xlabel( '%Q20 Bases' )
+        plt.ylim( 0, N+1 )
+        plt.axvline( x = self.metrics['percent_Q20_mean'], ls='--', color='red' )
+        plt.grid( axis='y', ls=':', color='grey' )
+        plt.title( 'Barcode Average %Q20 (by bases) = {:.1f}%'.format( self.metrics['percent_Q20_mean'] ) )
+        plt.tight_layout()
+        if outdir:
+            plt.savefig( os.path.join( outdir, 'percent_q20_plot.png' ) )
+        else:
+            plt.show()
+        plt.close( )
+        
 class ProtonData:
     '''
     ProtonData class which provides handlers for loading sequencing data
@@ -909,7 +1095,7 @@ class ProtonData:
         Function for controlling output at different logging levels
         '''
         if self.verbose >= level:
-            print text
+            print( text )
 
     def _trim_related_reports(self):
         '''
@@ -1536,10 +1722,10 @@ class TorrentHub:
                 else:
                     try: 
                         row[key] = float(part)
-                        print 'WARNING: Unknown field %s was saved as float' % key
+                        print( 'WARNING: Unknown field %s was saved as float' % key )
                     except ValueError:
                         row[key] = part
-                        print 'WARNING: Unknown field %s was saved as string' % key
+                        print( 'WARNING: Unknown field %s was saved as string' % key )
             try: 
                 row['report'] = int(row['a.id'].split('.')[-1])
             except (KeyError,ValueError):
@@ -1777,7 +1963,7 @@ class WellsFile:
         Function for controlling output at different logging levels
         '''
         if self.verbose >= level:
-            print text
+            print (text)
 
     def _read_raw_peaks( self, filename ):
         """

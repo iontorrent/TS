@@ -3,7 +3,7 @@
 # Gridengine queue slot definition
 #----------------------------------------------------------------------------
 queues: 
-  - { name: all.q, slots: 4}
+  - { name: all.q, slots: 5}
   - { name: plugin.q, slots: 2}
   - { name: thumbnail.q, slots: 2}
   - { name: thumbnail_worker.q, slots: 2}

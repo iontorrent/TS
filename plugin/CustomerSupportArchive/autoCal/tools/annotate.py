@@ -4,7 +4,7 @@ After you should usually overwrite logLevel and logFile with desired defaults
 '''
 try:
     from cStringIO import StringIO 
-except ModuleNotFoundError:
+except ImportError:
     from io import StringIO
 import os as _os
 import csv as _csv
@@ -12,6 +12,7 @@ import sys as _sys
 import ctypes as _ctypes
 import tempfile as _tempfile
 import subprocess as _subprocess
+from io import UnsupportedOperation
 try:
     from .figures import messenger as _msg
 except ImportError:
@@ -190,7 +191,13 @@ class Capturing( list ):
         ''' Run at beginning of with statement '''
         # The original fd to which stdout usually points
         # Usually this is 1 for POSIX systems
-        self._original_stdout_fd = _sys.stdout.fileno()
+        self._active = True
+        try:
+            self._original_stdout_fd = _sys.stdout.fileno()
+        except UnsupportedOperation:
+            # Usually jupyter notebooks
+            self._active = False
+            return self
         # Save a copy of the original stdout fd in _saved_stdout_fd
         self._saved_stdout_fd = _os.dup( self._original_stdout_fd )
         # Create a temporary file and redirect stdout to it
@@ -201,6 +208,8 @@ class Capturing( list ):
 
     def __exit__( self, *args ):
         ''' Run at end of with statement '''
+        if not self._active:
+            return
         # Send all output back to stdout instead of the temp file
         self._redirect_stdout( self._saved_stdout_fd )
         # Copy contents of temporary file to the given list

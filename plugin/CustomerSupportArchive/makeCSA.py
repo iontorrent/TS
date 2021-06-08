@@ -58,8 +58,30 @@ result_patterns = [
     '*.ini',
     # VariantCaller
     'VariantCaller.json',
-    'summary*.log'
+    'summary*.log',
+    '*inline_control.png',
+    'inline_control_stats.json',
 ]
+
+dir_patterns = [
+    'log/AnnotatorActor-00',
+    'log/TmapExecutionActor-00',
+    'log/VcMetricActor-00',
+    'log/AppRunnerActor-00',
+    'log/TmapMergeActor-00',
+    'log/CnvActor-00',
+    'log/VariantCallerActor-00',
+    'log/AssayQCMetricActor-00',
+    'log/BaseCallingActor-00',
+    'log/BarcodeCrosstalkActor-00',
+    'log/PlanLevelAppRunnerActor-00',
+    'log/RNACountsActor-00'
+]
+
+rawDir_patterns = [
+    'pipPres'
+]
+
 rawdata_patterns = [
     'explog_final.txt',
     'explog.txt',
@@ -111,7 +133,8 @@ qcreport_patterns = {
     "*amplicon.cov.xls",
     "*.summary.pdf",
     "*.stats.cov.txt",
-    "wells_beadogram.png"
+    "wells_beadogram.png",
+    "*.pdf"
 }
 
 def match_files(walk, pattern):
@@ -119,6 +142,13 @@ def match_files(walk, pattern):
         for basename in files:
             if fnmatch.fnmatch(basename, pattern):
                 filename = os.path.join(root, basename)
+                yield filename
+
+def match_dir(walk, pattern):
+    for root, dirname, files in walk:
+        if root.endswith(pattern):
+            for file in files:
+                filename = os.path.join(root, file)
                 yield filename
 
 
@@ -140,6 +170,18 @@ def get_file_list(directory, patterns, block_list=[], check_list = []):
                 mylist.append(filename)
     return mylist
 
+def get_file_list2(directory, patterns):
+    print "getting files from the log dir" + directory
+    mylist = []
+    try:
+        walk = list(os.walk(directory, followlinks=True))
+    except:
+        raise Exception('Unable to access files from %s' % directory)
+
+    for pattern in patterns:
+        for filename in match_dir(walk, pattern):
+            mylist.append(filename)
+    return mylist
 
 def get_list_from_results(directory, blockList):
     file_list = get_file_list(directory, result_patterns, block_list=["plugin", "thumbnail", "rawdata"] + blockList)
@@ -148,6 +190,12 @@ def get_list_from_results(directory, blockList):
 
 def get_list_from_rawdata(directory):
     return get_file_list(directory, rawdata_patterns)
+
+def get_list_from_dir(directory):
+    return get_file_list2(directory, dir_patterns)
+
+def get_list_from_dir2(directory):
+    return get_file_list2(directory, rawDir_patterns)
 
 def get_list_from_report(directory):
     return get_file_list(directory, qcreport_patterns)
@@ -226,6 +274,13 @@ def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name=None, b
     zipList = get_list_from_rawdata(rawDataDir)
     writeZip(csaFullPath, zipList, dirtrim=rawDataDir, openmode="a")
 
+    # Generate a list of files from log dir to append to the archive
+    zipList = get_list_from_dir(reportDir)
+    writeZip(csaFullPath, zipList, dirtrim=reportDir, openmode="a")
+
+    zipList = get_list_from_dir2(rawDataDir)
+    writeZip(csaFullPath, zipList, dirtrim=rawDataDir, openmode="a")
+
     # Generate a list of files from report dir to append to the archive
     if len(sampleResultsDirs) > 0:
         for sampleResultsDir in sampleResultsDirs:
@@ -235,7 +290,7 @@ def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name=None, b
             except:
                 pass
 
-    version = '0.3.2'
+    version = '0.4.4'
     pluginInfo = tarfile.TarInfo('pluginInfo.txt')
     pluginInfo.size = len(version)
     tar = tarfile.open(csaFullPath, 'a')

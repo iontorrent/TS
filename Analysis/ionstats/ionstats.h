@@ -16,6 +16,8 @@
 #define TYPICAL_FLOWS_PER_BASE 2
 #define NUMBER_OF_NUCLEOTIDES 4
 #define DEFAULT_SEQ_KEY                    "TCAG"
+#define DEFAULT_BARCODE                    ""
+#define DEFAULT_BARCODE_OUTPUT             ""
 
 using namespace std;
 

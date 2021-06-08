@@ -20,6 +20,7 @@ HotspotReader::HotspotReader()
   hint_header_ = 0;
   hint_cur_ = 0;
   checkpt_ = 0;
+  hint_vec.clear();
 }
 
 
@@ -68,6 +69,7 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
   // go through the entire vcf to generate the blacklist
   ifstream hotspot_vcf;
   hotspot_vcf.open(hotspot_vcf_filename.c_str(), ifstream::in);
+  hint_vec.clear(); // otherwise order cannot be maintained. We do not merge from two source.
 
   string bstrand = "BSTRAND";
   while (!hotspot_vcf.eof()) {
@@ -76,6 +78,8 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
     if (line[0] != '#') {
       // look for the BSTRAND tag
       size_t found = line.find(bstrand);
+      bool not_parse = true;
+      vector<HotspotAllele> ha;
       if (found != string::npos) {
 	// found BSTRAND, look for semicolon delimiter or end of line
 	long int hint = NO_HINT;
@@ -144,6 +148,9 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 		case 's':
 		  hint = SPEC_BAD_HINT;
 		  break;
+		case 'P':
+		  hint = SPEC_PARAM;
+		  break;
 	      }
 		hint_item hint_entry;
           	hint_entry.chr_ind = chrom_idx;
@@ -157,10 +164,22 @@ void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
 		    if (i == len or i == hint_entry.alt.size()) i--;
 		    hint_entry.prefix = i;
 		}
+		if (hint == SPEC_PARAM) {
+		    if (not_parse) {
+			not_parse = false;
+			ha.clear();
+			vcf::Variant v;
+			v.parse(line);
+			setupHotspot(ha,v, chrom_idx, pos);
+		    }
+		    hint_entry.params = ha[i].params;
+		    hint_entry.AFf = -1; hint_entry.AFr = -1;
+		    //cerr << "Z_Z override parameter " << hint_entry.params.filter_unusual_predictions << endl;
+		} 
 		if (bstr[i].size()>2) {
 		    float x, y;
 		    sscanf(bstr[i].c_str()+2, "%f:%f", &x, &y);
-		    if (hint == SPEC_BAD_HINT) {
+		    if (hint == SPEC_BAD_HINT or hint == SPEC_PARAM) {
 			hint_entry.AFf = x; hint_entry.AFr = y;
 		    } else {
 		        hint_entry.afmean = x; hint_entry.afsd = y;		    
@@ -210,9 +229,21 @@ void HotspotReader::FetchNextVariant()
     if (next_chr_ < 0) {
       cerr << "ERROR: invalid chromosome name in hotspot file " << current_hotspot.sequenceName << endl;
       exit(1);
-    }
+    }    
 
+    setupHotspot(next_, current_hotspot, next_chr_, next_pos_);
+     
+    if (next_.empty())
+      continue;
 
+    break;
+
+  }
+
+}
+
+void HotspotReader::setupHotspot( vector<HotspotAllele>& nn, vcf::Variant& current_hotspot, int chr_idx, int pos) 
+{
     vector<string>& min_allele_freq = current_hotspot.info["min_allele_freq"];
     vector<string>& strand_bias = current_hotspot.info["strand_bias"];
     vector<string>& min_coverage = current_hotspot.info["min_coverage"];
@@ -225,9 +256,18 @@ void HotspotReader::FetchNextVariant()
     vector<string>& filter_unusual_predictions = current_hotspot.info["filter_unusual_predictions"];
     vector<string>& filter_insertion_predictions = current_hotspot.info["filter_insertion_predictions"];
     vector<string>& filter_deletion_predictions = current_hotspot.info["filter_deletion_predictions"];
+    vector<string>& gc_motif_filter_multiplier = current_hotspot.info["gc_motif_filter_multiplier"];
+    vector<string>& do_snp_realignment = current_hotspot.info["do_snp_realignment"];
+    vector<string>& do_mnp_realignment = current_hotspot.info["do_mnp_realignment"];
+    vector<string>& realignment_threshold = current_hotspot.info["realignment_threshold"];
+    vector<string>& adjust_sigma = current_hotspot.info["adjust_sigma"];
     vector<string>& min_tag_fam_size = current_hotspot.info["min_tag_fam_size"];
     vector<string>& min_fam_per_strand_cov = current_hotspot.info["min_fam_per_strand_cov"];
     vector<string>& sse_prob_threshold = current_hotspot.info["sse_prob_threshold"];
+    vector<string>& heavy_tailed = current_hotspot.info["heavy_tailed"];
+    vector<string>& gen_min_allele_freq = current_hotspot.info["gen_min_allele_freq "];
+    vector<string>& gen_min_indel_allele_freq = current_hotspot.info["gen_min_indel_allele_freq"];
+    vector<string>& gen_min_coverage = current_hotspot.info["gen_min_coverage"];
     vector<string>& fwdb = current_hotspot.info["FWDB"];
     vector<string>& revb = current_hotspot.info["REVB"];
     vector<string>& oref = current_hotspot.info["OREF"];
@@ -237,16 +277,17 @@ void HotspotReader::FetchNextVariant()
     // collect bad-strand info
     vector<string>& black_list_strand = current_hotspot.info["BSTRAND"];
 
-    next_.reserve(current_hotspot.alt.size());
+    nn.reserve(current_hotspot.alt.size());
+
     for (unsigned int alt_idx = 0; alt_idx < current_hotspot.alt.size(); ++alt_idx) {
       if (current_hotspot.ref == current_hotspot.alt[alt_idx])
         continue;
       
-      next_.push_back(HotspotAllele());
-      HotspotAllele& hotspot = next_.back();
+      nn.push_back(HotspotAllele());
+      HotspotAllele& hotspot = nn.back();
 
-      hotspot.chr = next_chr_;
-      hotspot.pos = next_pos_;
+      hotspot.chr = chr_idx;
+      hotspot.pos = pos;
       hotspot.ref_length = current_hotspot.ref.length();
       hotspot.alt = current_hotspot.alt[alt_idx];
       hotspot.suffix_padding = 0;
@@ -324,6 +365,11 @@ void HotspotReader::FetchNextVariant()
         hotspot.params.hp_max_length = atoi(hp_max_length[alt_idx].c_str());
       }
 
+      if (alt_idx < gc_motif_filter_multiplier.size() and gc_motif_filter_multiplier[alt_idx] != ".") {
+        hotspot.params.gc_motif_filter_multiplier_override = true;
+        hotspot.params.gc_motif_filter_multiplier = atof(gc_motif_filter_multiplier[alt_idx].c_str());
+      }
+
       if (alt_idx < filter_unusual_predictions.size() and filter_unusual_predictions[alt_idx] != ".") {
         hotspot.params.filter_unusual_predictions_override = true;
         hotspot.params.filter_unusual_predictions = atof(filter_unusual_predictions[alt_idx].c_str());
@@ -354,6 +400,44 @@ void HotspotReader::FetchNextVariant()
         hotspot.params.sse_prob_threshold = atof(sse_prob_threshold[alt_idx].c_str());
       }
 
+      if (alt_idx < heavy_tailed.size() and heavy_tailed[alt_idx] != ".") {
+        hotspot.params.heavy_tailed_override = true;
+        hotspot.params.heavy_tailed = atof(heavy_tailed[alt_idx].c_str());
+      }
+
+      if (alt_idx < do_snp_realignment.size() and do_snp_realignment[alt_idx] != ".") {
+        hotspot.params.do_snp_realignment_override = true;
+        hotspot.params.do_snp_realignment = atoi(do_snp_realignment[alt_idx].c_str());
+      }
+
+      if (alt_idx < do_mnp_realignment.size() and do_mnp_realignment[alt_idx] != ".") {
+        hotspot.params.do_mnp_realignment_override = true;
+        hotspot.params.do_mnp_realignment = atoi(do_mnp_realignment[alt_idx].c_str());
+      }
+
+      if (alt_idx < realignment_threshold.size() and realignment_threshold[alt_idx] != ".") {
+        hotspot.params.realignment_threshold_override = true;
+        hotspot.params.realignment_threshold = atof(realignment_threshold[alt_idx].c_str());
+      }
+
+      if (alt_idx < adjust_sigma.size() and adjust_sigma[alt_idx] != ".") {
+        hotspot.params.adjust_sigma_override = true;
+        hotspot.params.adjust_sigma = atoi(adjust_sigma[alt_idx].c_str());
+      }
+
+      if (alt_idx < gen_min_allele_freq.size() and gen_min_allele_freq[alt_idx] != ".") {
+        hotspot.params.gen_min_allele_freq_override = true;
+        hotspot.params.gen_min_allele_freq = atof(gen_min_allele_freq[alt_idx].c_str());
+      }
+      if (alt_idx < gen_min_indel_allele_freq.size() and gen_min_indel_allele_freq[alt_idx] != ".") {
+        hotspot.params.gen_min_indel_allele_freq_override = true;
+        hotspot.params.gen_min_indel_allele_freq = atof(gen_min_indel_allele_freq[alt_idx].c_str());
+      }
+      if (alt_idx < gen_min_coverage.size() and gen_min_coverage[alt_idx] != ".") {
+        hotspot.params.gen_min_coverage_override = true;
+        hotspot.params.gen_min_coverage = atoi(gen_min_coverage[alt_idx].c_str());
+      }
+
       if (alt_idx < fwdb.size() and fwdb[alt_idx] != ".") {
         hotspot.params.fwdb = atof(fwdb[alt_idx].c_str());
       }
@@ -366,13 +450,6 @@ void HotspotReader::FetchNextVariant()
       hotspot.params.black_strand = alt_idx < black_list_strand.size() ? black_list_strand[alt_idx][0] : '.';
 
     }
-
-    if (next_.empty())
-      continue;
-
-    break;
-
-  }
 
 }
 

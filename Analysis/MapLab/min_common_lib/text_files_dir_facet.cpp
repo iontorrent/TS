@@ -31,7 +31,8 @@ bool TestDirWithTextFiles_facet::generate_test_tree_in (const char* basedir)
     {
         std::ostringstream fns;
         fns << dname << PSEPARATOR << base_fname << c << ".txt";
-        const char* fn = fns.str ().c_str ();
+        std::string ss = fns.str ();
+        const char* fn = ss.c_str ();
         if (!generate_test_text_file (fn))
             return false;
     }

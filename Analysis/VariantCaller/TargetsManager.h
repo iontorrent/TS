@@ -14,6 +14,8 @@
 #include <iostream>
 #include <fstream>
 #include "ReferenceReader.h"
+#include "ExtendParameters.h"
+#include "Variant.h"
 
 struct Alignment;
 
@@ -33,6 +35,22 @@ struct TargetStats{
 
     // fam_size_hist[x] = y indicates there are y families of size x.
 	map<int, unsigned int> fam_size_hist;
+};
+struct VariantSpecificParams;
+struct AmpliconSpecificParam{
+    // Amplicon-specific override for read filtering parameters
+    bool         read_mismatch_limit_override = false;
+    int          read_mismatch_limit = 0;
+    bool         read_snp_limit_override = false;
+    int          read_snp_limit = 0;
+    bool         min_mapping_qv_override = false;
+    int          min_mapping_qv = 0;
+    bool         min_cov_fraction_override = false;
+    float        min_cov_fraction = 0.0f;
+    // Amplicon-specific override for filter/evaluation parameters
+    VariantSpecificParams variant_param;
+    // Does the region have an override (usually not).
+    bool         has_override = false;
 };
 
 class TargetsManager {
@@ -54,19 +72,7 @@ public:
     // HS_ONLY for unify_vcf
     int          hotspots_only = 0;
     // Amplicon-specific override for read filtering parameters
-    bool         read_mismatch_limit_override = false;
-    int          read_mismatch_limit = 0;
-    bool         read_snp_limit_override = false;
-    int          read_snp_limit = 0;
-    bool         min_mapping_qv_override = false;
-    int          min_mapping_qv = 0;
-    bool         min_cov_fraction_override = false;
-    float        min_cov_fraction = 0.0f;
-    // Amplicon-specific override for molcular tagging parameters
-    bool         min_tag_fam_size_override = false;
-    int          min_tag_fam_size = 0;
-    bool         min_fam_per_strand_cov_override = false;
-    int          min_fam_per_strand_cov = 0;
+    AmpliconSpecificParam amplicon_param;
     // Amplicon stats
     TargetStats   my_stats;
   };
@@ -86,8 +92,11 @@ public:
   bool IsFullyCoveredByUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const;
   bool IsOverlapWithUnmerged(int unmerged_idx, int chr, long pos_start, long pos_end) const;
   bool IsBreakingIntervalInMerged(int merged_idx, int chr, long pos_start, long pos_end) const;
+  bool FindPossibleBreakIntervalInMerge(int chr, long pos, long &end_cur, long &start_next) const;
   int FindMergedTargetIndex(int chr, long pos) const;
-
+  void OverrideVariantSpecificParams(const vcf::Variant &variant, vector<VariantSpecificParams> &variant_specific_params) const;
+  string ChrIndexToName(int chr_idx) const;
+  int ChrNameToIndex(const string& chr_name) const;
   vector<UnmergedTarget>  unmerged;
   vector<MergedTarget>    merged;
   vector<int>             chr_to_merged_idx;
@@ -97,6 +106,8 @@ public:
   float min_coverage_fraction;
 private:
   pthread_mutex_t coverage_counter_mutex_;
+  map<string, int>        chr_name_to_idx_; // Use ChrNameToIndex to get the value of the key
+  vector<string>          chr_idx_to_name_;
 };
 
 

@@ -3,7 +3,7 @@ from .datfile import DatFile
 from . import chiptype as ctm
 import numpy as np
 
-tn_valid = ( '550_3525', '530v1', '540v1' )
+tn_valid = ( '550_3525', '530v1', '540v1', '541v2_250', 'Val541v2_250' )
 spa_valid = ()
 
 def get_thumbnail( data, chiptype=None, spa=False ):
@@ -41,7 +41,8 @@ def get_thumbnail_550_3525( data ):
         for C in range( 12 ):
             tn_r = R*100
             tn_c = C*100
-            data_r = R*ct.blockR + ( 830 if R%2 else 828 )
+            #data_r = R*ct.blockR + ( 830 if R%2 else 828 )
+            data_r = R*ct.blockR + 804
             data_c = C*ct.blockC + 806
             tn[tn_r:tn_r+100,tn_c:tn_c+100] = data[data_r:data_r+100,data_c:data_c+100]
     return tn
@@ -72,6 +73,12 @@ def get_thumbnail_540v1( data ):
             tn[tn_r:tn_r+100,tn_c:tn_c+100] = data[data_r:data_r+100,data_c:data_c+100]
     return tn
 
+def get_thumbnail_541v2_250( data ):
+    return get_thumbnail_540v1( data )
+
+def get_thumbnail_Val541v2_250( data ):
+    return get_thumbnail_540v1( data )
+
 def get_thumbnail_generic( data, chiptype=None ):
     ''' Generic thumbnail creator. Not guaranteed to be accurate! '''
     print( 'WARNING! Creating thumbnail from full chip, but thumbnail not guaranteed to be accurate ' )
@@ -101,11 +108,39 @@ def get_spa_generic( data, chiptype=None ):
     #    chiptype = ctm.guess_chiptype( data )
     #    print( 'WARNING! Chip type guessed to be {}'.format( chiptype.name ) )
 
+    # final thumbnail dimensions
     chipR = 800
     chipC = 1200
 
-    b = np.linspace(0.0, np.shape(data)[0], chipR, endpoint=False)
-    a = np.linspace(0.0, np.shape(data)[1], chipC, endpoint=False)
+    # full array dimensions
+    num_row = np.shape(data)[0]
+    num_col = np.shape(data)[1]
+
+    # get initial position
+    rx_min = (3*num_row)/6400
+    ry_min = num_col/3200
+
+    # quadrature align column and row indexes with bit shifts
+    if ( (ry_min+num_col) & 3 ):
+        ry_min = (ry_min + num_col + 4) & ~(4-1)
+        ry_min = ry_min - num_col
+        if ry_min < 0:
+            ry_min = 0
+
+    if ( (rx_min+num_row) & 3 ):
+        rx_min = (rx_min + num_row + 4) & ~(4-1)
+        rx_min = rx_min - num_row
+        if rx_min < 0:
+            rx_min = 0
+
+    ## OLD algorithm
+    #b = np.linspace(0.0, np.shape(data)[0], chipR, endpoint=False)
+    #a = np.linspace(0.0, np.shape(data)[1], chipC, endpoint=False)
+
+    # Updated algorithm
+    b = np.linspace( ry_min, np.shape(data)[0], chipR, endpoint=False)
+    a = np.linspace( rx_min, np.shape(data)[1], chipC, endpoint=False)
+
     coord_C = np.array([int(round(A)) for A in a])
     coord_R = np.array([int(round(B)) for B in b])
 
@@ -161,7 +196,7 @@ def match_helper( dirname, outcsv ):
             if ( tn_window[or_tn_r,or_tn_c,:] == origin ).all():
                 found_origin = True
         if found_origin:
-            msg += ' | (%4i, %4i) -> (%3i, %4i)' % ( origin_r, origin_c, or_tn_r, or_tn_c )
+            msg += ' | ({}, {}) -> ({}, {})' % ( origin_r, origin_c, or_tn_r, or_tn_c )
         else:
             msg += ' | ERROR Finding origin'
             origin_r = origin_c = or_tn_r = or_tn_c = 0
@@ -177,17 +212,17 @@ def match_helper( dirname, outcsv ):
             if ( tn_window[op_tn_r,op_tn_c,:] == opposite ).all():
                 found_opposite = True
         if found_opposite:
-            msg += ' | (%4i, %4i) -> (%3i, %4i)' % ( opposite_r, opposite_c, op_tn_r, op_tn_c )
+            msg += ' | ({}, {}) -> ({}, {})'.format( opposite_r, opposite_c, op_tn_r, op_tn_c )
         else:
             msg += ' | ERROR Finding opposite'
             opposite_r = opposite_c = op_tn_r = op_tn_c = 0
 
-        print '(%1i, %2i) %s' % ( R, C, msg )
+        print( '{}, {} {}'.format( R, C, msg ) )
         return ( br, bc, out[0][0], out[1][0], origin_r, origin_c, or_tn_r, or_tn_c, opposite_r, opposite_c, op_tn_r, op_tn_c )
         
     filename = dirname + '/%s/W1_step.dat'
     ct = chiptype.get_ct_from_dir( dirname )
-    print 'Found Chiptype: %s' % chiptype.name
+    print( 'Found Chiptype: {}'.format(chiptype.name) )
     tn = DatFile( filename % 'thumbnail', norm=False )
 
     with open( outcsv, 'w' ) as f:

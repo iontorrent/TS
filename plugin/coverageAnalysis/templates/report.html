@@ -52,13 +52,11 @@
 </head>
 
 <body>
-{% if not isDx %}
-    <h1><center>Coverage Analysis Report</center></h1>
-    {% if Sample_Name != "" and Sample_Name != "None" %}
-        <h3><center>Sample Name: {{Sample_Name}}</center></h3>
-    {% endif %}
-    <h3><center>{{run_name}}</center></h3>
+<h1><center>Coverage Analysis Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+    <h3><center>Sample Name: {{Sample_Name}}</center></h3>
 {% endif %}
+<h3><center>{{run_name}}</center></h3>
 
 <table class="center">
 <tr><td><h4>

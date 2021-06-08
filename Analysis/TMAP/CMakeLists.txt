@@ -16,7 +16,10 @@ set (GLOBAL_SOURCES              config.h
 				 src/util/tmap_levenshtein.h src/util/tmap_levenshtein.c 
 				 src/util/tmap_sort.h 
 				 src/util/tmap_vec.h 
+				 src/util/tmap_bsearch.h src/util/tmap_bsearch.c 
+				 src/util/tmap_histo.h src/util/tmap_histo.c 
 				 src/util/tmap_sam_convert.h src/util/tmap_sam_convert.c 
+				 src/util/tmap_cigar_util.h src/util/tmap_cigar_util.c 
 				 src/seq/tmap_fq.h src/seq/tmap_fq.c 
 				 src/seq/tmap_sff.h src/seq/tmap_sff.c 
 				 src/seq/tmap_sam.h src/seq/tmap_sam.c 
@@ -147,6 +150,8 @@ set (tmap_SOURCES
                            src/map/util/tmap_map_stats.h src/map/util/tmap_map_stats.c 
                            src/map/util/tmap_map_util.h src/map/util/tmap_map_util.c
                            src/map/util/tmap_map_locopt.h src/map/util/tmap_map_locopt.c 
+                           src/map/util/tmap_map_align_util.h src/map/util/tmap_map_align_util.c 
+#                           src/map/util/tmap_map_repair.h src/map/util/tmap_map_repair.c 
                            src/map/pairing/tmap_map_pairing.h src/map/pairing/tmap_map_pairing.c 
                            src/map/map1/tmap_map1.h src/map/map1/tmap_map1.c 
                            src/map/map1/tmap_map1_aux.h src/map/map1/tmap_map1_aux.c 

@@ -178,7 +178,10 @@ fi
 #exec > >(tee "$TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG") 2>&1
 #
 
-check_switch_repo
+if [ -z ${TS_SWITCH_REPO_ACCEPTED} ]; then
+    check_switch_repo
+    export TS_SWITCH_REPO_ACCEPTED=1
+fi
 
 #---                    ---#
 #---    Main Execution  ---#

@@ -644,7 +644,7 @@
       "displayedValue": "2 Library Pools - OCA Plus",
       "description": "LibraryPrep protocol for OCAv4 on 550 chip",
       "isDefault": false,
-      "isActive": false,
+      "isActive": true,
       "isVisible": true,
       "categories": "ocav4;multiPoolSupport",
       "samplePrep_instrumentType": "",
@@ -684,6 +684,74 @@
       "samplePrep_instrumentType": "",
       "sequencing_instrumentType": "",
       "uid": "CV0021"
+    }
+  },
+  {
+    "pk": 23,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "oca_s5",
+      "displayedValue": "OCA S5",
+      "description": "Oncomine Panel Assay category for S5",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0023"
+    }
+  },
+  {
+    "pk": 24,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "brca",
+      "displayedValue": "BRCA",
+      "description": "Oncomine BRCA Assay for S5",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0024"
+    }
+  },
+  {
+    "pk": 25,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "mrd",
+      "displayedValue": "MRD",
+      "description": "Oncomine MRD Assay for S5",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0025"
+    }
+  },
+  {
+    "pk": 26,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "trilink",
+      "displayedValue": "TriLink Small RNA",
+      "description": "TriLink Small RNA Seq Appl category for S5",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0026"
     }
   },
   {
@@ -743,13 +811,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0008"
       ],
       "productCode": "AMPS_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -763,16 +831,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -786,8 +854,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -797,13 +865,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0004"
       ],
       "productCode": "TARS_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -817,16 +885,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -840,8 +908,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,      
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -851,13 +919,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0004"
       ],
       "productCode": "WGNM_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -871,16 +939,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -894,8 +962,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -905,13 +973,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0010"
       ],
       "productCode": "RNA_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": false,
@@ -925,7 +993,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -933,10 +1001,10 @@
       "isDefaultBarcoded" : true,
       "defaultBarcodeKitName" : "IonXpressRNA",
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isReferenceSelectionSupported" : false,
       "isTargetTechniqueSelectionSupported" : true,
@@ -951,8 +1019,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "rna",
       "isSamplePrepKitSupported" : false,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -962,13 +1030,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0013"
       ],
       "productCode": "AMPS_RNA_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": false,
@@ -982,7 +1050,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -990,10 +1058,10 @@
       "isDefaultBarcoded" : true,
       "defaultBarcodeKitName" : "IonXpress",
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -1007,8 +1075,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : false,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -1018,13 +1086,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0004"
       ],
       "productCode": "GENS_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1038,16 +1106,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -1061,8 +1129,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -1072,13 +1140,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0008"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0008"
       ],
       "productCode": "AMPS_EXOME_0",
-      "defaultChipType": "P1.1.17",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1092,10 +1160,10 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0014"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": [
-        "SPREP0009"
+        "ICPREP0012"
       ],
       "defaultControlSeqKit": null,
       "isVisible": true,
@@ -1113,8 +1181,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -1124,13 +1192,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0019"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0003"
       ],
       "productCode": "TARS_16S_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1144,7 +1212,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -1152,10 +1220,10 @@
       "isDefaultBarcoded" : false,
       "defaultBarcodeKitName" : "",
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -1169,8 +1237,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -1180,13 +1248,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0008"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0008"
       ],
       "productCode": "AMPS_1",
-      "defaultChipType": "P1.1.17",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1200,7 +1268,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0014"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -1219,8 +1287,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "proton",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -1282,13 +1350,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0008"
       ],
       "productCode": "AMPS_DNA_RNA_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1302,16 +1370,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -1325,7 +1393,7 @@
       "isBarcodeKitSelectionRequired" : true,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
+      "instrumentType": "s5",
       "isDefaultForInstrumentType" : true,
       "defaultSamplePrepProtocol": null
     }
@@ -1495,7 +1563,7 @@
         "LIB0008"
       ],
       "productCode": "PGx_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -1509,16 +1577,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultTemplateKit" : [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
@@ -1533,10 +1601,10 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
+      "instrumentType": "s5",
       "defaultBarcodeKitName": "IonXpress",
       "isDefaultBarcoded" : true,
-      "isDefaultForInstrumentType" : true,
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol":null
     }
   },
@@ -2380,13 +2448,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0013"
       ],
       "productCode": "AMPS_RNA_fusions",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": false,
@@ -2400,7 +2468,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": [
@@ -2423,8 +2491,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : false,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -2919,13 +2987,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0019"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0019"
       ],
       "productCode": "IMMUNE_REPERTOIRE_PGM_0",
-      "defaultChipType": "318",
+      "defaultChipType": "520",
       "isDefault": false,
       "description": "",
       "isHotspotRegionBEDFileSuppported": false,
@@ -2939,7 +3007,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -2947,10 +3015,10 @@
       "isDefaultBarcoded" : true,
       "defaultBarcodeKitName" : "IonXpress",
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -2964,8 +3032,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : false,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -3522,13 +3590,13 @@
     "fields": {
       "defaultHotSpotRegionBedFileName": "",
       "defaultTemplateKit": [
-        "TEMPLT0018"
+        "ICPREP0012"
       ],
       "defaultLibraryKit": [
         "LIB0019"
       ],
       "productCode": "MUTATION_LOAD_0",
-      "defaultChipType": 318,
+      "defaultChipType": "520",
       "isDefault": true,
       "description": "",
       "isHotspotRegionBEDFileSuppported": true,
@@ -3542,16 +3610,16 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
       "isVisible": true,
       "defaultIonChefPrepKit" : [
-        "ICPREP0007"
+        "ICPREP0012"
       ],
       "defaultIonChefSequencingKit" : [
-        "SEQ0024"
+        "SEQ0023"
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
@@ -3565,8 +3633,8 @@
       "isBarcodeKitSelectionRequired" : false,
       "barcodeKitSelectableType" : "all",
       "isSamplePrepKitSupported" : true,
-      "instrumentType": "pgm",
-      "isDefaultForInstrumentType" : true,
+      "instrumentType": "s5",
+      "isDefaultForInstrumentType" : false,
       "defaultSamplePrepProtocol": null
     }
   },
@@ -4989,7 +5057,7 @@
       "value": "AmpliSeq HD on Chef",
       "iRValue": "",
       "iRAnnotationType": "",
-      "isActive": true
+      "isActive": false
     }
   },
   {
@@ -5203,12 +5271,1244 @@
     }
   },
   {
+    "pk": 91,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0091",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Accelerated Phase Chronic Myeloid Leukemia",
+      "iRValue": "Accelerated Phase Chronic Myeloid Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 92,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0092",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Acute Lymphoblastic Leukemia",
+      "iRValue": "Acute Lymphoblastic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 93,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0093",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Adult T-Cell Leukemia/Lymphoma",
+      "iRValue": "Adult T-Cell Leukemia/Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 94,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0094",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Anaplastic Large Cell Lymphoma",
+      "iRValue": "Anaplastic Large Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 95,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0095",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Angioimmunoblastic T-Cell Lymphoma",
+      "iRValue": "Angioimmunoblastic T-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 96,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0096",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Angiosarcoma",
+      "iRValue": "Angiosarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 97,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0097",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "B-Cell Neoplasms",
+      "iRValue": "B-Cell Neoplasms",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 98,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0098",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "B-Cell Non-Hodgkin's Lymphoma",
+      "iRValue": "B-Cell Non-Hodgkin's Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 99,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0099",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "B-Cell Prolymphocytic Leukemia",
+      "iRValue": "B-Cell Prolymphocytic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 100,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0100",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Bladder Adenocarcinoma",
+      "iRValue": "Bladder Adenocarcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 101,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0101",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Bladder Small Cell Neuroendocrine Carcinoma",
+      "iRValue": "Bladder Small Cell Neuroendocrine Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 102,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0102",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Bladder Squamous Cell Carcinoma",
+      "iRValue": "Bladder Squamous Cell Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 103,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0103",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Bladder Urothelial Carcinoma",
+      "iRValue": "Bladder Urothelial Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 104,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0104",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Blast Phase Chronic Myeloid Leukemia",
+      "iRValue": "Blast Phase Chronic Myeloid Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 105,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0105",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Burkitt Leukemia",
+      "iRValue": "Burkitt Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 106,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0106",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Burkitt Lymphoma",
+      "iRValue": "Burkitt Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 107,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0107",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Chronic Lymphocytic Leukemia",
+      "iRValue": "Chronic Lymphocytic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 108,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0108",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Chronic Phase Chronic Myeloid Leukemia",
+      "iRValue": "Chronic Phase Chronic Myeloid Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 109,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0109",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Clear Cell Sarcoma of Soft Tissue",
+      "iRValue": "Clear Cell Sarcoma of Soft Tissue",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 110,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0110",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Columnar Cell Variant Thyroid Gland Papillary Carcinoma",
+      "iRValue": "Columnar Cell Variant Thyroid Gland Papillary Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 111,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0111",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Dermatofibrosarcoma Protuberans",
+      "iRValue": "Dermatofibrosarcoma Protuberans",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 112,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0112",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Desmoplastic Small Round Cell Tumor",
+      "iRValue": "Desmoplastic Small Round Cell Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 113,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0113",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Differentiated Thyroid Gland Carcinoma",
+      "iRValue": "Differentiated Thyroid Gland Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 114,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0114",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Diffuse Large B-Cell Lymphoma",
+      "iRValue": "Diffuse Large B-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 115,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0115",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Double-Hit Lymphoma",
+      "iRValue": "Double-Hit Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 116,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0116",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Ewing Sarcoma",
+      "iRValue": "Ewing Sarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 117,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0117",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Ewing Sarcoma/Peripheral Primitive Neuroectodermal Tumor",
+      "iRValue": "Ewing Sarcoma/Peripheral Primitive Neuroectodermal Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 118,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0118",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Extranodal Marginal Zone Lymphoma",
+      "iRValue": "Extranodal Marginal Zone Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 119,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0119",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Extraskeletal Ewing Sarcoma",
+      "iRValue": "Extraskeletal Ewing Sarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 120,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0120",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Fibrosarcoma",
+      "iRValue": "Fibrosarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 121,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0121",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Follicular Lymphoma",
+      "iRValue": "Follicular Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 122,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0122",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Follicular T-Cell Lymphoma",
+      "iRValue": "Follicular T-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 123,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0123",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Gastric Marginal Zone Lymphoma",
+      "iRValue": "Gastric Marginal Zone Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 124,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0124",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Hairy Cell Leukemia",
+      "iRValue": "Hairy Cell Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 125,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0125",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Hepatosplenic T-Cell Lymphoma",
+      "iRValue": "Hepatosplenic T-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 126,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0126",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Large B-Cell Lymphoma",
+      "iRValue": "Large B-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 127,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0127",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Leiomyosarcoma",
+      "iRValue": "Leiomyosarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 128,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0128",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Liposarcoma",
+      "iRValue": "Liposarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 129,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0129",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Lung Cancer",
+      "iRValue": "Lung Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 130,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0130",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Lymphangiosarcoma",
+      "iRValue": "Lymphangiosarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 131,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0131",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Lymphoma",
+      "iRValue": "Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 132,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0132",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Lymphoplasmacytic Lymphoma",
+      "iRValue": "Lymphoplasmacytic Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 133,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0133",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Malignant Peripheral Nerve Sheath Tumor",
+      "iRValue": "Malignant Peripheral Nerve Sheath Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 134,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0134",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Mantle Cell Lymphoma",
+      "iRValue": "Mantle Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 135,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0135",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Marginal Zone Lymphoma",
+      "iRValue": "Marginal Zone Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 136,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0136",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Multiple Myeloma",
+      "iRValue": "Multiple Myeloma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 137,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0137",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Mycosis Fungoides",
+      "iRValue": "Mycosis Fungoides",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 138,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0138",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Myelodysplastic/Myeloproliferative Neoplasm",
+      "iRValue": "Myelodysplastic/Myeloproliferative Neoplasm",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 139,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0139",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Myeloid Neoplasm",
+      "iRValue": "Myeloid Neoplasm",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 140,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0140",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Nodal Marginal Zone Lymphoma",
+      "iRValue": "Nodal Marginal Zone Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 141,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0141",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Nodal Peripheral T-Cell Lymphoma of T Follicular Helper Cell Origin",
+      "iRValue": "Nodal Peripheral T-Cell Lymphoma of T Follicular Helper Cell Origin",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 142,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0142",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Non-Hodgkin's Lymphoma",
+      "iRValue": "Non-Hodgkin's Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 143,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0143",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Not Applicable",
+      "iRValue": "Not Applicable",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 144,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0144",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Other",
+      "iRValue": "Other",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 145,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0145",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Other Hematologic Cancer",
+      "iRValue": "Other Hematologic Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 146,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0146",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Other Hematological Cancer",
+      "iRValue": "Other Hematological Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 147,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0147",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Other Solid Tumor",
+      "iRValue": "Other Solid Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 148,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0148",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Peripheral T-Cell Lymphoma",
+      "iRValue": "Peripheral T-Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 149,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0149",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Poorly Differentiated Thyroid Gland Carcinoma",
+      "iRValue": "Poorly Differentiated Thyroid Gland Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 150,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0150",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Primary Cutaneous Anaplastic Large Cell Lymphoma",
+      "iRValue": "Primary Cutaneous Anaplastic Large Cell Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 151,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0151",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Primary Cutaneous B-Cell Non-Hodgkin Lymphoma",
+      "iRValue": "Primary Cutaneous B-Cell Non-Hodgkin Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 152,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0152",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Primary Cutaneous T-Cell Non-Hodgkin Lymphoma",
+      "iRValue": "Primary Cutaneous T-Cell Non-Hodgkin Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 153,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0153",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Rhabdomyosarcoma",
+      "iRValue": "Rhabdomyosarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 154,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0154",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Sezary Syndrome",
+      "iRValue": "Sezary Syndrome",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 155,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0155",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Small Lymphocytic Lymphoma",
+      "iRValue": "Small Lymphocytic Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 156,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0156",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Solid Tumor",
+      "iRValue": "Solid Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 157,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0157",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Splenic Marginal Zone Lymphoma",
+      "iRValue": "Splenic Marginal Zone Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 158,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0158",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Sporadic Thyroid Gland Medullary Carcinoma",
+      "iRValue": "Sporadic Thyroid Gland Medullary Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 159,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0159",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Synovial Sarcoma",
+      "iRValue": "Synovial Sarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 160,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0160",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "T-Cell Large Granular Lymphocyte Leukemia",
+      "iRValue": "T-Cell Large Granular Lymphocyte Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 161,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0161",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "T-Cell Neoplasms",
+      "iRValue": "T-Cell Neoplasms",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 162,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0162",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "T-Cell Non-Hodgkin's Lymphoma",
+      "iRValue": "T-Cell Non-Hodgkin's Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 163,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0163",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "T-Cell Prolymphocytic Leukemia",
+      "iRValue": "T-Cell Prolymphocytic Leukemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 164,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0164",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Tall Cell Variant Thyroid Gland Papillary Carcinoma",
+      "iRValue": "Tall Cell Variant Thyroid Gland Papillary Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 165,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0165",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Thyroid Gland Anaplastic Carcinoma",
+      "iRValue": "Thyroid Gland Anaplastic Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 166,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0166",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Thyroid Gland Follicular Carcinoma",
+      "iRValue": "Thyroid Gland Follicular Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 167,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0167",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Thyroid Gland Hurthle Cell Carcinoma",
+      "iRValue": "Thyroid Gland Hurthle Cell Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 168,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0168",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Thyroid Gland Medullary Carcinoma",
+      "iRValue": "Thyroid Gland Medullary Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 169,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0169",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Thyroid Gland Papillary Carcinoma",
+      "iRValue": "Thyroid Gland Papillary Carcinoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 170,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0170",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Triple Negative Breast Cancer",
+      "iRValue": "Triple Negative Breast Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 171,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0171",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Triple-Hit Lymphoma",
+      "iRValue": "Triple-Hit Lymphoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 172,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0172",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Undifferentiated/Unclassified Sarcoma",
+      "iRValue": "Undifferentiated/Unclassified Sarcoma",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 173,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0173",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Unknown Primary Origin",
+      "iRValue": "Unknown Primary Origin",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 174,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0174",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Unspecified Cancer",
+      "iRValue": "Unspecified Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 175,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0175",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Unspecified Hematological Cancer",
+      "iRValue": "Unspecified Hematological Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 176,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0176",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Unspecified Solid Tumor",
+      "iRValue": "Unspecified Solid Tumor",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 177,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0177",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Uterine Cancer",
+      "iRValue": "Uterine Cancer",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
+    "pk": 178,
+    "model": "rundb.sampleannotation_cv",
+    "fields": {
+      "annotationType": "cancerType",
+      "uid": "SAMPLEANNOTATE_CV_0178",
+      "isIRCompatible": true,
+      "sampleGroupType_CV": null,
+      "value": "Waldenström Macroglobulinemia",
+      "iRValue": "Waldenström Macroglobulinemia",
+      "iRAnnotationType": "CancerType",
+      "isActive": true
+    }
+  },
+  {
     "pk": 1,
     "model": "rundb.sampleattributedatatype",
     "fields": {
-        "dataType": "Text",
-        "description": "Up to 1024 characters",
-        "isActive": true
+      "dataType": "Text",
+      "description": "Up to 1024 characters",
+      "isActive": true
     }
   },
   {

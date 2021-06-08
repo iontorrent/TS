@@ -195,7 +195,7 @@ public:
                    string& gvcf_output,
                    const ReferenceReader& r,
                    TargetsManager& tm,
-                   size_t w, size_t min_dp, bool la);
+                   size_t w, size_t min_dp, bool la, bool output_true_allele);
 
   ~VcfOrderedMerger();
 
@@ -220,6 +220,7 @@ private:
   const ReferenceReader& reference_reader;
   TargetsManager& targets_manager;
   bool left_align_enabled;
+  bool    use_ppd_spd;
   size_t window_size, minimum_depth;
   PriorityQueue novel_queue, assembly_queue, hotspot_queue;
   list<vcf::Variant> hotspots_;
@@ -252,6 +253,7 @@ private:
   bool find_and_merge_assembly(vcf::Variant *x, bool use_too_far);
 
   void generate_novel_annotations(vcf::Variant* variant);
+  void right_align_variant(vcf::Variant* variant);
 
   void merge_annotation_into_vcf(vcf::Variant* merged_entry, vcf::Variant* hotspot);
   void merge_annotation_into_vcf(vcf::Variant* hotspot); 

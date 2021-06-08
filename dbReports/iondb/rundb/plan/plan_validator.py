@@ -699,7 +699,6 @@ def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
                 {"barcode": selectedBarcode},
             )  # "Barcode %s selections have to be unique\n" % selectedBarcode
             errors["DUPLICATE_BARCODE"] = errors["DUPLICATE_BARCODE"] + message + "\n"
-
     # logger.debug("errors=%s" %(errors))
 
     return errors

@@ -494,7 +494,7 @@ void * VariantCallerWorker(void *input)
 		if (use_dummy_end){
 			consensus_position_ticket->end = &dummy_alignment;
 		}
-		vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length, &my_examiner);
+		vc.candidate_generator->GenerateCandidates(variant_candidates, consensus_position_ticket, haplotype_length, &my_examiner, vc.targets_manager);
 		// Important! I MUST revert the dummy Alignment object back to NULL immediately, since ConsensusPositionTicketManager does a lot of operation for NULL pointer.
 		if (use_dummy_begin){
 			consensus_position_ticket->begin = NULL;
@@ -504,12 +504,13 @@ void * VariantCallerWorker(void *input)
 		}
     }
     else{
-    	vc.candidate_generator->GenerateCandidates(variant_candidates, position_ticket, haplotype_length, &my_examiner);
+    	vc.candidate_generator->GenerateCandidates(variant_candidates, position_ticket, haplotype_length, &my_examiner, vc.targets_manager);
     }
 
     pthread_mutex_lock(&vc.bam_walker_mutex);
     int next_hotspot_chr = -1;
     long next_hotspot_position = -1;
+    //vc.bam_walker->Fetch_more_reads(position_ticket, haplotype_length);
     if (vc.candidate_generator->GetNextHotspotLocation(next_hotspot_chr, next_hotspot_position))
       more_positions = vc.bam_walker->AdvancePosition(haplotype_length, next_hotspot_chr, next_hotspot_position);
     else

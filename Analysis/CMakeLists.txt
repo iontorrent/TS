@@ -383,6 +383,14 @@ add_dependencies(Thumbnail IONVERSION)
 target_link_libraries(Thumbnail ion-analysis pthread dl)
 install(TARGETS Thumbnail DESTINATION bin)
 
+add_executable(MergeReseqBams 
+    MergeReseqBams/MergeReseqBams.cpp 
+    VariantCaller/Bookkeeping/MiscUtil.cpp
+    ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(MergeReseqBams IONVERSION)
+target_link_libraries(MergeReseqBams ${ION_BAMTOOLS_LIBS} z ion-analysis pthread)
+install(TARGETS MergeReseqBams DESTINATION bin)
+
 # If doing pca spline trial
 #add_executable(PcaSplineExample Image/PcaSplineExample.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 #add_dependencies(PcaSplineExample IONVERSION)

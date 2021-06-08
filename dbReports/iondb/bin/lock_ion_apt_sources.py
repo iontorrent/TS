@@ -4,10 +4,11 @@
 """
 This script will lock or unlock the version of the ion software by manipulating the apt source path.
 """
-from ion import version
 import os
 import subprocess
 import sys
+from ion import version
+from iondb.utils.utils import getMajorPlatform
 
 # turn off complex traceback stuff
 sys.tracebacklimit = 0
@@ -32,12 +33,16 @@ with open("/etc/lsb-release", "r") as fp:
         if line.startswith("DISTRIB_CODENAME"):
             os_codename = line.split("=")[1].strip()
 
+s5_only_repo = None
+if getMajorPlatform() == "s5_only":
+    s5_only_repo = os_codename + "-genestudio"
+
 if enable:
-    find_string = "updates\/software.*%s\/" % os_codename
-    replace_string = "updates\/software\/archive\/%s %s\/" % (version, os_codename)
+    find_string = "updates\/software.*%s\/" % (s5_only_repo if s5_only_repo else os_codename)
+    replace_string = "updates\/software\/archive\/%s\/ %s\/" % (version, os_codename)
 else:
     find_string = "updates\/software\/archive\/%s.*" % version
-    replace_string = "updates\/software %s\/" % os_codename
+    replace_string = "updates\/software\/ %s\/" % (s5_only_repo if s5_only_repo else os_codename)
 sed_string = "s/%s/%s/g" % (find_string, replace_string)
 
 # Possible locations of Ion Apt repository strings:

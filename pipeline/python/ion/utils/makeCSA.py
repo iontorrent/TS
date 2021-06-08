@@ -171,9 +171,12 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
             chef_log_files = chef_log_handle.getnames()
             chef_log_handle.extractall(chef_log_temp_dir)
             for chef_log_file in chef_log_files:
-                csa_handle.write(
-                    os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file
-                )
+                try:
+                    csa_handle.write(
+                        os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file
+                    )
+                except IOError:
+                    continue
         finally:
             if os.path.exists(str(chef_log_temp_dir)):
                 shutil.rmtree(chef_log_temp_dir)

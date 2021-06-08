@@ -8,6 +8,11 @@
 #include "../../sw/tmap_vsw.h"
 #include "../../realign/realign_cliptype.h"
 
+#if defined (__cplusplus)
+extern "C"
+{
+#endif
+
 /*!
   The default offset for homopolymer errors.
   */
@@ -259,6 +264,13 @@ typedef struct __tmap_map_opt_t {
     int32_t amplicon_overrun; /*!< maximum allowed alignment to overrun amplicon edge in one large indel alignment*/
     int32_t max_adapter_bases_for_soft_clipping; /*!< specifies to perform 3' soft-clipping (via -g) if at most this # of adapter bases were found (ZB tag) (--max-adapter-bases-for-soft-clipping) */ 
     int32_t end_repair_5_prime_softclip; /*!< end-repair is allowed to introduce 5' softclip */
+    int32_t repair_min_freq; /*!< REPAiR (read-end position alignment repair) minimal frequency sum to consider repair */
+    int32_t repair_min_count; /*!< REPAiR (read-end position alignment repair) minimal read count to consider repair */
+    int32_t repair_min_adapter; /*!< REPAiR minimal adapter size (ZB tag) */
+    int32_t repair_max_overhang; /*!< REPAiR maximal distance from the template end to the amplicon end (ampl_len - ZA) */
+    double  repair_identity_drop_limit; /*!< REPAiR the identity score of the newly aligned zone should be above IDENTITY_DROP_LIMIT*(removed_portion_identity) */
+    int32_t repair_max_primer_zone_dist; /*!< REPAiR maximal number of errors in the primer zone (between amplicon end and the read end if read end is inside amplicon) */
+    int32_t repair_clip_ext; /*!< number of bases to extend the clip beyond the worst alignment position*/
 
     key_t shm_key;  /*!< the shared memory key (-k,--shared-memory-key) */
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
@@ -293,7 +305,7 @@ typedef struct __tmap_map_opt_t {
     int32_t cigar_sanity_check; /*!< check cigar conformity (detail levels 0(default) to 9(all checks)*/
 
     // DVK: alignment length filtering
-    int32_t min_al_len; /*!< minimal alignment length to report */
+    int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */
     double  min_al_cov; /*!< minimal aligned fraction of the read */
     double  min_identity; /*!< minimal identity (fraction) of the alignment */
 
@@ -476,5 +488,9 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src);
   */
 void
 tmap_map_opt_copy_stage(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src);
+
+#if defined (__cplusplus)
+}
+#endif
 
 #endif // TMAP_MAP_OPT_H

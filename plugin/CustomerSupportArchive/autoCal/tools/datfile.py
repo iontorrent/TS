@@ -4,7 +4,7 @@ Functions for analyzing DatFiles
 import os, sys, time
 import warnings
 import numpy as np
-from . import average, stats, imtools, vfc
+from . import stats, imtools, vfc
 from . import chiptype as ct
 from .annotate import Capturing
 from .misc import flatten
@@ -14,13 +14,17 @@ allow_missing = True
 # Suppress all divide by zero and other ridiculous warnings
 np.seterr( 'ignore' )
 
+
 try:
     sys.path.append('/home/scott/python/deinterlace')
-    sys.path.append('/home/brennan/0_repos/pyCextensions/deinterlace')
+    sys.path.append('/home/brennan/0_repos/pyCextensions/')
+    sys.path.append('/home/brennan/repos/pyCextensions/')
+    sys.path.append('/rnd/brennan/pyCextensions/')
     sys.path.append('%s/pydeint' % moduleDir)
     sys.path.append('/software/testing')
     import deinterlace as di
 except ImportError as e:
+    print( 'WARNING! Unable to import deinterlace' )
     warnings.warn(str(e),ImportWarning)
 
 # Note: for wettest datfiles, you may want to use the DatFile class from the 
@@ -40,7 +44,7 @@ class DatFile( object ):
 
     # Internal flags
     _vfc          = False # indicates if VFC is detected
-    def __init__(self, filename=None, norm=True, fcmask=True, isbasic=None, chiptype=None, dr=400, vfc=False, normframes=None ):
+    def __init__(self, filename=None, norm=True, fcmask=True, isbasic=None, chiptype=None, dr=400, vfc=False, normframes=None, pinned_low_cutoff=None, pinned_high_cutoff=None ):
         '''
         Generic function that will load an arbitrarily sized acquisition file.
         Returns array size details, pixel data, and pinned well information.
@@ -115,8 +119,12 @@ class DatFile( object ):
         self.data         = img
         
         # Add new property to the class defining pixels that are pinned.
-        self.pinned_high = np.any( img > 16370 , axis=2 )
-        self.pinned_low  = np.any( img < 10,     axis=2 )
+        if pinned_high_cutoff is None:
+            pinned_high_cutoff = 16370
+        if pinned_low_cutoff is None:
+            pinned_low_cutoff = 10
+        self.pinned_high = np.any( img > pinned_high_cutoff , axis=2 )
+        self.pinned_low  = np.any( img < pinned_low_cutoff,     axis=2 )
         self.pinned      = self.pinned_high | self.pinned_low
 
         if self.norm==True:
@@ -171,11 +179,19 @@ class DatFile( object ):
             self.CalculateActivePixels()
             return self.actpix
 
-    def measure_avgtrace( self ):
-        try: 
-            return self.avgtrace
+    def measure_avgtrace( self, micro=False, mask=None, redo=False ):
+        '''
+        NOTE:  mask takes in a numpy array of what you want to block
+                EX: if you want to mask out empty wells (i.e. only have data from beads)
+                        --> mask=empty
+        '''
+        try:
+            if self._avgtrace_micro == micro and not redo: 
+                return self.avgtrace
+            else:
+                raise
         except:
-            return self.AvgTrace()
+            return self.AvgTrace( micro=micro, mask=mask, redo=redo )
 
     def measure_average( self ):
         ''' 
@@ -1226,7 +1242,7 @@ class DatFile( object ):
         ### So far with Datacollect 3527(vfc3.txt), we don't need to worried about it on 550 chips.
 
         # Calculate average trace
-        avgtrace = average.masked_avg( image , pinned )
+        avgtrace = stats.masked_avg( image , pinned )
         avgtrace = self.MakeBasic(avgtrace)
 
         # Define search parameter to pull out linear part of the beadfind curves
@@ -1303,7 +1319,7 @@ class DatFile( object ):
         Emperically, this gives similar slope values to the Threshold method but the t0 pooints will probably be later
         '''
         # Calculate average trace
-        avgtrace = average.masked_avg( image , pinned )
+        avgtrace = stats.masked_avg( image , pinned )
         avgtrace = self.MakeBasic(avgtrace)
 
         # Define search parameter to pull out linear part of the beadfind curves
@@ -1391,7 +1407,7 @@ class DatFile( object ):
         method specifies which way to calculate the slope.  
         '''
         # Calculate average trace
-        avgtrace = average.masked_avg( image , pinned )
+        avgtrace = stats.masked_avg( image , pinned )
         avgtrace = self.MakeBasic(avgtrace)
 
         # Define search parameter to pull out linear part of the beadfind curves
@@ -1495,7 +1511,7 @@ class DatFile( object ):
             pinned = self.pinned
 
         # Calculate average trace
-        avgtrace = average.masked_avg( image , pinned )
+        avgtrace = stats.masked_avg( image , pinned )
         avgtrace = self.MakeBasic( avgtrace )
 
         # Define search parameters to trim out beadfind-relative (steep) part of the curves
@@ -1562,14 +1578,26 @@ class DatFile( object ):
     ##################################################
     # Average Trace                                  #
     ##################################################
-    def AvgTrace( self ):
+    def AvgTrace( self, micro=False, mask=None, redo=False ):
         """
-        Calculats the average trace for each block. For a block, this will reaturn a [1,1,N] array.  For a thumbnail, this returns an [8,12,N] array
+        Calculates the average trace for each block. For a block, this will reaturn a [1,1,N] array.  For a thumbnail, this returns an [8,12,N] array
+
+        NOTE:  mask takes in a numpy array of what you want to block
+                EX: if you want to mask out empty wells (i.e. only have data from beads)
+                        --> mask=empty
         """
         try:
-            return self.avgtrace
+            # cached setting for last calculation
+            if self._avgtrace_micro == micro and not redo:
+                return self.avgtrace
         except AttributeError:
+            self._avgtrace_micro = micro
             pass
+
+        if mask is not None:
+            mask = ~np.logical_and( self.actpix, ~mask )
+        else:
+            mask = ~self.actpix
 
         # Start timing algorithm
         start_time = time.time()
@@ -1580,9 +1608,17 @@ class DatFile( object ):
         if self.chiptype.blockR == 0 and self.chiptype.blockC == 0:
             raise ValueError( 'Error! dat file is of unexpected size' )
 
+        # choose regular blocks or micro blocks for avg trace
+        if micro:
+            blockR = self.chiptype.microR
+            blockC = self.chiptype.microC
+        else:
+            blockR = self.chiptype.blockR
+            blockC = self.chiptype.blockC
+
         # Calculate the number of block
-        rows = self.rows / self.chiptype.blockR
-        cols = self.cols / self.chiptype.blockC
+        rows = self.rows / blockR
+        cols = self.cols / blockC
         
         # Initialize data arrays
         self.avgtrace = np.zeros( (rows, cols, self.data.shape[2] ) )
@@ -1590,11 +1626,11 @@ class DatFile( object ):
         # Analyze each block
         start = time.time()
         for r in range(rows):
-            rws = slice( r*self.chiptype.blockR, (r+1)*self.chiptype.blockR )
+            rws = slice( r*blockR, (r+1)*blockR )
             for c in range(cols):
-                cls = slice( c*self.chiptype.blockC, (c+1)*self.chiptype.blockC )
+                cls = slice( c*blockC, (c+1)*blockC )
                 
-                self.avgtrace[r,c,:] = average.masked_avg( self.data[rws,cls,:], ~self.actpix[rws,cls] )
+                self.avgtrace[r,c,:] = stats.masked_avg( self.data[rws,cls,:], mask[rws,cls] )
 
         return self.avgtrace
 
@@ -1754,7 +1790,7 @@ class DatFile( object ):
 
     def CheckBasic( self, startframe=15 ):
         ''' Does a global averaging to determine if the step is basic or acidic.  This might not do wel at the corner blocks '''
-        avgtrace = average.masked_avg( self.data, self.pinned )
+        avgtrace = stats.masked_avg( self.data, self.pinned )
         if startframe == 0:
             startval = trace[0]
         else:

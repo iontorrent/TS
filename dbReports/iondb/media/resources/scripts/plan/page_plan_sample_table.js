@@ -17,9 +17,17 @@ updateSamplesTable = function () {
                 row.irSetID = row.irSetID ? row.irSetID.toString() : "";
                 row.ircellularityPct = row.ircellularityPct ? row.ircellularityPct.toString() : "";
                 row.irbiopsyDays = row.irbiopsyDays ? row.irbiopsyDays.toString() : "";
+                if (row.irMultipleWorkflowSelected !== undefined && row.irMultipleWorkflowSelected.length > 1 ) {
+                    var irMultipleWorkflowSelectedObj = [];
+                    $.each(row.irMultipleWorkflowSelected, function (index, value) {
+                        var workflowObj = getWorkflowObj(value);
+                        irMultipleWorkflowSelectedObj.push({'workflow': workflowObj['Workflow'], 'tag': workflowObj['tag_isFactoryProvidedWorkflow'] });
+                    });
+                    row.irMultipleWorkflowSelected = irMultipleWorkflowSelectedObj;
+                }
             });
         }
-        //console.log("page_plan_sample_table.updateSamplesTable table=", JSON.stringify(samplesTable));
+        // console.log("page_plan_sample_table.updateSamplesTable table=", JSON.stringify(samplesTableJSON));
         $('#samplesTable').val(JSON.stringify(samplesTableJSON));
     }
 }
@@ -283,6 +291,7 @@ $(document).ready(function () {
         },
         schema: {
             model: {
+                id: "Id",
                 fields: $.extend({
                     row:                  { type: "number", editable: false },
                     barcodeId:            { type: "string",
@@ -358,9 +367,14 @@ $(document).ready(function () {
             {
                 field: "barcodeId", title: gettext('workflow.step.sample.grid.columns.field.barcodeId.title'),
                 width: '200px',
-                attributes: { "name": "barcodeId" },
+                attributes: {"name": "barcodeId"},
                 hidden: $('#chk_not_barcoded').is(':checked'),
-                editor: barcodeEditor, 
+                editor: barcodeEditor,
+                headerAttributes: planOpt.isPlanBySample ? {
+                    "rel": "tooltip",
+                    "data-original-title": "Not recommended to change the barcode for plan by sample(Templating)."
+                } : "",
+                headerTemplate: planOpt.isPlanBySample ? '<i class="icon-info-sign"></i>' + gettext('workflow.step.sample.grid.columns.field.barcodeId.title') : gettext('workflow.step.sample.grid.columns.field.barcodeId.title'),
                 template: dropDnTemplate({'html': $('#barcodeColumnTemplate').html()})
             },
             {
@@ -368,15 +382,20 @@ $(document).ready(function () {
                 width: '200px',
                 attributes: { "name": "endBarcodeId" },
                 hidden: $('#chk_not_dualBarcoded').is(':checked'),
-                editor: endBarcodeEditor, 
+                editor: endBarcodeEditor,
                 template: dropDnTemplate({'html': $('#endBarcodeColumnTemplate').html()})
             },
             {
                 field: "sampleName", title: gettext('workflow.step.sample.grid.columns.field.sampleName.title') + gettext('workflow.step.sample.grid.columns.field.sampleName.title.required'),
                 width: '200px',
-                attributes: { "name": "sampleName" },
+                attributes: {"name": "sampleName"},
                 editor: planOpt.isPlanBySample ? sampleForSamplesetEditor : "",
-                template: planOpt.isPlanBySample? dropDnTemplate({'html':$('#sampleForSamplesetColumnTemplate').html()}) : "#=sampleName#",
+                template: planOpt.isPlanBySample ? dropDnTemplate({'html': $('#sampleForSamplesetColumnTemplate').html()}) : "#=sampleName#",
+                headerAttributes: planOpt.isPlanBySample ? {
+                    "rel": "tooltip",
+                    "data-original-title": "Not recommended to change the sample name for plan by sample(Templating)."
+                } : "",
+                headerTemplate: planOpt.isPlanBySample ? '<i class="icon-info-sign"></i>' + gettext('workflow.step.sample.grid.columns.field.sampleName.title') : gettext('workflow.step.sample.grid.columns.field.sampleName.title'),
             },
             {
                 field: "_control_type", width: "22px",

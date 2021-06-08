@@ -8,9 +8,14 @@
 #include "../io/tmap_file.h"
 #include "../io/tmap_seq_io.h"
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
 */
-                    
+
 #define TMAP_SAM_PRINT_VERSION "1.4"
 
 
@@ -97,5 +102,9 @@ tmap_sam_md1(bam1_t *b, char *ref, int32_t len);
   */
 void
 tmap_sam_update_cigar_and_md(bam1_t *b, char *ref, char *read, int32_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_SAM_CONVERT_H

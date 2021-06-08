@@ -1,6 +1,8 @@
 ''' 
 DO NOT PUT ANYTHING IN HERE THAT REQUIRES RUNNING AS ROOT! 
 Module to interface with the instrument using datacollect
+
+IMPORTANT: All calls to grep /var/log/debug MUST USE the -a flag as well to avoid hanging on binary junk
 '''
 import xml.etree.ElementTree as ET
 import subprocess
@@ -14,6 +16,10 @@ verbose = 1
 devnull = open( os.devnull, 'w' )
 
 _disable_clamp_open = False
+
+GENEXUS = 'GENEXUS' 
+S5      = 'S5'
+PROTON  = 'PROTON'
 
 # Make sure that /var/log/debug is readable.  TODO: "sudo python" w/o password only works on raptor
 if os.path.exists( '/var/log/debug' ):
@@ -69,7 +75,6 @@ def cmdquery_val( *args, **kwargs ):
     except AttributeError:
         raise cmdError
 
-
 def chip_poweroff():
     cmdcontrol( 'wantChipEnabled', 0, 'WrCntrls' )
 
@@ -90,7 +95,7 @@ def capture_image( wait=True, timeout=10 ):
         
     if wait:
         starttime = datetime.datetime.now()
-        cmd = 'grep -e \<SET\>.*\<ChipImage\> -e "Acquisition Complete" /var/log/debug'
+        cmd = 'grep -a -e \<SET\>.*\<ChipImage\> -e "Acquisition Complete" /var/log/debug'
         while True:
             output = subprocess.Popen( cmd, shell=True, stdout=subprocess.PIPE, stderr=devnull ).communicate()[0]
             # Make sure the output was recieved
@@ -223,20 +228,49 @@ def get_actual_dynamic_range():
         return float(info.text)
     return 0
 
-def get_BBresp( cmd, maxcount=30 ):
+def get_active_genexus_lanes( as_int=False ):
+    ''' Returns a list of lane numbers as integers 
+
+        4-bit array, integer values
+        --> all lanes = 15, no lanes = 0
+        Lane 1 == 1
+        Lane 2 == 2
+        Lane 3 == 4
+        Lane 4 == 8
+    '''
+    lane_bits  = int( cmdquery_val( 'Options', field='DbgLaneActive' ) )
+    if as_int:
+        return lane_bits
+
+    temp    = lane_bits
+    lanes   = []
+    for x,l in zip([8,4,2,1],[4,3,2,1]):
+        if temp >= x:
+            lanes.append( l )
+            temp -= x
+        if temp == 0:
+            break
+    return sorted( lanes )
+
+
+def get_BBresp( cmd, maxcount=30, platformCmd=False ):
     ''' Keeps asking cmdControl until it gets an answer '''
     count = 0
     while True:
         BBresp   = subprocess.Popen( cmd, stdout=subprocess.PIPE, shell=True).communicate()[0]
+
+        if platformCmd: source = 'platformCmd'
+        else:           source = 'cmdControl'
+
         if BBresp is None:
             count += 1
-            _annotate('Recieved invalid response from cmdControl %i times' % count, 0 )
+            _annotate('Recieved invalid response from %s %i times' % (source, count), 0 )
             _annotate('...%s' % cmd, 0 )
             time.sleep(0.5)
         else:
             return BBresp
         if maxcount >= count:
-            raise IOError( 'Unable to get a valid reponse from cmdControl (%i tries) to the question: %s' % ( maxcount, cmd ) )
+            raise IOError( 'Unable to get a valid reponse from %s (%i tries) to the question: %s' % ( source, maxcount, cmd ) )
 
 def get_cal_gain():
     ''' Returns the ExpInfo gain data '''
@@ -312,7 +346,7 @@ def get_chip_version():
 
 def get_dac():
     ''' Gets the dac voltage '''
-    BBresp = get_BBresp( "/software/cmdControl Query WrCntrls | grep dac" )
+    BBresp = get_BBresp( r"/software/cmdControl Query WrCntrls | grep \>dac\<" )
     resp   = parse_xml ( BBresp )
     return float( resp.find('value').text )
 get_vref = get_dac
@@ -397,6 +431,22 @@ def get_manifold_pressure():
     regex = re.compile( '\<Manifold Pressure\>(.*)\<\/Manifold Pressure\>' )
     return float( regex.search( resp ).groups()[0] )
 
+def get_platform():
+    cmd = '/software/platformCmd'
+    BBresp = get_BBresp( cmd, platformCmd=True )
+    regex = re.compile( 'dc_log:platform = \< (.*) \>' )
+    val = regex.search( BBresp ).groups()[0]
+    val = val.lower()
+    if 'valkyrie' in val or 'genexus' in val:
+        return GENEXUS
+    elif 's5ruo' in val:
+        return S5
+    elif 'proton' in val:
+        return PROTON
+    else:
+        print( 'ERROR: Platform not found' )
+        raise
+
 def get_save_thumbnail_only():
     ''' Checks if only thumbail data is being saved to disk '''
     cmd = '/software/cmdControl Query WrCntrls | grep wantThumbnailToDisk'
@@ -425,6 +475,10 @@ def get_scripts():
         return result.text.split()
 
 def get_valkyrie_lane():
+    ''' Seems to be for proton retrofits --> only works for one lane at a time
+        Use get_active_valk_lanes moving forward
+        BP 14 Apr 2020
+    '''
     resp = cmdquery( 'calAvgAlgo', group='Options' )
     regex = re.compile( '\<value\>(.*)\<\/value\>' )
     return regex.search( resp ).groups()[0]
@@ -514,7 +568,7 @@ def cmp_logtime( l, starttime ):
 
 def is_cal_done_old( starttime ):
     """Interprets /var/log/debug to check if chip calibrate passed"""
-    log = subprocess.Popen(["grep 'Type:ChipCalStatus: Done' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
+    log = subprocess.Popen(["grep -a 'Type:ChipCalStatus: Done' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
     log = log.splitlines()
     log = [ l for l in log if cmp_logtime(l,starttime) ]
     if len(log)>0:
@@ -561,7 +615,7 @@ def is_door_closed():
 
 def is_image_captured( imageName, starttime ):
     ''' Similar to is_script_done, but can be used to see if an image has been saved to disk, mid-script '''
-    log = subprocess.Popen(["grep 'Closing' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
+    log = subprocess.Popen(["grep -a 'Closing' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
     if log == '':
         _annotate( 'Please check the log, it appears the flow script was not run', 0 )
         return False
@@ -626,7 +680,7 @@ def is_reagent_motor_home():
 
 def is_script_done( scriptName, starttime ):
     """Interprets /var/log/debug to check if flow script completed"""
-    log = subprocess.Popen(["grep 'Type:' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
+    log = subprocess.Popen(["grep -a 'Type:' /var/log/debug | tail -n 200" ], stdout=subprocess.PIPE, shell=True).communicate()[0]
     if log == '':
         _annotate( 'Please check the log, it appears the flow script was not run', 0 )
         return False
@@ -766,7 +820,7 @@ def open_door():
 def passed_cal():
     ''' Checks if chip cal passed by querying /var/log/debug '''
     # Find when calibrate started
-    cmd = 'grep ChipCalibrateWorker\ started /var/log/debug'
+    cmd = 'grep -a ChipCalibrateWorker\ started /var/log/debug'
     output = subprocess.Popen( cmd, shell=True, stdout=subprocess.PIPE ).communicate()[0].strip()
     if not output:
         print 'ERROR! no calibration event detected'
@@ -775,7 +829,7 @@ def passed_cal():
     starttime = get_logtime( lines[-1] )
 
     # Find when calibrate finished
-    cmd = "grep 'ChipCal:\ Passed\|ChipCal:\ Failed' /var/log/debug"
+    cmd = "grep -a 'ChipCal:\ Passed\|ChipCal:\ Failed' /var/log/debug"
     output = subprocess.Popen( cmd, shell=True, stdout=subprocess.PIPE ).communicate()[0].strip()
     if not output:
         # No result returned yet (or ever)
@@ -803,6 +857,41 @@ def parse_xml( text ):
             _annotate( traceback.format_exc() )
             _annotate( '-'*30, 0 )
             raise
+
+def set_active_genexus_lanes( value='1234' ):
+    ''' Takes a string of lane numbers as input
+        The string is parsed to determine which lanes should be set as active
+        An integer (0-15) is generated based on the conversion table for the byte register
+        The integer is then sent to the datacollect option DbgLaneActive
+
+        4-bit array, integer values
+        --> all lanes = 15, no lanes = 0
+        Lane 1 == 1
+        Lane 2 == 2
+        Lane 3 == 4
+        Lane 4 == 8
+    '''
+    lane_dict   = {'1':1,'2':2,'3':4,'4':8}
+
+    if isinstance( value, type([]) ) or isinstance( value, type(tuple) ):
+        value = ''.join([str(x) for x in value])
+    elif isinstance( value, int ):
+        value = str(value)
+
+    # duplicate values would cause problems, might as well handle them
+    lanes = set( [ v for v in value ] )
+    if len(value)>len(lanes):
+        print( 'Error: Duplicate Values' )
+        return 0
+
+    lane_bits  = 0
+    for l in lanes:
+        if l in '1234':
+            lane_bits += lane_dict[l]
+        else:
+            print( 'Error: {} not an accepted lane'.format(l) )
+            return 0
+    cmdcontrol( 'DbgLaneActive', value=lane_bits, group='Options' )
 
 def set_advCompression( value=None ):
     ''' Controls advanced (PCA?) compression '''
@@ -911,6 +1000,10 @@ def set_temps( manifold=None, tec=None ):
         cmdcontrol( 'ChipTECTemperature', int(tec), 'Options' )
 
 def set_valkyrie_lane( lane ):
+    ''' Seems to be for proton retrofits --> only one lane at a time 
+        Use set_active_valk_lanes moving forward
+        BP 14 Apr 2020
+    '''
     cmdcontrol( 'calAvgAlgo', group='Options', value=lane )
 
 def set_valve_position( code ):
@@ -1034,7 +1127,10 @@ def wait_for_valving( timeout=20 ):
 def wait_for_script( scriptName, waittime, starttime, flex=60, interval=5 ):
     ''' Waits for the specifed script to complete.  Since the chiptype impacts the script time, this buffers
     for up to the specified flex time '''
-    loops = int(flex)/5
+    if interval <=0:
+        print( 'interval must be an integer number of seconds greater than 0' )
+        raise
+    loops = int(flex/interval)
 
     _annotate( '\tThis script will complete in about %i seconds, please wait . . .' % waittime, 1 )
     _time_progress( waittime , starttime=starttime, start='\t' , current=scriptName)

@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include <config.h>
 
+
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   Generic Functions
   */
@@ -401,5 +407,9 @@ tmap_version(int argc, char *argv[]);
  */
 int32_t
 tmap_detect_cpus();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_DEFINITIONS_H

@@ -60,6 +60,8 @@ class VarButton {
   bool isNoVariant;         // The alternative allele is not a variant, i.e., altAllele = reference_context.reference_allele
   bool doRealignment;       // Switch to turn realignment on or off 
   bool isClearlyNonFD;      // Is the allele clearly non-FD that can be told by the context?
+  bool isGCMotif;           // Is the allele a common motif caused by GC homopolymers?
+  bool isPossibleGCMotif;   // Is the allele a possible motif caused by GC homopolymer (TBD by FDVR)?
   VarButton() {
     isHPIndel      = false;
     isSNP          = false;
@@ -76,6 +78,8 @@ class VarButton {
     isNoVariant    = false;
     doRealignment  = false;
     isClearlyNonFD = false;
+    isGCMotif      = false;
+    isPossibleGCMotif = false;
   }
 };
 
@@ -167,6 +171,9 @@ class AlleleIdentity {
         const ReferenceReader &ref_reader);
     bool IdentifyDyslexicMotive(char base, int position,
         const ReferenceReader &ref_reader, int chr_idx);
+    void IdentifyGCMotif(const LocalReferenceContext& reference_context, const ReferenceReader &ref_reader);
+    void IdentifyPossibleGCMotif(const LocalReferenceContext& reference_context, const ReferenceReader &ref_reader);
+
 
     void SubCategorizeSNP(const LocalReferenceContext &reference_contextl);
     void SubCategorizeMNP(const LocalReferenceContext &reference_contextl);

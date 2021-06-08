@@ -18,13 +18,6 @@ matplotlib.rcParams['image.cmap'] = 'jet'
 # Import our tools
 import html
 import kickback
-
-import inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0, os.path.join(parentdir, 'autoCal')) 
-print os.path.join(parentdir, 'autoCal')
-
 from cdtools import NoisyOffset
 from tools import misc, chipcal
 from tools.core import chiptype
@@ -43,10 +36,16 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
     
     Plugin to analyze core chip performance metrics.
     
-    Latest Update | Updated tools for an explog fix.
-                  | Implemented per-lane difference images for wafermapping purposes.
+    Latest Update | Reverted to DynamicRangeAfterBF as the core DR to use for offset analysis based on behavior
+                  |   from all chip types, including those not on Valkyrie.
+                  | Bugfix where tools directory was not committed and included in chipDiagnostics with DR fix.
+                  | Major update due to correction for selecting proper DynamicRange from explog.  Version 4.0 
+                      was mistakenly upgraded to use the wrong value when in reality there was a datacollect bug.
+                  | v4.0.3 | B.P. | Uprevved version number for improved installation tracking (4.0.2 was used 
+                      in debug and had installation issue on tardis.ite)
+                  | v6.1.1 | B.P.   | updated chipcal.determine_lane algorithm
     """
-    version       = "3.4.3"
+    version       = "6.1.1"
     allow_autorun = True
     
     runTypes      = [ RunType.THUMB , RunType.FULLCHIP , RunType.COMPOSITE ]
@@ -90,8 +89,6 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         
         print( 'Plugin complete.' )
         
-        sys.exit(0)
-
     def analyze_cal( self ):
         ''' loads and does basic calibration analysis '''
         #self.cc = chipcal.ChipCal( self.calibration_dir , self.chip_type , self.results_dir )
@@ -114,6 +111,12 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         self.cc.load_gain       ( )
         self.cc.determine_lane  ( ) # Need to do this as soon as possible.
         self.cc.find_refpix     ( )
+        
+        # Moved up load_offset so that we can determine pinned pixels ahead of analyzing gain and ignoring pinned pixels . . .
+        print( 'DR detected to be %s' % self.explog.DR )
+        self.cc.offset_lims = [ 0, self.explog.DR ] # This call gets overwritten in .load_offset . . . . .
+        self.cc.load_offset   ( DR=self.explog.DR , pinned_low_cutoff=500 , pinned_high_cutoff=15883 )
+        
         self.analyze_property   ( 'gain' )
         
         self.cc.wafermap_spatial( self.cc.gain[::self.cc.rows/600,::self.cc.cols/800],'gain',self.cc.gain_lims )
@@ -140,12 +143,11 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         self.wafermap_lims['noise_localstd'] = process_lims( noise_localstd_lims )
         
         # Load offset.  Make sure to get real DR.  This should be read in from explog through other methods.
-        print( 'DR detected to be %s' % self.explog.DR )
-        self.cc.offset_lims =  [ 0, self.explog.DR ] # This call gets overwritten in .load_offset . . . . .
-        self.cc.load_offset    ( DR=self.explog.DR , pinned_low_cutoff=500 , pinned_high_cutoff=15883 )
         self.analyze_property  ( 'offset' )
         
         self.cc.pinned_heatmaps( )
+        self.cc.pinned_heatmaps( hd=True ) # New in version 4.0.0
+        self.wafermap_lims['perc_pinned_low_hs']   = process_lims( [0,  5] )
         self.wafermap_lims['perc_pinned_low']      = process_lims( [0, 20] )
         self.wafermap_lims['perc_pinned_low_full'] = process_lims( [0,100] )
         
@@ -159,10 +161,12 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         
         # Test for multilane chip and if it is, then make some plots
         if self.cc.is_multilane:
-            metrics = ['noise','noise_localstd','gain','gain_localstd','offset','offset_localstd']
-            for m in metrics:
-                self.cc.calc_metrics_by_lane( m )
-                self.cc.multilane_boxplot   ( m )
+            for met in ['noise','gain','offset']:
+                metrics = [met, '{}_localstd'.format( met ), '{}_true_localstd'.format( met ), '{}_true_localstd_hd'.format( met )]
+                for m in metrics:
+                    self.cc.calc_metrics_by_lane( m )
+                    self.cc.multilane_boxplot   ( m )
+                    self.cc.calc_pinned_metrics_by_lane( )
                 
             # These guys use default limits
             self.cc.multilane_wafermap_spatial( 'noise'  )
@@ -173,16 +177,14 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
             self.cc.multilane_wafermap_spatial( 'offset', transpose=False )
             
             # Special limits
-            self.cc.multilane_wafermap_spatial( 'noise_localstd' , noise_localstd_lims  )
-            self.cc.multilane_wafermap_spatial( 'gain_localstd'  , gain_localstd_lims   )
-            self.cc.multilane_wafermap_spatial( 'offset_localstd', offset_localstd_lims )
-            self.cc.multilane_wafermap_spatial( 'noise_localstd' , noise_localstd_lims  , transpose=False )
-            self.cc.multilane_wafermap_spatial( 'gain_localstd'  , gain_localstd_lims   , transpose=False )
-            self.cc.multilane_wafermap_spatial( 'offset_localstd', offset_localstd_lims , transpose=False )
-            
-            # Make fullscale and [0-20%] wafermap images of each lane.
-            self.cc.multilane_pinned_heatmaps( fullscale=False )
-            self.cc.multilane_pinned_heatmaps( fullscale=True  )
+            for m, lims in [('noise',noise_localstd_lims), ('gain',gain_localstd_lims), ('offset',offset_localstd_lims)]:
+                for prefix,suffix in [ ('',''), ('true_',''), ('true_','_hd')]:
+                    self.cc.multilane_wafermap_spatial( '{}_{}localstd{}'.format(m, prefix, suffix), lims )
+                    self.cc.multilane_wafermap_spatial( '{}_{}localstd{}'.format(m, prefix, suffix), lims, transpose=False )
+                    
+            # Make the suite of pinned pixel density wafermap images of each lane at the scales of 0 to 5, 20, or 100%.
+            self.cc.multilane_pinned_heatmaps( hd=False )
+            self.cc.multilane_pinned_heatmaps( hd=True  )
             
     def analyze_conversion( self ):
         ''' 
@@ -291,6 +293,7 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         try:
             kbip = kickback.KickbackIonPlugin()
             kbip.startplugin = self.startplugin
+            kbip.results_dir = self.results_dir
             kbip.outjson     = 'kickback.json'
 
             # Tell kickback plugin where raw acquisitions really are (raw_tndata_dir is last used here)
@@ -310,7 +313,7 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         m = prop.lower()
         
         self.cc.calc_metrics ( m , ignore_upper_limit=True )
-        self.cc.histogram    ( m )
+        self.cc.histogram    ( m , rescale_ylim=True ) # Added kwarg in version 4.0.0 to eliminate refpix/other lanes from dominating ylims
         if m == 'noise' and self.ct.series == 'pgm':
             self.cc.noise = GBI( self.cc.noise[:,:,np.newaxis] , self.cc.noise < 1 , 10 ).squeeze()
             self.cc.noise[ np.isnan( self.cc.noise ) ] = 0.
@@ -319,14 +322,32 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         self.cc.colavg       ( m )
         self.cc.plot_colavg  ( m )
         self.cc.plot_colavg  ( m , True )
-        self.cc.diff_img     ( m )
-        self.cc.plot_diff_img( m )
+        
+        # Turning off this old method in version 4.0.0 - Phil
+        # self.cc.diff_img     ( m )
+        # self.cc.plot_diff_img( m )
+        
+        ##################################################
+        # Generate (spam) superpixel attributes
+        ##################################################
+        # This is the historical default
+        self.cc.superpixel_analysis( m ) 
         self.cc.local_std    ( m )
         self.cc.local_avg    ( m )
         self.cc.diff_img_hd  ( m )
-        # self.cc.plot_colavg  ( m+'_localstd' )
-        self.cc.save_json    ( m )
         
+        # This is the better way to do it (ignore_pinned=True)
+        self.cc.superpixel_analysis( m, ignore_pinned=True )
+        self.cc.local_std    ( m, ignore_pinned=True )
+        
+        # This is the best way to do it (ignore_pinned=True and hd=True)
+        self.cc.superpixel_analysis( m, ignore_pinned=True, hd=True ) 
+        self.cc.local_std    ( m, ignore_pinned=True, hd=True )
+        self.cc.local_avg    ( m, ignore_pinned=True )
+        self.cc.diff_img_hd  ( m, ignore_pinned=True )
+        ##################################################
+        
+        self.cc.save_json    ( m )
         return None
     
     def calibration( self ):
@@ -952,21 +973,28 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
                         results[key] = {}
                         for met in loaded:
                             if key == met.split('_')[0]:
-                                results[key][ met.split('%s_' % key)[1] ] = loaded[met]
+                                # This now handles getting rid of noise_true_noise_localstd to true_localstd
+                                # But also handles going from noise_q2 to just q2
+                                new_metric = met.replace('{}_'.format( key ),'' )
+                                results[key][new_metric] = loaded[met]
                             else:
                                 results[key][met] = loaded[met]
                 except:
                     print 'Error reading %s' % js
-                    
+
+        # Add in dynamic range used in the analysis....for posterity
+        results['used_dynamic_range'] = self.explog.DR
+        
         # Add in results from pinned pixels
         pinned_metrics = ['PixelLow','PixelHigh','PixelInactive','PixelInRange','PixelCount','PercPinnedLow',
-                          'PercPinnedHigh','PinnedLowThreshold','PinnedHighThreshold','PercPinned']
+                          'PercPinnedHigh','PinnedLowThreshold','PinnedHighThreshold','PercPinned',
+                          'PercPinned_TB_Diff']
         for m in pinned_metrics:
             results['offset'][m] = self.cc.metrics[m]
             
         # Add in results from explog
         results['explog'] = self.explog.metrics
-
+        
         # Add in wafermap limits
         results['wafermap_lims'] = self.wafermap_lims
         
@@ -981,7 +1009,16 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
             results[ m ] = getattr( self.cc , m , False )
             
         results['lane_metrics'] = self.cc.lane_metrics
-
+        
+        # Add local_pinned metrics
+        for met in ['pinned_low', 'pinned_high', 'pinned']:
+            for n in ['_all','']:
+                # Skip non-HD metrics for now.
+                # for suffix in ['_hd','']:
+                for suffix in ['_hd']:
+                    metric = 'local_{}{}{}'.format( met, n, suffix ) 
+                    results[metric] = self.cc.metrics.get( metric, {} )
+        
         # Add in edge_analyzer metrics
         results['edge_metrics'] = self.edge_metrics
         
@@ -1002,7 +1039,8 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
                     
     def pixel_uniformity( self ):
         """ Creates pixel uniformity output page just as is done for PixelUniformity Plugin """
-        
+
+        # Change this for version 4.0.0 to focus on only the true_<metric>_hd metrics.
         def metric_table( metric_prefix , title ):
             ''' local function to create a metric table '''
             output = html.table( )
@@ -1035,36 +1073,45 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         #mets  = ['median','iqr','mode','std','P90']
         #for ( name , met ) in zip( names , mets ):
         #    ol_mets.add_row( [name,'%d' % self.cc.metrics['offset_localstd_%s' % met]] , [70,30] )
-        
-        offset_local = metric_table( 'offset_localstd' , 'Offset Local Stdev' )
-        gain_local   = metric_table( 'gain_localstd'   , 'Gain Local Stdev' )
-        noise_local  = metric_table( 'noise_localstd'  , 'Noise Local Stdev' )
-        
+
+        types = ['offset','gain','noise']
+        try:
+            offset_local = metric_table( 'offset_true_localstd_hd' , 'Offset True Local Stdev' )
+            gain_local   = metric_table( 'gain_true_localstd_hd'   , 'Gain True Local Stdev' )
+            noise_local  = metric_table( 'noise_true_localstd_hd'  , 'Noise True Local Stdev' )
+            spatials  = ['{}_true_localstd_hd_spatial.png'.format(t) for t in types ]
+            colavgs   = ['{}_true_localstd_hd_colavg.png'.format(t) for t in types ]
+            histograms= ['{}_true_localstd_hd_histogram.png'.format(t) for t in types ]
+        except KeyError:
+            offset_local = metric_table( 'offset_localstd' , 'Offset Local Stdev' )
+            gain_local   = metric_table( 'gain_localstd'   , 'Gain Local Stdev' )
+            noise_local  = metric_table( 'noise_localstd'  , 'Noise Local Stdev' )
+            spatials  = ['{}_localstd_spatial.png'.format(t) for t in types ]
+            colavgs   = ['{}_localstd_colavg.png'.format(t) for t in types ]
+            histograms= ['{}_localstd_histogram.png'.format(t) for t in types ]
+            
         main = html.table( )
         w    = [25,25,25,25]
         main.add_row( ['Metrics','Spatial Map','Column Average','Histogram'] , w , th=True )
         
         metric_tables = [ offset_local , gain_local , noise_local ]
-        spatials  = ['offset_localstd_spatial.png'  ,'gain_localstd_spatial.png'  ,'noise_localstd_spatial.png' ]
-        colavgs   = ['offset_localstd_colavg.png'   ,'gain_localstd_colavg.png'   ,'noise_localstd_colavg.png' ]
-        histograms= ['offset_localstd_histogram.png','gain_localstd_histogram.png','noise_localstd_histogram.png']
         
         for (a,b,c,d) in zip( metric_tables , spatials , colavgs , histograms ):
             main.add_row( [ a , html.image_link( b ) , html.image_link( c ) , html.image_link( d ) ] , w )
 
         # Add perc pinned pixel plots
         main.add_row( [ '<center>% Pixels Pinned Low</center>' , 
-                        html.image_link( 'perc_pinned_low_spatial.png' ) ,
-                        html.image_link( 'perc_pinned_low_full_spatial.png' ) , 
-                        html.image_link( 'perc_pinned_low_histogram.png' ) ] , w )
+                        html.image_link( 'perc_pinned_low_hs_spatial_hd.png' ) ,
+                        html.image_link( 'perc_pinned_low_full_spatial_hd.png' ) , 
+                        html.image_link( 'perc_pinned_low_histogram_hd.png' ) ] , w )
         main.add_row( [ '<center>% Pixels Pinned High</center>' , 
-                        html.image_link( 'perc_pinned_high_spatial.png' ) ,
-                        html.image_link( 'perc_pinned_high_full_spatial.png' ) , 
-                        html.image_link( 'perc_pinned_high_histogram.png' ) ] , w )
+                        html.image_link( 'perc_pinned_high_hs_spatial_hd.png' ) ,
+                        html.image_link( 'perc_pinned_high_full_spatial_hd.png' ) , 
+                        html.image_link( 'perc_pinned_high_histogram_hd.png' ) ] , w )
         main.add_row( [ '<center>Total % Pixels Pinned</center>' , 
-                        html.image_link( 'perc_pinned_spatial.png' ) ,
-                        html.image_link( 'perc_pinned_full_spatial.png' ) , 
-                        html.image_link( 'perc_pinned_histogram.png' ) ] , w )
+                        html.image_link( 'perc_pinned_hs_spatial_hd.png' ) ,
+                        html.image_link( 'perc_pinned_full_spatial_hd.png' ) , 
+                        html.image_link( 'perc_pinned_histogram_hd.png' ) ] , w )
         
         pu.add( '<h2>Local Standard Deviation Analysis</h2>' )
         pu.add( main.get_table() )
@@ -1074,7 +1121,7 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         pu.add( '<h2>Difference images</h2>' )
         diff_img = html.table( )
         #diff_img.add_row( [ html.image_link('%s_diff_img.png' % x ) for x in ['offset','gain','noise']],[33,33,33])
-        diff_img.add_row([html.image_link('%s_diff_img_hd.png' % x ) for x in ['offset','gain','noise']],[33,33,33])
+        diff_img.add_row([html.image_link('true_%s_diff_img_hd.png' % x ) for x in ['offset','gain','noise']],[33,33,33])
         pu.add( diff_img.get_table() )
         
         pu.make_footer( )
@@ -1300,7 +1347,7 @@ class chipDiagnostics( IonPlugin , PluginMixin ):
         # use of a '' will force loop to put in an empty table row, useful to separate quartiles from means
         metrics = ['','q2','iqr','','P90','','mean','std']
         
-        for chip_metric in ['gain','gain_localstd','noise','noise_localstd','offset','offset_localstd']:
+        for chip_metric in ['gain','gain_true_localstd_hd','noise','noise_true_localstd_hd','offset','offset_true_localstd_hd']:
             if 'gain' in chip_metric:
                 units = self.cc.gain_units
                 fmt   = '%4.0f'

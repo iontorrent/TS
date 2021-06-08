@@ -1054,6 +1054,11 @@ class PlanDetailView(DetailView):
 
             if params:
                 barcoded = config_dict.get("barcodeId") or "nobarcode"
+                if barcoded in context["iru_config"]:
+                    irworkflow = context["iru_config"][barcoded]["Workflow"]
+                    multiWorkflowList = irworkflow if isinstance(irworkflow, list) else [str(irworkflow)]
+                    multiWorkflowList.append(str(params["Workflow"]))
+                    params["Workflow"] = multiWorkflowList
                 context["iru_config"][barcoded] = params
                 context["iru_columns"] = [
                     v[0] for v in iru_display_keys if v[0] in columns
@@ -1870,7 +1875,6 @@ def page_plan_samples_table_alternate_keys():
     keys = (("nucleotideType", "nucleotideType (DNA/RNA)"),)
     return keys
 
-
 def page_plan_save_samples_table(request):
     """ request from editing Plan page to save samples table from js to csv """
     response = http.HttpResponse(mimetype="text/csv")
@@ -1889,11 +1893,23 @@ def page_plan_save_samples_table(request):
 
     writer.writerow(header)
     for row in table:
-        values = [row[key] for key in keys]
+        values = [getcsv_rowData(row, key) for key in keys ]
         writer.writerow(values)
-
     return response
 
+def getcsv_rowData(row, key):
+    multiWorkflowString = None
+    if key == 'irWorkflow':
+        if row.get('irMultipleWorkflowSelected'):
+            multiWorkflowSelectedObj = row.get('irMultipleWorkflowSelected', [])
+            if multiWorkflowSelectedObj and isinstance(multiWorkflowSelectedObj[0], dict):
+                multiWorkflowSelectedList = [obj.get('workflow') for obj in multiWorkflowSelectedObj]
+                multiWorkflowString = ", ".join(multiWorkflowSelectedList)
+
+    if multiWorkflowString:
+        return multiWorkflowString
+    else:
+        return row[key]
 
 def page_plan_load_samples_table(request):
     """ load and validate samples csv file """
@@ -1958,15 +1974,26 @@ def page_plan_load_samples_table(request):
         reader = csv.DictReader(f)
         error = ""
         for n, row in enumerate(reader):
+            checkMultiWorkflow = row.get('IR Workflow', '')
+            workflowSelectedList = []
+            if checkMultiWorkflow:
+                workflowSelectedList = checkMultiWorkflow.split(',')
+                if len(workflowSelectedList) > 1:
+                    row['IR Workflow'] = workflowSelectedList[0]
             processed_row = dict([(k, row[v]) for k, v in keys if v in row])
             if not processed_row:
                 continue
 
             ret["samplesTable"].append(processed_row)
+            if len(workflowSelectedList) > 1:
+                workflowSelectedList = [workflow.strip() for workflow in workflowSelectedList]
+                ret["samplesTable"][n]["irMultipleWorkflowSelected"] = workflowSelectedList
 
             # validation
             row_errors = []
             for key, value in list(processed_row.items()):
+                if key == 'irMultipleWorkflowSelected':
+                    continue
                 if barcodeSet:
                     if (len(value) - len(value.lstrip())) or (
                         len(value) - len(value.rstrip())

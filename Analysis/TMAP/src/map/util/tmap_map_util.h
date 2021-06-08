@@ -11,6 +11,11 @@
 #include "tmap_map_stats.h"
 #include "tmap_map_locopt.h"
 
+#if defined (__cplusplus)
+extern "C"
+{
+#endif
+
 #define __map_util_gen_ap(par, opt) do { \
     int32_t i; \
     for(i=0;i<ACTGN_MATRIX_SIZE;++i) { \
@@ -153,26 +158,33 @@ typedef struct {
  Control structure for reference sequence buffer
  */
 typedef struct {
-    uint8_t* buf;       /*!< pointer to the address of the memory buffer for unpacked reference sequence */
-    uint32_t buf_sz;    /*!< pointer to the variable contining presently allocated size of target_buf */
-    uint8_t* data;      /*!< pointer into buffer where actual requested fragment starts */
-    uint32_t data_len;  /*!< length of last requested data */
-    uint32_t seqid;     /*!< sequence Id for the fragment stored in data member, 1-based */
-    uint32_t seq_start; /*!< offset of the first base of fragment stored in buf, 1-based */
-    uint32_t seq_end;   /*!< offset of the last base stored in buf, 1-based */
+    uint8_t* buf;        /*!< pointer to the address of the memory buffer for unpacked reference sequence */
+    uint32_t buf_sz;     /*!< pointer to the variable contining presently allocated size of target_buf */
+    uint8_t* data;       /*!< pointer into buffer where actual requested fragment starts */
+    uint32_t data_len;   /*!< length of last requested data */
+    uint32_t position;   /*!< coordinate of the data start in the reference fragment being cached (0-based!) */
+    uint32_t seqid;      /*!< sequence Id for the fragment stored in data member, 1-based */
+    uint32_t seq_start;  /*!< offset of the first base of fragment stored in buf, 1-based */
+    uint32_t seq_end;    /*!< offset of the last base stored in buf, 1-based */
 } ref_buf_t;
 
+
 /*!
-  populates the ref_buf_t so that the data 
+ * initializes ref_buf_t for proper memory management (on-heap pointers to NULLs)
+ * */
+void target_cache_init (ref_buf_t* target);
+/*!
+ * frees memory held by ref_buf_t
+ * */
+void target_cache_free (ref_buf_t* target);
+/*!
+  extracts specified portion of the reference data and populates the ref_buf_t structure
   @param dest (ref_buf_t*) the reference cache control structure
   @param refseq (tmap_refseq_t *) pointer to the the reference server control structure
   @param seqid (uint32_t) sequence id to cache, 1-based, 
   @param seq_start (uint32_t) position of first base in a fragment to cache, 1-based
   @param seq_end (uint32_t) poition of last base of a fragment to cache, 1-based
   */
-
-void target_cache_init (ref_buf_t* target);
-void target_cache_free (ref_buf_t* target);
 void cache_target (ref_buf_t* target, tmap_refseq_t *refseq, uint32_t seqid, uint32_t seq_start, uint32_t seq_end);
 
 
@@ -385,7 +397,7 @@ tmap_map_util_remove_duplicates(tmap_map_sams_t *sams, int32_t dup_window, tmap_
  @return                  the mapping quality
  */
 int32_t
-tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, int32_t n_best_subo, int32_t best_subo_score, tmap_map_opt_t *opt);
+tmap_map_util_mapq_score (int32_t seq_len, int32_t n_best, int32_t best_score, int32_t n_best_subo, int32_t best_subo_score, tmap_map_opt_t *opt);
 
 /*!
  Computes the mapping quality from the mappings of multiple algorithms
@@ -395,7 +407,7 @@ tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, in
  @return          0 upon success, non-zero otherwise
  */
 int32_t
-tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq);
+tmap_map_util_mapq (tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq);
 
 /*!
   perform local alignment
@@ -422,6 +434,15 @@ tmap_map_util_sw_gen_score
     int32_t *num_after_grouping
 );
 
+void tmap_map_util_populate_sw_par_iupac_direct 
+(
+    tmap_sw_param_t* par, 
+    int32_t score_match, 
+    int32_t pen_mm, 
+    int32_t pen_gapo, 
+    int32_t pen_gape, 
+    int32_t bw
+);
 
 void tmap_map_util_populate_sw_par_iupac 
 (
@@ -448,6 +469,7 @@ void tmap_map_util_populate_stage_sw_par
   @return               the locally aligned sams
   */
 
+// Find alignment box for all mappings of a read
 tmap_map_sams_t*
 tmap_map_util_find_align_starts 
 (
@@ -460,6 +482,7 @@ tmap_map_util_find_align_starts
     tmap_map_stats_t *stat      // statistics
 );
 
+// find amplion for locations of each mapping of a read
 void
 tmap_map_find_amplicons 
 (
@@ -470,6 +493,7 @@ tmap_map_find_amplicons
     tmap_map_sams_t *sams       // initial rough mapping 
 );
 
+// align all mappings of the read
 void 
 tmap_map_util_align 
 (
@@ -484,6 +508,7 @@ tmap_map_util_align
     tmap_map_stats_t *stat      // statistics
 );
 
+// long indel rescue for all mappings of the read
 void 
 tmap_map_util_salvage_edge_indels 
 ( 
@@ -499,6 +524,7 @@ tmap_map_util_salvage_edge_indels
     tmap_map_stats_t* stat      // statistics
 );
 
+// adjust softclips according to specs for all mappings of a read
 void 
 tmap_map_util_cure_softclips 
 (
@@ -506,6 +532,7 @@ tmap_map_util_cure_softclips
     tmap_seq_t **seqs          // array of size 4 that contains pre-computed inverse / complement combinations
 );
 
+// trim key for all mappings for a read
 void 
 tmap_map_util_trim_key 
 (
@@ -517,6 +544,7 @@ tmap_map_util_trim_key
     tmap_map_stats_t *stat      // statistics
 );
 
+// end repair all mappings for a read
 void 
 tmap_map_util_end_repair_bulk 
 (
@@ -525,11 +553,26 @@ tmap_map_util_end_repair_bulk
     tmap_seq_t *seq,            // read
     tmap_seq_t **seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
     tmap_map_opt_t *opt,        // tmap parameters
-    tmap_sw_param_t* swpar,     // Smith-Waterman scoring parameters
     ref_buf_t* target,          // reference data cache
     tmap_sw_path_t** path_buf,  // buffer for traceback path
     int32_t* path_buf_sz,       // used portion and allocated size of traceback path. 
     tmap_map_stats_t *stat      // statistics
+);
+
+// REPAiR all mappings for a read
+void tmap_map_util_REPAiR_bulk 
+(
+    tmap_refseq_t* refseq, 
+    tmap_map_sams_t* sams, 
+    tmap_seq_t* seq, 
+    tmap_seq_t** seqs, 
+    tmap_map_opt_t* opt, 
+    int32_t stage_ord, 
+    tmap_sw_param_t* swpar, 
+    ref_buf_t* target, 
+    tmap_sw_path_t** path_buf, 
+    int32_t* path_buf_sz, 
+    tmap_map_stats_t* stat
 );
 
 # if 0
@@ -651,29 +694,44 @@ AlBatch;
 
 void cigar_log 
 (
-    const uint32_t* cigar, 
+    const uint32_t* cigar,
     unsigned cigar_sz
 );
+
 uint32_t cigar_to_batches 
 (
-    const uint32_t* cigar, 
-    uint32_t cigar_sz, 
-    uint32_t* x_clip, 
-    AlBatch* batches, 
+    const uint32_t* cigar,
+    uint32_t cigar_sz,
+    uint32_t* x_clip,
+    AlBatch* batches,
     uint32_t max_batches
 );
-void log_batches 
-(const char* xseq, unsigned xlen, uint8_t xrev, const char* yseq, unsigned ylen, uint8_t yrev, const AlBatch *b_ptr, int b_cnt, unsigned xoff, unsigned yoff);
 
-void tmap_map_log_text_align (
-    const char* preceed, 
-    uint32_t* cigar, 
-    uint32_t n_cigar, 
-    const char* query, 
-    uint32_t query_len, 
-    uint32_t forward, 
-    const char* ref, 
-    uint32_t ref_off);
+void log_batches 
+(
+    const char* xseq,
+    unsigned xlen,
+    uint8_t xrev,
+    const char* yseq,
+    unsigned ylen,
+    uint8_t yrev,
+    const AlBatch *b_ptr,
+    int b_cnt,
+    unsigned xoff,
+    unsigned yoff
+);
+
+void tmap_map_log_text_align 
+(
+    const char* preceed,
+    uint32_t* cigar,
+    uint32_t n_cigar,
+    const char* query,
+    uint32_t query_len,
+    uint32_t forward,
+    const char* ref,
+    uint32_t ref_off
+);
 
 int
 tmap_map_get_amplicon
@@ -698,6 +756,8 @@ cache_sw_overrides
     tmap_sw_param_t* def_sw_par
 );
 
-
+#if defined (__cplusplus)
+}
+#endif
 
 #endif // TMAP_MAP_UTIL_H

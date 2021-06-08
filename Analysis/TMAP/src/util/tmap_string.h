@@ -4,6 +4,11 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   A Generic String Library
   */
@@ -85,5 +90,9 @@ tmap_string_reverse_compliment(tmap_string_t *str, int32_t is_int);
   */
 void
 tmap_string_compliment(tmap_string_t *str, int32_t is_int);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_STRING_H

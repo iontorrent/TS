@@ -30,6 +30,11 @@
 #include <stdlib.h>
 #include "tmap_alloc.h"
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   A Vector Library
   */
@@ -127,5 +132,9 @@
                                  (v).a = (type*)tmap_realloc((v).a, sizeof(type) * (v).m, "(v).a"), 0) \
                                 : (v).n <= (size_t)(i)? (v).n = (i) \
                                 : 0), (v).a[(i)]
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_VEC_H

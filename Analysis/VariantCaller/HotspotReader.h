@@ -38,7 +38,8 @@ enum AlleleHint {
   FWD_BAD_HINT = 1,
   REV_BAD_HINT = 2,
   BOTH_BAD_HINT = 3,
-  SPEC_BAD_HINT = 4
+  SPEC_BAD_HINT = 4,
+  SPEC_PARAM = 5
 };
 
 class hint_item {
@@ -54,6 +55,7 @@ class hint_item {
   double AFf, AFr;
   string alt;
   int prefix;
+  VariantSpecificParams params;
 }; 
  
 class HotspotReader {
@@ -83,9 +85,13 @@ public:
 	return true;
   }
   bool hint_AF_good_allele(int af, int ar, int cf, int cr) {
-	if (hint_value() != SPEC_BAD_HINT) return false; 
+	if (hint_value() != SPEC_BAD_HINT and hint_value() != SPEC_PARAM) return false; 
 	double AFf = hint_vec[hint_cur_].AFf, AFr = hint_vec[hint_cur_].AFr;
 	return (AFf*cf < (double) af and AFr*cr < (double) ar); // is a good allele
+  }
+  VariantSpecificParams *hint_param_ptr() {
+	if (hint_value() != SPEC_PARAM) return NULL;
+	return &(hint_vec[hint_cur_].params);
   }
   string hint_alt() const { return hint_vec[hint_cur_].alt; }
   bool hint_empty() const { return hint_vec.empty() || hint_header_ >=  hint_vec.size();}
@@ -97,6 +103,7 @@ public:
   bool hint_more() { return hint_cur_ < hint_vec.size();}
 
   void MakeHintQueue(const string& hotspot_vcf_filename);
+  void setupHotspot( vector<HotspotAllele>& nn, vcf::Variant& current_hotspot, int chr_idx, int pos);
 
 private:
   const ReferenceReader * ref_reader_;

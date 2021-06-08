@@ -11,13 +11,13 @@
         "analysisDir",
         "pluginOutputDir"
     ],
-    "isThumbnail":"true",
+    "isThumbnail":"false",
     "name":"chipDiagnostics",
     "outputs":[
         "./outputs"
     ],
     "payOption":"Free",
-    "runAllowed":"THUMBNAIL",
+    "runAllowed":"ASSAY",
     "runOnceOnly":"true",
     "scriptLauncher":"chipDiagnostics.py",
     "validWorkflowAppTypes":[
@@ -29,5 +29,5 @@
         "type"
     ],
     "vendorActivation":"/share/apps/",
-    "ver":"3.4.2"
+    "ver":"6.1.1"
 }

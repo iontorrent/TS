@@ -45,6 +45,8 @@ public:
     bool detailed_integral;
     int max_iterations;
     int iter_done;
+    float avg_most_resp_squared_error;
+    int num_non_ol_reads;
     vector<float> ll_at_stage;
     vector<float> start_freq_of_winner;
  
@@ -58,10 +60,13 @@ public:
     void ResetToOrigin();
     void PropagateTuningParameters(EnsembleEvalTuningParameters &my_params, int num_hyp_no_null);
     void SetAndPropagateDebug(int debug);
+    void CalculateAvgMostRespSquaredError(const vector<CrossHypotheses>& my_hypotheses);
     LatentSlate(int debug = 0){
         max_iterations = 10;
         detailed_integral = true;
         iter_done = 0;
+        avg_most_resp_squared_error = 0.0f;
+        num_non_ol_reads = 0;
         DEBUG = debug;
         SetAndPropagateDebug(DEBUG);
     };
@@ -119,6 +124,7 @@ public:
     int                    multiallele_window_end;
     vector<string>         misc_info_fields;
     bool                   doRealignment;
+    float                  realignment_threshold;
     int                    total_read_counts;  // Total read counts (weighted by ZR) on read_stack
     int                    DEBUG;
     // Allele evaluation information
@@ -136,6 +142,7 @@ public:
         multiallele_window_start = -1;
         multiallele_window_end = -1;
         doRealignment = false;
+        realignment_threshold = 1.0f;
         total_read_counts = 0;
         DEBUG = 0;
         read_id_.clear();
@@ -145,7 +152,7 @@ public:
     };
 
     //! @brief Set the parameters of the evaluator
-    void SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager);
+    void SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager);
     //! @brief Generate the base space hypotheses for each read
     void SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
                                 const ExtendParameters &parameters, const ReferenceReader &ref_reader);
@@ -168,7 +175,7 @@ public:
     // Functions of allele related (not go to the reads) are defined here
     //! @brief Setup the alleles, i.e., context investigation, allele classification, etc.
     void SetupAllAlleles(const ExtendParameters &parameters, const InputStructures &global_context,
-                         const ReferenceReader &ref_reader);
+                         const ReferenceReader &ref_reader, const vector<VariantSpecificParams>& variant_specific_params);
     //! @brief Filter out undesired alleles
     void FilterAllAlleles(const ControlCallAndFilters& my_controls, const vector<VariantSpecificParams>& variant_specific_params);
     //! @brief Calculate the end of the look ahead window (primarily for candidate generator)

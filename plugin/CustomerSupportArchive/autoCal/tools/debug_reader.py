@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 TODAY       = datetime.datetime.today()
 WF_REGEX    = re.compile( r""".*working directory: (?P<wd>[\w/.]+), workflowVersion: (?P<version>[\w/.=\s\-]+)""" )
-GIT_RE      = re.compile( r"""git branch\s+=\s+(?P<branch>[\w/_/-]+)\s+git commit =\s+(?P<commit>[\w]+)""" )
+GIT_RE      = re.compile( r"""git branch\s+=\s+(?P<branch>[\w\-./_]+)\s+git commit =\s+(?P<commit>[\w]+)""" )
 DEBUG_REGEX = re.compile( r"""(?P<file>[\w/.]+):(?P<timestamp>[\w:\s]{15})\s(?P<inst>[\w\-_]+)\s(?P<source>[\w.]+):\s(?P<message>[\w\W\s]+)""" )
 
 """
@@ -227,6 +227,8 @@ class DebugLog( object ):
         
         Also works without the input timestamp if we set it with set_start_timestamp.
         """
+
+
         # If no starttimestamp is passed in, try using the attribute self.start_timestamp
         if start_timestamp is None: start_timestamp = self.start_timestamp
 
@@ -266,24 +268,25 @@ class DebugLog( object ):
     def get_timestamp( date_string, start_timestamp=None, end_timestamp=None ):
         """ Extract the timestamp from debug log line, convert to datetime object, and add in a year """
         # NOTE: No Year in the debuglog timestamps
-        stamp = datetime.datetime.strptime( date_string.strip() , "%b %d %H:%M:%S" )
+        try:
+            stamp = datetime.datetime.strptime( date_string.strip() , "%b %d %H:%M:%S" )
+        except ValueError:
+            # necessary for leap year - Feb 29th. Thinks day is out of range, so we need to tag on the year
+            year = datetime.date.today().year
+            date_string = '{} {}'.format(year, date_string)
+            stamp = datetime.datetime.strptime( date_string.strip() , "%Y %b %d %H:%M:%S" )
         # Below is where we add in a year
-        # First try to use the start and end timestamps pulled from explog since they have the year -- B.P. 17Sep2019
-        if start_timestamp:
+        if stamp.month == 12 and stamp.day == 31:
             # try matching the start timestamp month if it exists
-            if stamp.month == start_timestamp.month: 
+            if start_timestamp and stamp.month == start_timestamp.month: 
                 return stamp.replace( start_timestamp.year )
-            # try matching the end timestamp month if it exists
-            elif end_timestamp:  
-                if stamp.month == end_timestamp.month: 
-                    return stamp.replace( end_timestamp.year )
-        # Maybe all we have is an end_timestamp...not sure why, but it's possible
-        elif end_timestamp:  
-            if stamp.month == end_timestamp.month: 
+        elif stamp.month == 1 and stamp.day==1:  
+            if start_timestamp and stamp.month == start_timestamp.month: 
+                return stamp.replace( start_timestamp.year )
+            elif end_timestamp and stamp.month == end_timestamp.month: 
                 return stamp.replace( end_timestamp.year )
-        else:
-            # Fallback method --> not guaranteed to work on or about New Year's Eve
-            return stamp.replace( TODAY.year )
+        # Fallback method --> not guaranteed to work on or about New Year's Eve
+        return stamp.replace( TODAY.year )
     
     
 class ValkyrieDebug( DebugLog ):
@@ -295,13 +298,19 @@ class ValkyrieDebug( DebugLog ):
         if start_timestamp is None: start_timestamp = self.start_timestamp
 
         greps = [ 'do_',        # for modules
+                  'RESEQUENCE', # to detect if resequencing happened. 
                   'planStatus', # for high level timing
                   ': peStatus', # for a typo.
                   'start magnetic isp', # for mag to seq timing, possibly
+                  'Type:Experiment Complete', # for more accurate sequencing end time- was not in use for a while, but am bringing it back 
+                  'Acquisition Complete', # one for each sequencing and resequencing flow- help determine accurate sequencing end time 
+                  #'CopyLocalFile 783', # was used for a short period of time to determine a more accurate sequencing end time 
+                  'er52', # use to determine if error 52 occurred in either pipette  
+                  'W3 failed', # use to determine if conical clog check was skipped due to very low (below 50 uL/s) W3 flow  
+                  'ValueError: ERROR:', # use to find various pipette errors  
                   ]
         
         self.all_lines = self.search_many( *greps )
-        
         if start_timestamp:
             # filter all_lines by lines that have timestamp after the official experiment start.
             self.all_lines = self.filter_lines( self.all_lines, start_timestamp )
@@ -311,11 +320,12 @@ class ValkyrieDebug( DebugLog ):
         """ Reads log for workflow components, allowing detection of e2e runs. """
         # Primary search criteria is 'do_'
         # Let's assume that if we end up with a run report, we are actually doing sequencing...?
-        modules = { 'libprep'   : False,
-                    'harpoon'   : False,
-                    'magloading': False,
-                    'coca'      : False,
-                    'sequencing': True  }
+        modules = { 'libprep'     : False,
+                    'harpoon'     : False,
+                    'magloading'  : False,
+                    'coca'        : False,
+                    'sequencing'  : True ,
+                    'resequencing': False  } # cannot detect here since there is no do_resequencing in debug
         
         #if hasattr( self, 'all_lines' ):
         #    lines = [ line for line in self.all_lines if 'do_' in line ]
@@ -323,8 +333,10 @@ class ValkyrieDebug( DebugLog ):
         #    lines = self.search( 'do_' )
         
         lines = self.search( 'do_' )
+        reseq_lines = self.search('RESEQUENCE')
             
         parsed  = [ self.read_line( line ) for line in lines ]
+        reseq_parsed = [self.read_line( line ) for line in reseq_lines]
         
         conditions = [ ('libprep'   , ['libprep'] ),
                        ('harpoon'   , ['harpoon'] ),
@@ -346,44 +358,88 @@ class ValkyrieDebug( DebugLog ):
                 #message_words = line['message'].split()
                 #if set(words).issubset( set(message_words) ):
                 #    modules[ key ] = 'true' in [ w.lower() for w in message_words ]
-
+        
+        # Determine if resequencing happened
+        reseq_count = 0
+        for line in reseq_parsed:
+            if 'RESEQUENCE' in line['message']:
+                reseq_count += 1
+        if reseq_count > 4:
+            modules['resequencing'] = True
+            print('Resequencing Detected in debug')
+        
         self.modules = modules
 
         print( 'summary' )
-        for k in ['libprep','harpoon','magloading','coca','sequencing']:
+        for k in ['libprep','harpoon','magloading','coca','sequencing','resequencing']:
             print( '{}:\t{}'.format( k  , modules[k] ) )
     
     
-    def get_overall_timing( self ):
+    def get_overall_timing( self, reseq=False ):
         if hasattr( self, 'all_lines' ):
-            #lines = [ line for line in self.all_lines if 'planstatus' in line.lower() ]
-            lines = [ line for line in self.all_lines if 'planstatus' in line.lower() or 'pestatus' in line.lower()]
+            lines = [ line for line in self.all_lines if 'planstatus' in line.lower() or 'pestatus' in line.lower() or 'type:experiment complete' in line.lower() or ('copylocalfile' and 'acq_') in line.lower()]
         else:
             # Bugfix.  Looks like someone accidentally overwrote planStatus with peStatus
-            lines = self.search_many( 'planStatus', ': peStatus' )
+            lines = self.search_many( 'planStatus', ': peStatus', 'copylocalfile' )
             
         parsed     = [ self.read_line( line ) for line in lines ]
         timing     = {}
-        conditions = [ ('review',['Review']),
-                       ('library_start',['Library','Started']),
-                       ('library_end',['Library','Completed']),
-                       ('templating_start',['Templating','Started']),
-                       ('templating_end',['Templating','Completed']),
-                       ('sequencing_start',['Sequencing','Started']),
-                       ('sequencing_end',['Sequencing','Completed']) ]
+        conditions = [ ('review',['Review'],False),
+                       ('library_start',['Library','Started'],False),
+                       ('library_end',['Library','Completed'],False),
+                       ('templating_start',['Templating','Started'],False),
+                       ('templating_end',['Templating','Completed'],False),
+                       ('sequencing_start',['Sequencing','Started'],False),
+                       ('sequencing_end',['Sequencing','Completed'],False) ] # won't find this one in reseq runs
+        if reseq:
+            conditions += [
+                       ('resequencing-templating_start',['Resequencing','Started'],True), # actually called resequencing prep in debug
+                       ('resequencing-templating_end',['Resequencing','Started'],True),
+                       ('resequencing-sequencing_start',['Sequencing','Started'],True) , # for reseq
+                       ('resequencing-sequencing_end',['Sequencing','Completed'],True) ]
         
-        for key,words in conditions:
-            timing[ key ] = None
+        for key,words,uselast in conditions:
+            timing[ key ] = None 
             for line in parsed:
-                message_words = [ w.replace(',','') for w in line['message'].split() ]
+                message_words = [ w.replace(',','').replace(')','') for w in line['message'].split() ]
                 if set(words).issubset( set( message_words ) ):
                     timing[ key ] = line['timestamp']
-                    
+                    print('FOUND TIME {} FOR KEY {}'.format(line['timestamp'],key))
+                    # The above method for determining sequencing end time is not accurate when postLib Deck clean takes longer than sequencing. 
+                    #if key=='sequencing_end':
+                    #    try:
+                    #        timing[ key ] = seq_complete # actual seq end, before 'Sequencing Complete' line 
+                    #        print('updating sequencing complete time to file transfer of final acquisition....')
+                    #    except:
+                    #        print('tried but failed to update sequencing complete time') 
+                    if not uselast:
+                        break # take first instance of finding it
+                #if 'Type:Experiment' in message_words:
+                    # noticed this phrase does not appear in 6.35.1 
+                    #seq_complete = line['timestamp'] # Save time of copy files, since the one just  before Sequencing Completed is the real sequencing end time- copying last acquisition file
+                    #print('Type:Experiment line: {}'.format(line))
+        
+        # Next, determine if we are missing sequencing_end time.
+        if reseq:
+            if timing[ 'sequencing_end' ] == timing[ 'resequencing-sequencing_end']:
+                print('Did not find a sequencing_end time. This is expected for RESEQUENCING runs')
+                # now we attempt to find it. Look for the first Type:Experiment Complete afte seq start time
+                get_next = False
+                for line in parsed:
+                    if get_next:
+                        message_words = [ w.replace(',','').replace(')','') for w in line['message'].split() ]
+                        if 'Type:Experiment' in message_words:
+                            print('Type:Experiment line for seq complete: {}'.format(line))
+                            timing[ 'sequencing_end' ] = line['timestamp']
+                            break
+                    if line['timestamp'] == timing['sequencing_start']:
+                        get_next = True
+
         # Check for if they are all blank.
         if not any( timing.values() ):
             timing['sequencing_start'] = self.start_timestamp # Faster than getattr and now initialized to None
             timing['sequencing_end']   = self.end_timestamp
-            
+        print('debug_reader timing dict : {}'.format(timing))    
         self.timing = timing
         
         # PW:  At one point, I thought this was a good idea.  Instead, I want runs that are not easily detected
@@ -403,15 +459,28 @@ class ValkyrieDebug( DebugLog ):
                   'seq' : 'darkcyan' }
         
         if self.modules['libprep']:
-            lib   = (self.timing['library_end'] - self.timing['library_start']).total_seconds() / 3600.
-            dead3 = (self.timing['templating_start'] - self.timing['library_end']).total_seconds() / 3600.
+            try:
+                lib   = (self.timing['library_end'] - self.timing['library_start']).total_seconds() / 3600.
+            except:
+                print('Missing either library start or end... perhaps run crashed')
+                lib = 0
+            try:
+                dead3 = (self.timing['templating_start'] - self.timing['library_end']).total_seconds() / 3600.
+            except:
+                print('Missing templating_start time')
+                dead3 = 0
         else:
             lib   = 0
             dead3 = 0
             
         if self.modules['harpoon'] or self.modules['magloading'] or self.modules['coca']:
-            temp  = (self.timing['templating_end'] - self.timing['templating_start']).total_seconds() / 3600.
-            dead4 = (self.timing['sequencing_start'] - self.timing['templating_end']).total_seconds() / 3600.
+            try:
+                temp  = (self.timing['templating_end'] - self.timing['templating_start']).total_seconds() / 3600.
+                dead4 = (self.timing['sequencing_start'] - self.timing['templating_end']).total_seconds() / 3600.
+            except:
+                print('Missing either templating start or end time... possibly due to COCA only run')
+                temp  = 0
+                dead4 = 0
         else:
             temp  = 0
             dead4 = 0
@@ -576,4 +645,5 @@ class ValkyrieDebug( DebugLog ):
             timing['duration'] = float( (timing['end'] - timing['start']).seconds / 3600. )
             
         return timing
+
 

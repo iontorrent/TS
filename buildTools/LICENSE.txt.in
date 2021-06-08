@@ -1,18 +1,18 @@
 @CMAKE_PROJECT_NAME@ -- @PROJECT_DESCRIPTION@
 
-This document contains 2 separate and distinct licenses: (1) Torrent Suite(tm) Software Version 5.14 Open Source License
+This document contains 2 separate and distinct licenses: (1) Torrent Suite(tm) Software Version 5.16 Open Source License
 and (2) Service & Support Telemetry Module Software Version 2.0.1 End User License Agreement.
 
-(1) Torrent Suite(tm) Software Version 5.14
+(1) Torrent Suite(tm) Software Version 5.16
 ========================================
 
-Torrent Suite(tm) Software v5.14: This software provides for the analysis and storage of data received from
-the Ion Personal Genome Machine(tm) Sequencer, the Ion Proton(tm) Sequencer, the Ion GeneStudio S5 Sequencer
-or the Ion GeneStudio S5 XL Sequencer, the Ion GeneStudio S5 Prime or the Ion GeneStudio S5 Plus.
+Torrent Suite(tm) Software v5.16: This software provides for the analysis and storage of data received from
+the Ion GeneStudio S5 Sequencer or the Ion GeneStudio S5 XL Sequencer, the Ion GeneStudio S5 Prime
+or the Ion GeneStudio S5 Plus.
 
-February 28, 2019
+January 27, 2021
 
-Copyright (C) 2011 - 2019 Life Technologies Corporation
+Copyright (C) 2011 - 2021 Life Technologies Corporation
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it

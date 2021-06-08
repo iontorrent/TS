@@ -101,6 +101,12 @@ int main() {
 #ifndef TMAP_HASH_H
 #define TMAP_HASH_H
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
+
 /*! 
   Generic Hash Libary
   */
@@ -542,5 +548,9 @@ typedef const char *tmap_hash_cstr_t;
  */
 #define TMAP_HASH_MAP_INIT_STR(name, tmap_val_t)								\
 	TMAP_HASH_INIT(name, tmap_hash_cstr_t, tmap_val_t, 1, tmap_hash_str_hash_func, tmap_hash_str_hash_equal)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_HASH_H

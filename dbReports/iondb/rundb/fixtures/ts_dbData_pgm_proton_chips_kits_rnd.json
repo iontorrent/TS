@@ -1,0 +1,448 @@
+[
+  {
+    "pk": 1,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "314",
+      "slots": 1,
+      "description": "314v2",
+      "isActive": true,
+      "instrumentType": "pgm"
+    }
+  },
+  {
+    "pk": 3,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "318",
+      "slots": 1,
+      "description": "318v2",
+      "isActive": true,
+      "instrumentType": "pgm"
+    }
+  },
+  {
+    "pk": 5,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "316v2",
+      "slots": 1,
+      "description": "316v2",
+      "isActive": true,
+      "instrumentType": "pgm"
+    }
+  },
+  {
+    "pk": 14,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "P1.1.17",
+      "slots": 1,
+      "description": "PI",
+      "isActive": true,
+      "instrumentType": "proton"
+    }
+  },
+   {
+    "pk": 21,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "318D",
+      "slots": 1,
+      "description": "318D",
+      "isActive": true,
+      "instrumentType": "pgm"
+    }
+  },
+ {
+    "pk": 20020,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMInstallKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 100,
+      "uid": "SEQ0006",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT_IC",
+      "isActive": true,
+      "description": "Ion PGM Install Kit",
+      "categories" : "readLengthDerivableFromFlows;"
+    }
+  },
+  {
+    "pk": 20043,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Template OT2 200 Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0006",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PI Template OT2 200 Kit v2",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+   {
+    "pk": 20044,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit-v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0012",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 Kit v2",
+      "categories" : "readLengthDerivableFromFlows;",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20049,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit-v3",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0014",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 Kit v3",
+      "categories" : "readLengthDerivableFromFlows;",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20050,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Template OT2 200 Kit v3",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0008",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PI Template OT2 200 Kit v3",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20053,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PI Controls Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0016",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Controls Kit v2",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+   {
+    "pk": 20055,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Template IA Tech Access Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "IATEMP0001",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IA",
+      "isActive": true,
+      "description": "Ion PGM Template IA 500 Kit",
+      "defaultThreePrimeAdapter": [
+        "FWD_0006"
+      ]
+    }
+  },
+  {
+    "pk": 20056,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMIC200Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0016",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion PGM IC 200 Sequencing Kit",
+      "categories" : "readLengthDerivableFromFlows;"
+    }
+  },
+  {
+    "pk": 20058,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonIIC200Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0017",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion PI IC 200 Seq Kit",
+      "categories" : "readLengthDerivableFromFlows;",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20065,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq Exome RDY - IC Kit 1x8",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0017",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion AmpliSeq Exome RDY - IC Kit 1x8",
+      "applicationType" : "AMPS_EXOME"
+    }
+  },
+  {
+    "pk": 20066,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq Exome RDY - IC Kit 4x2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0018",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion AmpliSeq Exome RDY - IC Kit 4x2",
+      "applicationType" : "AMPS_EXOME"
+    }
+  },
+  {
+    "pk": 20067,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit-v3_2x520",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0019",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 v3 - 2X520",
+      "categories" : "readLengthDerivableFromFlows;",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20070,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion PROTON IC v2 Universal",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "libraryReadLength" : 200,
+      "uid": "ICPREP0004",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion PI Hi-Q Chef Kit",
+      "categories" : "supportLibraryReadLength;samplePrepProtocol;protonRnaWTSamplePrep",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20071,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonProtonIHiQ",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0020",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT_IC_IA",
+      "isActive": true,
+      "description": "Ion PI Hi-Q Sequencing 200 Kit",
+      "categories" : "readLengthDerivableFromFlows;",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20072,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Hi-Q OT2 200 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0010",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PI Hi-Q OT2 200 Kit",
+      "chipTypes": "900;P1.0.19;P1.0.20;P1.1.17;P1.1.541;P1.2.18;P2.0.1;P2.1.1;P2.1.2;P2.3.1"
+    }
+  },
+  {
+    "pk": 20079,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMSelectKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0022",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT_IC",
+      "isActive": true,
+      "description": "Ion PGM Select Sequencing Kit",
+      "categories" : ""
+    }
+  },
+  {
+    "pk": 20080,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PGM Select Library Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0021",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "",
+      "isActive": true,
+      "description": "Ion PGM Select Library Kit",
+      "categories" : ""
+    }
+  },
+   {
+    "pk": 20081,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM OneTouch Select Template Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0013",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion OneTouch Select Template Kit",
+      "categories" : ""
+    }
+  },
+  {
+    "pk": 20090,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMHiQView",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0024",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT_IC_IA",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q View Sequencing Kit",
+      "categories" : "flowOverridable;readLengthDerivableFromFlows;"
+    }
+  },
+  {
+    "pk": 20091,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Hi-Q View OT2 Kit - 200",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "TEMPLT0018",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q View OT2 Kit - 200"
+    }
+  },
+  {
+    "pk": 20092,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Hi-Q View OT2 Kit - 400",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 850,
+      "uid": "TEMPLT0019",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q View OT2 Kit - 400"
+    }
+  },
+  {
+    "pk": 20093,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion PGM Hi-Q View Chef Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "libraryReadLength" : 200,
+      "uid": "ICPREP0007",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q View Chef Kit",
+      "categories" : "supportLibraryReadLength;samplePrepProtocol;pcr200_400bpSamplePrep"
+    }
+  },
+  {
+    "pk": 20094,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PGM Controls 200 Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0022",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Controls 200 Kit v2"
+    }
+  }
+]

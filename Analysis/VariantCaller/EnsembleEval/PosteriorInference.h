@@ -56,6 +56,8 @@ public:
 
   float max_ll; // current best setup
   int max_index; // location of max
+  float sum_likelihood_right; // \int_0^{f_max} likelihood(f) df
+  float sum_likelihood_left;  // \int_{f_max}^1 likelihood(f) df
 
   // if I am doing one allele vs another for genotyping
   vector<int> freq_pair;
@@ -73,6 +75,7 @@ public:
   unsigned int ResizeToMatch(ShortStack &total_theory, unsigned max_detail_level = 0);
   void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref);
   void SetTargetMinAlleleFreq(const ExtendParameters& my_param, const vector<VariantSpecificParams>& variant_specific_params);
+  float LogLikelihoodAdjustment() const;
 
 private:
   //  Calculate the posterior for just one hyp frequency
@@ -134,9 +137,10 @@ class PosteriorInference{
   void StartAtHardClassify(ShortStack &total_theory, bool update_frequency, const vector<float> &start_frequency);
   void QuickUpdateStep(ShortStack &total_theory);
 //  void DetailedUpdateStep(ShortStack &total_theory, bool update_frequency);
-  float ReturnMaxLL(){ return(ref_vs_all.max_ll+params_ll);};
-  float ReturnJustLL(){return(ref_vs_all.max_ll);};
-
+  float ReturnMaxLL() const { return(ref_vs_all.max_ll+params_ll);};
+  float ReturnJustLL() const {return(ref_vs_all.max_ll);};
+  float ReturnLLAdjustment() const {return ref_vs_all.LogLikelihoodAdjustment();};
+  float ReturnAdjustedMaxLL() const { return ReturnMaxLL() + ReturnLLAdjustment();};
 };
 
 

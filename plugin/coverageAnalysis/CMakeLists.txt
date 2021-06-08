@@ -19,4 +19,10 @@ SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "Brian Bourke-Martin")
 # this will include the entire directory contents into the package
 include(../cmake/CMakeLists.PluginInstallEverything.txt)
 
+INSTALL(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        DESTINATION "${CPACK_PACKAGE_INSTALL_DIRECTORY}"
+        USE_SOURCE_PERMISSIONS
+        REGEX "^${CMAKE_CURRENT_SOURCE_DIR}/lifechart/bbctools" EXCLUDE
+       )
+
 INCLUDE(CPack)

@@ -4,6 +4,11 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 #define TMAP_RAND_NN 312
 #define TMAP_RAND_MM 156
 #define TMAP_RAND_UM 0xFFFFFFFF80000000ULL /* Most significant 33 bits */
@@ -53,5 +58,10 @@ tmap_rand_get(tmap_rand_t *r);
 */
 void
 tmap_rand_destroy(tmap_rand_t *r);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_RAND_H

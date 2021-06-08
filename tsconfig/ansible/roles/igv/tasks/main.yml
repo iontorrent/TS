@@ -6,6 +6,81 @@
 - name:
   include: '../../../globals.yml'
 #-----------------------------------------------------------------------------
+# stop tomcat
+#-----------------------------------------------------------------------------
+- name: Stopping tomcat 7
+  service:
+    name: tomcat7
+    state: stopped
+  ignore_errors: yes
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
+
+- name: Stopping tomcat 8
+  service:
+    name: tomcat8
+    state: stopped
+  ignore_errors: yes
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
+
+#-----------------------------------------------------------------------------
+# Uninnstall previous Ion Torrent Packages for igv
+#-----------------------------------------------------------------------------
+# ion-jk and ion-igv 5.2.0 built for 14.04 only
+- name: Uninstall old igv node in 14.04
+  apt:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - ion-jk=5.2.0
+    - ion-igv=5.2.0
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
+
+# ion-jk and ion-igv 5.12.0 is built for 18.04 only
+- name: Uninstall old igv node in 18.04
+  apt:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - ion-jk=5.12.0
+    - ion-igv=5.12.0
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
+
+#-----------------------------------------------------------------------------
+# Uninnstall previous tomcat packages
+#-----------------------------------------------------------------------------
+- name: Uninstall tomcat 7 server on 14.04
+  apt:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - tomcat7
+    - tomcat7-admin
+    - tomcat7-common
+    - libtomcat7-java
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
+
+- name: Uninstall tomcat 8 server on 18.04
+  apt:
+    name: "{{ item }}"
+    state: absent
+  with_items:
+    - tomcat8
+    - tomcat8-admin
+    - tomcat8-common
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
+#-----------------------------------------------------------------------------
 # Install system packages for igv
 #-----------------------------------------------------------------------------
 - name: Install tomcat 7 server on 14.04
@@ -14,8 +89,7 @@
     state: present
     force: yes
   with_items:
-    - tomcat7
-    - tomcat7-admin
+    - ion-tomcat7
   when:
     - ansible_distribution_version == "14.04"
     - has_network_access
@@ -26,8 +100,7 @@
     state: present
     force: yes
   with_items:
-    - tomcat8
-    - tomcat8-admin
+    - ion-tomcat8
   when:
     - ansible_distribution_version == "18.04"
     - has_network_access
@@ -35,28 +108,70 @@
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for igv
 #-----------------------------------------------------------------------------
-# ion-jk and ion-igv 5.2.0 built for 14.04 only
+# ion-jk and ion-igv 5.2.1 built for 14.04 only
 - name: Install packages for igv node in 14.04
   apt:
     name: "{{ item }}"
     state: present
     force: yes
   with_items:
-    - ion-jk=5.2.0
-    - ion-igv=5.2.0
+    - ion-jk=5.2.1
+    - ion-igv=5.2.1
   when:
     - ansible_distribution_version == "14.04"
     - has_network_access
 
-# ion-jk and ion-igv 5.12.0 is built for 18.04 only
+# ion-jk and ion-igv 5.12.1 is built for 18.04 only
 - name: Install packages for igv node in 18.04
   apt:
     name: "{{ item }}"
     state: present
     force: yes
   with_items:
-    - ion-jk=5.12.0
-    - ion-igv=5.12.0
+    - ion-jk=5.12.1
+    - ion-igv=5.12.1
   when:
     - ansible_distribution_version == "18.04"
+    - has_network_access
+
+- name: Reverting Apache Tomcat AJP Vulnerability(GhostCat) issue.
+  lineinfile:
+    path: /usr/share/tomcat8/conf/server.xml
+    state: absent
+    regexp: '^([\<\!\s\-\-]*)<Connector port="8009" protocol="AJP/1.3" redirectPort="8443"\s*/>'
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
+
+- name: Reverting Apache Tomcat AJP Vulnerability(GhostCat) issue.
+  lineinfile:
+    path: /usr/share/tomcat7/conf/server.xml
+    state: absent
+    regexp: '^([\<\!\s\-\-]*)<Connector port="8009" protocol="AJP/1.3" redirectPort="8443"\s*/>'
+  when:
+    - ansible_distribution_version == "14.04"
+    - has_network_access
+
+- name: Fixing igv loading issue.
+  xml:
+    path: /usr/share/tomcat8/conf/server.xml
+    xpath: /Server/Service
+    input_type: xml
+    pretty_print: yes
+    add_children:
+        - '<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" secretRequired="false" />'
+  when:
+    - ansible_distribution_version == "18.04"
+    - has_network_access
+
+- name: Fixing igv loading issue.
+  xml:
+    path: /usr/share/tomcat7/conf/server.xml
+    xpath: /Server/Service
+    input_type: xml
+    pretty_print: yes
+    add_children:
+        - '<Connector port="8009" protocol="AJP/1.3" redirectPort="8443" secretRequired="false" />'
+  when:
+    - ansible_distribution_version == "14.04"
     - has_network_access

@@ -8,13 +8,13 @@
 bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &my_ensemble,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
-                        vector<bool> & same_as_null_hypothesis, bool & changed_alignment, const InputStructures &global_context,
+                        int & hyp_same_as_null, bool & changed_alignment, const InputStructures &global_context,
                         const ReferenceReader &ref_reader)
 {
 
   // Hypotheses: 1) Null; read as called 2) Reference Hypothesis 3-?) Variant Hypotheses
   my_hypotheses.resize(my_ensemble.allele_identity_vector.size()+2);
-  same_as_null_hypothesis.assign(my_hypotheses.size(), false);
+  hyp_same_as_null = -1;
 
   // Set up variables to log the flows we splice into
   splice_start_flow = -1;
@@ -141,7 +141,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
     }
 
     // Get the main flows before and after splicing
-    splice_end_flow = GetSpliceFlows(current_read, global_context, my_hypotheses, same_as_null_hypothesis,
+    splice_end_flow = GetSpliceFlows(current_read, global_context, my_hypotheses, hyp_same_as_null,
                                      splice_start_idx, splice_end_idx, splice_start_flow);
     if (splice_start_flow < 0 or splice_end_flow <= splice_start_flow) {
       did_splicing = false;
@@ -296,7 +296,7 @@ bool SpliceAddVariantAlleles(const Alignment &current_read, const string& pretty
 
 
 int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_context,
-                   vector<string> &my_hypotheses, vector<bool> & same_as_null_hypothesis,
+                   vector<string> &my_hypotheses, int & hyp_same_as_null,
                    int splice_start_idx, vector<int> splice_end_idx, int &splice_start_flow)
 {
 
@@ -379,8 +379,11 @@ int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_
       splice_end_flow = my_flow;
 
     // Check if hypothesis is equal to the null hypothesis, i.e., the read as called
-    same_as_null_hypothesis[i_hyp] = i_hyp>0 and splice_length[i_hyp] == splice_length[0]
-      and my_hypotheses[i_hyp].compare(my_start_idx, splice_length[i_hyp], my_hypotheses[0], my_start_idx, splice_length[0]) == 0;
+    if (i_hyp>0 and hyp_same_as_null < 0){
+    	if (splice_length[i_hyp] == splice_length[0] and my_hypotheses[i_hyp].compare(my_start_idx, splice_length[i_hyp], my_hypotheses[0], my_start_idx, splice_length[0]) == 0){
+    		hyp_same_as_null = (int) i_hyp - 1;
+    	}
+    }
 
     // reverse verbose
     if (global_context.DEBUG>2)

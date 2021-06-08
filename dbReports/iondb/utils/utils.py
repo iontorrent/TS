@@ -18,7 +18,7 @@ import json
 import urlparse
 import urllib2
 import base64
-
+import sys
 import apt
 from dateutil.parser import parse as parse_date
 from django.conf import settings
@@ -26,6 +26,11 @@ from django.utils.translation import ugettext_lazy
 from django.http import HttpResponse
 
 logger = logging.getLogger(__name__)
+
+ionpath = "/opt/ion"
+if ionpath not in sys.path:
+    sys.path.append(ionpath)
+os.environ["DJANGO_SETTINGS_MODULE"] = "iondb.settings"
 
 TIMEOUT_LIMIT_SEC = settings.REQUESTS_TIMEOUT_LIMIT_SEC
 
@@ -685,3 +690,37 @@ def authenticate_fetch_url(**kwargs):
     response = requests.get(kwargs.get('base_url'), auth=(kwargs.get('username'), kwargs.get('password')), timeout=TIMEOUT_LIMIT_SEC)
     response.raise_for_status()
     return response.json()
+
+def getLicenseFileName():
+    filePaths = [
+        os.path.join("/etc/apt/sources.list.d", x)
+        for x in os.listdir("/etc/apt/sources.list.d")
+        if os.path.splitext(x)[1] == ".list" and x != "iontorrent-offcycle.list" and 'iontorrent-ubuntu.list' not in x
+    ]
+    license_file_name = "LICENSE.txt"
+    for filePath in filePaths:
+        p = subprocess.Popen(['awk', 'NF{s=$0}END{print s}', filePath], shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        res, err = p.communicate()
+        if err:
+            continue
+            # print (err.decode())
+        else:
+            # Get the repoName and path from http://updates.itw/updates/software/ bionic-genestudio
+            repoName = res.decode().split(' ')[-1].strip()[:-1]  # bionic-genestudio
+            repoPath = res.decode().split(' ')[-2].strip()  # url
+            if 'updates/software/' in repoPath:
+                license_file_name = 'LICENSE-' + repoName + '.txt'  # Ex:LICENSE-bionic-genestudio.txt
+                if 'archive' in repoPath:
+                    repoTrim = repoPath.split('/')
+                    # Ex:LICENSE-archive-5.16.1-bionic.txt
+                    license_file_name = "{0}-{1}-{2}-{3}.txt".format('LICENSE', repoTrim[-3], repoTrim[-2], repoName)
+                return license_file_name
+    return license_file_name
+
+def getMajorPlatform():
+    try:
+        from iondb.rundb.models import GlobalConfig
+        majorPlatform = GlobalConfig.get().majorPlatform
+        return majorPlatform
+    except Exception as Err:
+        return "NOT_AVAILABLE"

@@ -96,9 +96,24 @@ def furbishPluginParams():
   config.setdefault('padtargets','0')
   config.setdefault('minalignlen','0')
   config.setdefault('minmapqual','0')
-  config.setdefault('covdepth1','20')
-  config.setdefault('covdepth2','100')
-  config.setdefault('covdepth3','500')
+  # GeneStudio
+  defaultCovDepths = {
+    'covdepth1': '20',
+    'covdepth2': '100',
+    'covdepth3': '500'
+  }
+  # Genexus
+  if pluginParams['cmdOptions'].isDx:
+    defaultCovDepths = {
+      'covdepth1': '100',
+      'covdepth2': '350',
+      'covdepth3': '500'
+    }
+
+  config.setdefault('covdepth1', defaultCovDepths['covdepth1'])
+  config.setdefault('covdepth2', defaultCovDepths['covdepth2'])
+  config.setdefault('covdepth3', defaultCovDepths['covdepth3'])
+
   # for past and future use
   config['trimreads'] = 'No'
   # for defaults that depend on runtype
@@ -140,10 +155,26 @@ def printStartupMessage():
   printlog('  Barcodes:         %s' % pluginParams['barcodeInput'])
   printlog('  Output folder:    %s' % pluginParams['results_dir'])
   printlog('  Output file stem: %s' % pluginParams['prefix'])
+
   printlog('Run parameters:')
   printlog('  Library Type:     %s' % config['librarytype_id'])
-  printlog('  Reference Name:   %s' % pluginParams['genome_id'])
-  printlog('  Target Regions:   %s' % config['targetregions_id'])
+  if pluginParams['cmdOptions'].isDx:
+    sortedBarcodeRefDisplay = {}
+    for barcode in barcodeInput.keys():
+      barcodeData = barcodeSpecifics(barcode)
+      if barcodeData.get('nuctype') == "RNA":
+        sortedBarcodeRefDisplay['RNA'] = barcodeData
+      if barcodeData.get('nuctype') == "DNA":
+        sortedBarcodeRefDisplay['DNA'] = barcodeData
+    if sortedBarcodeRefDisplay.get('DNA'):
+      printlog('  Reference Name:   %s' % sortedBarcodeRefDisplay['DNA'].get('reference', ''))
+      printlog('  Target Regions:   %s' % sortedBarcodeRefDisplay['DNA'].get('bedfile', ''))
+    if sortedBarcodeRefDisplay.get('RNA'):
+      printlog('  Fusion Reference Name:   %s' % sortedBarcodeRefDisplay['RNA'].get('reference', ''))
+      printlog('  Fusion Target Regions:   %s' % sortedBarcodeRefDisplay['RNA'].get('bedfile', ''))
+  else:
+    printlog('  Reference Name:   %s' % pluginParams['genome_id'])
+    printlog('  Target Regions:   %s' % config['targetregions_id'])
   # echo out manually specified targets to facilitate copy/paste for re-run
   if config['barcodebeds'] == 'Yes' and pluginParams['manual_run']:
     target_files = pluginParams['target_files']

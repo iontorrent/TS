@@ -125,7 +125,7 @@ class FamilyManager:
         self.set_tvc_param(None)
         
         # Handle the deprecated pysam.AlignedRead attributes
-        self.__get_tag = (lambda bam_read, key : (bam_read.get_key(key))) if hasattr(pysam.AlignedRead, 'get_key') else (lambda bam_read, key : (bam_read.opt(key)))
+        self.__get_tag = (lambda bam_read, key : (bam_read.get_tag(key))) if hasattr(pysam.AlignedRead, 'get_tag') else (lambda bam_read, key : (bam_read.opt(key)))
         self.__reference_start = (lambda bam_read : (bam_read.reference_start)) if hasattr(pysam.AlignedRead, 'reference_start') else (lambda bam_read : (bam_read.pos))
         self.__reference_end = (lambda bam_read : (bam_read.reference_end)) if hasattr(pysam.AlignedRead, 'reference_end') else (lambda bam_read : (bam_read.aend))
         self.__reference_name = (lambda bam_read : bam_read.reference_name) if hasattr(pysam.AlignedRead, 'reference_name') else (lambda bam_read : self.__f_bam.getrname(bam_read.tid))

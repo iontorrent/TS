@@ -136,7 +136,8 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
   << "##INFO=<ID=PBP,Number=A,Type=Float,Description=\"Pval of relative variant position in reference reads versus variant reads.  Related to GATK ReadPosRankSumTest\">" << endl
   << "##INFO=<ID=PPD,Number=A,Type=Integer,Description=\"Number of extra prefix paddings added to the alternative allele\">" << endl
   << "##INFO=<ID=SPD,Number=A,Type=Integer,Description=\"Number of extra suffix paddings added to the alternative allele\">" << endl
-  << "##INFO=<ID=FDVR,Number=A,Type=Integer,Description=\"Level of Flow Disruption of the alternative allele versus reference.\">" << endl;
+  << "##INFO=<ID=FDVR,Number=A,Type=Integer,Description=\"Level of Flow Disruption of the alternative allele versus reference.\">" << endl
+  << "##INFO=<ID=GCM,Number=A,Type=Integer,Description=\"Indication of the variant is a possible GC motif.\">" << endl;
 
 
   // If we want to output multiple min-allele-freq
@@ -240,7 +241,7 @@ void clearInfoTags(vcf::Variant &var) {
 	   "RBI", "FWDB", "REVB", "REFB", "VARB",
 	   "HRUN", "SSSB", "SSEN", "SSEP", "STB", "STBP", "PBP", "PB",
 	   "FDP", "FRO", "FAO", "FSRF", "FSRR", "FSAF", "FSAR", "FXX", "QD", "TGSM",
-	   "PPA", "VFSH", "MUQUAL", "MUGT", "MUGQ", "MLLD", "LOD"};
+	   "PPA", "VFSH", "MUQUAL", "MUGT", "MUGQ", "MLLD", "LOD", "GCM"};
   for (vector<string>::const_iterator tag_it = tag_to_clear.begin(); tag_it != tag_to_clear.end(); ++tag_it)
 	  ClearVal(var, tag_it->c_str());
 }
@@ -250,7 +251,7 @@ void NullInfoFields(vcf::Variant &var, bool use_position_bias, bool use_molecula
 	clearInfoTags(var);
 	const vector<string> num_alt_tags_to_zero =
    	   {"AO", "SAF", "SAR", "AF", "FAO", "FSAF", "FSAR", "HRUN", "RBI",
-   	    "FWDB", "REVB", "REFB", "VARB", "SSSB", "SSEN", "SSEP", "MLLD"};
+   	    "FWDB", "REVB", "REFB", "VARB", "SSSB", "SSEN", "SSEP", "MLLD", "GCM"};
 	for (vector<string>::const_iterator tag_it = num_alt_tags_to_zero.begin(); tag_it != num_alt_tags_to_zero.end(); ++tag_it){
 		var.info[*tag_it] = vector<string>(num_alt, "0");
 	}

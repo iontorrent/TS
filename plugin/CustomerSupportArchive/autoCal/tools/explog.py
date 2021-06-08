@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.stats as stats
 
 from .core import explog as explog_lite
-from links import Links
+from .links import Links
 
 
 class Explog( explog_lite.Explog ):
@@ -292,8 +292,22 @@ class Explog( explog_lite.Explog ):
             
             # Define x-axis based on flow number, with prerun flows being negative...an alternative to time axis.
             allflows = len(self.dss)
-            self.flowax = np.arange( allflows ) - ( allflows-self.flows )
             
+            # However, this run could be reseq.  So....let's check.  I don't trust the explog_final.txt 'doResequencing' flag
+            self.is_reseq = allflows > 2 * self.flows
+            if self.is_reseq:
+                # This is reseq!
+                self.prerun_flows = (allflows - 2*self.flows)/2
+                self.flowax = np.arange( allflows ) - self.prerun_flows
+                self.seq_flow_mask = (self.flowax >= 0)
+                self.seq_flow_mask[(self.flows + self.prerun_flows):(self.flows +2*self.prerun_flows)] = False
+                self.prerun_edges = [ [ -self.prerun_flows, 0 ], [self.flows, self.flows+self.prerun_flows ] ]
+            else:
+                self.prerun_flows  = ( allflows-self.flows )
+                self.flowax        = np.arange( allflows ) - self.prerun_flows
+                self.seq_flow_mask = (self.flowax >= 0)
+                self.prerun_edges = [ [ -self.prerun_flows, 0 ] ]
+                
             # Instrument pressure metrics
             self.calc_flow_metrics( self.p_reg , 'RegulatorPressure'  )
             self.calc_flow_metrics( self.p_mani, 'ManifoldPressure'   )
@@ -324,12 +338,40 @@ class Explog( explog_lite.Explog ):
             self.calc_flow_metrics( self.flowtemp, 'ValkyrieFlowTemp' )
             
         return None
+
+    def config_xaxis( self, ax=None ):
+        '''Helper to improve x-axis labeling'''
+        # Figure out where ticks should go. Every 100 should be good.
+        locs   = range( 0, self.flows, 100 )
+        labels = range( 0, self.flows, 100 )
+        
+        if self.is_reseq:
+            new_start = self.prerun_flows + self.flows
+            locs   += range( new_start, new_start + self.flows, 100 )
+            labels += labels
+        if ax is None:
+            plt.xlim( self.flowax[0], self.flowax[-1] )
+            plt.xlabel( 'Flows (shaded areas are beadfind/prerun flows)' )
+            for x1,x2 in self.prerun_edges:
+                plt.axvspan( x1, x2, facecolor='grey', alpha=0.25 )
+            plt.xticks( locs, labels )
+        else:
+            ax.set_xlim( self.flowax[0], self.flowax[-1] )
+            ax.set_xlabel( 'Flows (shaded areas are beadfind/prerun flows)' )
+            for x1,x2 in self.prerun_edges:
+                ax.axvspan( x1, x2, facecolor='grey', alpha=0.25 )
+            ax.set_xticks( locs )
+            ax.set_xticklabels( labels )
             
     def dss_plot( self , outdir ):
         ''' plots DSS with prerun flows as "negative" flows '''
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (dss_plot) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             # Decide on if Vref is recorded -- if so, make a slightly different plot.
             if self.vref.any():
@@ -338,15 +380,14 @@ class Explog( explog_lite.Explog ):
                 ax1.set_ylabel ( 'dac_start_sig' , color='b' )
                 ax1.tick_params( 'y' , colors='b' )
                 ax1.set_title  ( 'dac_start_sig' )
-                ax1.set_xlabel ( 'Flows (negative values are beadfind and prerun flows)')
-                ax1.set_xlim   ( self.flowax[0]-5 , self.flowax[-1] )
+                self.config_xaxis( ax1 )
                 
                 # Define vref axis as second y-axis
                 ax2 = ax1.twinx()
                 ax2.plot       ( self.flowax , self.vref , 'g-' )
                 ax2.set_ylabel ( 'Reference Electrode (V)' , color='g' )
                 ax2.tick_params( 'y' , colors='g' )
-                ax2.set_xlim   ( self.flowax[0]-5 , self.flowax[-1] )
+                ax2.set_xlim   ( self.flowax[0] , self.flowax[-1] )
                 
                 ax1.grid       ( ) # This only works if default ticks are at same positions along axes.
                 
@@ -363,8 +404,7 @@ class Explog( explog_lite.Explog ):
                 ymin,ymax  = plt.ylim()
                 plt.ylim   ( 0.9*ymin , 1.1*ymax )
                 plt.title  ( 'dac_start_sig' )
-                plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
-                plt.xlim   ( self.flowax[0]-5 , self.flowax[-1] )
+                self.config_xaxis()
                 # plt.axvline( x=0 , ls='-' , color='black' )
                 plt.grid   ( )
                 # plt.savefig( os.path.join( outdir , 'dss_plot.png' ) )
@@ -378,12 +418,15 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (dc_offset) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.figure ( )
             plt.plot   ( self.flowax , self.dc , label='DC Offset' )
-            plt.xlim   ( self.flowax[0]-5 , self.flowax[-1] )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'DC Offset (DN14 Counts)' )
+            self.config_xaxis()
             plt.grid   ( )
             plt.title  ( 'DC Offset' )
             ymin,ymax  = plt.ylim()
@@ -403,6 +446,10 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (cumulative_offset) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             # Do the wacky massaging of numbers
             start = np.where( self.flowax == 0 )[0][0]
@@ -435,17 +482,20 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (flow_duration) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.figure ( )
             plt.plot   ( self.flowax[:-1] , np.diff( self.time ) , label='Flow Duration' )
-            plt.xlim   ( self.flowax[0]-5 , self.flowax[-1] )
             
             # 21 Feb 2019
             # Pre-run flows do not matter.  Let's fix the y scale to zoom in on the area of interest.
             plt.ylim   ( 0 , 45 )
             
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Time (s)' )
+            self.config_xaxis()
             plt.grid   ( )
             plt.title  ( 'Flow Duration' )
             ymin,ymax  = plt.ylim()
@@ -490,17 +540,20 @@ class Explog( explog_lite.Explog ):
             
     def pinch_plot( self , outdir ):
         ''' Plots pinch regulator pressures '''
+        if not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         if self.isRaptor:
             plt.figure ( )
             plt.plot   ( self.flowax , self.mwa , label='Main waste' )
             plt.plot   ( self.flowax , self.cwa , label='Chip waste' )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Pressure (psi)' )
             plt.grid   ( )
             plt.title  ( 'Pinch Regulator Pressure' )
             ymin,ymax  = plt.ylim()
             plt.ylim   ( 0.9*ymin , 1.1*ymax )
+            self.config_xaxis()
             plt.legend ( )
             plt.savefig( os.path.join( outdir , 'pinch_regulators.png' ) )
             plt.close  ( )
@@ -509,13 +562,12 @@ class Explog( explog_lite.Explog ):
             for lane, c in zip( [1,2,3,4], ['red','orange','green','blue'] ):
                 plt.plot( self.flowax , getattr( self, 'pm{}'.format(lane), [] ) , ls='-'  , color=c , label='L{} Main'.format(lane) )
                 plt.plot( self.flowax , getattr( self, 'pc{}'.format(lane), [] ) , ls='--' , color=c , label='L{} Chip'.format(lane) )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Pressure (psi)' )
             plt.grid   ( )
             plt.title  ( 'Pinch Regulator Pressure' )
             ymin,ymax  = plt.ylim()
             plt.ylim   ( 0.9*ymin , 1.1*ymax )
+            self.config_xaxis()
             plt.legend ( ncol=4 , fontsize=10 , loc='upper center' )
             plt.savefig( os.path.join( outdir , 'pinch_regulators.png' ) )
             plt.close  ( )
@@ -524,6 +576,10 @@ class Explog( explog_lite.Explog ):
             
     def pressure_plot( self , outdir ):
         ''' Plots instrument pressures '''
+        if not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         plt.figure ()
         
         if self.chiptype.series.lower() in ['pgm']:
@@ -533,8 +589,9 @@ class Explog( explog_lite.Explog ):
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.plot   ( self.flowax , self.p_reg  , label='Regulator' )
             plt.plot   ( self.flowax , self.p_mani , label='Manifold'  )
-            plt.xlim   ( self.flowax[0]-5 , self.flowax[-1] )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
+            #plt.xlim   ( self.flowax[0]-5 , self.flowax[-1] )
+            #plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
+            self.config_xaxis()
             
         plt.grid   ( True )
         plt.title  ( 'Instrument Pressure' )
@@ -552,6 +609,10 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (chip_temp) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.figure ( )
             plt.plot   ( self.flowax , self.temp1 , label='Thermometer 1' )
@@ -559,13 +620,12 @@ class Explog( explog_lite.Explog ):
             plt.plot   ( self.flowax , self.temp3 , label='Thermometer 3' )
             plt.plot   ( self.flowax , self.temp4 , label='Thermometer 4' )
             plt.ylabel ( 'Temperature (degC)' )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
-            plt.grid   ( True )
             plt.title  ( 'Chip Temperature' )
             # plt.axvline( x=0 )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
             ymin,ymax  = plt.ylim()
             plt.ylim   ( 0.7*ymin , 1.3*ymax )
+            self.config_xaxis()
+            plt.grid   ( True )
             plt.legend ( loc=0 )
             plt.savefig( os.path.join( outdir , 'chip_thermometer_temperature.png' ) )
             plt.close  ( )
@@ -577,6 +637,10 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (cpu_temp) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.figure ()
             plt.plot   ( self.flowax , self.cpuT1 , label='CPU 1' )
@@ -584,11 +648,10 @@ class Explog( explog_lite.Explog ):
             plt.plot   ( self.flowax , self.gpuT  , label='GPU'   )
             plt.grid   ( True )
             plt.title  ( 'CPU Temperature' )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Temperature (degC)' )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
             ymin, ymax = plt.ylim()
             plt.ylim   ( 0.8*ymin , 1.2*ymax )
+            self.config_xaxis()
             plt.legend ( loc=0 )
             plt.savefig( os.path.join( outdir , 'instrument_cpu_temperature.png' ) )
             plt.close  ( )
@@ -600,17 +663,20 @@ class Explog( explog_lite.Explog ):
         if self.chiptype.series.lower() in ['pgm']:
             print ( 'Skipping! This plot (fpga_temp) cannot be created for PGM.' )
             
+        elif not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             plt.figure ()
             plt.plot   ( self.flowax , self.fpgaT1 , label='FPGA 1' )
             plt.plot   ( self.flowax , self.fpgaT2 , label='FPGA 2' )
             plt.grid   ( True )
             plt.title  ( 'FPGA Temperature' )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Temperature (degC)' )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
             ymin, ymax = plt.ylim()
             plt.ylim   ( 0.8*ymin , 1.2*ymax )
+            self.config_xaxis()
             plt.legend ( loc=0 )
             plt.savefig( os.path.join( outdir , 'instrument_fpga_temperature.png' ) )
             plt.close  ( )
@@ -619,6 +685,10 @@ class Explog( explog_lite.Explog ):
         
     def inst_temp_plot( self , outdir ):
         ''' Plots instrument temperature plot '''
+        if not self.flowax.any():
+            print ( 'Skipping! Per-flow sensor data does not exist in this explog file.' )
+            return None
+        
         plt.figure ()
         
         if self.chiptype.series.lower() in ['pgm']:
@@ -632,6 +702,7 @@ class Explog( explog_lite.Explog ):
                 plt.plot( self.flowax , self.tempchip , label='Chip'          )
                 
             plt.xlabel  ( 'Flow' )
+            plt.xlim    ( self.flowax[0] , self.flowax[-1] )
             
         elif self.chiptype.series.lower() in ['proton','s5','s5xl']:
             if self.isRaptor:
@@ -650,10 +721,9 @@ class Explog( explog_lite.Explog ):
                 #plt.plot   ( self.flowax , self.coolT , label='Under Chip') - This is unused now.
                 # plt.plot   ( self.flowax , self.ambT1 , label='Ambient 1' ) - this is unreliable
                 plt.plot   ( self.flowax , self.ambT2 , label='Ambient' )
-                plt.xlim   ( self.flowax[0] , self.flowax[-1] )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
+                
+            self.config_xaxis()
             
-        plt.xlim   ( self.flowax[0] , self.flowax[-1] )
         plt.grid   ( True )
         plt.title  ( 'Instrument Temperature' )
         plt.ylabel ( 'Temperature (degC)' )
@@ -673,10 +743,9 @@ class Explog( explog_lite.Explog ):
         if self.isValkyrie and any(self.flowrate):
             plt.figure ( )
             plt.plot( self.flowax , self.flowrate , ls='-' , color='blue' )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
             plt.ylabel ( 'Flow Rate (uL/s)' )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
             plt.ylim   ( 0, 210 )
+            self.config_xaxis()
             
             i = 1
             for y in range(48,200,48):
@@ -700,9 +769,8 @@ class Explog( explog_lite.Explog ):
         if self.isValkyrie and any(self.flowrate):
             plt.figure ( )
             plt.plot( self.flowax , self.flowtemp , ls='-' , color='red' )
-            plt.xlabel ( 'Flows (negative values are beadfind and prerun flows)')
+            self.config_xaxis()
             plt.ylabel ( 'Flow Temperature (C)' )
-            plt.xlim   ( self.flowax[0] , self.flowax[-1] )
             plt.grid   ( )
             plt.title  ( 'Valkyrie Flow Temperature' )
             plt.savefig( os.path.join( outdir , 'valkyrie_flowtemp.png' ) )
@@ -711,19 +779,20 @@ class Explog( explog_lite.Explog ):
             print ( 'Skipping! Flow temperature data does not exist for this run.' )
         
     def make_all_plots( self , outdir ):
-        self.dss_plot              ( outdir )
-        self.dc_offset_plot        ( outdir )
-        self.flow_duration_plot    ( outdir )
-        self.pinch_plot            ( outdir )
-        self.pressure_plot         ( outdir )
-        self.chip_temp_plot        ( outdir )
-        self.cpu_temp_plot         ( outdir )
-        self.fpga_temp_plot        ( outdir )
-        self.inst_temp_plot        ( outdir )
-        self.gain_curve            ( outdir )
-        self.flowrate_plot         ( outdir )
-        self.flowtemp_plot         ( outdir )
-        # Removing this plot because it's probably bogus.  At the very least it is misleading.
-        #self.cumulative_offset_plot( outdir )
-    
-
+        if self.flowax.any():
+            self.dss_plot              ( outdir )
+            self.dc_offset_plot        ( outdir )
+            self.flow_duration_plot    ( outdir )
+            self.pinch_plot            ( outdir )
+            self.pressure_plot         ( outdir )
+            self.chip_temp_plot        ( outdir )
+            self.cpu_temp_plot         ( outdir )
+            self.fpga_temp_plot        ( outdir )
+            self.inst_temp_plot        ( outdir )
+            self.gain_curve            ( outdir )
+            self.flowrate_plot         ( outdir )
+            self.flowtemp_plot         ( outdir )
+            # Removing this plot because it's probably bogus.  At the very least it is misleading.
+            #self.cumulative_offset_plot( outdir )
+        else:
+            print( 'Error!  The explog file used does not appear to have any flow data present!  Skipping plots.')

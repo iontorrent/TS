@@ -7,7 +7,7 @@ from iondb.rundb import tsvm
 from iondb.rundb.forms import NetworkConfigForm
 from iondb.utils import files
 from iondb.utils.files import rename_extension
-from iondb.utils.utils import is_TsVm, get_deprecation_messages
+from iondb.utils.utils import is_TsVm, get_deprecation_messages, getLicenseFileName
 from django.contrib import admin
 from django.forms import TextInput, Textarea
 from django.forms.models import model_to_dict
@@ -399,13 +399,13 @@ def get_EULA_text():
     eula_content = None
 
     errorCodes = {
-        "E001": "The requested EULA file does not exist on the Ion Updates server",
+        "E001": "The requested EULA file does not exist on the Ion Updates server %s",
         "E002": "HTTP ServerNotFoundError: {0}",
         "E003": "HTTP Error: {0}",
         "E004": "No EULA content available",
     }
 
-    EULA_TEXT_URL = settings.PRODUCT_UPDATE_BASEURL + settings.EULA_TEXT_URL
+    EULA_TEXT_URL = settings.PRODUCT_UPDATE_BASEURL + settings.EULA_TEXT_URL + getLicenseFileName()
 
     try:
         response, content = h.request(EULA_TEXT_URL)
@@ -418,7 +418,7 @@ def get_EULA_text():
             eula_content = markDown_content
         if response["status"] == "404":
             isValid = False
-            errorMsg = errorCodes["E001"]
+            errorMsg = errorCodes["E001"] % EULA_TEXT_URL
             logger.debug(
                 "httplib2.ServerNotFoundError: iondb.rundb.admin.py %s", errorMsg
             )

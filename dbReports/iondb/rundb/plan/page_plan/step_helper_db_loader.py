@@ -2100,10 +2100,17 @@ class StepHelperDbLoader:
             # add IR values
             if irInfo and irInfo["userInputInfo"]:
                 barcodeToIrValues = {}
+                multiWorkflowBarcodeToIrValues = {}
                 for irvalues in irInfo["userInputInfo"]:
                     barcodeId = irvalues.get("barcodeId")
                     if barcodeId:
-                        barcodeToIrValues[barcodeId] = irvalues
+                        if barcodeId in barcodeToIrValues:
+                            if barcodeId not in multiWorkflowBarcodeToIrValues:
+                                multiWorkflowBarcodeToIrValues[barcodeId] = [irvalues.get('Workflow')]
+                            else:
+                                multiWorkflowBarcodeToIrValues[barcodeId].append(irvalues['Workflow'])
+                        else:
+                            barcodeToIrValues[barcodeId] = irvalues
 
                 for sampleDict in samplesTable:
                     for irkey, irvalue in list(
@@ -2121,6 +2128,12 @@ class StepHelperDbLoader:
                                 )
                         else:
                             sampleDict["ir" + irkey] = irvalue
+                if multiWorkflowBarcodeToIrValues:
+                    for sampleDict in samplesTable:
+                        sampleDict["irMultipleWorkflowSelected"] = []
+                        if sampleDict["barcodeId"] in multiWorkflowBarcodeToIrValues:
+                            sampleDict["irMultipleWorkflowSelected"].append(sampleDict.get('irWorkflow'))
+                            sampleDict["irMultipleWorkflowSelected"].extend(multiWorkflowBarcodeToIrValues.get(sampleDict["barcodeId"]))
 
             # sort barcoded samples table
             samplesTable.sort(key=lambda item: item["orderKey"])

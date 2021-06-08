@@ -13,6 +13,15 @@ enum // index into stats arrays
     R3P = 3
 }; 
 
+#define REPAIR_CLIP_HIST_BINNO 9
+
+#ifndef TMAP_MAP_STATS_C
+extern int64_t repair_clip_hist_lowerb [];
+#endif
+
+void init_repair_clip_hist_lowerb ();
+
+
 typedef struct 
 {
     uint64_t num_reads; /*!< the number of reads with at least one mapping */
@@ -49,6 +58,15 @@ typedef struct
     uint64_t num_end_repair_extended [4];
     uint64_t bases_end_repair_extended [4]; 
     uint64_t total_end_repair_indel [4]; 
+    // REPAiR stats
+    uint64_t reads_REPAiRed;
+    uint64_t ends_REPAiRed [2];
+    uint64_t ends_REPAiR_clipped [2];
+    uint64_t ends_REPAiR_extended [2];
+    uint64_t matches_added_by_REPAiR [2]; 
+    uint64_t total_indel_added_by_REPAiR [2]; 
+    // REPAiR debug stats 
+    uint64_t repair_clip_histo [REPAIR_CLIP_HIST_BINNO];
     // 5' softclip removal stats
     uint64_t num_5_softclips [2];
     uint64_t bases_5_softclips_qry [2];

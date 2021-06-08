@@ -60,7 +60,7 @@ bool TestSuite::run ()
     bool tests_gathered = false;
     bool help_requested = false;
     TestSelection selected_tests;
-    for (int ano = 1; ano != testEnv.argc_; ++ ano)
+    for (int ano = 1; ano != testEnv.argc_; ++ano)
     {
         if (testEnv.argv_ [ano][0] == '-')
         {

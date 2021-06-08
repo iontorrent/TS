@@ -1,0 +1,33 @@
+{
+    "activationClass":"none",
+    "dependsOn":[
+        "none"
+    ],
+    "embeddedOutput":"false",
+    "executeDxAdapter":"true",
+    "img":"none",
+    "inWorkflow":"true",
+    "inputs":[
+        "analysisDir",
+        "pluginOutputDir"
+    ],
+    "name":"sampleID",
+    "outputs":[
+        "./outputs"
+    ],
+    "payOption":"Free",
+    "runAllowed":"SAMPLE",
+    "isThumbnail":"true",
+    "runOnceOnly":"true",
+    "scriptLauncher":"sampleID.py",
+    "validWorkflowAppTypes":[
+        "DNA",
+        "RNA",
+        "DNA_RNA"
+    ],
+    "variantAnnotationKeys":[
+        "type"
+    ],
+    "vendorActivation":"/share/apps/",
+    "ver":"5.16.0.3"
+}

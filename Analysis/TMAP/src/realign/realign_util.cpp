@@ -20,7 +20,7 @@ void pretty_al_from_bin_cigar (const uint32_t* cigar_bin, unsigned cigar_bin_sz,
     for (const uint32_t* elem = cigar_bin, *sent = cigar_bin + cigar_bin_sz; elem != sent; ++elem)
     {
         oplen = bam_cigar_oplen (*elem);
-        constype = bam_cigar_type (*elem);
+        constype = bam_cigar_type (bam_cigar_op (*elem)); // fix for PowerPC: the shortcut 'bam_cigar_type (*elem)' works only for intel (bitwise shift op).
         switch (constype)
         {
             case CONSUME_QRY:

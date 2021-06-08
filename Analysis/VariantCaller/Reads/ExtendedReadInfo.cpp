@@ -485,16 +485,16 @@ void FilterByModifiedMismatches(Alignment *rai, int read_mismatch_limit, const T
 	bool is_override_by_target = false;
 	// First deal with the modified_mismatches_limit override by targets.
 	for (vector<int>::iterator target_idx_it = rai->target_coverage_indices.begin(); target_idx_it != rai->target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
-		if (targets_manager->unmerged[*target_idx_it].read_mismatch_limit_override){
+		if (targets_manager->unmerged[*target_idx_it].amplicon_param.read_mismatch_limit_override){
 			if (is_override_by_target){
-				int read_mismatch_limit_by_target = targets_manager->unmerged[*target_idx_it].read_mismatch_limit;
+				int read_mismatch_limit_by_target = targets_manager->unmerged[*target_idx_it].amplicon_param.read_mismatch_limit;
 				// The read covers multiple targets with override.
 				// Use the most stringent (i.e., smallest positive). Note that read_mismatch_limit = 0 means disable, the least stringent.
 				read_mismatch_limit = ((read_mismatch_limit * read_mismatch_limit_by_target) == 0)?
 						max(read_mismatch_limit, read_mismatch_limit_by_target) : min(read_mismatch_limit, read_mismatch_limit_by_target);
 			}else{
 				// This is the first time I see the override.
-				read_mismatch_limit = targets_manager->unmerged[*target_idx_it].read_mismatch_limit;
+				read_mismatch_limit = targets_manager->unmerged[*target_idx_it].amplicon_param.read_mismatch_limit;
 				is_override_by_target = true;
 			}
 		}

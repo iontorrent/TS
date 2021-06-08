@@ -118,8 +118,8 @@ def run_plugin(skiprun=False,barcode=""):
 
   # Hard-coded path to sample ID target BED file - may be user definable later
   track_set = pluginParams['track_set']
-  regionsBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets',track_set+'_sampleID_regions.bed')
-  lociBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets',track_set+'_sampleID_loci.bed')
+  regionsBed = os.path.join(plugin_dir,'targets',track_set+'_sampleID_regions.bed')
+  lociBed = os.path.join(plugin_dir,'targets',track_set+'_sampleID_loci.bed')
 
   # skip the actual and assume all the data already exists in this file for processing
   if skiprun:
@@ -136,13 +136,19 @@ def run_plugin(skiprun=False,barcode=""):
 
   if pluginParams['cmdOptions'].cmdline: return ({},{})
   printtime("Generating report...")
-
-  # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
-  createlink( os.path.join(plugin_dir,'slickgrid'), output_dir )
-  createlink( os.path.join(plugin_dir,'lifegrid'), output_dir )
-  createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
-  createlink( regionsBed, os.path.join(output_dir,'tracking_regions.bed') )
-  createlink( lociBed, os.path.join(output_dir,'tracking_loci.bed') )
+  try:
+    # Link report page resources. This is necessary as the plugin code is inaccesible from URLs directly.
+    createlink( os.path.join(plugin_dir,'slickgrid'), output_dir )
+    createlink(os.path.join(plugin_dir, 'scripts'), output_dir)
+    createlink(os.path.join(plugin_dir, 'css'), output_dir)
+    createlink( os.path.join(plugin_dir,'lifegrid'), output_dir )
+    createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
+    createlink( regionsBed, os.path.join(output_dir,'tracking_regions.bed') )
+    createlink( lociBed, os.path.join(output_dir,'tracking_loci.bed') )
+    createlink(os.path.join(plugin_dir, 'scripts'), pluginParams['results_dir'])
+    createlink(os.path.join(plugin_dir, 'css'), pluginParams['results_dir'])
+  except Exception as Err:
+    printtime("Symbolic linking Error: %s", Err)
 
   # Optional: Delete intermediate files after successful run. These should not be required to regenerate any of the
   # report if the skip-analysis option. Temporary file deletion is also disabled when the --keep_temp option is used.
@@ -160,9 +166,10 @@ def run_plugin(skiprun=False,barcode=""):
     "output_dir" : output_dir,
     "output_url" : output_url,
     "output_prefix" : output_prefix,
-    "allele_table" : 'allele_counts.xls',
-    "file_links" : 'filelinks.xls',
+    "allele_table" : 'allele_counts.xls'
   }
+  if not pluginParams['cmdOptions'].isDx:
+    reportData["file_links"] = 'filelinks.xls'
   return (resultData,reportData)
 
 
@@ -228,6 +235,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
       })
   render_context = {
     "autorefresh" : autoRefresh,
+    "isDx": pluginParams['cmdOptions'].isDx,
     "run_name" : pluginParams['prefix'],
     "barcode_results" : simplejson.dumps(barcodeSummary)
   }
@@ -262,6 +270,7 @@ def createDetailReport(resultData,reportData):
   output_prefix = pluginParams['output_prefix']
   html_report = os.path.join(output_dir,pluginParams['report_name'])
   render_context = resultData.copy()
+  reportData["isDx"] = pluginParams['cmdOptions'].isDx
   render_context.update(reportData)
   createReport( html_report, 'report.html', render_context )
 
@@ -347,6 +356,7 @@ def parseCmdArgs():
   parser.add_option('-p', '--purge_results', help='Remove all folders and most files from output results folder.', action="store_true", dest='purge_results')
   parser.add_option('-s', '--skip_analysis', help='Skip re-generation of existing files but make new report.', action="store_true", dest='skip_analysis')
   parser.add_option('-x', '--stop_on_error', help='Stop processing barcodes after one fails. Otherwise continue to the next.', action="store_true", dest='stop_on_error')
+  parser.add_option('-i', '--isDx', help='platform specific environmental variable', dest='isDx', default='')
 
   (cmdOptions, args) = parser.parse_args()
   if( len(args) != 2 ):
@@ -436,7 +446,8 @@ def createlink(srcPath,destPath):
   elif not destPath:
     printlog("WARNING: Failed to create symlink as destination path is empty.")
     return False
-  os.system('ln -s "%s" "%s"'%(srcPath,destPath))
+  # -nf prevents both warning and odd behavior where target exists and is a directory
+  os.system('ln -snf "%s" "%s"'%(srcPath,destPath))
   if pluginParams['cmdOptions'].logopt:
     printlog("Created symlink %s -> %s"%(destPath,srcPath))
   return True
@@ -487,7 +498,10 @@ def loadPluginParams():
 
   # TODO: replace this with url_plugindir when available from startplugin.json
   resurl = jsonParams['runinfo'].get('results_dir','.')
-  plgpos = resurl.find('plugin_out')
+  if pluginParams['cmdOptions'].isDx:
+    plgpos = resurl.find('plugins')
+  else:
+    plgpos = resurl.find('plugin_out')
   if plgpos >= 0:
     resurl = os.path.join( jsonParams['runinfo'].get('url_root','.'), resurl[plgpos:] )
   pluginParams['results_url'] = resurl

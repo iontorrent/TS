@@ -12,7 +12,7 @@ import subprocess
 from matplotlib.pyplot import hist
 from scipy.ndimage import binary_closing, binary_opening
 
-from . import average, stats
+from . import stats
 from . import chiptype as ct
 from . import datprops as dp
 
@@ -48,11 +48,11 @@ class Edge:
             # Proton tn 
             start = 3*self.chip.blockR
             end   = self.chip.chipR - start
-            self.rowavg = average.stripe_avg( data[ start:end, : ] , 0 )
+            self.rowavg = stats.stripe_avg( data[ start:end, : ] , 0 )
 
             start = 3*self.chip.blockC
             end   = self.chip.chipC - start
-            self.colavg = average.stripe_avg( data[ : , start:end] , 1 )
+            self.colavg = stats.stripe_avg( data[ : , start:end] , 1 )
 
             self.boil( )
         elif self.chip.isblock:
@@ -60,11 +60,11 @@ class Edge:
 
             start = int( self.chip.blockR * 0.4 )   # Used to be center-100
             end   = int( self.chip.blockR * 0.6 )   # used to be center+100
-            self.rowavg = average.stripe_avg( data[ start:end , : ], 0 )
+            self.rowavg = stats.stripe_avg( data[ start:end , : ], 0 )
 
             start = int( self.chip.blockC * 0.4 )
             end   = int( self.chip.blockC * 0.6 )
-            self.colavg = average.stripe_avg( data[ : , start:end ], 1 )
+            self.colavg = stats.stripe_avg( data[ : , start:end ], 1 )
 
             self.boil( )
         else:
@@ -75,13 +75,13 @@ class Edge:
             #end   = self.chip.chipR - start
             top    = data.shape[1]*1/24
             bottom = data.shape[1]*23/24
-            self.rowavg = average.stripe_avg( data[ start:end , top:bottom ] , 0 )
+            self.rowavg = stats.stripe_avg( data[ start:end , top:bottom ] , 0 )
 
             #start = 3 * self.chip.blockC
             #end   = self.chip.chipC - start
             start = data.shape[1]*3/12
             end   = data.shape[1]*9/12
-            self.colavg = average.stripe_avg( data[ : , start:end ] , 1 )
+            self.colavg = stats.stripe_avg( data[ : , start:end ] , 1 )
 
             self.boil( )
             
@@ -253,7 +253,7 @@ class Edge:
         
         # Is there a way to kill the class from within? something to research when I find internets again.
         return None
-
+    
 class PGM_Transform:
     """
     Class to support axes transforms into flow direction.
@@ -452,7 +452,7 @@ def dat_compile_dp( path , metric, chiptype , filename=None, delete=False, trans
                         img = np.zeros( (chiptype.yBlocks*datsize[0] , chiptype.xBlocks*datsize[1] ) , dt )
                         img[ datsize[0]*i:datsize[0]*(i+1) , datsize[1]*j:datsize[1]*(j+1) ] = data
                         firstblock = False
-                        print 'Block Size: %s' % ( datsize, )
+                        print( 'Block Size: {}'.format( datsize, ) )
                     except IOError: 
                         pass
                 else:
@@ -714,7 +714,7 @@ def make_mask( img, filename ):
             runlength = last-first
             if runlength != tr:
                 if not br:
-                    print 'WARNING: Multiple sections found in row %i' % rn
+                    print( 'WARNING: Multiple sections found in row {}'.format( rn ) )
                     badrows += 1
                 br = True
                 if runlength > 5:
@@ -734,7 +734,7 @@ def make_mask( img, filename ):
         if len(disp) > 1:
             reallybad += 1
             for d in disp:
-                print d
+                print( d )
 
         #outline.append( ( 0, 0 ) )
         #if row.any():
@@ -750,9 +750,9 @@ def make_mask( img, filename ):
     np.array( outline ).astype( np.uint16 ).tofile( filename )
 
     if badrows: 
-        print ''
-        print '%i/%i rows were discontinious' % ( badrows, img.shape[0] )
-        print '%i/%i rows were severe' % ( reallybad, badrows )
+        print( '' )
+        print( '{}/{} rows were discontinious'.format( badrows, img.shape[0] ) )
+        print( '{}/{} rows were severe'.format( reallybad, badrows ) )
 
     return reallybad, badrows
 

@@ -34,6 +34,11 @@
 #include <x86intrin.h>
 #include <unistd.h>
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 // Gives the # of bytes to align the memory in 16-byte increments
 #define __tmap_vsw_16(_val) (((_val) + 15) >> 4 << 4)
 
@@ -135,5 +140,9 @@ tmap_vsw_opt_init(int32_t score_match, int32_t pen_mm, int32_t pen_gapo, int32_t
  */
 void
 tmap_vsw_opt_destroy(tmap_vsw_opt_t *opt);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_VSW_DEFINITIONS_H

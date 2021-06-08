@@ -63,6 +63,10 @@ mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
+option (ION_USE_SYSTEM_LIBSTATGEN "Use libstatgen system libraries" OFF)
+mark_as_advanced(ION_USE_SYSTEM_LIBSTATGEN)
+
+
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR # Debian Unstable
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR # Debian 8
     ${LSB_RELEASE_CODENAME} STREQUAL "stretch" OR # Debian 9
@@ -380,4 +384,24 @@ else()
     add_custom_target(bamtools)
 endif()
 
-
+if (NOT ION_USE_SYSTEM_LIBSTATGEN)
+    set (proj_name "libStatGen")
+    set (proj_version "1.0.14")
+    set (proj_name_version "${proj_name}-${proj_version}")
+    ExternalProject_add(${proj_name}
+        URL "https://github.com/statgen/libStatGen/archive/v1.0.14.tar.gz"
+        PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+        SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+        BUILD_IN_SOURCE 1
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND make USER_WARNINGS=-Wall
+        INSTALL_COMMAND ""
+        #PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/libstatgen-1.0.14.patch"
+    )
+    set(ION_STATGEN_LIBS  "${PROJECT_BINARY_DIR}/../${proj_name_version}/libStatGen.a")
+    set(ION_STATGEN_INCLUDES "${PROJECT_BINARY_DIR}/../${proj_name_version}/include")
+else()
+    find_library(ION_BAMTOOLS_LIBS NAMES libstatgen)
+    include_directories("/usr/include/libstatgen")
+    add_custom_target(libstatgen)
+endif()

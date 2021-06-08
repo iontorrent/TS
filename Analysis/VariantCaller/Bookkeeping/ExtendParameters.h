@@ -49,6 +49,7 @@ class EnsembleEvalTuningParameters {
     float soft_clip_bias_checker;
     float filter_deletion_bias;
     float filter_insertion_bias;
+    float gc_motif_filter_multiplier;
 
     int   max_detail_level;
     int   min_detail_level_for_fast_scan;
@@ -74,6 +75,7 @@ class EnsembleEvalTuningParameters {
       soft_clip_bias_checker = 0.1f;
       filter_deletion_bias = 10.0f;
       filter_insertion_bias = 10.0f;
+      gc_motif_filter_multiplier = 1.0f;
       max_detail_level = 0;
       min_detail_level_for_fast_scan = 0;
 
@@ -335,6 +337,104 @@ public:
   void CheckParameterLimits();
   void SetMolecularTagTrimmerOpt(Json::Value& tvc_params);
 
+};
+
+// ==============================================================================
+
+struct VariantSpecificParams {
+  VariantSpecificParams() :
+      min_allele_freq_override(false), min_allele_freq(0),
+      strand_bias_override(false), strand_bias(0),
+      strand_bias_pval_override(false), strand_bias_pval(0),
+
+      min_coverage_override(false), min_coverage(0),
+      min_coverage_each_strand_override(false), min_coverage_each_strand(0),
+      min_var_coverage_override(false), min_var_coverage(0),
+      min_variant_score_override(false), min_variant_score(0),
+      data_quality_stringency_override(false), data_quality_stringency(0),
+
+      position_bias_override(false), position_bias(0),
+      position_bias_pval_override(false), position_bias_pval(0),
+
+      hp_max_length_override(false), hp_max_length(0),
+      filter_unusual_predictions_override(false), filter_unusual_predictions(0),
+      filter_insertion_predictions_override(false), filter_insertion_predictions(0),
+      filter_deletion_predictions_override(false), filter_deletion_predictions(0),
+      sse_prob_threshold_override(false), sse_prob_threshold(0),
+      min_tag_fam_size_override(false), min_tag_fam_size(0),
+      min_fam_per_strand_cov_override(false), min_fam_per_strand_cov(0),
+      heavy_tailed_override(false), heavy_tailed(0),
+      gen_min_allele_freq_override(false),  gen_min_allele_freq(0),
+      gen_min_indel_allele_freq_override(false), gen_min_indel_allele_freq(0),
+      gen_min_coverage_override(false),  gen_min_coverage(0),
+      gc_motif_filter_multiplier_override(false), gc_motif_filter_multiplier(0),
+      do_snp_realignment_override(false), do_snp_realignment(false),
+      do_mnp_realignment_override(false), do_mnp_realignment (false),
+      realignment_threshold_override(false), realignment_threshold(1.0f),
+      adjust_sigma_override(false), adjust_sigma(false),
+      black_strand('.'),
+      fwdb(0.0f), revb(0.0f)
+	  {}
+
+  bool  min_allele_freq_override;
+  float min_allele_freq;
+  bool  strand_bias_override;
+  float strand_bias;
+  bool  strand_bias_pval_override;
+  float strand_bias_pval;
+  bool  min_coverage_override;
+  int   min_coverage;
+  bool  min_coverage_each_strand_override;
+  int   min_coverage_each_strand;
+  bool  min_var_coverage_override;
+  int   min_var_coverage;
+  bool  min_variant_score_override;
+  float min_variant_score;
+  bool  data_quality_stringency_override;
+  float data_quality_stringency;
+
+  bool  position_bias_override;
+  float position_bias;
+  bool position_bias_pval_override;
+  float position_bias_pval;
+
+  bool  hp_max_length_override;
+  int   hp_max_length;
+  bool  filter_unusual_predictions_override;
+  float filter_unusual_predictions;
+  bool  filter_insertion_predictions_override;
+  float filter_insertion_predictions;
+  bool  filter_deletion_predictions_override;
+  float filter_deletion_predictions;
+  bool  sse_prob_threshold_override;
+  float sse_prob_threshold;
+  bool min_tag_fam_size_override;
+  int  min_tag_fam_size;
+  bool min_fam_per_strand_cov_override;
+  int  min_fam_per_strand_cov;
+  bool heavy_tailed_override;
+  int  heavy_tailed;
+  bool gen_min_allele_freq_override;
+  float gen_min_allele_freq;
+  bool gen_min_indel_allele_freq_override;
+  float gen_min_indel_allele_freq;
+  bool gen_min_coverage_override;
+  int gen_min_coverage;
+  bool gc_motif_filter_multiplier_override;
+  float gc_motif_filter_multiplier;
+  bool do_snp_realignment_override;
+  bool do_snp_realignment;
+  bool do_mnp_realignment_override;
+  bool do_mnp_realignment;
+  bool realignment_threshold_override;
+  float realignment_threshold;
+  bool adjust_sigma_override;
+  bool adjust_sigma;
+
+  char  black_strand;
+
+  float fwdb;
+  float revb;
 };
 
 template <typename MyIter>

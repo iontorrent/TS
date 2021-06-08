@@ -67,7 +67,7 @@ typedef struct
 tmap_anno_t;
 
 /*!
- * read end statistics record (check Jingwei's specs if these are truly medians or some other meathures)
+ * read end statistics record (check Jingwei's specs if these are truly medians or some other measures)
  */
 #pragma pack (push, 1)
 typedef struct
@@ -84,7 +84,7 @@ tmap_map_endpos_t;
  */
 typedef struct 
 {
-    uint32_t index;  /*!< index into of the first tmap_map_endpos_t in the endposmem array in tmap_refseq_t structure. */
+    uint32_t index;  /*!< index into the first tmap_map_endpos_t in the endposmem array in tmap_refseq_t structure. */
     uint32_t starts_count; /*!< number of records for READ_START's following the index position in the endposmem array in tmap_refseq_t structure. */
     uint32_t ends_count; /*!< number of records for READ_END's following the index+starts_count position in the endposmem array in tmap_refseq_t structure. */
 }

@@ -4,6 +4,11 @@
 
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*! 
   Progress Messaging 
   */
@@ -53,5 +58,9 @@ tmap_progress_print1(const char *format, clock_t start_time, ...);
   */
 void
 tmap_progress_print2(const char *format, ...);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // TMAP_PROGRESS_H

@@ -240,7 +240,7 @@ tmap_map_all_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           tmap_map_opt_copy_stage(algo_opt, opt);
           // copy stage options to the algorithm options
           tmap_map_opt_copy_stage(algo_opt, stage_opt);
-          
+
           // check that the algorithm has not been specified
           for(l=0;l<opt->num_sub_opts;l++) {
               if(opt->sub_opts[l]->algo_id == algo_opt->algo_id 

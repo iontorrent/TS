@@ -1,12 +1,73 @@
 from scipy.stats import scoreatpercentile
 import re
 import numpy as np
+import numpy.ma as ma
+
 import matplotlib.pyplot as plt
 try:
     from . import plotting
 except ImportError:
     print( 'WARNING: unable to import "plotting" in stats. some functions may be disabled' )
 
+from . import reshape
+
+class BlockMath( reshape.BlockReshaper ):
+    """ 
+    Child class of BlockReshaper that adds relevant mathematics capabilities to reshaping functionality.
+    
+    Routines herein will return an array of size
+        ( data.shape[0]/roi_R, data.shape[1]/roi_C ) = ( numR, numC )
+    
+    Note the blockR, blockC nomenclature change to roi_R, roi_C for the averaging block size, to avoid confusion with chip 
+    block[R,C] in chipinfo.
+    
+    goodpix is a boolean array of the same size as data where pixels to be averaged are True.  By default all pixels are averaged
+    raising finite sets all nans and infs to 0
+    
+    For large data sets on computers with limited memory, it may help to set superR and superC to break the data into chunks
+        This is especially true for masked reshapes where we now have 2x the data size needing to be in memory.
+    """
+    def massage_output( self, output_obj ):
+        """ Applies finite correction and also deals with whether the object is of type np.ma.core.MaskedArray """
+        if isinstance( output_obj, ma.core.MaskedArray ):
+            output = output_obj.data
+        else:
+            output = output_obj
+            
+        if self.finite:
+            output[ np.isnan(output) ] = 0
+            output[ np.isinf(output) ] = 0
+            
+        return output
+    
+    def get_mean( self ):
+        return self.massage_output( self.reshaped.mean(2) )
+    
+    get_avg     = get_mean
+    get_average = get_mean
+    
+    def get_std( self ):
+        return self.massage_output( self.reshaped.std(2) )
+    
+    def get_sum( self ):
+        return self.massage_output( self.reshaped.sum(2) )
+    
+    def get_var( self ):
+        return self.massage_output( self.reshaped.var(2) )
+        
+    def get_vmr( self ):
+        ''' 
+        Calculates variance-mean-ratio . . . sigma^2 / mean 
+        Note that here we are going to define superpixels with zero means to be 0 VMR, not np.nan.
+        '''
+        means      = self.get_mean()
+        msk        = (means == 0)
+        means[msk] = 1
+        variance   = self.get_var()
+        vmr        = variance / means
+        vmr[msk]   = 0
+        return self.massage_output( vmr )
+    
 def named_stats( data, name='', histDir='', metricType='', maxsize=None, histlims=None ):
     ''' 
     This is a higher level version of percentiles
@@ -206,7 +267,6 @@ def calc_blocksize( data, nominal=(100,100) ):
 
     return (x_fin, y_fin,)
 
-
 def uniformity( data, blocksize, exclude=None, only_values=False, iqr=True, std=False ):
     ''' 
     Calculates the uniformity of the input data.
@@ -363,6 +423,130 @@ def chip_uniformity( data, chiptype, block='mini', exclude=None, only_values=Fal
     output = uniformity( data, blocksize, exclude=exclude, only_values=only_values, iqr=iqr, std=std )
 
     return output
+
+
+################################################################################
+# Averaging functions, include those brought over from average.py
+################################################################################
+
+def block_avg( data , blockR, blockC, goodpix=None, finite=False, superR=None, superC=None ):
+    """
+    Averages the specified data, averaging regions of blockR x blockC
+    This returns a data of size 
+        ( data.shape[0]/blockR, data.shape[1]/blockC )
+    
+    *****Note that blockR and blockC are not the same as blockR and blockC defaults by chiptype (fpga block rc shape)*****
+    
+    goodpix is a boolean array of same size as data where pixels to be averaged are True. By default all pixels are averaged
+    raising finite sets all nans and infs to 0
+
+    For large data sets on computers with limited memory, it may help to set superR and superC to break the data into chunks
+    """
+    bm = BlockMath( data , blockR, blockC, goodpix=goodpix, finite=finite, superR=superR, superC=superC )
+    return bm.get_mean()
+
+def block_std( data, blockR, blockC, goodpix=None, finite=False, superR=None, superC=None ):
+    """
+    Analog of block_avg that spits back the std.
+
+    *****Note that blockR and blockC are not the same as blockR and blockC defaults by chiptype (fpga block rc shape)*****
+    
+    goodpix is a boolean array of same size as data where pixels to be averaged are True. By default all pixels are averaged
+    """
+    bm = BlockMath( data , blockR, blockC, goodpix=goodpix, finite=finite, superR=superR, superC=superC )
+    return bm.get_std()
+
+# This function works but needs some help
+def BlockAvg3D( data , blocksize , mask ):
+    """
+    3-D version of block averaging.  Mainly applicable to making superpixel averages of datfile traces.  
+    Not sure non-averaging calcs makes sense?
+    mask is a currently built for a 2d boolean array of same size as (data[0], data[1]) where pixels to be averaged are True.
+    """
+    rows = data.shape[0]
+    cols = data.shape[1]
+    frames = data.shape[2]
+    
+    if np.mod(rows,blocksize[0]) == 0 and np.mod(cols,blocksize[1]) == 0:
+        blockR = rows / blocksize[0]
+        blockC = cols / blocksize[1]
+    else:
+        print( 'Error, blocksize not evenly divisible into data size.')
+        return None
+    output = np.zeros((blockR,blockC,frames))
+    
+    # Previous algorithm was slow and used annoying looping
+    # Improved algorithm that doeesn't need any looping.  takes about 1.4 seconds instead of 60.
+    msk    = np.array( mask , float )
+    msk.resize(rows, cols , 1 )
+    masked = np.array( data , float ) * np.tile( msk , ( 1 , 1 , frames ) )
+    step1  = masked.reshape(rows , blockC , -1 , frames).sum(2)
+    step2  = np.transpose(step1 , (1,0,2)).reshape(blockC , blockR , -1 , frames).sum(2)
+    step3  = np.transpose(step2 , (1,0,2))
+    mask1  = mask.reshape(rows , blockC , -1 ).sum(2)
+    count  = mask1.transpose().reshape(blockC , blockR , -1).sum(2).transpose()
+    #mask1  = mask.reshape(rows , blockC , -1 , frames).sum(2)
+    #count  = mask1.transpose().reshape(blockC , blockR , -1 , frames).sum(2).transpose()
+    output = step3 / count[:,:,np.newaxis]
+    
+    output[ np.isnan(output) ] = 0
+    output[ np.isinf(output) ] = 0
+    return output
+
+# I think these should just go away into their only calling modules.  Perhaps. - PW 9/18/2019
+# Pulled in from the average.py module. Only called by datfile.py
+def masked_avg( image, pinned ):
+    '''
+    Calculates average trace while excluding pinned pixels. 
+    If pinned = True, that pixel is excluded from the average.
+    Note: This is opposite compared to matlab functionality.
+    '''
+    avgtrace = np.mean ( image[ ~pinned ] , axis=0 )
+    return avgtrace
+
+# Pulled in from average.py.  Only called by chip.py.
+def stripe_avg( data, ax ):
+    """
+    Custom averaging algorithm to deal with pinned pixels
+    """
+    # EDIT 10-11-13
+    # Utilize numpy.masked_array to do this much more quickly
+    # Not so custom anymore!
+    return ma.masked_array( data , (data == 0) ).mean( ax ).data
+
+def top_bottom_diff( data, mask=None, force_sum=False ):
+    """ 
+    Function to calculate the difference of a given chip data array between top and bottom.
+    Despite our conventions of plotting origin='lower' suggesting rows in [0,rows/2] as being the bottom, this is
+      physically chip top by layout.  As such, we tie this metric to the physical chip layout and design since 
+      when this different becomes very large, we would look to the design or FA to identify root cause.
+    
+    This function returns the top - bottom difference, meaning if the bottom is larger, the output is negative.
+    
+    We will by default treat the data as a float or int that should be averaged on each half before taking the 
+      difference.For booleans, like pinned pixels, this would mean that we would get a decimal percentage.
+    
+    To instead add up the values top and bottom (e.g. difference in absolute # of pinned pixels), set force_sum=True
+    """
+    if force_sum:
+        op = np.sum
+    else:
+        op = np.mean
+        
+    r,c = data.shape
+    mid = int( r/2 )
+    
+    if mask is None:
+        top = op( data[:mid,:] )
+        bot = op( data[mid:,:] )
+    else:
+        if mask.shape != (r,c):
+            raise ValueError( "Input mask {} is not of the same shape as the data {}!".format( mask.shape,
+                                                                                               data.shape ) )
+        top = op( data[:mid,:][ mask[:mid,:] ] )
+        bot = op( data[mid:,:][ mask[mid:,:] ] )
+        
+    return top - bot
 
 ###########################################
 # rename functions for historical reasons #

@@ -740,6 +740,20 @@ void BAMWalkerEngine::BeginPositionProcessingTask(list<PositionInProgress>::iter
 }
 
 
+void BAMWalkerEngine::Fetch_more_reads(list<PositionInProgress>::iterator& position_ticket, int position_increment)
+{
+  if (position_increment <= 1) return;
+  long pos = next_position_ +  position_increment; 
+  if (tmp_begin_) {
+	while (tmp_end_ and 
+		((tmp_end_->alignment.RefID == next_target_->chr and tmp_end_->original_position <= pos)
+      		      or tmp_end_->alignment.RefID < next_target_->chr)
+      		and tmp_end_->processed)
+	    tmp_end_ = tmp_end_->next;
+	position_ticket->end = tmp_end_;
+   }
+}
+
 bool BAMWalkerEngine::AdvancePosition(int position_increment, int next_hotspot_chr, long next_hotspot_position)
 {
   next_position_ += position_increment;

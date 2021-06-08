@@ -3,13 +3,6 @@ matplotlib.use( 'agg', warn=False )
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from ion.plugin import *
-
-import sys, os, inspect
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0, os.path.join(parentdir, 'autoCal')) 
-print os.path.join(parentdir, 'autoCal')
-
 from tools.chiptype import ChipType
 from tools.datfile import DatFile
 from tools.stats import named_stats
@@ -328,7 +321,7 @@ class KickbackAnalyzer( object ):
     def do_hist( self, data, lims, name ):
         ''' Calculate a histogram, masking bad pixels '''
         flat = self.flatten( data )
-        stats = named_stats( flat, name=name, histDir='.', histlims=lims )
+        stats = named_stats( flat, name=name, histDir=self.outdir, histlims=lims )
         self.results.update( stats )
 
     def flatten( self, data ):
@@ -451,7 +444,8 @@ class KickbackIonPlugin( object ):
     version = "1.1.1"
     runTypes = [ RunType.THUMB ]
 
-    outjson = 'results.json'
+    outjson     = 'results.json'
+    results_dir = '.'
 
     def launch( self ):
         ''' Execute the plugin '''
@@ -468,7 +462,7 @@ class KickbackIonPlugin( object ):
         else:
             lanes = None
         print( lanes )
-        analyzer = KickbackAnalyzer( filename, self.dr_eff, self.chiptype, lanes=lanes )
+        analyzer = KickbackAnalyzer( filename, self.dr_eff, self.chiptype, outdir=self.results_dir, lanes=lanes )
         # Do stock analyses
         try:
             analyzer.analyze()
@@ -478,14 +472,14 @@ class KickbackIonPlugin( object ):
             self.results['warning'].append( analyzer.warnings )
 
             # make the output
-            json.dump( self.results, open( self.outjson, 'w' ) )
+            json.dump( self.results, open( os.path.join( self.results_dir, self.outjson ), 'w' ) )
             try:
-                BlockHtml( self.results )
+                BlockHtml( self.results, outdir=self.results_dir )
             except:
                 print( 'error making block html' )
                 raise
             try:
-                Html( self.results )
+                Html( self.results, outdir=self.results_dir )
             except:
                 print( 'error making main html' )
                 raise
@@ -514,7 +508,6 @@ class KickbackIonPlugin( object ):
 
         # Read the chip type
         try:
-            #self.chiptype = ChipType( name=self.startplugin['expmeta']['chiptype'], tn='spa' )
             self.chiptype = ChipType( name=self.log.chiptype.name, tn='spa' )
         except:
             self.chiptype = None
@@ -615,7 +608,7 @@ class BlockHtml(HtmlBase):
         cell3 = self.img_link( 'kickback_t0.png' )
         cell4 = self.img_link( 'fluidpotential_full.png' )
         body = body.format( r0_c0=cell1, r0_c1=cell2, r0_c2=cell3, r0_c3=cell4 )
-        with open( 'kickback_block.html', 'w' ) as f:
+        with open( os.path.join( self.outdir, 'kickback_block.html' ), 'w' ) as f:
             f.write( body )
  
 class Html(HtmlBase):
@@ -695,5 +688,5 @@ class Html(HtmlBase):
 
         body += self.image_list()
 
-        with open( 'kickback.html', 'w' ) as f:
+        with open( os.path.join( self.outdir, 'kickback.html' ), 'w' ) as f:
             f.write( body )

@@ -63,7 +63,7 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "*.pyo" EXCLUDE
     PATTERN "iondb/rundb/tests" EXCLUDE
 	PATTERN "iondb/backup" EXCLUDE
-	PATTERN "iondb/rundb/fixtures/ts_dbData_chips_kits_rnd.json" EXCLUDE
+    PATTERN "iondb/rundb/fixtures/ts_dbData_chips_kits_rnd.json" EXCLUDE
     PATTERN "iondb/rundb/fixtures/ts_dbData_analysisargs_rnd.json" EXCLUDE
 )
 

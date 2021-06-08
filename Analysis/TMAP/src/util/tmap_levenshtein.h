@@ -2,6 +2,11 @@
 #ifndef TMAP_LEVENSHTEIN_H
 #define TMAP_LEVENSHTEIN_H
 
+#ifdef __cplusplus
+extern "C" 
+{
+#endif
+
 /*!
  This function implements the Damerau-Levenshtein algorithm to calculate a distance between strings.
  @param  string1                string 1
@@ -16,5 +21,10 @@ int
 tmap_levenshtein(const char *string1, const char *string2,
 	int swap_penalty, int substitution_penalty,
 	int insertion_penalty, int deletion_penalty);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // TMAP_LEVENSHTEIN_H

@@ -21,15 +21,14 @@ function show_apprise($form, message) {
 	apprise(message);
 }
 
-function show_errors($form, error_messages){
+function show_errors($form, error_messages) {
     var $div = $("#error");
     $div.removeClass('alert alert-error').empty();
-
-    if (error_messages.length > 0){
-        var err_str = error_messages.length > 1 ? + error_messages.length + " Errors" : "Error";
+    if (error_messages.length > 0) {
+        var err_str = error_messages.length > 1 ? +error_messages.length + " Errors" : "Error";
         err_str += " found by Ion Reporter validation, please see highlighted boxes in the table below";
         $div.addClass('alert alert-error');
-        $div.append("<h4>"+ err_str +"<a class='pull-right' href='#'><i class='showall icon-minus'></i></a></h4>");
+        $div.append("<h4>" + err_str + "<a class='pull-right' href='#'><i class='showall icon-minus'></i></a></h4>");
         $div.append("<div id='all_iru_errors'><ul><li>" + error_messages.join('</li><li>') + '</li></ul></div>');
         $div.find(".showall").on('click', function () {
             $(this).toggleClass('icon-minus icon-plus');
@@ -44,8 +43,31 @@ function show_errors($form, error_messages){
     $("html, body").animate({ scrollTop: 0 }, "slow");
 }
 
+function isUploadonlyAndIrWorkflowSelected($form, array, prop, value) {
+    var samplesUploadOnly = [];
+    for (var i = 0, len = array.length; i < len; i++) {
+        if (array[i]) {
+            if (array[i][prop] === value) {
+                samplesUploadOnly.push(array[i]['sample'].toString());
+            } else if (samplesUploadOnly.indexOf(array[i]['sample']) >= 0) {
+                errMsg = 'Upload only and IR workflow cannot be combined';
+                updateSamplesTableValidationErrors(parseInt(array[i]["row"]) - 1, "irWorkflow", "", errMsg);
+                show_errors($form, ['Row ' + array[i]['row'] + ':' + errMsg]);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 function call_validation_api($form, accountId, userInputInfoDict) {
     console.log("iru_validation.call_validation_api() userInputInfoDict=", userInputInfoDict);
+    // Validation Error: if both upload only and IR workflow is selected during multi workflow launch
+    if (userInputInfoDict.userInputInfo.length > 1) {
+        if (isUploadonlyAndIrWorkflowSelected($form, userInputInfoDict.userInputInfo, "Workflow", "")) {
+            return;
+        }
+    }
 
     var ts_fieldnames = {
         "sample": "sampleName",
@@ -125,12 +147,38 @@ function call_validation_api($form, accountId, userInputInfoDict) {
                 return;
             }
         },
-        error: function(data){
-            show_errors($form, [message, data.status +' '+ data.statusText]);
+        error: function (data) {
+            show_errors($form, [message, data.status + ' ' + data.statusText]);
         }
     });
 }
 
+function get_input_info_item(row, irWorkflow, irTag) {
+    var dict = {};
+    var tag_isFactoryProvidedWorkflow = (irTag !== undefined) ? irTag : row["tag_isFactoryProvidedWorkflow"];
+    dict["sample"] = row["sampleName"];
+    dict["row"] = (i + 1).toString();
+    dict["Workflow"] = irWorkflow || '';
+    dict["tag_isFactoryProvidedWorkflow"] = tag_isFactoryProvidedWorkflow;
+    dict["Gender"] = row["irGender"];
+    dict["nucleotideType"] = row["nucleotideType"];
+    dict["Relation"] = row["irRelationshipType"];
+    dict["RelationRole"] = row["irRelationRole"];
+    dict["cancerType"] = row["ircancerType"];
+    dict["cellularityPct"] = row["ircellularityPct"];
+    dict["biopsyDays"] = row["irbiopsyDays"];
+    dict["cellNum"] = row["ircellNum"];
+    dict["coupleID"] = row["ircoupleID"];
+    dict["embryoID"] = row["irembryoID"];
+    dict["BacterialMarkerType"] = row["irBacterialMarkerType"];
+    dict["Witness"] = row["irWitness"];
+    dict["setid"] = row["irSetID"];
+    dict["controlType"] = row["controlType"];
+    dict["reference"] = row["reference"];
+    dict["targetRegionBedFile"] = row["targetRegionBedFile"];
+    dict["hotSpotRegionBedFile"] = row["hotSpotRegionBedFile"];
+    return dict;
+}
 function get_user_input_info_from_ui() {
     var userInputInfo = [];
     var samplesTable = JSON.parse($('#samplesTable').val());
@@ -139,29 +187,23 @@ function get_user_input_info_from_ui() {
         var row = samplesTable[i]
         if ( row["sampleName"].length > 0){
             var dict = {};
-            dict["sample"] = row["sampleName"];
-            dict["row"] = (i+1).toString();
-            dict["Workflow"] = row["irWorkflow"];
-            dict["tag_isFactoryProvidedWorkflow"] = dict["tag_isFactoryProvidedWorkflow"];
-            dict["Gender"] = row["irGender"];
-            dict["nucleotideType"] = row["nucleotideType"];
-            dict["Relation"] = row["irRelationshipType"];
-            dict["RelationRole"] = row["irRelationRole"];
-            dict["cancerType"] = row["ircancerType"];
-            dict["cellularityPct"] = row["ircellularityPct"];
-            dict["biopsyDays"] = row["irbiopsyDays"];
-            dict["cellNum"] = row["ircellNum"];
-            dict["coupleID"] = row["ircoupleID"];
-            dict["embryoID"] = row["irembryoID"];
-            dict["BacterialMarkerType"] = row["irBacterialMarkerType"];
-            dict["Witness"] = row["irWitness"];
-            dict["setid"] = row["irSetID"];
-            dict["controlType"] = row["controlType"];
-            dict["reference"] = row["reference"];
-            dict["targetRegionBedFile"] = row["targetRegionBedFile"];
-            dict["hotSpotRegionBedFile"] = row["hotSpotRegionBedFile"];
+            var irMultipleWorkflowSelected = ('irMultipleWorkflowSelected' in row) ?
+                JSON.parse(JSON.stringify(row['irMultipleWorkflowSelected'])) : [];
+            if(irMultipleWorkflowSelected && Array.isArray(irMultipleWorkflowSelected) && (irMultipleWorkflowSelected.length > 1)) {
+                var irMultipleWorkflowList = JSON.parse(JSON.stringify(row['irMultipleWorkflowSelected']));
+                $.each(irMultipleWorkflowList, function (i, irMultipleWorkflowItem) {
+                    workflowObj = $.grep(USERINPUT.workflows, function (obj) {
+                        if (obj.Workflow == irMultipleWorkflowItem["workflow"]) {
+                            return obj;
+                        }
+                    });
+                    userInputInfo.push(get_input_info_item(row, irMultipleWorkflowItem["workflow"], workflowObj[0].tag_isFactoryProvidedWorkflow));
+                });
+            }
+            else {
+                userInputInfo.push(get_input_info_item(row, row["irWorkflow"]));
+            }
 
-            userInputInfo.push(dict);
         }
     }
     return userInputInfo;

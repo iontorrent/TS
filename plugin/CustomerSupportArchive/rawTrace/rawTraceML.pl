@@ -89,12 +89,18 @@ mkpath $opt->{"out-dir"} || die "$0: unable to make directory ".$opt->{"out-dir"
 my $analysisDir = $opt->{"analysis-dir"};
 my $bAnalysisDir=$ENV{"SIGPROC_DIR"};
 # diretory for flow-by-flow
-
 # block ids
 my @x = (1, 4, 7, 10);
 my @y = (6, 3, 1);
+
 my $x_delta = 1288;
 my $y_delta = 1332;
+
+if ($opt->{"chip-type"} =~ m/GX7/) {
+$x_delta = 1712;
+$y_delta = 1704;
+}
+
 my $raw_dir = undef;
 my $path = undef;
 

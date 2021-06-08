@@ -1141,16 +1141,16 @@ void GenerateFlowSpaceConsensusPositionTicket(vector< vector< vector<MolecularFa
 					continue;
 				}
 				for (vector<int>::const_iterator target_idx_it = fam_it->all_family_members[0]->target_coverage_indices.begin(); target_idx_it != fam_it->all_family_members[0]->target_coverage_indices.end() and targets_manager != NULL; ++target_idx_it){
-					if (targets_manager->unmerged[*target_idx_it].min_tag_fam_size_override){
+					if (targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_tag_fam_size_override){
 						// Get the largest (most stringent) one in case the family covers multiple amplicons.
 						eff_min_family_size = min_family_size_override?
-								max(eff_min_family_size, (unsigned int) targets_manager->unmerged[*target_idx_it].min_tag_fam_size) : (unsigned int) targets_manager->unmerged[*target_idx_it].min_tag_fam_size;
+								max(eff_min_family_size, (unsigned int) targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_tag_fam_size) : (unsigned int) targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_tag_fam_size;
 						min_family_size_override = true;
 					}
-					if (targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov_override){
+					if (targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_fam_per_strand_cov_override){
 						// Get the largest (most stringent) one in case the family covers multiple amplicons.
 						eff_min_fam_per_strand_cov = min_fam_per_strand_cov_override?
-								max(eff_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[*target_idx_it].min_fam_per_strand_cov;
+								max(eff_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[*target_idx_it].amplicon_param.variant_param.min_fam_per_strand_cov;
 						min_fam_per_strand_cov_override = true;
 					}
 				}

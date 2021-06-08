@@ -30,7 +30,7 @@ class TestSelection;
 ///
 /// Provides facilites for functionality tests and for benchmarking
 /// The simplest use if through overwriting loaded_iter method. The overwritten method should call the tested procedure once. 
-/// User should call the public 'run' method for functionality test, or 'benchmark' to tetermine calls per second
+/// User should call the public 'run' method for functionality test, or 'benchmark' to determine calls per second
 /// by default, these methods invole protected loaded_iter once or many times
 /// 
 class TestCase
@@ -73,15 +73,20 @@ private:
     static unsigned failure_count_;
     static TestLog test_log_;
     void report_errors ();
+    static size_t compute_msg_size (const char* what, const char* fmt, va_list args);
+    static size_t format_msg (char* buf, size_t bufsz, const char* what, const char* fmt, va_list args);
+
 protected:
     /// stream where test output is sent; nullstream by default
     static StreamWrap o_; 
-    /// error reporting helper, stores message to internal error storeage
-    void err (const char* filename, int lineno, const char* message = NULL); // helper for error reporting
+    /// error reporting helper, saves message to internal error storage
+    void err  (const char* filename, int lineno, const char* msg = NULL); // helper for error reporting
+    void errx (const char* filename, int lineno, const char* what, const char* fmt, ...); // helper for error reporting
+    void quit (const char* filename, int lineno, const char* fmt, ...); // do not proceed with further testing, quit with error message
     /// stores error with message if condition fails
-    #define TEST_ASSERTX(cond,msg) if (!(cond)) {err (__FILE__, __LINE__, msg " : " #cond);}
+    #define TEST_ASSERTX(cond, fmt, ...) if (!(cond)) {errx (__FILE__, __LINE__, "Condition failed: " #cond,  fmt, ##__VA_ARGS__ );}
     /// stores error if condition fails
-    #define TEST_ASSERT(cond)     if (!(cond)) {err (__FILE__, __LINE__, "Condition failed : " #cond);}
+    #define TEST_ASSERT(cond)     if (!(cond)) {err (__FILE__, __LINE__, "Condition failed: " #cond);}
     /// stores error message
     #define TEST_FAILURE(msg)     err (__FILE__, __LINE__, (msg))
     /// acquires / creates resources needed for testing.
@@ -176,5 +181,7 @@ public:
         return true;
     }
 };
+
+std::ostream& operator << (std::ostream&, const TestCase&);
 
 #endif // __test_case_h__

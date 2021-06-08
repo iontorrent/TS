@@ -12,7 +12,7 @@ void CalculateHypPredictions(
     const Alignment          &my_read,
     const InputStructures    &global_context,
     const vector<string>     &Hypotheses,
-    const vector<bool>       &same_as_null_hypothesis,
+    const int                &hyp_same_as_null,
     vector<vector<float> >   &predictions,
     vector<float>            &normalizedMeasurements,
 	int                      &min_last_flow,
@@ -64,11 +64,10 @@ void CalculateHypPredictions(
 
     	// No need to simulate if a hypothesis is equal to the read as called
     	// We get that info from the splicing module
-    	if (same_as_null_hypothesis.at(i_hyp)) {
+    	if (i_hyp > 0 and (int) i_hyp == hyp_same_as_null + 1){
             predictions[i_hyp] = predictions[0];
             predictions[i_hyp].resize(flow_order.num_flows());
         } else {
-
             hypothesesReads[i_hyp] = master_read;
 
             // --- add hypothesis sequence to clipped prefix

@@ -1641,19 +1641,17 @@ namespace vcf {
     //cout << "Infocounts = " << vcf->infoCounts.size() << endl;
     for (map<string, int>::iterator c = vcf->infoCounts.begin(); c != vcf->infoCounts.end(); ++c) {
       int count = c->second;
-      if (count == ALLELE_NUMBER) {
-        string key = c->first;
+      string key = c->first;
+      // TS-18079 Make an exception for "VFSH", though its "Number=."
+      if (count == ALLELE_NUMBER or key == "VFSH") {
         map<string, vector<string> >::iterator v = info.find(key);
         if (v != info.end()) {
           vector<string>& vals = v->second;
-          vector<string> tokeep;
-          int i = 0;
-          for (vector<string>::iterator a = vals.begin(); a != vals.end(); ++a, ++i) {
-            if (i != altIndex) {
-              tokeep.push_back(*a);
-            }
+          // Sanity check: Make sure the length of the entry matches number of alt.
+          if (vals.size() != alt.size()){
+        	continue;
           }
-          vals = tokeep;
+          vals.erase(vals.begin() + altIndex);
         }
       }
     }
@@ -1665,15 +1663,12 @@ namespace vcf {
           map<string, vector<string> >& sample = s->second;
           map<string, vector<string> >::iterator v = sample.find(key);
           if (v != sample.end()) {
-            vector<string>& vals = v->second;
-            vector<string> tokeep;
-            int i = 0;
-            for (vector<string>::iterator a = vals.begin(); a != vals.end(); ++a, ++i) {
-              if (i != altIndex) {
-                tokeep.push_back(*a);
-              }
+        	vector<string>& vals = v->second;
+            // Sanity check: Make sure the length of the entry matches number of alt.
+            if (vals.size() != alt.size()){
+              continue;
             }
-            vals = tokeep;
+            vals.erase(vals.begin() + altIndex);
           }
         }
       }

@@ -4,7 +4,8 @@
 #include "RandSchrange.h"
 
 PrecomputeTDistOddN::PrecomputeTDistOddN(){
-    SetV(3);
+  SetAdjustSigma(false);
+  SetV(3);
 }
 
 // model as a t-distribution to slightly resist outliers
@@ -13,12 +14,24 @@ void PrecomputeTDistOddN::SetV(int _half_n){
 	v_ = (float) (2 * half_n_ - 1);
 	pi_factor_ = 1.0f / (M_PI * sqrt(v_));
 	v_factor_ = 1.0f;
-    for (int i_prod = 1; i_prod < half_n_; ++i_prod){
-      v_factor_ *= (v_ + 1.0f - 2.0f * i_prod) / (v_ - 2.0f * i_prod);
-    }
-    log_v_ = log(v_);
-    log_factor_ = log(v_factor_) - (0.5f * log_v_ + log(M_PI)); //log_factor = log(pi_factor * pi_factor), 1.1447299 = log(pi)
+  for (int i_prod = 1; i_prod < half_n_; ++i_prod){
+    v_factor_ *= (v_ + 1.0f - 2.0f * i_prod) / (v_ - 2.0f * i_prod);
+  }
+  log_v_ = log(v_);
+  log_factor_ = log(v_factor_) - (0.5f * log_v_ + log(M_PI)); //log_factor = log(pi_factor * pi_factor), 1.1447299 = log(pi)
+  SetAdjustSigma(adjust_sigma_);
 };
+
+void PrecomputeTDistOddN::SetAdjustSigma(bool adjust_sigma) {
+  adjust_sigma_ = adjust_sigma;
+  if (adjust_sigma_){
+    // Note that the variance of t-dist doesn't exist if half_n_ = 1. I use linear extrapolate from half_n_ = 2 for half_n_ = 1.
+    sigma_factor_ = half_n_ > 1? sqrt((2.0f * half_n_ - 3.0f) / (2.0f * half_n_ - 1.0f)) : sqrt(1.0f / 15.0f);
+  }else{
+    sigma_factor_ = 1.0f;
+  }
+}
+
 
 float PrecomputeTDistOddN::TDistOddN(float res, float sigma, float skew) const{
   // skew t-dist one direction or the other
@@ -97,32 +110,19 @@ CrossHypotheses::CrossHypotheses(){
     ll_scale = 0.0f;
     use_correlated_likelihood = false;
     read_counter = 1;
-    at_least_one_same_as_null = false;
+    hyp_same_as_null = -1;
     min_last_flow = -1;
     skew_estimate = 1.0f;
     ptr_query_name = NULL;
+    my_t_dist_ = NULL;
 }
 
 // Static variables
-PrecomputeTDistOddN CrossHypotheses::s_my_t_;
-int CrossHypotheses::s_heavy_tailed_ = 3;  // t_5 degrees of freedom
-bool CrossHypotheses::s_adjust_sigma_ = false;
-float CrossHypotheses::s_sigma_factor_ = 1.0f;
 int CrossHypotheses::s_max_flows_to_test = 10;
 float CrossHypotheses::s_min_delta_for_flow = 0.1f;
 float CrossHypotheses::s_magic_sigma_base = 0.085f;
 float CrossHypotheses::s_magic_sigma_slope = 0.0084f;
 
-void CrossHypotheses::SetHeavyTailed(int heavy_tailed, bool adjust_sigma){
-	s_heavy_tailed_ = heavy_tailed;
-	s_adjust_sigma_ = adjust_sigma;
-	ApplyHeavyTailed();
-}
-
-void CrossHypotheses::ApplyHeavyTailed(){
-	s_my_t_.SetV(s_heavy_tailed_); // 2*heavy_tailed - 1 = DoF of t-dist
-	s_sigma_factor_ = s_adjust_sigma_? sqrt((2.0f * s_heavy_tailed_ - 3.0f) / (2.0f * s_heavy_tailed_ - 1.0f)) : 1.0f;
-}
 
 void CrossHypotheses::CleanAllocate(int num_hyp, int num_flow) {
   // allocate my vectors here
@@ -162,7 +162,7 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
   // We need to simulate further than the end of the search interval to get good predicted values within
   int flow_upper_bound = splice_end_flow + 4*s_max_flows_to_test + 20;
   CalculateHypPredictions(thread_objects, my_read, global_context, instance_of_read_by_state,
-                                          same_as_null_hypothesis, predictions_all_flows, normalized_all_flows, min_last_flow, max_last_flow, flow_upper_bound);
+                                          hyp_same_as_null, predictions_all_flows, normalized_all_flows, min_last_flow, max_last_flow, flow_upper_bound);
   ResetModPredictions();
   strand_key = my_read.is_reverse_strand? 1 : 0;
   ptr_query_name = &(my_read.alignment.Name);
@@ -171,9 +171,6 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
   read_counter = my_read.read_count;
   if (read_counter > 1){
     measurement_sd_all_flows = my_read.measurements_sd;
-  }
-  for (unsigned int i_hyp = 1; i_hyp < same_as_null_hypothesis.size(); ++i_hyp){
-    at_least_one_same_as_null += same_as_null_hypothesis[i_hyp];
   }
 }
 
@@ -252,7 +249,7 @@ void CrossHypotheses::InitializeResponsibility() {
 // divide the variant probabilities into each hypothesis (summing to 1)
 // treat the 2 hypothesis case to start with
 void CrossHypotheses::UpdateResponsibility(const vector<float > &hyp_prob, float outlier_prob) {
-  if (at_least_one_same_as_null){
+  if (hyp_same_as_null >= 0){
 	// In principle, an outlier read means it supports neither alleles.
 	// In this case, the read can't be an outlier because the sequence as called is the same as an allele.
 	// Hence I override outlier_prob to be extremely low.
@@ -284,7 +281,7 @@ void CrossHypotheses::UpdateResponsibility(const vector<float > &hyp_prob, float
 }
 
 float CrossHypotheses::ComputePosteriorLikelihood(const vector<float > &hyp_prob, float outlier_prob) {
-  if (at_least_one_same_as_null){
+  if (hyp_same_as_null >= 0){
 	// In principle, an outlier read means it supports neither alleles.
 	// In this case, the read can't be an outlier because the sequence as called is the same as an allele.
 	// Hence I override outlier_prob to be extremely low.
@@ -480,8 +477,8 @@ void CrossHypotheses::ComputeBasicLogLikelihoods() {
 	if (read_counter == 1){
 		for (unsigned int i_hyp=0; i_hyp < basic_log_likelihoods.size(); i_hyp++) {
 			for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++) {
-				float my_sigma = s_adjust_sigma_? sigma_estimate[i_hyp][t_flow] * s_sigma_factor_ : sigma_estimate[i_hyp][t_flow];
-				basic_log_likelihoods[i_hyp][t_flow] = s_my_t_.LogTDistOddN(residuals[i_hyp][t_flow], my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
+				float my_sigma = my_t_dist_->GetAdjustSigma()? sigma_estimate[i_hyp][t_flow] * my_t_dist_->GetSigmaFactor() : sigma_estimate[i_hyp][t_flow];
+				basic_log_likelihoods[i_hyp][t_flow] = my_t_dist_->LogTDistOddN(residuals[i_hyp][t_flow], my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
 			}
 		}
 	}
@@ -494,8 +491,8 @@ void CrossHypotheses::ComputeBasicLogLikelihoods() {
 				if (measurement_var[t_flow] != 0.0f){
 					adj_res = (adj_res > 0.0f) ? sqrt(adj_res * adj_res + measurement_var[t_flow]) : -sqrt(adj_res * adj_res + measurement_var[t_flow]);
 				}
-				float my_sigma = s_adjust_sigma_? sigma_estimate[i_hyp][t_flow] * s_sigma_factor_ : sigma_estimate[i_hyp][t_flow];
-				basic_log_likelihoods[i_hyp][t_flow] = s_my_t_.LogTDistOddN(adj_res, my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
+				float my_sigma = my_t_dist_->GetAdjustSigma()? sigma_estimate[i_hyp][t_flow] * my_t_dist_->GetSigmaFactor() : sigma_estimate[i_hyp][t_flow];
+				basic_log_likelihoods[i_hyp][t_flow] = my_t_dist_->LogTDistOddN(adj_res, my_sigma, skew_estimate);  // pure observational likelihood depends on residual + current estimated sigma under each hypothesis
 			}
 		}
 	}
@@ -575,10 +572,10 @@ void CrossHypotheses::JointLogLikelihood() {
     //    cout << i_hyp <<  "\t" << res_projection << "\t" << sqrt(sigma_projection) << endl;
     // now that we have r*u and u*sigma*u
     sigma_projection = sqrt(sigma_projection);
-    if (s_adjust_sigma_){
-    	sigma_projection *= s_sigma_factor_;
+    if (my_t_dist_->GetAdjustSigma()){
+    	sigma_projection *= my_t_dist_->GetSigmaFactor();
     }
-    float b_likelihood = s_my_t_.LogTDistOddN(res_projection,sigma_projection,skew_estimate);
+    float b_likelihood = my_t_dist_->LogTDistOddN(res_projection,sigma_projection,skew_estimate);
 
     log_likelihood[i_hyp] = (read_counter == 1) ? b_likelihood : (float) read_counter * b_likelihood;
   }
@@ -677,7 +674,7 @@ void CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_cho
 	// Get the informative flows
 	for (unsigned int i_hyp = 1; i_hyp < num_hyp; ++i_hyp){
 		// Skip the i_hyp if it is the same as null hyp.
-		if (same_as_null_hypothesis[i_hyp]){
+		if ((int) i_hyp == hyp_same_as_null + 1){
 			continue;
 		}
 		pairwise_delta.push_back(vector<pair<float, unsigned int> >(0));
@@ -769,8 +766,9 @@ int CrossHypotheses::MostResponsible() const{
   return(most_r);
 }
 
-void EvalFamily::InitializeEvalFamily(unsigned int num_hyp){
+void EvalFamily::InitializeEvalFamily(unsigned int num_hyp, const PrecomputeTDistOddN * const t_dist){
 	my_family_cross_.success = true;
+	my_family_cross_.SetMyTDist(t_dist);
 	CleanAllocate(num_hyp);
 	InitializeFamilyResponsibility();
 }
@@ -890,7 +888,7 @@ void EvalFamily::ComputeFamilyOutlierResponsibility(const vector<CrossHypotheses
 		max_read_ol_resp = max(max_read_ol_resp, my_hypotheses[*read_idx_it].responsibility[0]);
 		weighted_avg_read_ol_resp += (my_hypotheses[*read_idx_it].responsibility[0] * (float) my_hypotheses[*read_idx_it].read_counter);
 		// The following criterion basically claims that the read is not an outlier.
-		if (my_hypotheses[*read_idx_it].at_least_one_same_as_null){
+		if (my_hypotheses[*read_idx_it].hyp_same_as_null >= 0){
 			// This condition basically implies that a hypothesis is the same as null. So it can't be an outlier.
 			semi_hard_fam_size += my_hypotheses[*read_idx_it].read_counter;
 		}
@@ -959,11 +957,14 @@ void EvalFamily::ComputeFamilyOutlierResponsibility(const vector<CrossHypotheses
 
 void RemoveHp(const string& base_seq, string& hp_removed_base_seq){
     hp_removed_base_seq.resize(0);
-    hp_removed_base_seq.reserve(base_seq.size());
     if (base_seq.empty()){
         return;
     }
-    for (string::const_iterator nuc_it = base_seq.begin(); nuc_it != base_seq.end(); ++nuc_it){
+    string::const_iterator nuc_it = base_seq.begin();
+    hp_removed_base_seq.reserve(base_seq.size());
+    hp_removed_base_seq.push_back(*nuc_it);
+    ++nuc_it;
+    for (; nuc_it != base_seq.end(); ++nuc_it){
         if (*nuc_it != hp_removed_base_seq.back()){
             hp_removed_base_seq.push_back(*nuc_it);
         }
@@ -1061,7 +1062,7 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 	for (unsigned int i_hyp = 0; i_hyp < instance_of_read_by_state.size(); ++i_hyp){
 		local_flow_disruptiveness_matrix[i_hyp][i_hyp] = 0; // identical means INDEL length 0.
 		for (unsigned int j_hyp = i_hyp + 1; j_hyp < instance_of_read_by_state.size(); ++j_hyp){
-			if (i_hyp == 0 and same_as_null_hypothesis[j_hyp]){
+			if (i_hyp == 0 and hyp_same_as_null + 1 == (int) j_hyp){
 				// same_as_null_hypothesis means identical
 				local_flow_disruptiveness_matrix[0][j_hyp] = 0;
 				local_flow_disruptiveness_matrix[j_hyp][0] = 0;
@@ -1069,7 +1070,7 @@ void CrossHypotheses::FillInFlowDisruptivenessMatrix(const ion::FlowOrder &flow_
 			}
 
 			// Skip the non-null hyp whcih is the same as the null hyp, since it has been carried out.
-			if (i_hyp > 0 and same_as_null_hypothesis[i_hyp]){
+			if (i_hyp > 0 and hyp_same_as_null + 1 == (int) i_hyp){
 				local_flow_disruptiveness_matrix[i_hyp][j_hyp] = local_flow_disruptiveness_matrix[0][j_hyp];
 				local_flow_disruptiveness_matrix[j_hyp][i_hyp] = local_flow_disruptiveness_matrix[0][j_hyp];
 				continue;
@@ -1155,7 +1156,7 @@ bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level)
 	}
 	// stringency_level = 0 means disable the filter
 	// at_least_one_same_as_null means not an OL. Should be the most common case.
-	if (stringency_level == 0 or at_least_one_same_as_null){
+	if (stringency_level == 0 or hyp_same_as_null >= 0){
 		return false;
 	}
 	else if (stringency_level >= 3){
@@ -1190,6 +1191,63 @@ bool CrossHypotheses::OutlierByFlowDisruptiveness(unsigned int stringency_level)
 	// The above switch is equivalent to the following return value.
 	return min_fd_code >= (3 - (int) stringency_level);
 }
+
+// Family level outlier read filtering to resolve family inconsistency
+// Note that it applies to reads in "all_family_members" and must be done after local_flow_disruptiveness_matrix of reads is calculated and before ShortStack::InitializeMyEvalFamilies.
+// Rule: Filter out the read if its null hyp is FD with the hyp supported by the majority of the reads in the family
+int EvalFamily::FamilyOutlierFilteringByFlowDisruption(vector<CrossHypotheses>& my_hypotheses){
+	vector<int> hyp_supports_count; // hyp_supports_count[i] is the number of reads (weighted by ZR) support the i-th allele (i=0,1,2,... for ref, first alt, second alt, ..., resp.)
+	unsigned int success_read_count = 0; // number of reads (weighted by ZR) that are valid so far
+	int most_responsible_hyp = -1; // The hypothesis that of that has most reads supported in base space.
+	float highest_responsibility = -1.0f; // The base space "family responsibility" of the most responsible hyp.
+	int num_reads_filtered_out = 0;
+
+	if (GetFamSize() == 0){
+		return 0;
+	}
+	// Determine hyp_supports_count
+	for(vector<unsigned int>::const_iterator read_idx_it = all_family_members.begin(); read_idx_it != all_family_members.end(); ++read_idx_it){
+		const CrossHypotheses & my_cross = my_hypotheses[*read_idx_it];
+		success_read_count += (my_cross.success? my_cross.read_counter : 0);
+		if ((not my_cross.success) or my_cross.hyp_same_as_null < 0){
+			continue;
+		}
+		if (hyp_supports_count.empty()){
+			// Initialize hyp_supports_count if not done
+			hyp_supports_count.assign(my_cross.instance_of_read_by_state.size() - 1, 0.0f);
+		}
+		hyp_supports_count[my_cross.hyp_same_as_null] += my_cross.read_counter;
+
+	}
+	// Do nothing if I have no valid read.
+	if (success_read_count == 0){
+		return 0;
+	}
+
+	// Determine the most responsible hyp and its responsibility.
+	for (int i_hyp = 0; i_hyp < (int) hyp_supports_count.size(); ++i_hyp){
+		float my_hyp_resp = float(hyp_supports_count[i_hyp]) / float(success_read_count);
+		if (my_hyp_resp > highest_responsibility){
+			highest_responsibility = my_hyp_resp;
+			most_responsible_hyp = i_hyp;
+		}
+	}
+	// Do nothing if the most responsible hyp doesn't have a "dominant" family responsibility.
+	if (highest_responsibility < 0.5f){
+		return 0;
+	}
+
+	// Disable the read if its OL hyp is FD against the most responsible hyp of the family.
+	for(vector<unsigned int>::const_iterator read_idx_it = all_family_members.begin(); read_idx_it != all_family_members.end(); ++read_idx_it){
+		CrossHypotheses & my_cross = my_hypotheses[*read_idx_it];
+		if (my_cross.local_flow_disruptiveness_matrix[0][most_responsible_hyp+1] > 1 and my_cross.success){
+			my_cross.success = false;
+			++num_reads_filtered_out;
+		}
+	}
+	return num_reads_filtered_out;
+}
+
 
 //CZB: Majority rule makes no sense for BIR-DIR UMT.
 void EvalFamily::FillInFlowDisruptivenessMatrix(const vector<CrossHypotheses> &my_hypotheses)

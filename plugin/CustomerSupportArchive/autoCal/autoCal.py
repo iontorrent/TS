@@ -26,11 +26,18 @@ class autoCal( IonPlugin , PluginMixin ):
     Author:      Phil Waggoner
     Last Updates: 
     
+    13 May 2019 | Added ReleaseVersion and RFIDMgrVersion, as well as scraping if development Valkyrie Workflow Scripts were used.
+    22 Apr 2019 | Bugfix to explog code to catch erroneous explog_final.txt files.
     03 Apr 2019 | Bugfix to ensure we try to get more Valkyrie data first from per-flow data.
     01 Apr 2019 | Added new Valkyrie flow rate and temperature data, plus explog lane active info.
     31 Mar 2019 | Updated explog_final flow_data match for new valkyrie pattern
+    15 Jul 2019 | Updated tools for +/- inf handling
+    24 Jan 2020 | Tools update for CSA
+    16 Mar 2020 | Fixed dual gain curve for handling standard cal
+    10 Aug 2020 | Updated to handle resequencing runs on Valkyrie.
+    17 AUg 2020 | Updated tools
     """
-    version       = "1.7.5"
+    version       = "2.1.1"
     allow_autorun = True
     
     runtypes      = [ RunType.THUMB , RunType.FULLCHIP ]
@@ -65,64 +72,127 @@ class autoCal( IonPlugin , PluginMixin ):
         # For the case of 560 chips, let's grab the initial explog to find out if we did post-run calibration
         self.dual_gain_curve( )
         
-        self.analyze_debugT0( )
-        self.write_html     ( )
+        # In the case that we have a reseq run, we should plot the two gain curves, just for fun.
+        if self.explog.is_reseq:
+            self.reseq_gain_curve( )
+            
+        self.analyze_T0( )
+        self.write_html( )
         
         # Write out results.json after combining T0 and explog metrics.
         print( 'Writing results.json' )
         self.metrics.update( self.explog.metrics )
+
+        # Account for reseq gain curves.  Historically, reseq gain curves have been ignored and the GainCurve[Gain\Vref] are from the initial run.
+        # To keep that convention, we need to swap and create new metrics.
+        # May eventually want additional initial-seq run metrics here, but it's not clear if any of them would be useful at this juncture.
+        if self.explog.is_reseq:
+            # Seq gain curve
+            self.metrics['GainCurveVref'] = self.first_explog.metrics['GainCurveVref']
+            self.metrics['GainCurveGain'] = self.first_explog.metrics['GainCurveGain']
+            
+            # Reseq gain curve
+            self.metrics['Reseq_GainCurveVref'] = self.explog.metrics['GainCurveVref']
+            self.metrics['Reseq_GainCurveGain'] = self.explog.metrics['GainCurveGain']
+            
         misc.serialize( self.metrics )
         with open( os.path.join( self.results_dir , 'results.json' ) , 'w' ) as f:
             json.dump( self.metrics , f )
             
         print( 'Plugin complete.' )
-        
-        sys.exit(0)
 
-    def analyze_debugT0( self ):
+    def analyze_T0( self ):
+        ''' wrapper function that handles analyzing tzero from the run and, if applicable, resequencing. '''
+        # Analyze the T0 data from seq and reseq runs, if applicable.
+        initial_t0 = self.analyze_debugT0( use_reseq=False )
+        if self.explog.is_reseq:
+            reseq_t0 = self.analyze_debugT0( use_reseq=True )
+            
+            # Make a diff image as well
+            T0_diff = reseq_t0.t0 - initial_t0.t0
+            plt.figure  ( )
+            plt.imshow  ( T0_diff , origin='lower', interpolation='nearest' , clim=[-5,5], cmap='seismic' )
+            plt.xlabel  ( 'Column Block' )
+            plt.ylabel  ( 'Row Block' )
+            plt.title   ( 'Different in Estimated T0 (Frame) [Reseq-Seq]' )
+            plt.colorbar( shrink=0.7 )
+            plt.savefig ( os.path.join( self.results_dir , 't0_difference_plot.png' ) )
+            plt.close   ( )
+
+            # Make an additional html file that simply shows the t0 plots side by side.
+            html = textwrap.dedent( '''\
+            <html><body>
+            <table border="0" cellspacing="0" cellpadding="0">
+            <tr>
+            <td width="33%%">Initial run</td>
+            <td width="33%%">Resequencing</td>
+            <td width="33%%">Delta (Reseq - Seq)</td>
+            </tr>
+            <tr>
+            <td width="33%%"><a href="t0_spatial.png"><img src="t0_spatial.png" width="100%%" /></a></td>
+            <td width="33%%"><a href="reseq/t0_spatial.png"><img src="reseq/t0_spatial.png" width="100%%" /></a></td>
+            <td width="33%%"><a href="t0_difference_plot.png"><img src="t0_difference_plot.png" width="100%%" /></a></td>
+            </tr>
+            </table>
+            </body></html>''' )
+            with open( os.path.join( self.results_dir, 't0_reseq.html' ), 'w' ) as f:
+                f.write( html )
+                
+    def analyze_debugT0( self, use_reseq=False ):
         ''' runs T0/vfc subanalysis '''
-        # Check if it's a thumbnail:
-        if os.path.basename( self.raw_data_dir ) == 'thumbnail':
-            debug_file = os.path.join( os.path.dirname( self.raw_data_dir ) , 'T0Estimate_dbg_final.json' )
+        if use_reseq:
+            debug_file = os.path.join( self.raw_data_dir, 'reseq', 'T0Estimate_dbg_final.json' )
+            outdir     = os.path.join( self.results_dir, 'reseq' )
+            if not os.path.exists( outdir ):
+                os.mkdir( outdir )
         else:
-            debug_file = os.path.join( self.raw_data_dir , 'T0Estimate_dbg_final.json' )
+            outdir = self.results_dir
+            # Check if it's a thumbnail:
+            if os.path.basename( self.raw_data_dir ) == 'thumbnail':
+                debug_file = os.path.join( os.path.dirname( self.raw_data_dir ) , 'T0Estimate_dbg_final.json' )
+            else:
+                debug_file = os.path.join( self.raw_data_dir , 'T0Estimate_dbg_final.json' )
             
         self.tzero_errors = []
         if os.path.exists( debug_file ):
             print('Load T0 Debug JSON.')
-            tz         = TZero( debug_file , self.results_dir )
+            tz         = TZero( debug_file , outdir )
             
             print('Plot data and create html.')
             tz.t0_spatial_plot ( )
             tz.cycle_regions   ( )
             tz.close_html      ( )
             tz.write_html      ( )
-
-            # Copy debug file here for later use.
-            os.system( 'cp %s %s' % (debug_file , os.path.join(self.results_dir , 'T0Estimate_dbg_final.json')) )
             
-            # add summary of errors found to the scroll box if we found any.
-            if len( tz.warnings['fake_t0'] ) == 0:
-                front_porch_count = 0
-            else:
-                front_porch_count = len( list( set( [ e.keys()[0] for e in tz.warnings['fake_t0'] ] )))
-                
-            if (len( tz.warnings['early'] ) > 0) or (len( tz.warnings['late'] ) > 0) or (front_porch_count > 0):
-                self.tzero_errors.append( '<h3>T0 Debug Errors:</h3>' )
-                self.tzero_errors.append( 'Total early T0 warnings: <b>%d</b>' % len( tz.warnings['early'] ) )
-                self.tzero_errors.append( 'Total late T0 warnings: <b>%d</b>' % len( tz.warnings['late'] ) )
-                self.tzero_errors.append( 'Total front porch warnings: <b>%d</b>' % front_porch_count )
-                
-            # Save errors/warnings to metrics, which will later be stored in results.json.
-            self.metrics['tzero_warning_early']       = len( tz.warnings['early'] )
-            self.metrics['tzero_warning_late']        = len( tz.warnings['late']  )
-            self.metrics['tzero_warning_front_porch'] = front_porch_count
+            # Copy debug file here for later use.
+            os.system( 'cp %s %s' % (debug_file , os.path.join(outdir , 'T0Estimate_dbg_final.json')) )
+            
+            # add summary of errors found to the scroll box if we found any. (right now only for initial run)
+            if not use_reseq:
+                if len( tz.warnings['fake_t0'] ) == 0:
+                    front_porch_count = 0
+                else:
+                    front_porch_count = len( list( set( [ e.keys()[0] for e in tz.warnings['fake_t0'] ] )))
+                    
+                if (len( tz.warnings['early'] ) > 0) or (len( tz.warnings['late'] ) > 0) or (front_porch_count > 0):
+                    self.tzero_errors.append( '<h3>T0 Debug Errors:</h3>' )
+                    self.tzero_errors.append( 'Total early T0 warnings: <b>%d</b>' % len( tz.warnings['early'] ) )
+                    self.tzero_errors.append( 'Total late T0 warnings: <b>%d</b>' % len( tz.warnings['late'] ) )
+                    self.tzero_errors.append( 'Total front porch warnings: <b>%d</b>' % front_porch_count )
+                    
+                # Save errors/warnings to metrics, which will later be stored in results.json.
+                self.metrics['tzero_warning_early']       = len( tz.warnings['early'] )
+                self.metrics['tzero_warning_late']        = len( tz.warnings['late']  )
+                self.metrics['tzero_warning_front_porch'] = front_porch_count
+            return tz
         else:
             print( 'Skipping T0 analysis, T0Estimate_dbg_final.json file not found.' )
-            self.metrics['tzero_warning_early']       = int( 0 )
-            self.metrics['tzero_warning_late']        = int( 0 )
-            self.metrics['tzero_warning_front_porch'] = int( 0 )
-            
+            if not use_reseq:
+                self.metrics['tzero_warning_early']       = int( 0 )
+                self.metrics['tzero_warning_late']        = int( 0 )
+                self.metrics['tzero_warning_front_porch'] = int( 0 )
+            return None
+                
     def derive_synclink_metrics( self ):
         """ Pulls in and synthesizes synclink metrics from self.explog.metrics """
         ll = self.explog.linklosses
@@ -168,6 +238,8 @@ class autoCal( IonPlugin , PluginMixin ):
         
         if np.all( vref_initial == vref_final ) and np.all( gain_initial == gain_final ):
             print( "Post run gain curve does not appear to have been performed.  Skipping." )
+        elif ( vref_initial.size == 1 ) or ( vref_final.size == 1):
+            print( "Post run cal appears to have been performed but a gain curve was not generated during one of the cals.  Skipping dual gain curve." )
         else:
             print( "Post run gain curve detected!  Creating new plot." )
             
@@ -242,10 +314,51 @@ class autoCal( IonPlugin , PluginMixin ):
             self.metrics['gain_loss_perc']       = gain_loss_perc
             self.metrics['gain_loss_ideal']      = gain_loss_ideal
 
-
-
-
+    def reseq_gain_curve( self ):
+        ''' creates new gain curve plot with both chip calibrations. '''
+        self.first_explog = explog.Explog( self.raw_data_dir )
+        
+        os.rename( os.path.join( self.results_dir , 'gain_curve.png' ) ,
+                   os.path.join( self.results_dir , 'gain_curve_reseq.png' ) )
+        
+        # Create initial gain curve and rename
+        self.first_explog.gain_curve( self.results_dir )
+        os.rename( os.path.join( self.results_dir , 'gain_curve.png' ) ,
+                   os.path.join( self.results_dir , 'gain_curve_seq.png' ) )
+        
+        def clean_data( eo ):
+            # We have the data and can make a plot!
+            vref   = np.array( [ x for x in eo.metrics['GainCurveVref'] if x != 0. ] )
+            gain   = np.array( [ x for x in eo.metrics['GainCurveGain'] if x != 0. ] )
             
+            # The following code added for Valkyrie alphas.  Not a bad idea really.
+            if (not vref.any()) and (not gain.any()):
+                print( 'Gain curve information was empty or all zeroes!  Skipping gain plot.' )
+                return None
+            
+            return vref, gain
+            
+        plt.figure ( )
+        colors = ['blue','green']
+        first_log  = clean_data( self.first_explog )
+        second_log = clean_data( self.explog )
+                
+        if first_log is not None:
+            plt.plot   ( first_log[0],  first_log[1] ,  'bo-', label='1st Run' )
+            plt.axvline( self.first_explog.metrics['dac'] , ls='--' , color='blue', label='1st Vref' )
+        if second_log is not None:
+            plt.plot   ( second_log[0], second_log[1] , 'go-', label='Reseq' )
+            plt.axvline( self.explog.metrics['dac'] , ls='--' , color='green', label='2nd Vref' )
+        
+        plt.xlabel ( 'Reference Electrode Voltage (V)' )
+        plt.ylabel ( 'Chip Gain (V/V)' )
+        plt.title  ( 'Calibration Gain Curve' )
+        plt.ylim   ( 0 , 1.2 )
+        plt.grid   ( )
+        plt.legend ( )
+        plt.savefig( os.path.join( self.results_dir , 'gain_curve.png' ) )
+        plt.close  ( )
+        
     def write_html( self ):
         """ Creates html and block html files """
         html = textwrap.dedent('''\
@@ -283,7 +396,10 @@ class autoCal( IonPlugin , PluginMixin ):
                 else:
                     html += '<td width="%s%%">%s</td>' % ( width , image_link( pic ))
             html += '</tr>'
-        html += '</table>\n</div></td>'
+        html += '</table>\n</div>'
+        if not self.explog.flowax.any():
+            html += '<p><em>Error making plots!  Flow data was not found in the explog_final.txt file!</em></p>'
+        html += '</td>'
         
         # Add in error section
         html += textwrap.dedent('''\

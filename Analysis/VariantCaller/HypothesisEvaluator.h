@@ -31,7 +31,7 @@ void CalculateHypPredictions(
 		const Alignment          &my_read,
         const InputStructures    &global_context,
         const vector<string>     &Hypotheses,
-        const vector<bool>       &same_as_null_hypothesis,
+	    const int                &hyp_same_as_null,
         vector<vector<float> >   &predictions,
         vector<float>            &normalizedMeasurements,
 		int                      &min_last_flow,

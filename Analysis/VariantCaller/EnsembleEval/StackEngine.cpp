@@ -87,6 +87,35 @@ void LatentSlate::FastStep(ShortStack &total_theory, bool update_frequency, bool
   }
 }
 
+void LatentSlate::CalculateAvgMostRespSquaredError(const vector<CrossHypotheses>& my_hypotheses){
+  double most_resp_squared_error = 0.0;
+  int num_reads = 0;
+  num_non_ol_reads = 0;
+  avg_most_resp_squared_error = 0.0f;
+  for (vector<CrossHypotheses>::const_iterator hyp_it = my_hypotheses.begin(); hyp_it != my_hypotheses.end(); ++hyp_it){
+    int most_resp_idx = hyp_it->MostResponsible();
+    double tmp_sq_error = 0.0;
+    if ((not hyp_it->success) or (most_resp_idx == 0)){
+      continue;
+    }
+    for (vector<float>::const_iterator res_it = hyp_it->residuals[most_resp_idx].begin(); res_it != hyp_it->residuals[most_resp_idx].end(); ++res_it){
+      tmp_sq_error += (double)((*res_it)*(*res_it));
+    }
+    for (vector<float>::const_iterator meas_var_it = hyp_it->measurement_var.begin(); meas_var_it != hyp_it->measurement_var.end(); ++meas_var_it){
+      tmp_sq_error += (double) (*meas_var_it);
+    }
+    most_resp_squared_error += tmp_sq_error * hyp_it->read_counter;
+    num_reads += hyp_it->read_counter;
+  }
+  if (num_reads == 0){
+    return;
+  }
+  avg_most_resp_squared_error = (float) (most_resp_squared_error / num_reads);
+  num_non_ol_reads = num_reads;
+}
+
+
+
 void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_frequency, bool update_sigma, vector<float> &start_frequency) {
   // start us out estimating frequency
   cur_posterior.StartAtHardClassify(total_theory, update_frequency, start_frequency);
@@ -132,6 +161,7 @@ void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_fre
   // evaluate likelihood of current parameter set
   // currently only done for bias
   cur_posterior.params_ll = bias_generator.BiasLL();
+  CalculateAvgMostRespSquaredError(total_theory.my_hypotheses);
 }
 
 
@@ -227,7 +257,7 @@ void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null, vector<Allele
 }
 
 float HypothesisStack::ReturnMaxLL() {
-  return cur_state.cur_posterior.ReturnMaxLL();
+  return cur_state.cur_posterior.ReturnAdjustedMaxLL();
 }
 
 void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, vector<AlleleIdentity> &allele_identity_vector) {
@@ -284,8 +314,10 @@ void HypothesisStack::ExecuteInference() {
     cur_state.bias_generator.PrintDebug(false);
 	cur_state.sigma_generator.PrintDebug(false);
     cout << "  - params_ll = "<< cur_state.cur_posterior.params_ll << endl
-	     << "  - ref_vs_all.max_ll + params_ll = "<< cur_state.cur_posterior.ReturnMaxLL() <<" @ allele_freq = " <<  PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end())
-	     << (cur_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl << endl;
+   	     << "  - ref_vs_all.max_ll = "<< cur_state.cur_posterior.ReturnJustLL() <<" @ allele_freq = " <<  PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end())
+	     << (cur_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl
+         << "  - ref_vs_all.ll_adjustment = " << cur_state.cur_posterior.ReturnLLAdjustment() << endl
+	     << "  - params_ll + max_ll + ll_adjustment = "<< cur_state.cur_posterior.ReturnAdjustedMaxLL() <<" @ allele_freq = " <<  PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end()) << endl <<endl;
   }
 
 }
@@ -334,33 +366,57 @@ float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp, bool apply_
 	  }
 	  tmp_state.ScanStrandPosterior(total_theory, true);
   }
-  float restart_LL=tmp_state.cur_posterior.ReturnMaxLL();
+  float restart_LL=tmp_state.cur_posterior.ReturnAdjustedMaxLL();
 
   if (DEBUG > 0){
 	  vector<float> max_allele_freq = tmp_state.cur_posterior.clustering.max_hyp_freq;
 	  if(tmp_state.cur_posterior.ref_vs_all.scan_ref_done){
         tmp_state.cur_posterior.clustering.UpdateFrequencyAgainstOne(max_allele_freq, tmp_state.cur_posterior.ref_vs_all.eval_at_frequency[tmp_state.cur_posterior.ref_vs_all.max_index], 0);
 	  }
-	  cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << (apply_site_specific_signal_adjustment? " and site-specific signal adjustment " : " ") << "done"<< endl
-	       << "  - params_ll = "<< tmp_state.cur_posterior.params_ll << endl
-	       << "  - ref_vs_all.max_ll + params_ll = "<< restart_LL << " @ allele_freq = " << PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end()) << (tmp_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl;
-	  double most_resp_squared_error = 0.0;
-	  int num_reads = 0;
-	  for (vector<CrossHypotheses>::const_iterator hyp_it = total_theory.my_hypotheses.begin(); hyp_it != total_theory.my_hypotheses.end(); ++hyp_it){
-        int most_resp_idx = hyp_it->MostResponsible();
-		if ((not hyp_it->success) or (most_resp_idx == 0)){
-			continue;
-		}
-		for (vector<float>::const_iterator res_it = hyp_it->residuals[most_resp_idx].begin(); res_it != hyp_it->residuals[most_resp_idx].end(); ++res_it){
-		  most_resp_squared_error += (double)((*res_it)*(*res_it));
-		}
-		++num_reads;
-	  }
-	  cout << "  - Most responsible mean squared-error per read = " << most_resp_squared_error / (double) num_reads << " from " << num_reads << " reads"<< endl;
+    cout << "+ Restart the EM algorithm with initial allele_freq = " << PrintIteratorToString(restart_hyp.begin(), restart_hyp.end()) << (apply_site_specific_signal_adjustment? " and site-specific signal adjustment " : " ") << "done"<< endl
+         << "  - params_ll = "<< tmp_state.cur_posterior.params_ll << endl
+         << "  - ref_vs_all.max_ll = "<< tmp_state.cur_posterior.ReturnJustLL() << " @ allele_freq = " << PrintIteratorToString(max_allele_freq.begin(), max_allele_freq.end()) << (tmp_state.cur_posterior.ref_vs_all.scan_ref_done? " from scan." : "from responsibility.") << endl
+         << "  - params_ll + max_ll = "<< restart_LL <<endl;
+    cout << "  - Most responsible mean squared-error per read = " << tmp_state.avg_most_resp_squared_error << " from " << tmp_state.num_non_ol_reads << " reads"<< endl;
   }
 
-  if (cur_state.cur_posterior.ReturnMaxLL() <restart_LL) {
-    cur_state = tmp_state; // update to the better solution, hypothetically
+  // No special handling for UMT
+  if (total_theory.GetIsMolecularTag()){
+    if (cur_state.cur_posterior.ReturnAdjustedMaxLL() < restart_LL) {
+      cur_state = tmp_state; // update to the better solution, hypothetically
+    }
+    return restart_LL;
+  }
+
+  // Prepare special rule for TS-17972:
+  bool is_new_better_mse = tmp_state.avg_most_resp_squared_error < cur_state.avg_most_resp_squared_error;
+  bool is_new_larger_params_ll = tmp_state.cur_posterior.params_ll > cur_state.cur_posterior.params_ll;
+  bool is_new_hom = tmp_state.cur_posterior.ref_vs_all.max_index == 0 or tmp_state.cur_posterior.ref_vs_all.max_index == (int) tmp_state.cur_posterior.ref_vs_all.log_posterior_by_frequency.size() - 1;
+  bool is_old_hom = cur_state.cur_posterior.ref_vs_all.max_index == 0 or cur_state.cur_posterior.ref_vs_all.max_index == (int) cur_state.cur_posterior.ref_vs_all.log_posterior_by_frequency.size() - 1;
+  int max_num_non_ol_reads = max(tmp_state.num_non_ol_reads, cur_state.num_non_ol_reads);
+  bool is_comparable_read_num = max_num_non_ol_reads > 0 ? ((float) abs(tmp_state.num_non_ol_reads - cur_state.num_non_ol_reads) / (max_num_non_ol_reads) < 0.05f) : false;
+
+  if (cur_state.cur_posterior.ReturnAdjustedMaxLL() < restart_LL) {
+    // New LL is more likely
+    if ((not is_new_better_mse) and (not is_new_larger_params_ll) and is_new_hom and (not is_old_hom) and is_comparable_read_num and max_num_non_ol_reads > 50){
+      // Meet the symptom of TS-17972
+      // No update even if the new LL is more likely
+      if (DEBUG){
+        cout << "  - Special logic applied: The latent state (with larger LL) does not replaces the one from init_allele_freq = "<< PrintIteratorToString(cur_state.start_freq_of_winner.begin(), cur_state.start_freq_of_winner.end()) << endl;
+      }
+    }else{
+      cur_state = tmp_state; // update to the better solution, hypothetically
+    }
+  }else{
+    // New LL is less likely
+    if (is_new_better_mse and is_new_larger_params_ll and is_old_hom and (not is_new_hom) and is_comparable_read_num and max_num_non_ol_reads > 50){
+      // Meet the symptom of TS-17972
+      // Do update even if the new LL is less likely
+      if (DEBUG){
+        cout << "  - Special logic applied: The latent state (with smaller LL) replaces the one from init_allele_freq = "<< PrintIteratorToString(cur_state.start_freq_of_winner.begin(), cur_state.start_freq_of_winner.end()) << endl;
+      }
+      cur_state = tmp_state;
+    }
   }
 
   return restart_LL;
@@ -1070,7 +1126,7 @@ void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters,
 	}
 
 	// (Step 2): Override in Region BED
-	// I suppose no [seq_context.position0, seq_context.position0 + seq_context.reference_allele.size()) must covered by only one merged region.
+	// I suppose [seq_context.position0, seq_context.position0 + seq_context.reference_allele.size()) must covered by only one merged region.
 	// TODO: Maybe make it become a utility in TargetsManager
 	int merged_idx = targets_manager->FindMergedTargetIndex(seq_context.chr_idx, seq_context.position0);
 	if (merged_idx >= 0){
@@ -1085,14 +1141,14 @@ void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters,
 				continue;
 			}
 			// Now the variant overlaps with targets_manager->unmerged[unmerged_idx]
-			if ((not min_family_size_override_in_hs) and targets_manager->unmerged[unmerged_idx].min_tag_fam_size_override){
+			if ((not min_family_size_override_in_hs) and targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_tag_fam_size_override){
 				allele_eval.total_theory.effective_min_family_size = min_family_size_override_in_region?
-				    max(allele_eval.total_theory.effective_min_family_size, (unsigned int) targets_manager->unmerged[unmerged_idx].min_tag_fam_size) : (unsigned int) targets_manager->unmerged[unmerged_idx].min_tag_fam_size;
+				    max(allele_eval.total_theory.effective_min_family_size, (unsigned int) targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_tag_fam_size) : (unsigned int) targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_tag_fam_size;
 				min_family_size_override_in_region = true;
 			}
-			if ((not min_fam_per_strand_cov_override_in_hs) and targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov_override){
+			if ((not min_fam_per_strand_cov_override_in_hs) and targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_fam_per_strand_cov_override){
 				allele_eval.total_theory.effective_min_fam_per_strand_cov = min_fam_per_strand_cov_override_in_region?
-				    max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[unmerged_idx].min_fam_per_strand_cov;
+				    max(allele_eval.total_theory.effective_min_fam_per_strand_cov, (unsigned int) targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_fam_per_strand_cov) : (unsigned int) targets_manager->unmerged[unmerged_idx].amplicon_param.variant_param.min_fam_per_strand_cov;
 				min_fam_per_strand_cov_override_in_region = true;
 			}
 		}
@@ -1130,9 +1186,45 @@ void EnsembleEval::SetEffectiveMinFamilySize(const ExtendParameters& parameters,
 	}
 }
 
+// Set heavy_tailed override
+// Use the minimum one if different values overrides are specified.
+void SetTDistOverride(const vector<VariantSpecificParams>& variant_specific_params, int& heavy_tailed, bool &adjust_sigma){
+	int overridden_heavy_tailed = 0;
+	bool has_adjust_sigma_override = false;
+	bool adjust_sigma_overriden_value = false;
+	for (vector<VariantSpecificParams>::const_iterator param_it=variant_specific_params.begin(); param_it != variant_specific_params.end(); ++param_it){
+		if (param_it->heavy_tailed_override){
+			overridden_heavy_tailed = overridden_heavy_tailed == 0? param_it->heavy_tailed : min(overridden_heavy_tailed, param_it->heavy_tailed);
+		}
+    if (param_it->adjust_sigma_override){
+      adjust_sigma_overriden_value = has_adjust_sigma_override? (adjust_sigma_overriden_value or param_it->adjust_sigma) : param_it->adjust_sigma;
+      has_adjust_sigma_override = true;
+    }
+	}
+	if (overridden_heavy_tailed > 0){
+		heavy_tailed = overridden_heavy_tailed;
+	}
+	if (has_adjust_sigma_override){
+	  adjust_sigma = adjust_sigma_overriden_value;
+	}
+}
+
+// Set realignment_threshold override
+// Use the minimal (most conservative) one if different overriding values are specified.
+void SetRealignmentThresholdOverride(const vector<VariantSpecificParams>& variant_specific_params, float& realignment_threshold){
+  float override_realignment_threshold = 2.0f;
+  for (vector<VariantSpecificParams>::const_iterator param_it=variant_specific_params.begin(); param_it != variant_specific_params.end(); ++param_it){
+    if (param_it->realignment_threshold_override){
+      override_realignment_threshold = min(override_realignment_threshold, param_it->realignment_threshold);
+    }
+  }
+  if (override_realignment_threshold >= 0.0f and override_realignment_threshold <= 1.0f){
+    realignment_threshold = override_realignment_threshold;
+  }
+}
 
 
-void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, const vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager){
+void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool use_molecular_tag, vector<VariantSpecificParams>& variant_specific_params, const TargetsManager * const targets_manager){
     allele_eval.my_params = parameters->my_eval_control;
 	// Set debug level
 	DEBUG = parameters->program_flow.DEBUG;
@@ -1149,8 +1241,15 @@ void EnsembleEval::SetAndPropagateParameters(ExtendParameters* parameters, bool 
     }
     // only rich_json_diagnostic needs full data
     allele_eval.total_theory.preserve_full_data = parameters->program_flow.rich_json_diagnostic;
+    // Amplicon-specific overriding.
+    targets_manager->OverrideVariantSpecificParams(*variant, variant_specific_params);
     // Site-specific signal adjustment
     allele_eval.SetSiteSpecificBiasAdjustment(variant_specific_params);
+    // Heavy Tailed Override (must be done after targets_manager->OverrideVariantSpecificParams(*variant, variant_specific_params))
+    SetTDistOverride(variant_specific_params, allele_eval.my_params.heavy_tailed, allele_eval.my_params.adjust_sigma);
+    // realignment_threshold and its override 
+    realignment_threshold = parameters->my_controls.filter_variant.realignment_threshold;
+    SetRealignmentThresholdOverride(variant_specific_params, realignment_threshold);
 }
 
 void EnsembleEval::FlowDisruptivenessInReadLevel(const InputStructures &global_context)
@@ -1254,6 +1353,8 @@ void EnsembleEval::FlowDisruptivenessInReadStackLevel(float min_ratio_for_fd)
     variant->info["FDVR"].clear();
     for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
     	allele_identity_vector[i_alt].fd_level_vs_ref = global_flow_disruptive_matrix[0][i_alt + 1];
+			// Also update isGCMotif as soon as fdvr is available
+    	allele_identity_vector[i_alt].status.isGCMotif += (allele_identity_vector[i_alt].status.isPossibleGCMotif and allele_identity_vector[i_alt].fd_level_vs_ref < 2);
     	/*
     	// I make an exception according to the reference context!
     	if (allele_identity_vector[i_alt].status.isHPIndel and global_flow_disruptive_matrix[0][i_alt + 1] != 0){
@@ -2253,7 +2354,8 @@ void EnsembleEval::LookAheadSlidingWindow(int current_candidate_gen_window_end_0
 
 void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
                                                  const InputStructures  &global_context,
-                                                 const ReferenceReader &ref_reader)
+                                                 const ReferenceReader &ref_reader,
+                                                 const vector<VariantSpecificParams>& variant_specific_params)
 {
   seq_context.DetectContext(*variant, global_context.DEBUG, ref_reader);
   allele_identity_vector.resize(variant->alt.size());
@@ -2270,6 +2372,11 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
   assert(variant->alt.size() == variant->isAltHotspot.size());
   assert(variant->alt.size() == variant->isAltFakeHotspot.size());
 
+  bool do_snp_realignment_override = false;
+  bool do_snp_realignment = false;
+  bool do_mnp_realignment_override = false;
+  bool do_mnp_realignment = false;
+
   //now calculate the allele type (SNP/Indel/MNV/HPIndel etc.) and window for hypothesis calculation for each alt allele.
   for (unsigned int i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
     allele_identity_vector[i_allele].status.isHotSpot = variant->isHotSpot;
@@ -2282,12 +2389,23 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
     allele_identity_vector[i_allele].getVariantType(variant->alt[i_allele], seq_context,
         global_context.ErrorMotifs,  parameters.my_controls.filter_variant, ref_reader, variant->alt_orig_padding[i_allele]);
     allele_identity_vector[i_allele].CalculateWindowForVariant(seq_context, ref_reader);
+    // Rule: if more than one allele has do_snp/mnp_realignment and they have different overriding value, then do_snp/mnp_realignment = true
+    do_snp_realignment += variant_specific_params[i_allele].do_snp_realignment_override? variant_specific_params[i_allele].do_snp_realignment : false;
+    do_snp_realignment_override += variant_specific_params[i_allele].do_snp_realignment_override;
+    do_mnp_realignment += variant_specific_params[i_allele].do_mnp_realignment_override? variant_specific_params[i_allele].do_mnp_realignment : false;
+    do_mnp_realignment_override += variant_specific_params[i_allele].do_mnp_realignment_override;
+  }
+
+  if (not do_snp_realignment_override){
+    do_snp_realignment = parameters.my_controls.filter_variant.do_snp_realignment;
+  }
+  if (not do_mnp_realignment_override){
+    do_mnp_realignment = parameters.my_controls.filter_variant.do_mnp_realignment;
   }
 
   //GetMultiAlleleVariantWindow();
   multiallele_window_start = -1;
   multiallele_window_end   = -1;
-
 
   // Mark Ensemble for realignment if any of the possible variants should be realigned
   // TODO: Should we exclude already filtered alleles?
@@ -2298,10 +2416,10 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
     if (allele_identity_vector[i_allele].end_splicing_window > multiallele_window_end or multiallele_window_end == -1)
       multiallele_window_end = allele_identity_vector[i_allele].end_splicing_window;
 
-    if (allele_identity_vector[i_allele].ActAsSNP() && parameters.my_controls.filter_variant.do_snp_realignment) {
+    if (allele_identity_vector[i_allele].ActAsSNP() && do_snp_realignment) {
       doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
     }
-    if (allele_identity_vector[i_allele].ActAsMNP() && parameters.my_controls.filter_variant.do_mnp_realignment) {
+    if (allele_identity_vector[i_allele].ActAsMNP() && do_mnp_realignment) {
       doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
     }
   }
@@ -2343,7 +2461,7 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
-                                allele_eval.total_theory.my_hypotheses[i_read].same_as_null_hypothesis,
+                                allele_eval.total_theory.my_hypotheses[i_read].hyp_same_as_null,
                                 changed_alignment,
                                 global_context,
                                 ref_reader);
@@ -2365,7 +2483,7 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
   if (doRealignment and num_valid_reads>0){
 	float frac_realigned = (float)num_realigned / (float)num_valid_reads;
 	// And re-do splicing without realignment if we exceed the threshold
-	if (frac_realigned > parameters.my_controls.filter_variant.realignment_threshold){
+	if (frac_realigned > realignment_threshold){
       my_info << "SKIPREALIGNx" << frac_realigned;
       doRealignment = false;
       for (unsigned int i_read = 0; i_read < allele_eval.total_theory.my_hypotheses.size(); i_read++) {
@@ -2377,7 +2495,7 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
                                       allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
                                       allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
                                       allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
-                                      allele_eval.total_theory.my_hypotheses[i_read].same_as_null_hypothesis,
+                                      allele_eval.total_theory.my_hypotheses[i_read].hyp_same_as_null,
                                       changed_alignment,
                                       global_context,
                                       ref_reader);
@@ -2433,6 +2551,13 @@ void EnsembleEval::StackUpOneVariant(const ExtendParameters &parameters, const P
     // TS-17069: The original read must fully cover the splicing window. (rai->original_positinon has been checked)
     if (rai->original_end_position < multiallele_window_end)
       continue;
+
+    // IR-45897 for left primer
+    if (multiallele_window_start < rai->alignment.Position and not rai->is_clean_left_primer)
+      continue;
+    // IR-45897 for right primer
+	if (multiallele_window_end > rai->alignment.GetEndPosition() and not rai->is_clean_right_primer)
+	  continue;
 
     // The read passes all conditions and is eligible to be downsampled.
     read_counter++;
@@ -3053,7 +3178,7 @@ void EnsembleEval::StackUpOneVariantMolTag(const ExtendParameters &parameters, v
                   continue;
 			    }
 
-				// Notes for TS-17069:
+				// TODO: Notes for TS-17069:
 				// However, TS-17069 doesn't affect the UMT runs in 5.10 since trim-ampliseq-primers is turned off.
 				// So the logic for the fix of TS-17069 is not applied in TS 5.10.1 for UMT (though I should, and also handle the consensus alignment)
 
@@ -3144,6 +3269,8 @@ BasicFilters const * ServeBasicFilterByType(const AlleleIdentity &variant_identi
 	// The new logic for serving min-allele-freq based on fd
 	if (variant_identity.status.isHotSpotAllele and (not my_controls.hotspots_as_de_novo))
 		return &(my_controls.filter_hotspot);
+	if (variant_identity.status.isGCMotif)
+	  return &(my_controls.filter_fd_0);
 	if (variant_identity.fd_level_vs_ref == 0)
 		return &(my_controls.filter_fd_0);
 	if (variant_identity.fd_level_vs_ref == 1)

@@ -6,15 +6,15 @@
 
 void ShortStack::PropagateTuningParameters(EnsembleEvalTuningParameters &my_params){
 	// t-dist related
-	CrossHypotheses::SetHeavyTailed(my_params.heavy_tailed, my_params.adjust_sigma);
+  my_t_.SetAdjustSigma(my_params.adjust_sigma);
+  my_t_.SetV(my_params.heavy_tailed);
+  // test flow construction
+  CrossHypotheses::s_max_flows_to_test = my_params.max_flows_to_test;
+  CrossHypotheses::s_min_delta_for_flow = my_params.min_delta_for_flow;
     
-    // test flow construction
-	CrossHypotheses::s_max_flows_to_test = my_params.max_flows_to_test;
-	CrossHypotheses::s_min_delta_for_flow = my_params.min_delta_for_flow;
-    
-    // used to initialize sigma-estimates
-	CrossHypotheses::s_magic_sigma_base = my_params.magic_sigma_base;
-	CrossHypotheses::s_magic_sigma_slope = my_params.magic_sigma_slope;
+  // used to initialize sigma-estimates
+  CrossHypotheses::s_magic_sigma_base = my_params.magic_sigma_base;
+  CrossHypotheses::s_magic_sigma_slope = my_params.magic_sigma_slope;
 }
 
 
@@ -24,6 +24,7 @@ void ShortStack::FillInPredictionsAndTestFlows(PersistingThreadObjects &thread_o
 {
   //ion::FlowOrder flow_order(my_data.flow_order, my_data.flow_order.length());
   for (unsigned int i_read = 0; i_read < my_hypotheses.size(); i_read++) {
+    my_hypotheses[i_read].SetMyTDist(&my_t_);
     my_hypotheses[i_read].FillInPrediction(thread_objects, *read_stack[i_read], global_context);
     my_hypotheses[i_read].start_flow = read_stack[i_read]->start_flow;
     my_hypotheses[i_read].InitializeTestFlows();
@@ -218,7 +219,7 @@ void ShortStack::UpdateReadResponsibilityFromFamily_(unsigned int num_hyp_no_nul
 		}
 		for (unsigned int i_ndx = 0; i_ndx < my_eval_families[i_fam].valid_family_members.size(); ++i_ndx){
 			int i_read = my_eval_families[i_fam].valid_family_members[i_ndx];
-			float my_outlier_prob = my_hypotheses[i_read].at_least_one_same_as_null ? safety_zero: outlier_prob;
+			float my_outlier_prob = my_hypotheses[i_read].hyp_same_as_null >= 0 ? safety_zero: outlier_prob;
 			my_hypotheses[i_read].UpdateResponsibility(loc_freq, my_outlier_prob);
 		}
 	}
@@ -343,8 +344,12 @@ unsigned int ShortStack::DetailLevel(void){
 // Step 3): Update valid_index
 void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 	num_func_families_ = 0;
+	int num_ol_reads_filtered_out = 0;
+
 	for (vector<EvalFamily>::iterator fam_it = my_eval_families.begin(); fam_it != my_eval_families.end(); ++fam_it){
-		fam_it->InitializeEvalFamily(num_hyp);
+		fam_it->InitializeEvalFamily(num_hyp, &my_t_);
+		// Filter out reads that cause family inconsistency.
+		num_ol_reads_filtered_out += fam_it->FamilyOutlierFilteringByFlowDisruption(my_hypotheses);
 		fam_it->ResetValidFamilyMembers();
 		for (vector<unsigned int>::iterator read_it = fam_it->all_family_members.begin(); read_it != fam_it->all_family_members.end(); ++read_it){
 			if (my_hypotheses[*read_it].success){
@@ -366,9 +371,14 @@ void ShortStack::InitializeMyEvalFamilies(unsigned int num_hyp){
 		// Filling in FD matrix for family
 		// fam_it->FillInFlowDisruptivenessMatrix(my_hypotheses);
 	}
-
 	// Some of the reads may be set to not success. Need to update valid_index.
 	FindValidIndexes();
+
+	// Verbose
+	if (DEBUG > 0){
+		cout << endl << "+ Read filtering in inconsistent families:" <<endl
+			 << "  - Additional " << num_ol_reads_filtered_out << " reads are considered to be outliers and filtered out because of the inconsistency with other reads in the family." << endl;
+	}
 }
 
 int ShortStack::OutlierCountsByFlowDisruptiveness(){

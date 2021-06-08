@@ -1,7 +1,7 @@
 import os, sys, re
 from . import json2 as json
 
-from . import chipcal, chiptype, explog
+from . import chipcal, chiptype, explog, lanes
 
 import numpy as np
 
@@ -18,6 +18,13 @@ class PluginMixin( object ):
         """
         # Initialize the metrics that will ultimately be saved in results.json
         self.metrics = {}
+
+        # Check if we are inside of the CSA
+        self.csa = os.getenv( 'CSA', False ) == 'True'
+        if self.csa:
+            self.plugin_root = os.environ['TSP_FILEPATH_PLUGIN_DIR']
+        else:
+            self.plugin_root = ""
         
         # Pull in relevant information from the run
         self.prepare_startplugin    ( )
@@ -29,23 +36,28 @@ class PluginMixin( object ):
         # These need to happen after we get self.explog
         self.find_die_area          ( )
         self.check_explog_multilane ( ) #sets self.explog_is_multilane, self.explog_lanes_active
-
+        
+        # Read in some Valkyrie-specific information about the samples.
         self.read_valkyrie_samples( )
         
+        # Check to see if the sigproc directory has a seq folder.
+        # This needs to execute before some of the other file checks
+        self.has_sigproc_seq        = os.path.exists( os.path.join( self.sigproc_dir, 'seq' ) )
+
         # Set a bunch of convenience attributes for file existence:
-        self.has_fc_bfmask          = os.path.exists( os.path.join( self.sigproc_dir , 'analysis.bfmask.bin' ) )
-        self.has_block_bfmask       = os.path.exists( os.path.join( self.sigproc_dir , 'block_X0_Y0' , 'analysis.bfmask.bin' ) )
-        self.has_bfmask_stats       = os.path.exists( os.path.join( self.sigproc_dir , 'analysis.bfmask.stats' ) )
+        self.has_fc_bfmask          = self.find_fc_bfmask()
+        self.has_block_bfmask       = self.find_block_bfmask()
+        self.has_bfmask_stats       = self.find_bfmask_stats()
         self.has_bfmask             = self.has_fc_bfmask or self.has_block_bfmask
         self.has_chipcal            = self.find_chipcal( )
         self.has_explog             = self.find_explog ( final=False )
         self.has_explog_final       = self.find_explog ( final=True )
         self.has_rawdata            = self.find_rawdata( )
-        self.has_reference          = ( self.ion_params['referenceName'] != "" )
+        self.has_reference          = ( self.ion_params.get('referenceName',"") != "" )
         self.has_nomatch_bam        = os.path.exists( os.path.join( self.basecaller_dir, 'nomatch_rawlib.basecaller.bam' ) )
 
         # Set convenience attributes for chemistry
-        self.isCOCA                 = bool( self.ion_params['reverse_primer_dict']['chemistryType'] == 'avalanche' )
+        self.isCOCA = bool( self.ion_params['reverse_primer_dict'].get('chemistryType','') == 'avalanche' )
                
         # This stored the nomatch bam filepath for later processing if it exists
         if self.has_nomatch_bam:
@@ -71,7 +83,14 @@ class PluginMixin( object ):
         ''' Check the explog values for LanesActiveX
                 set     self.explog_is_multilane = boolean
                         self.explog_lanes_active = dict( lane_{}: boolean )
+
+            NOTE: Due to behavior of valkyries and their explogs, first run _check_valk_lanes()
+            --> if the return from that function is true, exit as the explog_lane values will be set by _check_valk_lanes()
         '''
+        # Check if on valkyrie --> this function sets explog lane vals if valk and just need to exit
+        if self._check_valk_lanes(): return
+
+        #NOTE:  ---RUO ONLY BELOW---
         # initialize explog_is_multilane to False
         explog_is_multilane = False
         explog_lanes_active = {}
@@ -91,6 +110,38 @@ class PluginMixin( object ):
         # Assign attributes
         self.explog_is_multilane = explog_is_multilane
         self.explog_lanes_active = explog_lanes_active
+
+    def _check_valk_lanes( self ):
+        ''' Determines if on a valkyrie 
+        --> if not, is_valk=False and all subsequent values set to None
+        --> if on a valk, is_valk=True and then parses the assay/sample lanes from the output directory
+
+        NOTE:  This should be called in check_explog_multilane and overwrite the explog values for Valkyrie
+
+        '''
+        # look for .../ChipLaneX_Y/... in results_dir --> only on Valk
+        # ...it would be nice to have something that felt more robust, but many other fields cannot be trusted
+        regex = re.compile( r'.+/ChipLane(\d)/.+|.+/ChipLane(\d)_(\d)/.+|.+/ChipLane(\d)_(\d)_(\d)/.+|.+/ChipLane(\d)_(\d)_(\d)_(\d)/.+' )
+        match = regex.match( self.results_dir )
+        if not match:
+            self.is_valk                = False
+            self.explog_is_multilane    = False
+            self.explog_lanes_active    = { 'lane_{}'.format(i):False for i in range(1,5) }
+        else:
+            self.is_valk                = True
+            self.explog_is_multilane    = True
+
+            groups = match.groups()
+            groups = [ int(g) for g in groups if g is not None ]
+
+            self.explog_lanes_active = {}
+            for i in range( 1,5 ):
+                if i in groups: active = True
+                else:           active = False    
+                self.explog_lanes_active.update( {'lane_{}'.format(i):active} )
+
+        return self.is_valk
+            
 
     def detect_bc_ladder( self ):
         """
@@ -150,6 +201,7 @@ class PluginMixin( object ):
             # Let's pull rows and cols from there.
             chiprc  = ( self.explog.metrics['Rows'] , self.explog.metrics['Columns'] )
             
+        inferred = False
         try:
             # Start with what TS gives us.  Is that in chips.csv?
             ct = chiptype.ChipType( self.chip_type )
@@ -173,16 +225,35 @@ class PluginMixin( object ):
                         chiprc     = ( rows , cols )
                         ct         = chiptype.get_ct_from_rc( rows, cols )
                     except:
-                        raise ValueError( 'Error!  Unable to read chiptype from cal files.' )
+                        print ( 'Error!  Unable to read chiptype from cal files.' )
+                        print ( 'Attempting to invent a chip type' )
+                        # Well, that didn't work either.  Let's just make up a chip type
+                        try:
+                            ct = chiptype.make_ct_from_dir( blockdir )
+                            use_blockdir = True
+                        except IndexError:
+                            if chiprc is not None:
+                                ct = chiptype.make_ct_from_rc( *chiprc )
+                            else:
+                                try:
+                                    ct = chiptype.make_ct_from_rc( rows, cols )
+                                except NameError:
+                                    raise ValueError( 'We can\'t even invent a chip type' )
+                        inferred = True
+                        print( 'WARNING! a new chip type was inferred based on the input chip dimensions.  This does not exist in the table, and auxilary fields may be incorrect' )
                     
         # Now we can validate something.
-        if use_blockdir:
-            val_ct = chiptype.validate_chiptype( ct , blockdir=blockdir )
+        if inferred:
+            self.ct = ct
         else:
-            val_ct = chiptype.validate_chiptype( ct , rc=chiprc )
+            if use_blockdir:
+                val_ct = chiptype.validate_chiptype( ct , blockdir=blockdir, infer=True )
+            else:
+                val_ct = chiptype.validate_chiptype( ct , rc=chiprc, infer=True )
             
-        print( 'ChipType validated to be {0.name}'.format( val_ct ) )
-        self.ct = val_ct
+            print( 'ChipType validated to be {0.name}'.format( val_ct ) )
+            self.ct = val_ct
+
         
         return None
 
@@ -265,22 +336,53 @@ class PluginMixin( object ):
             
         return os.path.exists( os.path.join( self.acq_dir , first_flow ) )
 
+    def find_sigproc_file( self, filename ):
+        ''' Handles checking if the file lives in the subdirectory /seq inside sigproc_dir '''
+        normal  = os.path.exists( os.path.join( self.sigproc_dir, filename ) )
+        seq     = os.path.exists( os.path.join( self.sigproc_dir, 'seq', filename ) )
+
+        if normal:
+            found = True
+            fpath = os.path.join( self.sigproc_dir, filename )
+        elif seq:
+            found = True
+            fpath = os.path.join( self.sigproc_dir, 'seq', filename )
+        else:
+            found = False
+            fpath = None
+        return ( found, fpath, )
+
+    def find_fc_bfmask( self ):
+        found, fpath = self.find_sigproc_file( 'analysis.bfmask.bin' )
+        self.fc_bfmask_path = fpath
+        return found
+
+    def find_block_bfmask( self ):
+        found, _ = self.find_sigproc_file( 'block_X0_Y0/analysis.bfmask.bin' )
+        # NOTE: It doesn't seem to make sense to set this path attribute
+        #           /seq doesn't seem to impact block bfmask, but leaving this here in case
+        #           Also setting has_sigproc_seq should allow for later improved logic if necessary
+        #
+        #self.block_bfmask_path = fpath
+        return found
+
+    def find_bfmask_stats( self ):
+        found, fpath = self.find_sigproc_file( 'analysis.bfmask.stats' )
+        self.bfmask_stats_path = fpath
+        return found
+
     def get_barcodes( self , min_read_count=1000 ):
         """ Reads in barcodes associated with the run """
         self.barcodes = {}
         allbc         = {}
         
         try:
-            with open( 'barcodes.json','r' ) as f:
+            with open( os.path.join( self.plugin_root, 'barcodes.json' ),'r' ) as f:
                 allbc = json.load(f)
-        except:
-            try:
-                with open(os.path.join(self.results_dir, 'barcodes.json'),'r') as f:
-                    allbc = json.load(f) 
-            except IOError:
-                print( 'Warning!  barcodes.json file not found!' )
-            except ValueError:
-                print( 'Warning!  There appear to be no barcodes in this run!' )
+        except IOError:
+            print( 'Warning!  barcodes.json file not found!' )
+        except ValueError:
+            print( 'Warning!  There appear to be no barcodes in this run!' )
             
         # NOTE: THIS DOES NOT PICK UP nomatch BARCODES
         for b in allbc:
@@ -374,7 +476,7 @@ class PluginMixin( object ):
             regex_height    = re.compile( 'Height = (\d+)' )
             regex_width     = re.compile( 'Width = (\d+)' )
 
-            with open( os.path.join( self.sigproc_dir, 'analysis.bfmask.stats' ) ) as file:
+            with open( self.bfmask_stats_path ) as file:
                 for line in file.readlines():
                     if not height:
                         match = regex_height.match( line )
@@ -400,6 +502,37 @@ class PluginMixin( object ):
         first_flow = 'acq_0000.dat_noPCA'
         return os.path.exists( os.path.join( self.acq_dir , first_flow ) )
 
+    def iter_lanes( self, *lanes ):
+        """ 
+        Wrapper function that returns a lane generator for simple iteration using explog_lanes_active unless lanes is supplied.
+        returns lane id (integer in [1-4]) and string lane name.
+        """
+        # Note that this will essentially replace the functionality of LaneDiagnostics.iterlanes() and not require to ask if active:
+        if lanes:
+            return lanes.iter_lanes( *lanes )
+        else:
+            return lanes.iter_lanes( *self.explog_lanes_active )
+
+    def iter_lane_data( self, data, *lanes ):
+        """
+        Wrapper function on lanes.iter_lane_data for simple iteration using explog_lanes_active unless lanes is supplied.
+        returns lane id (integer in [1-4]), string lane name, and sliced data array for that lane.
+        """
+        if lanes:
+            return lanes.iter_lane_data( data, *lanes )
+        else:
+            return lanes.iter_lane_data( data, *self.explog_lanes_active )
+
+    def iter_lane_masked_data( self, data, *lanes ):
+        """
+        Wrapper function on lanes.iter_lane_masked_data for simple iteration using explog_lanes_active unless lanes is supplied.
+        returns lane id (integer in [1-4]), string lane name, sliced data array for that lane, and a sliced mask array for that lane.
+        """
+        if lanes:
+            return lanes.iter_lane_data( data, mask, *lanes )
+        else:
+            return lanes.iter_lane_data( data, mask, *self.explog_lanes_active )
+
     # According to the documentation, the startplugin.json file data is automatically loaded in the class
     # and can be accessed via self.startplugin.  This code will try that first and if not try to load the file.
     def prepare_startplugin( self ):
@@ -407,21 +540,15 @@ class PluginMixin( object ):
         Reads in namespace-like variables from startplugin.json, unless it's already a class attribute.
         Prepares common attributes of interest that we commonly use.
         """
-        self.results_dir = os.environ['TSP_FILEPATH_PLUGIN_DIR']
-        # if getattr( self , 'startplugin' , None ):
-        #     print( 'Using startplugin class attribute.' )
-        # else:
-        print( 'Reading startplugin.json . . .' )
-        try:
-            with open('startplugin.json','r') as fh:
-                self.startplugin = json.load(fh)
-                
-            print ( ' . . . startplugin.json successfully read and parsed.\n' )
-        except:
-            try: 
-                with open(os.path.join(self.results_dir, 'startplugin.json'),'r') as fh:
+        # order matters here! self.startplugin is an @property
+        if (not self.csa) and getattr( self , 'startplugin' , None ):
+            print( 'Using startplugin class attribute.' )
+        else:
+            print( 'Reading startplugin.json . . .' )
+            try:
+                with open( os.path.join( self.plugin_root, 'startplugin.json' ),'r') as fh:
                     self.startplugin = json.load(fh)
-                
+                    
                 print ( ' . . . startplugin.json successfully read and parsed.\n' )
             except:
                 print ( "Error reading startplugin.json!" )
@@ -438,7 +565,10 @@ class PluginMixin( object ):
         self.raw_data_dir  = self.startplugin['runinfo']['raw_data_dir']
         
         self.analysis_dir   = self.startplugin['runinfo']['analysis_dir'] # Main directory for results from a sequencing run
-        # self.results_dir    = self.startplugin['runinfo']['results_dir' ] # *** Save images, files, results.json, and html files within this directory ***
+        if self.csa:
+            self.results_dir = os.environ['TSP_FILEPATH_PLUGIN_DIR']
+        else:
+            self.results_dir = self.startplugin['runinfo']['results_dir' ] # *** Save images, files, results.json, and html files within this directory ***
         self.sigproc_dir    = self.startplugin['runinfo']['sigproc_dir' ] # Holds pipeline files like bfmask and block directories from analysis
         self.basecaller_dir = self.startplugin['runinfo']['basecaller_dir' ] # Holds barcode nomatch .bam file and a variety of pngs and .sam files 
         self.flows          = self.startplugin['expmeta']['run_flows'   ]
@@ -454,6 +584,16 @@ class PluginMixin( object ):
             self.calibration_dir = self.raw_data_dir.split('thumbnail')[0]
         else:
             self.calibration_dir = self.raw_data_dir
+
+        # Reseq related changes
+        try:
+            self.reseq_dir          = self.startplugin['runinfo']['reseqDir']
+            self.is_reseq           = self.startplugin['runinfo']['isReseq']
+        except:
+            print( "Error reading resequencing info in startplugin.json\nLikely an older TS version without reseq capability" )
+            self.reseq_dir          = None
+            self.is_reseq           = False
+            
             
         return None
     
@@ -480,9 +620,10 @@ class PluginMixin( object ):
             return found
         
         self.explog_dir = None
-        
-        paths = [ self.raw_data_dir , os.path.dirname( self.raw_data_dir ) , self.analysis_dir ]
-        names = [ 'raw_data_dir' , 'Parent Dir of raw_data_dir' , 'analysis_dir' ]
+
+        # Adding in reseq dir as a first attempt.
+        paths = [ os.path.join( self.raw_data_dir, 'reseq' ), self.raw_data_dir , os.path.dirname( self.raw_data_dir ) , self.analysis_dir ]
+        names = [ 'reseq_dir',                                'raw_data_dir' ,    'Parent Dir of raw_data_dir' ,         'analysis_dir' ]
         
         # Loop through acceptable paths to find explog.  Break if we found it.
         for path, name in zip( paths, names ):
@@ -535,7 +676,7 @@ class PluginMixin( object ):
             print( 'No analysisSamples.json found -- this must not be a Valkyrie run.' )
             self.analysisSamples = {}
             self.sample_dirs     = {}
-
+            
     def validate_lane_active( self, lane_id, detected ):
         ''' This function takes in a lane_id (string or int) and boolean (detected) and compares to the explog_active value 
                 The function will return a boolean for valid or invalid

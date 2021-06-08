@@ -329,6 +329,8 @@ def main():
             sse_bed_path,
             isBED_Encrypted=isBED_Encrypted,
         )
+        if errMsg and "5.14 is the last supported release" in errMsg:
+            print("Warning: %s" % errMsg)
         if isUploadFailed:
             print("ERROR: Could not create plan from this zip: %s." % str(errMsg))
             raise Exception("validation error")

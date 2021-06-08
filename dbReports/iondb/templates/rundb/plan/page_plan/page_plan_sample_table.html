@@ -3,6 +3,7 @@
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.web.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.editable.js"%}"></script>
 <script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.dropdownlist.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/kendo/src/js/kendo.custom.multiselect.js"%}"></script>
 <link rel="stylesheet" href="{% static "resources/kendo/styles/kendo.common.min.css"%}" />
 <link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
 <link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
@@ -38,6 +39,40 @@
   background-color: #D3D3D3;
   border-color: #C5C5C5 !important;
   border: 1px solid;
+}
+
+.custom-multiselect-popup.k-popup .k-list .k-item {
+    vertical-align: middle;
+}
+.custom-multiselect-popup.k-popup .k-list .k-item input,
+.custom-multiselect-popup.k-popup .k-list .k-item span {
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+}
+.custom-multiselect-popup.k-popup .k-list .k-item input {
+    margin: 3px;
+    margin-left: 2px;
+    margin-right: 6px;
+}
+
+.custom-multiselect-popup .k-state-selected,
+.custom-multiselect-popup .k-list .k-state-selected {
+    background: inherit;
+    border-color: transparent;
+    color: inherit;
+}
+
+
+.custom-multiselect-popup .k-list .k-state-hover,
+.custom-multiselect-popup .k-list .k-state-active
+{
+    color: #fff;
+    background: #AFAFA7;
+    background-color: #AFAFA7;
+    background-image: none;
+    -webkit-box-shadow: none;
+    box-shadow: none;
 }
 </style>
 

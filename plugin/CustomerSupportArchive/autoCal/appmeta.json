@@ -11,7 +11,7 @@
         "analysisDir",
         "pluginOutputDir"
     ],
-    "isThumbnail":"true",
+    "isThumbnail":"false",
     "name":"autoCal",
     "outputs":[
         "./outputs"
@@ -29,5 +29,5 @@
         "type"
     ],
     "vendorActivation":"/share/apps/",
-    "ver":"1.7.4"
+    "ver":"2.1.1"
 }
