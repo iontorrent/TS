@@ -8,7 +8,7 @@ from ion.plugin import *
 
 class ERCC_Analysis(IonPlugin):
   '''Examine relative abundance of ERCC sequence reads. (Ion supported)'''
-  version = '5.16.0.0'
+  version = '5.18.0.0'
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]
 

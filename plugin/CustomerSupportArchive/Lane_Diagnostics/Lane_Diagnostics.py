@@ -36,45 +36,10 @@ class Lane_Diagnostics( IonPlugin, PluginMixin.PluginMixin ):
     
     Now managed by Brennan Pursley
     
-    Latest updates | 26Jun2019  | PluginMixin bugfix
-    Latest updates | 17Apr2019  | **MAJOR**
-                                | v 2.0.0
-                                | Added aligned metrics from ionstats json
-                                |   --> created AQ class for processing
-                                | Renamed aligned-->bcmatch
-                                | Removed q7 metrics
-                                | Overhauled codebase -- except for pybam sections
-                                |   --> added sections and broke out functionality to smaller methods
-                                | Added disclaimer to html
-                                | Added below_thresh metrics
-                                | Improved nomatch calculations
-                                | Added below_thresh to total
-                                | v 2.0.1
-                                | debug of nonbarcoded -- no barcode name key error
-                                | debug of below_thresh values -- bad naming
-                                | v 2.0.2
-                                | added bcmatch length and local length metrics
-                                | v 2.0.3
-                                | added barcode-bcmatch length
-                    | 15Jul2019 | updated tools with +/- inf support
-                    | 23Jul2019 | **MAJOR**
-                                | new logic for explog_lanes_active in tools
-                    | 02Aug2019 | uprevved tools
-                    | 02Aug2019*| Added badppf metrics and images
-                    | 23Sep2019*| Added sunrise metrics
-                    | 18Feb2020 | v2.3.6    | Added self.csa check on writing normalduck table
-                                            | Changed warning message about active lanes
-                    | 19Feb2020 | v2.3.7    | Fixed write_no_explog_msg bug
-                    | 19Feb2020 | v2.3.8    | Tools update for csa
-                    | 25Feb2020 | v2.3.9    | Tools update, implement results_dir in SSME
-                    | 18May2020 | v2.3.10   | Added RunType.COMPOSITE
-                    | 24Jun2020 | v2.3.11   | Handle missing barcode filepaths
-                    | 30Jun2020 | v2.3.12   | Handle sigproc_dir seq folder
-                    | 17Aug2020 | v2.3.13   | chipcal determine_lane debug
-                                | v2.3.14   | commented out any saving of .dat files
+    Latest updates | 06Oct2020  | Turned off per-barcode ionstats calls
 
     '''
-    version       = "2.3.14"
+    version       = "2.3.17"
     allow_autorun = True
     
     runtypes      = [ RunType.THUMB , RunType.FULLCHIP, RunType.COMPOSITE ]
@@ -501,8 +466,9 @@ class Lane_Diagnostics( IonPlugin, PluginMixin.PluginMixin ):
 
             ### FIRST: process all aligned bams ###
             self.ionstats_processing_full( base_cmd, bc_path_list, h5_file, json_file )
-            ### SECOND: individually process barcode bams ###
-            self.ionstats_processing_barcodes( base_cmd, bc_path_list, h5_file, json_file )
+            if not self.csa:
+                ### SECOND: individually process barcode bams ###
+                self.ionstats_processing_barcodes( base_cmd, bc_path_list, h5_file, json_file )
 
         else:
             print( '\nAborting Ionstats Analysis -- No aligned bam files.' )
@@ -1353,6 +1319,27 @@ class Lane_Diagnostics( IonPlugin, PluginMixin.PluginMixin ):
             block  = textwrap.dedent('''<p>This is a Fullchip Run, No Lane Diagnostics Needed</p>
                 </body></html>''') 
         else:
+            # Notes on reseq behavior
+            block += textwrap.dedent( '''\
+                    <p><em>Notes on Reseq Behavior</em></p>
+                    <ul><li>bfmask.bin metrics (e.g. loading, total reads -->no quality analysis)
+                        <ul><li>On Valkyrie, always from seq data</li>
+                            <li>On RUO, from seq or reseq depending on DualAnalysis data</li>
+                        </ul>
+                        </li>
+                    </ul>
+                    <ul><li>bam file metrics (e.g. Q20 Reads/MRL --> quality analysis)
+                        <ul><li>AmpliSeq --> Always merged bams</li>
+                            <ul><li>**Independent bams are never created</li></ul>
+                            <li>AmpliSeqHD</li>
+                            <ul><li>On Valkyrie, always merged bam</li>
+                                <li>On RUO, from seq or reseq depending on DualAnalysis data</li>
+                            </ul>
+                        </ul>
+                        </li>
+                    </ul>
+                    <br>''' )
+
             active_lanes = []
             for (lane_id, lane, active) in self.iterlanes():
                 if active:

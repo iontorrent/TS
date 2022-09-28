@@ -32,6 +32,7 @@ $(document).ready(function() {
                 console.log("Approved/Activated user " + userId);
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_approve').modal('hide');
+                window.location.reload(true);
             }).fail(function (data) {
                $('#modal_confirm_approve .modal-body #modal-error-messages').empty().append('<p>{% trans "global.messages.error.label" %}:</p><p>' + data.responseText + '</p>').show();
             });
@@ -60,6 +61,7 @@ $(document).ready(function() {
                 console.log("Rejected user " + userId);
                 btn.parents(".pending-user").remove();
                 $('#modal_confirm_reject').modal('hide');
+                window.location.reload(true);
             }).fail(function (data) {
                $('#modal_confirm_reject .modal-body #modal-error-messages').empty().append('<p>{% trans "global.messages.error.label" %}:</p><p>' + data.responseText + '</p>').show();
             });
@@ -91,11 +93,8 @@ $(document).ready(function() {
 </script>
 {% endblock extra_head_js %}
 
-
-
 {% block content %}
-
-<div class="content">
+<div id="user" class="content">
     <h1>{% trans "configure_account.title" %}    <small>{% trans "configure_account.subtitle" %}</small></h1>
     <form method="post" action="" class="form-horizontal">
         {% csrf_token %}
@@ -103,7 +102,7 @@ $(document).ready(function() {
             {% for field in form %}
                 {% for error in field.errors %}
                     <div class="alert alert-danger">
-                        <strong>{{ field.label }} - {{ error|escape }}</strong>
+                        <strong>{{ field.label }} - {{ error|escape|safe }}</strong>
                     </div>
                 {% endfor %}
             {% endfor %}
@@ -112,6 +111,11 @@ $(document).ready(function() {
                     <strong>{{ error|escape }}</strong>
                 </div>
             {% endfor %}
+        {% endif %}
+        {% if updated or form.is_valid %}
+            <div class="alert alert-success">
+                    <strong>User Information updated successfully</strong>
+                </div>
         {% endif %}
         <fieldset>
             <div class="control-group">
@@ -174,6 +178,7 @@ $(document).ready(function() {
                 <label for="fileInput" class="control-label">{{form.password.label}}</label>
                 <div class="controls" id="password">
                     {{form.password}}
+                    <i class="icon-info-sign" rel="tooltip" data-original-title="The password must contain at least a uppercase letter, a digit, special chars(.,@#$%^&*()_-+!;) and minimum 10 characters"></i>
                 </div>
             </div>
             <div class="control-group">

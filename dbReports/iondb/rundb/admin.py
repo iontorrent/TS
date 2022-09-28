@@ -1,6 +1,10 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 from __future__ import absolute_import
 
+from django.contrib.auth.forms import UserChangeForm, AdminPasswordChangeForm
+from django.contrib.auth.hashers import check_password
+from iondb.rundb.login.forms import UserRegistrationForm
+from iondb.rundb.login.password_validator import PasswordValidator
 from iondb.rundb.models import *
 from iondb.rundb import tasks
 from iondb.rundb import tsvm
@@ -19,6 +23,7 @@ from django.http import HttpResponseRedirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.sessions.models import Session
 from django.core.urlresolvers import reverse
+from django.contrib.auth.admin import UserAdmin
 
 from django import http
 import httplib2
@@ -719,6 +724,10 @@ def exp_redo_from_scratch(request):
         )
         return HttpResponseRedirect("/admin/rundb/experiment/")
 
+@staff_member_required
+def configure_account_admin(request):
+    return HttpResponseRedirect(reverse("configure_account"))
+
 
 @staff_member_required
 def configure_server(request):
@@ -1266,3 +1275,53 @@ class PlanSessionAdmin(admin.ModelAdmin):
 
 
 admin.site.register(PlanSession, PlanSessionAdmin)
+
+
+class AdminPasswordChangeForm(AdminPasswordChangeForm):
+    def clean_password2(self):
+        password1 = self.cleaned_data.get('password1')
+        password2 = self.cleaned_data.get('password2')
+        if password1 and password2:
+            if password1 != password2:
+                raise forms.ValidationError(
+                    self.error_messages['password_mismatch'],
+                    code='password_mismatch',
+                )
+
+        if password2:
+            password_validator = PasswordValidator(password2)
+            exec_validation_methods = PasswordValidator.validation_methods
+            error_list = {}
+            for method in exec_validation_methods:
+                if 'username' in method:
+                    username = str(self.user.username)
+                    message = getattr(password_validator, method)(username)
+                else:
+                    message = getattr(password_validator, method)()
+
+                if isinstance(message, list):
+                    error_list[method] = str(''.join(message))
+                elif message is not None:
+                    error_list[method] = message
+            if error_list:
+                raise forms.ValidationError(map(str, error_list.values()))
+            if check_password(password2, self.user.password):
+                raise forms.ValidationError('That password has already been used')
+
+        return password2
+
+
+class CustomUserAdmin(UserAdmin):
+    form = UserChangeForm
+    add_form = UserRegistrationForm
+    change_password_form = AdminPasswordChangeForm
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'password1', 'password2')}
+         ),
+    )
+
+
+admin.site.unregister(User)
+admin.site.register(User, CustomUserAdmin)

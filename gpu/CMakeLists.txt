@@ -12,7 +12,7 @@ set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 
 # Use the closest ION_UPDATE_SERVER we can find.
 message(STATUS "Searching for an ION_UPDATE_SERVER...")
-foreach ( SERVER updates updates.itw updates.iontorrent.com )
+foreach ( SERVER updates updates.itw ionupdates.com )
     # See if we can look up the server in question.
     execute_process( COMMAND host -W 2 -t A ${SERVER}
        RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
@@ -64,8 +64,8 @@ configure_file (
 )
 
 if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
-  set(gpu_devdriver_version "410.78")
-  set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-410.78.run")
+  set(gpu_devdriver_version "460.80")
+  set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-460.80.run")
 else()
   set(gpu_devdriver_version "375.26")
   set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-375.26.run")

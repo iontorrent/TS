@@ -162,6 +162,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
     printf("   Barcode filter minreads  : %d (0 = disabled)\n", barcode_filter_minreads_);
     printf("   Barcode filter filename  : %s\n", barcode_filter_filename_.c_str());
     printf("   Generation of XB bam-tag : %s (number of base errors during barcode classification)\n", (barcode_bam_tag_ ? "on" : "off"));
+    printf("   No-match read group Idx  : %d\n", no_barcode_read_group_);
     if (barcode_ignore_flows_)
       printf("   Ignoring flows %d to %d for barcode classification.\n",classifier_ignore_flows_[0],classifier_ignore_flows_[1]);
     printf("\n");
@@ -479,11 +480,11 @@ int  BarcodeClassifier::FlowAlignClassification(const ProcessedRead &processed_r
 // ------------------------------------------------------------------------
 
 int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
-                                                  vector<float>& best_bias, int& filtered_zero_errors)
+                                                  vector<float>& best_bias, bool& filtered_zero_errors, int& org_read_group)
 {
     int best_barcode     = -1;
     best_errors          = -1;
-    filtered_zero_errors = -1;
+    filtered_zero_errors = false;
     best_distance        = score_cutoff_ + score_separation_;
     float second_best_distance = 1e20;
 
@@ -531,10 +532,14 @@ int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecall
     }
 
     if (second_best_distance - best_distance  < score_separation_) {
-      if (best_errors == 0)
-        filtered_zero_errors = barcode_.at(best_barcode).read_group_index;
-      best_barcode = -1;
+      if (best_errors == 0){
+        filtered_zero_errors = true;
+        org_read_group = barcode_.at(best_barcode).read_group_index;
+      }
+      else
+        best_barcode = -1;
     }
+
     return best_barcode;
 };
 
@@ -548,23 +553,24 @@ bool BarcodeClassifier::MatchesBarcodeSignal(const BasecallerRead& basecaller_re
 
   int   best_barcode         = -1;
   int   best_errors          = -1;
-  int   filtered_zero_errors = -1;
+  int   org_read_group       = -1;
+  bool  filtered_zero_errors = false;
   float best_distance        = 0.0;
   vector<float> best_bias;
 
-  best_barcode = SignalSpaceClassification(basecaller_read, best_distance, best_errors, best_bias, filtered_zero_errors);
+  best_barcode = SignalSpaceClassification(basecaller_read, best_distance, best_errors, best_bias, filtered_zero_errors, org_read_group);
 
-  return (best_barcode >= 0);
+  return (best_barcode >= 0 and org_read_group < 0);
 };
 
 // ------------------------------------------------------------------------
 
 int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
-                                                  vector<float>& best_bias, int& filtered_zero_errors)
+                                                  vector<float>& best_bias, bool& filtered_zero_errors, int& org_read_group)
 {
     int best_barcode     = -1;
     best_errors          = -1;
-    filtered_zero_errors = -1;
+    filtered_zero_errors = false;
     best_distance        = score_cutoff_ + score_separation_;
     float second_best_distance = 1e20;
 
@@ -610,9 +616,12 @@ int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& b
     }
 
     if (second_best_distance - best_distance  < score_separation_) {
-      if (best_errors == 0)
-        filtered_zero_errors = barcode_.at(best_barcode).read_group_index;
-      best_barcode = -1;
+      if (best_errors == 0){
+        filtered_zero_errors = true;
+        org_read_group  = barcode_.at(best_barcode).read_group_index;
+      }
+      else
+        best_barcode = -1;
     }
     return best_barcode;
 };
@@ -620,9 +629,9 @@ int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& b
 // ------------------------------------------------------------------------
 
 
-bool BarcodeClassifier::AdapterValidation(const BasecallerRead& basecaller_read, int& best_barcode, int& filtered_read_group)
+bool BarcodeClassifier::AdapterValidation(const BasecallerRead& basecaller_read, int best_barcode, bool& filtered_read)
 {
-  filtered_read_group = -1;
+  filtered_read = false;
 
   // zero means disabled
   if (adapter_cutoff_ == 0)
@@ -650,8 +659,9 @@ bool BarcodeClassifier::AdapterValidation(const BasecallerRead& basecaller_read,
   }
 
   if (residual_2 > num_adapter_flows * adapter_cutoff_) {
-    filtered_read_group = barcode_[best_barcode].read_group_index;
-    best_barcode = -1;
+    filtered_read = true;
+    //filtered_read_group = barcode_[best_barcode].read_group_index;
+    //best_barcode = -1;
     return false;
   }
   else
@@ -680,12 +690,12 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     case 2: // Minimize L2 distance for score_mode_ == 2
     case 3: // Minimize L1 distance for score_mode_ == 3
       best_barcode = SignalSpaceClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
-                                                 processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+                                                 processed_read.barcode_bias, processed_read.barcode_filt_zero_error, processed_read.org_rg_idx);
       break;
     case 4: //L2 for score mode 4
     case 5: //L1 for score mode 5
       best_barcode = ProportionalSignalClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
-                                                   processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+                                                   processed_read.barcode_bias, processed_read.barcode_filt_zero_error, processed_read.org_rg_idx);
       break;
     default: // Trivial base space comparison
       best_barcode = SimpleBaseSpaceClassification(basecaller_read);
@@ -698,30 +708,35 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
 
   // -------- Classification done, now accounting ----------
 
+  int x, y;
+  barcode_mask_.IndexToRowCol (read_index, y, x);
+
   if (best_barcode == -1) {
-    int x, y;
-    barcode_mask_.IndexToRowCol (read_index, y, x);
     barcode_mask_.SetBarcodeId(x, y, 0);
     if (no_barcode_read_group_ >= 0)
       processed_read.read_group_index = no_barcode_read_group_;
-    return;
+  }
+  else if (processed_read.barcode_filt_zero_error or processed_read.barcode_adapter_filtered){
+    barcode_mask_.SetBarcodeId(x, y, 0);
+    processed_read.read_group_index = barcode_[best_barcode].read_group_index;
+    processed_read.org_rg_idx = barcode_[best_barcode].read_group_index;
+    if (processed_read.barcode_filt_zero_error)
+      processed_read.barcode_adapter_filtered = false;
+  }
+  else {
+    barcode_mask_.SetBarcodeId(x, y, (uint16_t)barcode_[best_barcode].mask_index);
+    processed_read.read_group_index = barcode_[best_barcode].read_group_index;
+    processed_read.barcode_n_errors = max(processed_read.barcode_n_errors, 0);
   }
 
-  const Barcode& bce = barcode_[best_barcode];
-
-  int x, y;
-  barcode_mask_.IndexToRowCol (read_index, y, x);
-  barcode_mask_.SetBarcodeId(x, y, (uint16_t)bce.mask_index);
-  processed_read.read_group_index = bce.read_group_index;
-  processed_read.barcode_n_errors = max(processed_read.barcode_n_errors, 0);
+  if (not trim_barcodes_ or best_barcode == -1)
+    return;
 
   if(barcode_bam_tag_)
 	processed_read.bam.AddTag("XB","i", processed_read.barcode_n_errors);
 
-  if (not trim_barcodes_)
-    return;
-
   // Account for barcode + barcode adapter bases
+  const Barcode& bce = barcode_[best_barcode];
   if (score_mode_ == 0){
     processed_read.filter.n_bases_barcode = min(processed_read.filter.n_bases, (int)barcode_[best_barcode].full_barcode.length());
   }
@@ -741,7 +756,6 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   processed_read.filter.n_bases_prefix = processed_read.filter.n_bases_tag = processed_read.filter.n_bases_barcode;
   // And now do handle classification and trimming
   ClassifyAndTrimHandle(read_index, best_barcode, processed_read, basecaller_read, base_to_flow);
-
 }
 
 // ------------------------------------------------------------------------
@@ -877,9 +891,9 @@ void BarcodeClassifier::ClassifyAndTrimHandle(int read_index, int best_barcode,
     int x, y;
     barcode_mask_.IndexToRowCol (read_index, y, x);
     barcode_mask_.SetBarcodeId(x, y, 0);
-    if (no_barcode_read_group_ >= 0){
-      processed_read.barcode_handle_filtered = processed_read.read_group_index;
-      processed_read.read_group_index = no_barcode_read_group_;
+    if (no_barcode_read_group_ >= 0 and processed_read.org_rg_idx < 0){
+      processed_read.barcode_handle_filtered = true;
+      processed_read.org_rg_idx = processed_read.read_group_index;
       processed_read.handle_n_errors = 1+handle_cutoff_;
     }
     return;
@@ -995,7 +1009,7 @@ int  BarcodeClassifier::HandleFlowAlign(int best_barcode, ProcessedRead &process
 
 // ------------------------------------------------------------------------
 
-void BarcodeClassifier::Close(BarcodeDatasets& datasets)
+void BarcodeClassifier::Close(BarcodeDatasets& datasets, int num_end_barcodes)
 {
   // Nothing to do if dataset is not in use
   // Do not filter control dataset and do not generate output files
@@ -1016,6 +1030,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
   datasets.barcode_filters()["classifier_mode"]   = (Json::Int64)score_mode_;
   datasets.barcode_filters()["classifier_cutoff"] = score_cutoff_;
   datasets.barcode_filters()["classifier_separation"] = score_separation_;
+  datasets.barcode_filters()["num_end_barcodes"]  = num_end_barcodes;
   if (hamming_dmin_ >=0)
     datasets.barcode_filters()["hamming_distance"] = hamming_dmin_;
 
@@ -1090,7 +1105,8 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 
       // Filter read groups where a too large proportion of reads failed adapter verification
       // Likely to be a highly contaminated sample and should not be analyzed
-      if ((not i_am_filtered) and (not barcode_filter_postpone_) and (not is_control_barcode))
+      // Do not apply to dual barcode sets - dual barcodes will filter contamination
+      if ((not i_am_filtered) and (not barcode_filter_postpone_) and (not is_control_barcode) and num_end_barcodes == 0)
       {
         //unsigned int adapter_filtered = (*rg)["barcode_adapter_filtered"].asUInt();
         i_am_filtered = (5*adapter_filtered > read_count) ? true : false;
@@ -1505,28 +1521,23 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
   if (best_barcode < 0) {
     if (not process_as_single)
       PushReadToNomatch(read_index, processed_read);
+    // Trim the parts that have been identified
+    UpdateReadTrimming(processed_read, n_bases_trimmed, "");
     return;
   }
   processed_read.end_barcode_index = best_barcode;
+  // If we process as single barcode, or demultiplex an external list
+  // we add the end barcode sequence to the YK field.
+  if (process_as_single or demux_barcode_list_) {
+    my_YK_tag += end_barcodes_.at(best_barcode).barcode_adapter;
+    my_YK_tag += end_barcodes_.at(best_barcode).barcode_sequence;
+  }
 
   // Move clearly identified barcode contamination to no-match, i.e.,
   // reads where we identified an end barcode and it was the wrong one
   if (have_end_bc and end_barcodes_.at(best_barcode).barcode_sequence !=
       read_group_.at(processed_read.read_group_index).barcode_sequence){
     PushReadToNomatch(read_index, processed_read);
-  }
-
-  // we're done if trimming is not desired
-  if (not trim_barcodes_) {
-    processed_read.filter.n_bases_after_barcode_trim = -1;
-    return;
-  }
-
-  // If we process as single barcode, or demultiplex an external list
-  // we add the end barcode sequence to the YK field.
-  if (process_as_single or demux_barcode_list_) {
-    my_YK_tag += end_barcodes_.at(best_barcode).barcode_adapter;
-    my_YK_tag += end_barcodes_.at(best_barcode).barcode_sequence;
   }
 
   UpdateReadTrimming(processed_read, n_bases_trimmed, my_YK_tag);
@@ -1537,6 +1548,11 @@ void EndBarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead 
 void EndBarcodeClassifier::UpdateReadTrimming(ProcessedRead &processed_read,
          int trim_n_bases, const string& YK_tag)
 {
+  if (not trim_barcodes_) {
+    processed_read.filter.n_bases_after_barcode_trim = -1;
+    return;
+  }
+
   // Trim bases from read
   processed_read.filter.n_bases_after_barcode_trim = max(0, processed_read.filter.n_bases_filtered-trim_n_bases);
   processed_read.filter.n_bases_filtered = processed_read.filter.n_bases_after_barcode_trim;
@@ -1556,9 +1572,10 @@ void EndBarcodeClassifier::PushReadToNomatch(int read_index, ProcessedRead &proc
 {
   int x, y;
   barcode_mask_pointer_->IndexToRowCol (read_index, y, x);
-  if (nomatch_read_group_ >= 0){
-    processed_read.end_barcode_filtered = processed_read.read_group_index;
-    processed_read.read_group_index = nomatch_read_group_;
+  if (nomatch_read_group_ >= 0 and processed_read.org_rg_idx < 0){
+    processed_read.end_barcode_filtered = true;
+    processed_read.org_rg_idx = processed_read.read_group_index;
+    //processed_read.read_group_index = nomatch_read_group_;
     barcode_mask_pointer_->SetBarcodeId(x, y, 0);
   }
 }

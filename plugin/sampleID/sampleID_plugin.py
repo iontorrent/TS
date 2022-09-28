@@ -141,12 +141,14 @@ def run_plugin(skiprun=False,barcode=""):
     createlink( os.path.join(plugin_dir,'slickgrid'), output_dir )
     createlink(os.path.join(plugin_dir, 'scripts'), output_dir)
     createlink(os.path.join(plugin_dir, 'css'), output_dir)
+    createlink(os.path.join(plugin_dir, 'kendo'), output_dir)
     createlink( os.path.join(plugin_dir,'lifegrid'), output_dir )
     createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
     createlink( regionsBed, os.path.join(output_dir,'tracking_regions.bed') )
     createlink( lociBed, os.path.join(output_dir,'tracking_loci.bed') )
     createlink(os.path.join(plugin_dir, 'scripts'), pluginParams['results_dir'])
     createlink(os.path.join(plugin_dir, 'css'), pluginParams['results_dir'])
+    createlink(os.path.join(plugin_dir, 'kendo'), pluginParams['results_dir'])
   except Exception as Err:
     printtime("Symbolic linking Error: %s", Err)
 

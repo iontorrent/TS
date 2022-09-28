@@ -191,6 +191,15 @@ def main():
     if (
         len(files) == 1
         and files[0].endswith(".bed")
+        and meta.get("sse", False) == True
+    ):
+        sse_bed = os.path.basename(files[0])
+        print("Content:        SSE or SVB file in BED format")
+        print()
+
+    elif (
+        len(files) == 1
+        and files[0].endswith(".bed")
         and meta.get("hotspot", False) == False
     ):
         target_regions_bed = os.path.basename(files[0])

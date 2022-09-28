@@ -320,28 +320,35 @@ double TinyTimer()
   return ( curT );
 }
 
+char FileCacherDummy=0; // to keep the access from being optimized away
 void Image::JustCacheOneImage(const char *name)
 {
-	int totalLen = 0;
     double startT = TinyTimer();
-	char buf[1024 * 1024];
-	int len;
+    struct stat statbuf;
+    stat(name,&statbuf);
+    int fd = open(name,O_RDONLY,0);
+    char cntr=0;
+    if(fd >= 0){
+      char *dst;
+      if ((dst = (char *)mmap (0, statbuf.st_size, PROT_READ,
+	MAP_SHARED, fd, 0)) == (caddr_t) -1)
+	assert ("mmap error for output");
 
-	// just read the file in...  It will be stored in cache
-	int fd = open(name, O_RDONLY);
-	if (fd >= 0)
-	{
-		while ((len = read(fd, &buf[0], sizeof(buf))) > 0)
-			totalLen += len;
-		close(fd);
-	}
-	else
-	{
-		printf("failed to open %s\n", name);
-	}
+      __off_t addr=0;
+      while(addr < statbuf.st_size){
+	cntr+=dst[addr];
+	addr += 4096;
+      }
+      FileCacherDummy=cntr;
+      munmap((void *)dst,statbuf.st_size);
+      //printf("Done caching %s\n",fname);
+      close(fd);
+    }else{
+      printf("failed to open %s\n", name);
+    }
 
-	CacheAccessTime = TinyTimer()-startT;
-//	fprintf ( stdout, "File %s cache access = %0.2lf sec. with %d bytes\n", name,stopT - startT,totalLen );
+    CacheAccessTime = TinyTimer()-startT;
+//	fprintf ( stdout, "File %s cache access = %0.2lf sec. with %d bytes\n", name,stopT - startT,statbuf.st_size );
 //	fflush ( stdout );
 }
 

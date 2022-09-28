@@ -386,6 +386,10 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf Chip Data & {{experiment.rawdatastyle}} \\
 	\bf Chip Lot Number & {{chipLot}} \\
 	\bf Chip Wafer & {{chipWafer}} \\
+	{% if experiment.chipTecDfltAmbient %}
+	   \bf Chip Heater & Dynamic \\
+	{% endif %}
+	\bf Manifold Heater & {% if experiment.manTecDfltAmbient %} Dynamic {% else %} Default {% endif %} \\
 	\bf Barcode Set & {{report.eas.barcodeKitName|latexsafe}} \\
 	\bf Analysis Name & {{report.resultsName|latexsafe}} \\ 
 	\bf Analysis Date & {{report.timeStamp}} \\ 

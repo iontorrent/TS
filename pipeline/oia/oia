@@ -22,6 +22,21 @@ PIDFILE="/var/run/${DAEMON_NAME}.pid"
 
 function start_function ()
 {
+
+    # check for ASSAY dev or IVD mode
+    mode="assaydev"
+    if [ "`grep mode /servershare/common/config/rdx.properties | grep application.mode=dx`" != "" ]; then
+      mode="dx"
+    fi
+
+    # check for StartDatacollect_<mode>_host existence
+    if [ -e /software/StartDatacollect_host_$mode ] ; then
+      if [ ! -e /.dockerenv ]; then
+        echo "not starting oia on host, it will be starting in a docker image"
+        return 1
+      fi
+    fi
+    
     # Start the Job Server
     if [ -f ${DAEMON} ]
     then

@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import zipfile
 import StringIO
+import time
 
 result_patterns = [
     'ion_params_00.json',
@@ -27,40 +28,14 @@ result_patterns = [
     "AnalysisData.json",
     "primaryAnalysis.log",
     "summary.log",
-    #Signal processing files
-    '*bfmask.stats',
-    # 'avgNukeTrace_*.txt',
-    # 'dcOffset*',
-    # 'NucStep*',
-    'processParameters.txt',
-    'separator.bftraces.txt',
-    'separator.trace.txt',
-    'sigproc.log',
     # 'BkgModelFilterData.h5',
     # 'pinsPerFlow.txt',
-    # Basecaller files
-    '*ionstats_alignment.json',
-    '*ionstats_basecaller.json',
-    'alignmentQC_out.txt',
-    'alignmentQC_out_*.txt',
-    'alignStats_err.json',
-    'BaseCaller.json',
-    'basecaller.log',
-    'datasets_basecaller.json',
-    'datasets_pipeline.json',
-    'datasets_tf.json',
-    '*ionstats_tf.json',
-    'TFStats.json',
-    'readLenHisto*.png',
-    'Bead_density_1000.png',
     # '*.sparkline.png'
     # tertiary analysis and  secondary analysis
     '*.ini',
     # VariantCaller
     'VariantCaller.json',
     'summary*.log',
-    '*inline_control.png',
-    'inline_control_stats.json',
 ]
 
 dir_patterns = [
@@ -76,6 +51,35 @@ dir_patterns = [
     'log/BarcodeCrosstalkActor-00',
     'log/PlanLevelAppRunnerActor-00',
     'log/RNACountsActor-00'
+]
+
+outputs_patterns = [
+    #Signal processing files
+    '*bfmask.stats',
+    # 'avgNukeTrace_*.txt',
+    # 'dcOffset*',
+    # 'NucStep*',
+    'processParameters.txt',
+    'separator.bftraces.txt',
+    'separator.trace.txt',
+    'sigproc.log',
+    # Basecaller files
+    'alignmentQC_out.txt',
+    'alignmentQC_out_*.txt',
+    'alignStats_err.json',
+    '*ionstats_tf.json',
+    'TFStats.json',
+    'readLenHisto*.png',
+    '*ionstats_alignment.json',
+    '*ionstats_basecaller.json',
+    'datasets_tf.json',
+    'BaseCaller.json',
+    'basecaller.log',
+    'datasets_basecaller.json',
+    'datasets_pipeline.json',
+    'Bead_density_1000.png',
+    '*inline_control.png',
+    'inline_control_stats.json',
 ]
 
 rawDir_patterns = [
@@ -120,11 +124,13 @@ rawdata_patterns = [
     'initFill_pressureVerify.csv',
     'initFill_R*.csv',
     'blockedTipPressureCurve_*.csv',
+    'DebugInfo.json'
 ]
 
 duplicate_patterns = {
     "outputs/SigProcActor-00" : "sigproc.log",
-    "outputs/BaseCallingActor-00" : "basecaller.log"
+    "outputs/BaseCallingActor-00" : "basecaller.log",
+    "recalibration": "basecaller.log"
 }
 
 qcreport_patterns = {
@@ -135,6 +141,10 @@ qcreport_patterns = {
     "*.stats.cov.txt",
     "wells_beadogram.png",
     "*.pdf"
+}
+
+purification_patterns = {
+    "*"
 }
 
 def match_files(walk, pattern):
@@ -184,12 +194,16 @@ def get_file_list2(directory, patterns):
     return mylist
 
 def get_list_from_results(directory, blockList):
-    file_list = get_file_list(directory, result_patterns, block_list=["plugin", "thumbnail", "rawdata"] + blockList)
+    file_list = get_file_list(directory, result_patterns, block_list=["plugin", "thumbnail", "rawdata", "outputs"] + blockList)
+    return file_list
+
+def get_list_from_outputs(directory, blockList):
+    file_list = get_file_list(directory, outputs_patterns, blockList)
     file_list = remove_duplicate_from_outputs(file_list, duplicate_patterns, block_ele = "recalibration")
     return file_list
 
 def get_list_from_rawdata(directory):
-    return get_file_list(directory, rawdata_patterns)
+    return get_file_list(directory, rawdata_patterns, block_list=["/X"])
 
 def get_list_from_dir(directory):
     return get_file_list2(directory, dir_patterns)
@@ -200,6 +214,22 @@ def get_list_from_dir2(directory):
 def get_list_from_report(directory):
     return get_file_list(directory, qcreport_patterns)
 
+def get_list_from_puri(directory):
+    file_list = []
+    puri_dir = ""
+    basedir = os.path.dirname(directory)
+    try:
+        for name in os.listdir(basedir):
+            if os.path.isdir(os.path.join(basedir, name)) and fnmatch.fnmatch(os.path.join(basedir, name), directory):
+                puri_dir = os.path.join(basedir, name)
+                break
+        if len(puri_dir) > 0: 
+            for file in os.listdir(puri_dir):
+                file_list.append(os.path.join(puri_dir, file))
+    except:
+        raise Exception('Unable to access files from %s' % directory)
+    return file_list
+    
 def remove_duplicate_from_outputs(file_list, duplicate_patterns, block_ele):
     print "removing duplicated files"
     # A copy of the file list
@@ -212,7 +242,7 @@ def remove_duplicate_from_outputs(file_list, duplicate_patterns, block_ele):
         for filename in file_list_copy:
             if block in filename and logfile in filename and block_ele not in filename:
                 nBlock = nBlock + 1
-                lastline = os.popen("tail -n 2 %s" % filename).read()
+                lastline = os.popen("tail -n 3 %s" % filename).read()
                 if "Complete" in lastline:
                     nSuccess = nSuccess + 1
         # remove log files when all the block completed without error
@@ -221,7 +251,7 @@ def remove_duplicate_from_outputs(file_list, duplicate_patterns, block_ele):
             for filename in file_list_copy:
                 if block in filename and logfile in filename and block_ele not in filename and nRemove > 0:
                     # print "FOUND: " + filename
-                    lastline = os.popen("tail -n 2 %s" % filename).read()
+                    lastline = os.popen("tail -n 3 %s" % filename).read()
                     if "Complete" in lastline:
                         blockid = block + '/'  + filename.split(block + '/')[1].split('/')[0]
                         # print "pattern - " + blockid
@@ -234,7 +264,7 @@ def remove_duplicate_from_outputs(file_list, duplicate_patterns, block_ele):
 
 
 
-def writeZip(fullnamepath, filelist, dirtrim="", recursive = False, openmode="w"):
+def writeZip(fullnamepath, filelist, dirtrim="", recursive = False, openmode="w", basename = ""):
     '''Add files to zip archive.  dirtrim is a string which will be deleted
     from each file entry.  Used to strip leading directory from filename.'''
     # Open a zip archive file
@@ -244,16 +274,16 @@ def writeZip(fullnamepath, filelist, dirtrim="", recursive = False, openmode="w"
     for item in filelist:
         if os.path.exists(item):
             if recursive:
-                arcname = item.replace(dirtrim, 'CSA/'+ os.path.basename(os.path.dirname(item)) + '/')
+                arcname = item.replace(dirtrim, 'CSA/' + os.path.basename(os.path.dirname(item)) + '/')
             else:
-                arcname = item.replace(dirtrim, 'CSA/')
+                arcname = item.replace(dirtrim, 'CSA/' + basename)
             csa.add(item, arcname)
 
     # Close zip archive file
     csa.close()
 
 
-def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name=None, block_list = []):
+def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name = None, block_list = [], purification_dir = ""):
     """Create the CSA zip file"""
 
     # reportDir must exist
@@ -270,6 +300,11 @@ def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name=None, b
     zipList = get_list_from_results(reportDir, block_list)
     writeZip(csaFullPath, zipList, dirtrim=reportDir, openmode="w")
 
+    # Generate a list of files from outputs dir to write to the archive
+    outputs_dir = os.path.join(reportDir, "outputs/")
+    zipList = get_list_from_outputs(outputs_dir, block_list)
+    writeZip(csaFullPath, zipList, dirtrim = outputs_dir, openmode="a", basename = "outputs/")
+
     # Generate a list of files from rawdata dir to append to the archive
     zipList = get_list_from_rawdata(rawDataDir)
     writeZip(csaFullPath, zipList, dirtrim=rawDataDir, openmode="a")
@@ -281,16 +316,24 @@ def makeCSA(reportDir, rawDataDir, sampleResultsDirs = [] ,csa_file_name=None, b
     zipList = get_list_from_dir2(rawDataDir)
     writeZip(csaFullPath, zipList, dirtrim=rawDataDir, openmode="a")
 
+    if len(purification_dir) > 0:
+        try:
+            zipList = get_list_from_puri(purification_dir)
+            writeZip(csaFullPath, zipList, dirtrim=os.path.dirname(purification_dir) + '/', recursive = True, openmode="a")
+        except:
+            pass
+
     # Generate a list of files from report dir to append to the archive
     if len(sampleResultsDirs) > 0:
         for sampleResultsDir in sampleResultsDirs:
             try:
+                time.sleep(60 * 60 * 2)
                 zipList = get_list_from_report(sampleResultsDir)
                 writeZip(csaFullPath, zipList, dirtrim=sampleResultsDir, recursive = True, openmode="a")
             except:
                 pass
 
-    version = '0.4.4'
+    version = '0.5.0'
     pluginInfo = tarfile.TarInfo('pluginInfo.txt')
     pluginInfo.size = len(version)
     tar = tarfile.open(csaFullPath, 'a')

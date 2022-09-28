@@ -6,23 +6,28 @@ set -e
 
 case "$1" in
     configure)
-    pub_code=$(cat <<PUB
+    dbreports_exists=$(eval "dpkg -l | grep ii | grep ion-dbreports") || true
+    echo "$dbreports_exists"
+    if [[ ! -z ${dbreports_exists} ]] ; then
+        pub_code=$(cat <<PUB
 try:
     import iondb.bin.djangoinit, iondb.rundb.publishers as pub
-except ImportError:
-    print("ion-dbreports not install yet, unable to scan for publishers")
+except ImportError as Err:
+    print(Err)
     import sys
     sys.exit(0)
 print("rescanning publishers")
 pub.search_for_publishers()
 PUB
-)
-    python -c "${pub_code}"
-
-    echo "NOTE!  Dependent services need to be restarted!"
-    echo "The following commands are suggested:"
-    echo "sudo service celeryd restart"
-    echo "sudo service apache2 restart"
+      )
+         python -c "${pub_code}"
+         echo "NOTE!  Dependent services need to be restarted!"
+         echo "The following commands are suggested:"
+         echo "sudo service celeryd restart"
+         echo "sudo service apache2 restart"
+    else
+         echo "ion-dbreports not install yet, unable to scan for publishers"
+    fi
     ;;
 esac
 

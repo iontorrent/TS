@@ -38,6 +38,7 @@ typedef struct __tmap_map_locopt_t
     tmap_map_opt_ovr_i_t gapl_len;  /*!< the number of extra bases to add when searching for long indels (-K, --gap-long-length) */ 
     tmap_map_opt_ovr_i_t bw; /*!< the extra bases to add before and after the target during Smith-Waterman (-w,--band-width) */
     tmap_map_opt_ovr_i_t softclip_type; /*!< soft clip type (-g,--softclip-type) */
+    tmap_map_opt_ovr_i_t score_thr;  /*!< the score threshold (match-score-scaled) (-T,--score-thres) */
     tmap_map_opt_ovr_i_t end_repair; // /*!< specifies if and how to perform end repair on higher coordinate end of the amplicon (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */
     tmap_map_opt_ovr_i_t end_repair_he; // /*!< specifies to perform 5' end repair on higher coordinate end of the amplicon (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */
     tmap_map_opt_ovr_i_t end_repair_le; /*!< specifies to perform 5' end repair on lower coordinate end of the amplicon (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */

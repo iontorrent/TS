@@ -271,6 +271,15 @@ class BarcodeSampleInfo(object):
                 end_sequence=end_sequence,
                 end_adapter=end_adapter,
             )
+            
+        def getBarcodeName(readGroupName):
+            # many times it seems that the readGroupId is a join between the results runid and barcodeName
+            # so they need to break this out and parse the readGroupId
+            if "." in readGroupName:
+                runid, barcodeName = readGroupName.split(".", 1)
+            else:
+                barcodeName = readGroupName
+            return barcodeName
 
         data = dict()
         reportFullPath = self.result.get_report_path()
@@ -284,31 +293,33 @@ class BarcodeSampleInfo(object):
         for dataset in basecallerResults.get("datasets"):
             barcodeEntry = dict()
             readGroups = dataset["read_groups"]
-            # currently multiple read_groups on single barcode not supported
-            if len(readGroups) != 1:
-                logger.warn("Multiple read_groups on single barcode not supported")
+            
+            # Repeat Sequencing stores more than one read group in one dataset - iterate over read groups
+            if len(readGroups) == 0:
+                logger.warn("No read_groups found in dataset " + dataset.get("dataset_name", ""))
                 continue
-
-            readGroupId = readGroups[0]
-
-            # many times it seems that the readGroupId is a join between the results runid and barcodeName
-            # so they need to break this out and parse the readGroupId
-            if "." in readGroupId:
-                runid, barcodeName = readGroupId.split(".", 1)
-            else:
-                barcodeName = readGroupId
-
+            
+            barcodeName = getBarcodeName(readGroups[0])
             if NO_MATCH in barcodeName:
                 continue
-
-            # since there should be one and only one read group, we can hard code the first element of the read groups
-            singleReadGroup = basecallerResults.get("read_groups")[readGroupId]
-
-            barcodeEntry[REFERENCE] = self.eas.reference
-            barcodeEntry[FILTERED] = singleReadGroup.get(FILTERED, False)
-            # if this is a "filtered" barcode, then we will skip including it.
-            if barcodeEntry[FILTERED] and not include_filtered:
+            
+            # Infer filtered status & verify all read groups belong to the same barcode
+            is_filtered  = True
+            same_barcode = True
+            for readGroupName in readGroups:
+                is_filtered = is_filtered and basecallerResults.get("read_groups")[readGroupName].get(FILTERED, False)
+                same_barcode = same_barcode and barcodeName == getBarcodeName(readGroupName)
+            
+            if not same_barcode:
+                logger.warn("Different barcodes in the same dataset are not supported")
                 continue
+            
+            if is_filtered and not include_filtered:
+                continue
+            
+            barcodeEntry[FILTERED] = is_filtered
+            barcodeEntry[READ_COUNT] = dataset.get("read_count", 0)
+            firstReadGroup = basecallerResults.get("read_groups")[readGroups[0]]
 
             try:
                 dnaBarcodeData = dnaBarcode.objects.get(
@@ -320,7 +331,7 @@ class BarcodeSampleInfo(object):
                         barcodeName=barcodeName, barcodeKit=self.eas.barcodeKitName
                     )
                 )
-                dnaBarcodeData = createDnaBarcodeModel(read_group=singleReadGroup)
+                dnaBarcodeData = createDnaBarcodeModel(read_group=firstReadGroup)
 
             if not dnaBarcodeData:
                 logger.error(
@@ -330,10 +341,9 @@ class BarcodeSampleInfo(object):
                 )
                 continue
 
+            barcodeEntry[REFERENCE] = self.eas.reference
             barcodeEntry[BARCODE_ANNOTATION] = dnaBarcodeData.annotation
             barcodeEntry[BARCODE_TYPE] = dnaBarcodeData.type
-
-            barcodeEntry[READ_COUNT] = singleReadGroup[READ_COUNT]
 
             barcodeEntry[BARCODE_SEQUENCE] = dnaBarcodeData.sequence
             barcodeEntry[BARCODE_ADAPTER] = dnaBarcodeData.adapter

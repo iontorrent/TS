@@ -60,7 +60,7 @@ tmap_map_pairing_read_rescue(tmap_refseq_t *refseq,
                              tmap_seq_t *one_orig, tmap_seq_t *two_orig,
                              tmap_map_sams_t *one, tmap_map_sams_t *two, 
                              tmap_seq_t *one_seq[2], tmap_seq_t *two_seq[2], 
-                             tmap_rand_t *rand, tmap_map_opt_t *opt);
+                             tmap_rand_t *rand, tmap_map_opt_t *opt, tmap_map_stats_t* stat);
 
 /*!
   given sets of seeds for two ends of pair, scores all possible pairs of seeds and

@@ -4,12 +4,6 @@
 #include <extesting.h>
 #include "test_alignment_generator.h"
 
-// Below is a template for a derivative from Test
-// To add a case,
-//   - copy class below and substitute name/constructor name/ heading with proper values
-//   - instantiate an instance of this class wiin CommonLibTest object
-//   - register the instance in the init method of the CommonLibTest class
-//   - fill in "process" and add "init", "report" and "cleanup" if needed
 
 class TestValidateAlignment : public Test
 {

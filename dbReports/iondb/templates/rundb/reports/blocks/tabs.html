@@ -113,6 +113,15 @@
 					{% endif %}
 				</td></tr>
 				<tr><td>Barcode Set</td><td>{{report.eas.barcodeKitName}}</td></tr>
+				{% if experiment.chipTecDfltAmbient %}
+				<tr><td>Chip Heater</td><td>Dynamic</td></tr>
+				{% endif %}
+
+				<tr>
+					<td>Manifold Heater</td>
+					<td>{% if experiment.manTecDfltAmbient %}Dynamic{% else %}Default{% endif %}</td>
+				</tr>
+
 				<tr><td>Analysis Name</td><td>{{report.resultsName}}</td></tr>
 				<tr><td>Analysis Date</td><td>{{report.timeStamp}}</td></tr>
 				<tr><td>Analysis Flows</td><td>{{report.processedflows}}</td></tr>

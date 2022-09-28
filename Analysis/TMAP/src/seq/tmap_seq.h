@@ -27,6 +27,14 @@ enum {
 
 /*! 
   */
+
+typedef struct {
+	char *rg_id;
+	const char *ks;
+	const char *fo;
+	const sam_header_record_t *rg_record;
+	const sam_header_record_t *pg_record;
+}seq_update_cache_t;
 typedef struct {
     int8_t type;  /*!< the type associated with this structure */
     union {

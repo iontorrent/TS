@@ -15,7 +15,7 @@ class DataExport(IonPlugin):
     """
     This plugin automates a manual Data Management Export Action
     """
-    version = '5.16.0.0'
+    version = '5.18.0.0'
     author = "bernard.puc@thermofisher.com and samuel.thoraval@thermofisher.com"
     runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
     runlevels = [RunLevel.LAST]

@@ -96,6 +96,23 @@ def ampliseq_concurrent_api_call(user, password, api_url):
 
     return get_ampliseq_designs(user, password, api_url)
 
+def get_status_uploadHistoryLink(downloadObj):
+    uploadHistoryLink = None
+    status = None
+    if downloadObj:
+        try:
+            status = downloadObj.status
+            if "HTTP Error" not in status:
+                uploadHistoryLink = "/rundb/uploadstatus/{0}/".format(
+                    downloadObj.id
+                )
+            else:
+                uploadHistoryLink = "#"
+        except Exception as Err:
+            logger.error(
+                "Unknown error %s" % Err
+            )  # do not crash if any unknown issue
+    return status, uploadHistoryLink
 
 def get_ampliseq_designs(user, password, api_url):
     ctx = {}
@@ -117,21 +134,10 @@ def get_ampliseq_designs(user, password, api_url):
                 solution_id = solution["id"]
                 configurationChoices = solution["configuration_choices"]
                 sourceUrl = solution["resultsUri"]
-                uploadHistoryLink = None
-                status = None
                 downloadObj = getASPanelImportStatus(
                     "ordered", design["id"], solution_id, sourceUrl
                 )
-                if downloadObj:
-                    try:
-                        uploadHistoryLink = "/rundb/uploadstatus/{0}/".format(
-                            downloadObj.id
-                        )
-                        status = downloadObj.status
-                    except Exception as Err:
-                        logger.error(
-                            "Unknown error %s" % Err
-                        )  # do not crash if any unknown issue
+                status, uploadHistoryLink = get_status_uploadHistoryLink(downloadObj)
 
                 if solution.get("ordered", False):
                     panelType = template.get("panelType") or "on-demand"
@@ -213,13 +219,9 @@ def get_fixed_designs_list(fixed_design_data):
             designID = design["id"]
             sourceUrl = design["resultsUri"]
             configurationChoices = design["configuration_choices"]
-            uploadHistoryLink = None
-            status = None
             downloadObj = getASPanelImportStatus("fixed", designID, sourceUrl=sourceUrl)
+            status, uploadHistoryLink = get_status_uploadHistoryLink(downloadObj)
 
-            if downloadObj:
-                uploadHistoryLink = "/rundb/uploadstatus/{0}/".format(downloadObj.id)
-                status = downloadObj.status
             tmpDict = {"id": designID, "configuration_choices": configurationChoices}
             description = design["description"]
             rec_app = None

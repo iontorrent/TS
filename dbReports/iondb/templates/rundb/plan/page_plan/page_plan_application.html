@@ -4,6 +4,8 @@
 {% block main-title %}{% trans "workflow.step.application.subtitle" %}{% endblock main-title %}
 
 {% block page-plan-content %}
+{% with lockAssayParams=helper.getStepDict.Kits.savedObjects.meta.lockAssayParams %}
+<input type="hidden" name="lockAssayParams" value="{{helper.getStepDict.Kits.savedObjects.meta.lockAssayParams|join:',' }}" />
 <div class="row-fluid">
     <div class="span4">
         <h4>{% trans "workflow.step.application.fields.applicationGroup.label" %}</h4>
@@ -12,12 +14,12 @@
                 {% for application in step.prepopulatedFields.applicationGroups %}
                     {% if application.name == step.savedFields.applicationGroupName %}
                         <label class="radio">
-                            <input type="radio" name="applicationGroupName" value="{{application.name}}" checked="checked">
+                            <input type="radio" id="applicationGroupName" name="applicationGroupName" value="{{application.name}}" checked="checked" {% if lockAssayParams %} disabled="disabled" {% endif %}>
                             {{application.description}}
                         </label>
                     {% else %}
                         <label class="radio">
-                            <input type="radio" name="applicationGroupName" value="{{application.name}}">
+                            <input type="radio" id="applicationGroupName" name="applicationGroupName" value="{{application.name}}" {% if lockAssayParams %} disabled="disabled" {% endif %}>
                             {{application.description}}
                         </label>
                     {% endif %}
@@ -73,7 +75,8 @@
     {% for key, value in step.validationErrors.items %}
         <h4 style="color: red">{{value}}</h4>
     {% endfor %}
-</div>  
+</div>
+{% endwith %}
 {% endblock page-plan-content %}
 
 {% block summary-table %}
@@ -87,6 +90,11 @@
     updateRuntypeFromApplication = function(applicationId, selectedRuntypeId) {
         var runTypeIds = applicationToRuntype[applicationId];
         $('.runTypeOptionsContent').empty();
+        var lockAssayParams = $('input[name = "lockAssayParams"]').val();
+        if (lockAssayParams){
+            lockAssayParams = $('input[name = "lockAssayParams"]').val().split(",");
+        }
+
         $.each(runTypeIds, function(indexInArray, valueOfElement){
             var inputHolder = $('<label>');
             inputHolder.attr('class', 'radio');
@@ -94,11 +102,16 @@
             var input = $('<input>');
             input.attr('type', 'radio');
             input.attr('name', 'runType');
+            input.attr('id', 'runType');
             input.val(valueOfElement);
             if(valueOfElement == selectedRuntypeId){
                 input.attr('checked', 'checked');
             }
 
+            // Lock assay Params
+            if(lockAssayParams){
+                input.attr('disabled', true);
+            }
             input.on('click', function(){
                 $("#selectedTechnique").text($(this).parent().text().trim());
 				$("#selectedApplicationCategory").html("");
@@ -110,11 +123,11 @@
 
         });
 
-        updateTargetTechnique(applicationId, selectedRuntypeId);
+        updateTargetTechnique(applicationId, selectedRuntypeId, lockAssayParams);
      };
      
 
-    updateTargetTechnique = function(applicationId, selectedRuntypeId) {
+    updateTargetTechnique = function(applicationId, selectedRuntypeId, lockAssayParams) {
         if ((selectedRuntypeId == undefined) && (applicationId != "{{step.savedFields.applicationGroupName}}")) {   
             console.log("#1 undefined selectedRuntypeId.  Going to show targetTechnique!!!");
         
@@ -136,12 +149,16 @@
 
                 
                 if (isToShow == "True") {
-                    $('.runTypeOptionsContent  :input').attr('disabled', false);
-                    $('#runTypeHolder').attr('disabled', false);
+                    if (!lockAssayParams) {
+                        $('.runTypeOptionsContent  :input').attr('disabled', false);
+                        $('#runTypeHolder').attr('disabled', false);
+                    }
                     $('#runTypeHolder').show();       
                 }
                 else {
-                    $('#runTypeHolder').attr('disabled', true); 
+                    if(!lockAssayParams){
+                        $('#runTypeHolder').attr('disabled', true);
+                    }
                     $('#runTypeHolder').hide();                      
                 }                                      
             }
@@ -168,7 +185,6 @@
 
 
     $(document).ready(function () {
-
         $(".applicationGroupOptionsContent input").change(function()  {
             var applicationId = $(this).val();
             updateRuntypeFromApplication(applicationId);

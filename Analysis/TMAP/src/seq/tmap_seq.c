@@ -7,6 +7,8 @@
 #include "tmap_sff.h"
 #include "tmap_seq.h"
 
+seq_update_cache_t update_cache;
+
 tmap_seq_t *
 tmap_seq_init(int8_t type)
 {
@@ -333,6 +335,8 @@ tmap_seq_update(tmap_seq_t *seq, int32_t idx, sam_header_t *header)
   sam_header_records_t *records = NULL;
   sam_header_record_t **record_list = NULL;
   int32_t n = 0;
+  int32_t use_cache = 0;
+
 
   // Read Group
   switch(seq->type) {
@@ -347,6 +351,19 @@ tmap_seq_update(tmap_seq_t *seq, int32_t idx, sam_header_t *header)
       tmap_error("type is unrecognized", Exit, OutOfRange);
       break;
   }
+
+  if(update_cache.rg_id == NULL){
+	  update_cache.rg_id = rg_id;
+  }
+  else{
+	  if(update_cache.rg_id == rg_id){
+		  use_cache=1;
+	  }
+	  else{
+		  update_cache.rg_id=rg_id;
+	  }
+  }
+
   if(NULL == rg_id) { // did not find in SAM/BAM
       // NB: assume that it is from the ith record in the header 
       records = sam_header_get_records(header, "RG");
@@ -358,7 +375,10 @@ tmap_seq_update(tmap_seq_t *seq, int32_t idx, sam_header_t *header)
           if(NULL == seq->rg_record) tmap_bug();
       }
   }
-  else { // found in SAM/BAM
+  else if(use_cache){
+	  seq->rg_record = update_cache.rg_record;
+  }
+  else{// found in SAM/BAM
       n = 0;
       record_list = sam_header_get_record(header, "RG", "ID", rg_id, &n);
       if(0 == n) {
@@ -370,25 +390,36 @@ tmap_seq_update(tmap_seq_t *seq, int32_t idx, sam_header_t *header)
           tmap_error("Found more than one @RG.ID in the SAM/BAM Header", Exit, OutOfRange);
       }
       seq->rg_record = record_list[0];
+      update_cache.rg_record = record_list[0];
       free(record_list); // NB: shallow copied
   }
-
   // Program Group
   // NB: assumes the last item in the header
-  records = sam_header_get_records(header, "PG");
-  if(NULL != records && 0 < records->n) { // it exists
-      seq->pg_record = records->records[records->n-1]; // copy over
+  if(update_cache.pg_record == NULL){
+	  records = sam_header_get_records(header, "PG");
+	  if(NULL != records && 0 < records->n) { // it exists
+		  update_cache.pg_record = records->records[records->n-1]; // copy over
+	  }
+	  else {
+		  update_cache.pg_record = NULL;
+	  }
   }
-  else {
-      seq->pg_record = NULL;
-  }
+  seq->pg_record = update_cache.pg_record;
+
 
   // key sequence and flow order
   seq->fo_start_idx = -1;
   if(NULL != seq->rg_record) { // It should exist in the SAM/BAM Header
-      seq->ks = sam_header_record_get(seq->rg_record, "KS");
-      seq->fo = sam_header_record_get(seq->rg_record, "FO");
-        
+	  if(!use_cache){
+		  seq->ks = sam_header_record_get(seq->rg_record, "KS");
+		  seq->fo = sam_header_record_get(seq->rg_record, "FO");
+		  update_cache.ks = seq->ks;
+		  update_cache.fo = seq->fo;
+	  }
+	  else{
+		  seq->ks = update_cache.ks;
+		  seq->fo = update_cache.fo;
+	  }
       // flow order index start
       if(NULL != seq->ks && NULL != seq->fo && TMAP_SEQ_TYPE_SFF == seq->type) { // only if it is an SFF
           // in addition, remove key sequence and trimming

@@ -34,7 +34,8 @@ class DebugLog( object ):
     """ Class for interaction with /var/log/debug. """
     def __init__( self, debug_path, start_timestamp=None, end_timestamp=None ):
         self.path = debug_path
-        
+        self.filter_on_starttime = True # exclude debug lines printed before run start time
+
         # Allows setting of the start point right up front to ignore previous runs' information.
         self.set_start_timestamp( start_timestamp )
 
@@ -121,10 +122,11 @@ class DebugLog( object ):
         ans, err = p.communicate()
         try:
             lines = ans.splitlines()
-            if self.start_timestamp:
+            if self.start_timestamp and self.filter_on_starttime:
                 return self.filter_lines( lines )
             else:
                 return lines
+                print('Will NOT filter on timestamp in search_many of debug')
         except AttributeError:
             return []
         
@@ -292,10 +294,11 @@ class DebugLog( object ):
 class ValkyrieDebug( DebugLog ):
     """ Specific class for parsing the Valkyire Debug log for workflow timing and status messages. """
     
-    def parallel_grep( self , start_timestamp=None ):
+    def parallel_grep( self , start_timestamp=None, filter_on_starttime=True ):
         """ Merges all phrases for grepping into a single operation, stores to self.all_lines """
         # try using attribute self.start_timestamp is start_timestamp is None
         if start_timestamp is None: start_timestamp = self.start_timestamp
+        self.filter_on_starttime = filter_on_starttime # to ensure search_many does not filter on start time
 
         greps = [ 'do_',        # for modules
                   'RESEQUENCE', # to detect if resequencing happened. 
@@ -308,13 +311,14 @@ class ValkyrieDebug( DebugLog ):
                   'er52', # use to determine if error 52 occurred in either pipette  
                   'W3 failed', # use to determine if conical clog check was skipped due to very low (below 50 uL/s) W3 flow  
                   'ValueError: ERROR:', # use to find various pipette errors  
+                  'pipette: recv id', # use to find pipette serial numbers  
+                  'timedout', # use to find pipette time out errors  
+                  'er75', # error for when pipette fails to pick up tip  
+                  'er62', # error for when pipette fails to pick up tip  
+                  'UNABLE TO PICKUP', # line printed when pipette fails to pick up tip after 5 attempts  
                   ]
         
-        self.all_lines = self.search_many( *greps )
-        if start_timestamp:
-            # filter all_lines by lines that have timestamp after the official experiment start.
-            self.all_lines = self.filter_lines( self.all_lines, start_timestamp )
-        
+        self.all_lines = self.search_many( *greps ) # will filter on start_timestamp in here, unless filter_on_starttime is False
         
     def detect_modules( self ):
         """ Reads log for workflow components, allowing detection of e2e runs. """

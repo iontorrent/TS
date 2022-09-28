@@ -1541,26 +1541,88 @@ void DifferentialSeparator::PrintWell(TraceStore &store, int well, int flow) {
   PrintVec(vec);
 }
 
+typedef struct{
+	int thread_id;
+	int bin_start;
+	int bin_end;
+
+	TraceStoreCol *store;
+	int rowStep;
+	int colStep;
+	char *filter;
+	int  filter_len;
+	float *mad;
+	GridMesh<float> *mesh;
+
+	DifferentialSeparator *obj;
+}WellDeviationContext_t;
+
+
+void DifferentialSeparator::WellDeviationThread(TraceStoreCol *store,
+		GridMesh<float> *mesh, int rowStep, int colStep, char *filter,
+		int filter_len, float *mad, int bin_start, int bin_end)
+{
+	  vector<float> mean(filter_len);
+	  vector<float> m2(filter_len);
+	  vector<float> summary(filter_len);
+	  vector<float> normalize(filter_len * store->GetNumFrames());
+	  int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+	  for (int binIx = bin_start; binIx < bin_end; binIx++) {
+	    mesh->GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+	    WellDeviationRegion(*store, rowStart, rowEnd, colStart, colEnd,
+	                        0, store->GetNumFrames(), 0, store->GetNumFlows(),
+	                        &mean[0], &m2[0],
+	                        &normalize[0],
+	                        &summary[0], filter, mad);
+	  }
+
+}
+
+void *WellDeviationThreadEntry(void *arg)
+{
+	WellDeviationContext_t *args=(WellDeviationContext_t *)arg;
+	args->obj->WellDeviationThread(args->store,args->mesh,
+			args->rowStep,args->colStep,args->filter,
+			args->filter_len,args->mad,
+			args->bin_start,args->bin_end);
+	return NULL;
+}
+
 void DifferentialSeparator::WellDeviation(TraceStoreCol &store,
                                           int rowStep, int colStep,
                                           vector<char> &filter,
-                                          vector<float> &mad) {
+                                          vector<float> &mad,
+										  int ncores ) {
 
   GridMesh<float> mesh;
   mesh.Init(mMask.H(), mMask.W(), rowStep, colStep);
-  vector<float> mean(filter.size());
-  vector<float> m2(filter.size());
-  vector<float> summary(filter.size());
-  vector<float> normalize(filter.size() * store.GetNumFrames());
-  int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-  for (size_t binIx = 0; binIx < mesh.GetNumBin(); binIx++) {
-    mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-    WellDeviationRegion(store, rowStart, rowEnd, colStart, colEnd,
-                        0, store.GetNumFrames(), 0, store.GetNumFlows(),
-                        &mean[0], &m2[0],
-                        &normalize[0],
-                        &summary[0], filter, mad);
+  int numBin=mesh.GetNumBin();
+
+  WellDeviationContext_t pac[ncores];
+
+  pthread_t worker_id[ncores];
+  int lastEnd=0;
+  for (int worker = 0; worker < ncores; worker++) {
+	  WellDeviationContext_t *pacp=&pac[worker];
+	  pacp->thread_id=worker;
+	  pacp->bin_start=lastEnd;
+	  pacp->bin_end=lastEnd=numBin*(worker+1)/ncores;
+	  pacp->colStep=colStep;
+	  pacp->rowStep=rowStep;
+	  pacp->filter=&filter[0];
+	  pacp->filter_len=filter.size();
+	  pacp->mad=&mad[0];
+	  pacp->mesh=&mesh;
+	  pacp->obj=this;
+	  pacp->store=&store;
+    if (pthread_create(&worker_id[worker], NULL, WellDeviationThreadEntry, pacp)) {
+      cerr << "ERROR: problem starting thread" << endl;
+      exit (EXIT_FAILURE);
+    }
   }
+
+  for (int worker = 0; worker < ncores; worker++)
+    pthread_join(worker_id[worker], NULL);
 }
                                           
 
@@ -1572,8 +1634,8 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
                                                 float *mean, float *m2,
                                                 float *normalize,
                                                 float *summary,
-                                                vector<char> &filters,
-                                                vector<float> &mad) {
+                                                char  *filters,
+                                                float *mad) {
   int loc_num_frames = frame_end - frame_start;
   // calculate the average trace
   float region_sum[loc_num_frames];
@@ -1589,20 +1651,18 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
     for (int flow_ix = flow_start; flow_ix < flow_end; flow_ix++) {
       for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
         size_t offset = row_ix * store_num_cols + col_start;
-        char *__restrict filter_start = &filters[0] + offset;
-        int16_t *__restrict store_start = &store.mData[0] + (frame_ix * store.mFlowFrameStride) + (flow_ix * store_num_wells) + offset;
-        int16_t *__restrict store_end = store_start + loc_num_cols;
+        char *__restrict filterp = &filters[0] + offset;
+        int16_t *__restrict storep = &store.mData[0] + (frame_ix * store.mFlowFrameStride) + (flow_ix * store_num_wells) + offset;
         //        assert(store_end - &store.mData[0] <= store.mData.size());
-        //        assert(filter_start - &filters[0] <= filters.size());
-        float &frame_sum = region_sum[frame_ix-frame_start];
-        while (store_start != store_end) {
-          if ((*filter_start) == 0) {
-            frame_sum += *store_start;
+        //        assert(filterp - &filters[0] <= filters.size());
+        float frame_sum = region_sum[frame_ix-frame_start];
+        for(size_t trc=0;trc<loc_num_cols;trc++){
+          if (filterp[trc] == 0) {
+             frame_sum += storep[trc];
              count++;
           }
-          filter_start++;
-          store_start++;
         }
+        region_sum[frame_ix-frame_start]=frame_sum;
       }
     }
   }
@@ -1625,12 +1685,11 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
     for (int flow_ix = flow_start; flow_ix < flow_end; flow_ix++) {
       for (int frame_ix = norm_start; frame_ix < norm_end; frame_ix++) {
         size_t store_offset = row_ix * store_num_cols + col_start;
-        int16_t *__restrict store_start = store.GetMemPtr() + frame_ix * store.mFlowFrameStride + flow_ix * store_num_wells + store_offset;
-        int16_t *__restrict store_end = store_start + loc_num_cols;
+        int16_t *__restrict storep = store.GetMemPtr() + frame_ix * store.mFlowFrameStride + flow_ix * store_num_wells + store_offset;
         size_t loc_offset = (row_ix - row_start) * loc_num_cols + (flow_ix-flow_start) * loc_num_wells;
         float *__restrict normalize_start = normalize + loc_offset;
-        while(store_start != store_end) {
-          *normalize_start++ += *store_start++;
+        for(size_t trc=0;trc<loc_num_cols;trc++){
+          normalize_start[trc] += storep[trc];
         }
       }
     }
@@ -1643,7 +1702,7 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
     *normalize_start++ /= norm_count;
   }
   
-  // Loop over all the wells doing normalization per flow and calcule the mean and variance
+  // Loop over all the wells doing normalization per flow and calculate the mean and variance
   memset(region_sum,0,sizeof(float) *loc_num_frames);
   memset(summary, 0, sizeof(float) * loc_num_wells);
   int frame_mad_start = min(frame_start + WELL_DEV_FRAME_START_OFFSET, frame_end);
@@ -1659,29 +1718,23 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
         count++;
         int well_offset = row_ix * store_num_cols + col_start;
         size_t store_offset = frame_ix *store.mFlowFrameStride + flow_ix * store_num_wells + well_offset;
-        int16_t *__restrict store_start = store.GetMemPtr() + store_offset;
-        int16_t *__restrict store_end = store_start + loc_num_cols;
+        int16_t *__restrict storep = store.GetMemPtr() + store_offset;
         int loc_offset = (row_ix - row_start) * loc_num_cols;
         float *__restrict norm_start = normalize + flow_ix * loc_num_wells + loc_offset;
         float *__restrict mean_start = mean + loc_offset;
         float *__restrict m2_start = m2 + loc_offset;
-        float delta;
-        while (store_start != store_end) {
-          if (*norm_start == 0.0f) {
-            *norm_start = 1.0f;
-            if (filters[well_offset] == GoodWell) {
-              filters[well_offset] = WellDevZeroNorm;
+        char *filtersp=&filters[well_offset];
+        for(size_t trc=0;trc<loc_num_cols;trc++){
+          if (norm_start[trc] == 0.0f) {
+            norm_start[trc] = 1.0f;
+            if (filtersp[trc] == GoodWell) {
+              filtersp[trc] = WellDevZeroNorm;
             }
           }
-          float value = (float)(*store_start) / *norm_start;
-          delta = value - *mean_start;
-          *mean_start += delta / count;
-          *m2_start += delta * (value - *mean_start);
-          store_start++;
-          norm_start++;
-          mean_start++;
-          m2_start++;
-          well_offset++;
+          float value = (float)(storep[trc]) / norm_start[trc];
+          float delta = value - mean_start[trc];
+          mean_start[trc] += delta / count;
+          m2_start[trc] += delta * (value - mean_start[trc]);
         }
       }
     }
@@ -1705,10 +1758,9 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
   }
   for (int row_ix = row_start; row_ix < row_end; row_ix++) {
     float *__restrict summary_start = summary + (row_ix - row_start) * loc_num_cols;
-    float *__restrict summary_end = summary_start + loc_num_cols;
     float *__restrict mad_start = &mad[0] + row_ix * store_num_cols + col_start;
-    while(summary_start != summary_end) {
-      *mad_start++ = sqrt(*summary_start++ / loc_num_frames);
+    for(size_t trc=0;trc<loc_num_cols;trc++){
+      mad_start[trc] = sqrt(summary_start[trc] / loc_num_frames);
     }
   }
 }
@@ -2022,7 +2074,8 @@ void DifferentialSeparator::RankReference(TraceStoreCol &store,
                                           Mask &mask,
                                           int minWells,
                                           vector<char> &filter,
-                                          vector<char> &refWells) {
+                                          vector<char> &refWells,
+										  int ncores) {
 
   int count = 0; 
   if (useKeySignal == 1) {
@@ -2070,7 +2123,7 @@ void DifferentialSeparator::RankReference(TraceStoreCol &store,
     std::fill(mEmptyMetrics[0].begin(), mEmptyMetrics[0].end(), 0.0f);
     std::fill(mEmptyMetrics[1].begin(), mEmptyMetrics[1].end(), 0.0f);
     store.WellProj(store, mKeys, filter, mEmptyMetrics[0]);
-    WellDeviation(store, rowStep, colStep, filter, mEmptyMetrics[1]);
+    WellDeviation(store, rowStep, colStep, filter, mEmptyMetrics[1],ncores);
     for (size_t well_ix = 0; well_ix < mWells.size(); well_ix++) {
       mWells[well_ix].bfMetric2 = mEmptyMetrics[0][well_ix];
       mWells[well_ix].bfMetric3 = mEmptyMetrics[1][well_ix];
@@ -2654,6 +2707,8 @@ void DifferentialSeparator::FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh
                      std::min (128,mask.W()), std::min (128,mask.H()), keys);
   AvgKeyReporter<double> avgReport(keys, opts.outData, opts.flowOrder, opts.analysisDir, 
                                    usable_flows, traceStore.GetNumFrames());
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: FitKeys before JobQ.");
+
   std::vector<EvalKeyJob> evalJobs(emptyEstimates.GetNumBin());
   for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++) {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
@@ -2665,29 +2720,112 @@ void DifferentialSeparator::FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh
     jQueue.AddJob(evalJobs[binIx]);
   }
   jQueue.WaitUntilDone();
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: FitKeys after JobQ.");
   avgReport.Finish();
   keySumReport.Finish();
 
 }
 
+typedef struct {
+	int thread_id;
+	int bin_start;
+	int bin_end;
+
+	DifSepOpt *opts;
+	TraceStoreCol *traceStore;
+	GridMesh<struct FitTauEParams> *emptyEstimates;
+	char *filteredWells;
+	float *ftime;
+	int *allZeroFlows;
+	int allZeroFlows_size;
+	float *taub_est;
+	int *converged;
+	int *no_wells;
+
+	DifferentialSeparator *obj;
+}FitTauEContext_t;
+
+void *FitTauEThreadEntry(void *arg)
+{
+	FitTauEContext_t *args=(FitTauEContext_t *)arg;
+
+	args->obj->FitTauEThread(
+			args->bin_start, args->bin_end,
+			*args->opts, *args->traceStore,
+			*args->emptyEstimates,
+	        args->filteredWells, args->ftime, args->allZeroFlows,
+			args->allZeroFlows_size, args->taub_est,
+			*args->converged, *args->no_wells);
+
+	return NULL;
+}
+
 
 void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, GridMesh<struct FitTauEParams> &emptyEstimates,
                                     std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlows, float *taub_est) {
-  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Zeromers.");
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before FitTauE.");
   emptyEstimates.Init (mMask.H(), mMask.W(), opts.tauEEstimateStepY, opts.tauEEstimateStepX);
-  ZeromerMatDiff z_diff;
-  ZeromerMatDiff z_diff_big;
   int converged = 0;
   int no_wells = 0;
-  int zero_flows[1] = {0};
+  int ncores=opts.nCores;
+
   if (taub_est != NULL) {  memset(taub_est, 0, sizeof(float) * filteredWells.size()); }
-  for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++) {
+
+  int numBin=emptyEstimates.GetNumBin();
+
+  FitTauEContext_t pac[ncores];
+
+  pthread_t worker_id[ncores];
+  int lastEnd=0;
+  for (int worker = 0; worker < ncores; worker++) {
+	  FitTauEContext_t *pacp=&pac[worker];
+	  pacp->thread_id=worker;
+	  pacp->bin_start=lastEnd;
+	  pacp->bin_end=lastEnd=numBin*(worker+1)/ncores;
+	  pacp->allZeroFlows=&allZeroFlows[0];
+	  pacp->allZeroFlows_size=allZeroFlows.size();
+	  pacp->emptyEstimates=&emptyEstimates;
+	  pacp->filteredWells=&filteredWells[0];
+	  pacp->opts=&opts;
+	  pacp->taub_est=taub_est;
+	  pacp->traceStore=&traceStore;
+	  pacp->converged=&converged;
+	  pacp->no_wells=&no_wells;
+	  pacp->ftime=&ftime[0];
+	  pacp->obj=this;
+    if (pthread_create(&worker_id[worker], NULL, FitTauEThreadEntry, pacp)) {
+      cerr << "ERROR: problem starting thread" << endl;
+      exit (EXIT_FAILURE);
+    }
+  }
+
+  for (int worker = 0; worker < ncores; worker++)
+    pthread_join(worker_id[worker], NULL);
+
+  fprintf(stdout, "FitTauE() - %d %d %d\n", converged, no_wells, (int)emptyEstimates.GetNumBin());
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After well Zeromers.");
+
+}
+
+void DifferentialSeparator::FitTauEThread(
+		int bin_start, int bin_end,
+		DifSepOpt &opts, TraceStoreCol &traceStore,
+		GridMesh<struct FitTauEParams> &emptyEstimates,
+        char *filteredWells, float *ftime, int *allZeroFlows,
+		int allZeroFlows_size, float *taub_est,
+		int &converged, int &no_wells)
+{
+	  ZeromerMatDiff z_diff;
+	  ZeromerMatDiff z_diff_big;
+	  int zero_flows[1] = {0};
+
+  for (int binIx = bin_start; binIx < bin_end; binIx++) {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
     z_diff.SetUpMatricesClean(traceStore, &filteredWells[0], &ftime[0], 2, 3, 
                               mMask.W(), mMask.W() * mMask.H(),
                               rowStart, rowEnd, colStart, colEnd,
-                              &allZeroFlows[0], allZeroFlows.size(),
+                              &allZeroFlows[0], allZeroFlows_size,
                               0, traceStore.GetNumFrames());
     struct FitTauEParams &param = emptyEstimates.GetItem(binIx);
     if (z_diff.m_num_wells < MIN_SAMPLE_TAUE_STATS) {
@@ -2726,6 +2864,7 @@ void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, 
         converged++;
       }
     }
+
     if (taub_est != NULL) {
       z_diff_big.SetUpMatrices(traceStore, &filteredWells[0], &ftime[0], 1, 1, 
                                mMask.W(), mMask.W() * mMask.H(),
@@ -2753,13 +2892,37 @@ void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, 
       }
     }
   }
-  fprintf(stdout, "FitTauE() - %d %d %d\n", converged, no_wells, (int)emptyEstimates.GetNumBin());
-  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After well Zeromers.");
 }
 
+typedef struct{
+	int thread_id;
+	int bin_start;
+	int bin_end;
+
+	DifSepOpt *opts;
+	Mask *mask;
+	vector<float> *bfMetric;
+	float madThreshold;
+	std::vector<KeyFit> *wells;
+	GridMesh<MixModel> *modelMesh;
+	std::stringstream *modelOutput;
+
+	DifferentialSeparator *obj;
+}RegionalClusteringContext_t;
+
+
+void *RegionalClusteringThreadEntry(void *arg)
+{
+	RegionalClusteringContext_t *args=(RegionalClusteringContext_t *)arg;
+	args->obj->RegionalClusteringThread(args->bin_start,args->bin_end,
+			*args->opts,*args->mask,*args->bfMetric,args->madThreshold,
+			*args->wells,*args->modelMesh,args->modelOutput);
+	return NULL;
+}
 void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
                                                std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh) {
   int numWells = mask.H() * mask.W();
+  int ncores=opts.nCores;
   ofstream modelOut;
   if (opts.outputDebug > 1) {
     string modelFile = opts.outData + ".mix-model.txt";
@@ -2768,10 +2931,10 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
   }
   
   modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStepY, opts.clusterMeshStepX);
-  SampleStats<double> bfSnr;
+//  SampleStats<double> bfSnr;
 
-  //  double bfMinThreshold = bfQuantiles.GetQuantile (.02);
-  //  cout << "Bf min threshold is: " << bfMinThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " << ( (bfQuantiles.GetQuantile (.75) - bfQuantiles.GetQuantile (.25)) /2) << endl;
+//  double bfMinThreshold = bfQuantiles.GetQuantile (.02);
+//  cout << "Bf min threshold is: " << bfMinThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " << ( (bfQuantiles.GetQuantile (.75) - bfQuantiles.GetQuantile (.25)) /2) << endl;
 
   // Should we use standard deviation of signal as the beadfind metric
   // (eg cluster signal vs no signal instead of buffering vs no
@@ -2785,7 +2948,49 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
     }
   }
 
-  for (size_t binIx = 0; binIx < modelMesh.GetNumBin(); binIx++)
+  int numBin=modelMesh.GetNumBin();
+
+  RegionalClusteringContext_t pac[ncores];
+  std::stringstream modelOutStrStr[numBin];
+  pthread_t worker_id[ncores];
+  int lastEnd=0;
+  for (int worker = 0; worker < ncores; worker++) {
+	  RegionalClusteringContext_t *pacp=&pac[worker];
+	  pacp->thread_id=worker;
+	  pacp->bin_start=lastEnd;
+	  pacp->bin_end=lastEnd=numBin*(worker+1)/ncores;
+	  pacp->bfMetric=&bfMetric;
+	  pacp->madThreshold=madThreshold;
+	  pacp->mask=&mask;
+	  pacp->modelMesh=&modelMesh;
+	  pacp->opts=&opts;
+	  pacp->wells=&wells;
+	  pacp->obj=this;
+	  pacp->modelOutput=&modelOutStrStr[0];
+    if (pthread_create(&worker_id[worker], NULL, RegionalClusteringThreadEntry, pacp)) {
+      cerr << "ERROR: problem starting thread" << endl;
+      exit (EXIT_FAILURE);
+    }
+  }
+
+  for (int worker = 0; worker < ncores; worker++)
+    pthread_join(worker_id[worker], NULL);
+
+//  cout << "BF SNR: " << bfSnr.GetMean() << " +/- " << (bfSnr.GetSD()) << endl;
+  if (modelOut.is_open()) {
+    for (int binIx = 0; binIx < numBin; binIx++){
+      modelOut << modelOutStrStr[binIx].str();
+    }
+
+    modelOut.close();
+  }
+}
+void DifferentialSeparator::RegionalClusteringThread(int start_bin, int end_bin,
+		DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
+        std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh, stringstream *modelOut)
+{
+
+  for (int binIx = start_bin; binIx < end_bin; binIx++)
     {
       int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
       modelMesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
@@ -2818,30 +3023,26 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
       int minBfGoodWells = max (200, (int) (goodCount * .5));
       ClusterRegion (rowStart, rowEnd, colStart, colEnd, madThreshold, opts.minTauESnr,
 		     minBfGoodWells, bfMetric, wells, opts.clusterTrim, false,  model);
-      if ( model.count > minBfGoodWells) {
-        double bf = ( (model.mu2 - model.mu1) / ( (sqrt (model.var2) + sqrt (model.var1)) /2));
-        if (isfinite (bf) && bf > 0)  {
-          bfSnr.AddValue (bf);
-        }
-        else  {
-          cout << "Region: " << binIx << " has snr of: " << bf << " " << model.mu1 << "  " << model.var1 << " " << model.mu2 << " " << model. var2 << endl;
-        }
-      }
+//      if ( model.count > minBfGoodWells) {
+//        double bf = ( (model.mu2 - model.mu1) / ( (sqrt (model.var2) + sqrt (model.var1)) /2));
+//        if (isfinite (bf) && bf > 0)  {
+//          bfSnr.AddValue (bf);
+//        }
+//        else  {
+//          cout << "Region: " << binIx << " has snr of: " << bf << " " << model.mu1 << "  " << model.var1 << " " << model.mu2 << " " << model. var2 << endl;
+//        }
+//      }
       int binRow, binCol;
       modelMesh.IndexToXY (binIx, binRow, binCol);
       if (opts.outputDebug > 1) {
-	modelOut << binIx << "\t" << binRow << "\t" << binCol << "\t"
-		 << rowStart << "\t" << rowEnd << "\t" << colStart << "\t" << colEnd << "\t"
-		 << model.count << "\t" << model.mix << "\t"
-		 << model.mu1 << "\t" << model.var1 << "\t"
-		 << model.mu2 << "\t" << model.var2 << "\t"
-		 << model.threshold << "\t" << model.refMean << endl;
+	     modelOut[binIx] << binIx << "\t" << binRow << "\t" << binCol << "\t"
+       << rowStart << "\t" << rowEnd << "\t" << colStart << "\t" << colEnd << "\t"
+       << model.count << "\t" << model.mix << "\t"
+       << model.mu1 << "\t" << model.var1 << "\t"
+       << model.mu2 << "\t" << model.var2 << "\t"
+       << model.threshold << "\t" << model.refMean << endl;
       }
     }
-  cout << "BF SNR: " << bfSnr.GetMean() << " +/- " << (bfSnr.GetSD()) << endl;
-  if (modelOut.is_open()) {
-    modelOut.close();
-  }
 }
 
 
@@ -3294,6 +3495,7 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells,
     OutputOutliers (opts, traceStore, bg, wells,
                     sdHigh, sdLow, madHigh, bfHigh,
                     bfLow, peakLow);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After OutputOutliers.");
 
     // Write out debugging matrix
     int n_cols = 25;
@@ -3342,6 +3544,7 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells,
         wellMatrix.at (i, currentCol++) = mEmptyMetrics.back().at(i);                             // 24
       }
     }
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After wellMatrix pop.");
 
     string h5Summary = "/separator/summary";
     vector<int> flows(2);
@@ -3351,9 +3554,15 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells,
     h5file.Open(false);
     if (opts.outputDebug > 3) 
       saver.WriteResults(h5file);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After writeResults.");
     H5Arma::WriteMatrix (h5file, h5Summary, wellMatrix);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After writeMatrix.");
+
     CalcRegionEmptyStat(h5file, modelMesh, traceStore, h5SummaryRoot, flows, mask);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After CalcRegionEmptyStat.");
+
     h5file.Close();
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After close.");
   }
 }
 
@@ -3678,7 +3887,7 @@ void DifferentialSeparator::SetUp(DifSepOpt &opts, std::string &bfFile, arma::Co
   for (size_t kIx = 0; kIx < mKeys.size(); kIx++) { opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, mKeys[kIx].usableKeyFlows); }
   // Setup our job queue
   int qSize = (mMask.W() / opts.t0MeshStepX + 1) * (mMask.H() / opts.t0MeshStepY + 1);
-  if (opts.nCores <= 0) {  opts.nCores = numCores(); }
+  if (opts.nCores <= 0) {  opts.nCores = min(28,max(numCores(),6)); }
   mQueue.Init (opts.nCores, qSize);
 
   // Figure out which flows can be used for fitting taue
@@ -3757,6 +3966,8 @@ void DifferentialSeparator::ClusterToSelectReference(DifSepOpt &opts, const std:
     if (mBfMask[i] & MaskReference) {maskRefStats.AddWell(mWells[i]);}
     if (mBfMask[i] & MaskEmpty) {maskEmptyStats.AddWell(mWells[i]);}
   }
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After AddWell.");
+
   //  CountReference("Filtered wells", mFilteredWells);
   if (libStats.NumSeen() > 10) { libStats.ReportStats(stdout);}
   if (tfStats.NumSeen() > 50) { tfStats.ReportStats(stdout);}
@@ -3765,6 +3976,8 @@ void DifferentialSeparator::ClusterToSelectReference(DifSepOpt &opts, const std:
   refStats.ReportStats(stdout);
   filtStats.ReportStats(stdout);
   OutputStats(opts, mBfMask);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After OutputStats.");
+
   HandleDebug(mWells, opts, h5SummaryRoot, saver, mMask, traceStore, modelMesh,
               maskRefStats.m_quantiles[KEY_SD_STAT].GetQuantile(.9),
               maskRefStats.m_quantiles[KEY_SD_STAT].GetQuantile(.9),
@@ -3816,14 +4029,18 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   if (opts.isThumbnail) { row_step = col_step = BF_THUMBNAIL_SIZE; }
 
   if (opts.filterNoisyCols != "none") {
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before FilterNoisyColumns.");
     FilterNoisyColumns(row_step, col_step, mMask, opts, mFilteredWells);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After FilterNoisyColumns.");
   }
 
   // Pick which wells to use for initial reference for backgound
   int minWells = ceil(opts.referenceStep*opts.referenceStep * opts.percentReference);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before RankReference. " + std::to_string(opts.useSignalReference));
   RankReference(traceStore, mBfMetric, opts.referenceStep, opts.referenceStep, opts.useSignalReference,
                 opts.iqrMult, 7, opts.percentReference, mMask, minWells,
-                mFilteredWells, mRefWells);
+                mFilteredWells, mRefWells,opts.nCores);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After RankReference.");
   if (!opts.skipBuffer) {
     mEmptyMetrics.push_back(mBfMetric);
   }
@@ -3863,7 +4080,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
           ftime, flowsAllZero, NULL);
 
   // See which keys are the best match for wells.
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before FitKeys.");
   FitKeys(mQueue, opts, emptyEstimates, traceStore, mKeys, ftime, saver, mMask, mWells);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After FitKeys.");
 
   // Use our dual gaussian mixture clustering to split wells into empty/live
   ClusterToSelectReference(opts, h5SummaryRoot, saver, traceStore, modelMesh, emptyEstimates);

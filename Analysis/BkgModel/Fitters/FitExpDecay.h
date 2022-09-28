@@ -70,10 +70,22 @@ public:
 
 protected:
     virtual void Evaluate(float *y, float *params) {
-       memset(y,0,sizeof(float[npts]));
-
-       for (int i=i_start;i < i_end;i++)
-          y[i] = params[0]*ExpApprox(-(xvals[i]-xvals[i_start])/params[1]) + params[2];
+       float param0=params[0];
+       float param1=params[1] * 256.0f;
+       float param2=params[2];
+       float startVal=1.0f + xvals[i_start]/param1;
+       int i=0;
+       for(;i<i_start;i++)
+    	   y[i]=0;
+       for (;i < i_end;i++){
+		  float x = startVal - xvals[i]/param1;
+		  x *= x; x *= x; x *= x; x *= x;
+		  x *= x; x *= x; x *= x; x *= x;
+		  y[i] = param0*x + param2;
+          //y[i] = param0*ExpApprox(-(xvals[i]-startVal)/param1) + param2;
+       }
+       for(;i<npts;i++)
+    	   y[i]=0;
     }
 
     // loop exit condition

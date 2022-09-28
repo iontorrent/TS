@@ -645,7 +645,7 @@ class ChipCal:
             return None
         
     def analyze_refpix( self ):
-        if os.path.exists( os.path.join( self.output_dir, 'masked_refpix_quadrant.png' ) ) and not self.force:
+        if os.path.exists( os.path.join( self.output_dir, 'refpix.json' ) ) and not self.force:
             print( '... Noise has already been analyzed.  Use --force to override' )
             return
         if self.chiptype.ref_rows is None and self.chiptype.ref_cols is None:
@@ -789,7 +789,7 @@ class ChipCal:
             except AttributeError:
                 self.load_gain()
                 self.find_refpix() # need to explicitly call after loading gain
-                self.close_gain()
+                self.close_gain() # close gain since we're done with it
             # Deal with offsets AFTER gain in order to exclude reference pixels.
             try:
                 # offset must have been loaded but, getting pinned is complicated
@@ -798,10 +798,9 @@ class ChipCal:
                 self.offset
                 self.close_offset()
                 self.load_offset()
-                self.close_offset()
             except AttributeError:
                 self.load_offset() # load_offset calls find_pinned so we're fine
-                self.close_offset()
+                self.close_offset() # close offset since we're done with it
 
             # This is the better way to do it (ignore_pinned=True)
             self.superpixel_analysis( m, ignore_pinned=True )
@@ -820,7 +819,7 @@ class ChipCal:
     def analyze_noise( self, close=True, true_metrics=True ):
         ''' Default behavior is to analyze true_metrics '''
         m          = 'noise'
-        if os.path.exists( os.path.join( self.output_dir, 'edge_noise_colavg.dat' ) ) and not self.force:
+        if os.path.exists( os.path.join( self.output_dir, 'noise.json' ) ) and not self.force:
             print( '... Noise has already been analyzed.  Use --force to override' )
             return
         start_time = time.time()
@@ -835,6 +834,9 @@ class ChipCal:
         if self.is_multilane:
             self.calc_metrics_by_lane( m )
             self.calc_metrics_by_lane( m+'_localstd' )
+            if true_metrics:
+                self.calc_metrics_by_lane( m+'_true_localstd' )
+                self.calc_metrics_by_lane( m+'_true_localstd_hd' )
         else:
             self.annotate( 'Skipping multilane analysis, as this is not a multilane chip' )
 
@@ -844,7 +846,8 @@ class ChipCal:
     def analyze_offset( self, close=True, true_metrics=True ):
         ''' Defaut behavior is to analyze true_metrics '''
         m          = 'offset'
-        if os.path.exists( os.path.join( self.output_dir, 'offset_colavg_dd.dat' ) ) and not self.force:
+        #NOTE: For historical reasons, offset data is prepended with PIX and stored in pix.json
+        if os.path.exists( os.path.join( self.output_dir, 'pix.json' ) ) and not self.force:
             print( '... Offsets have already been analyzed.  Use --force to override' )
             return
         start_time = time.time()
@@ -868,6 +871,9 @@ class ChipCal:
             self.calc_pinned_metrics_by_lane( )
             self.multilane_pinned_heatmaps( hd=False )
             self.multilane_pinned_heatmaps( hd=True  )
+            if true_metrics:
+                self.calc_metrics_by_lane( m+'_true_localstd' )
+                self.calc_metrics_by_lane( m+'_true_localstd_hd' )
         else:
             self.annotate( 'Skipping multilane analysis, as this is not a multilane chip' )
 
@@ -876,7 +882,7 @@ class ChipCal:
 
     def analyze_gain( self , buffering_gc=False, close=True, true_metrics=True ):
         ''' Default behavior is to analyze true_metrics '''
-        if os.path.exists( os.path.join( self.output_dir, 'offset_diff_img.png' ) ) and not self.force:
+        if os.path.exists( os.path.join( self.output_dir, 'gain.json' ) ) and not self.force:
             if buffering_gc and not any( [ 'buffering_gc' in f for f in os.listdir( self.output_dir ) ] ):
                 pass
             else:
@@ -895,6 +901,9 @@ class ChipCal:
         if self.is_multilane:
             self.calc_metrics_by_lane( m )
             self.calc_metrics_by_lane( m+'_localstd' )
+            if true_metrics:
+                self.calc_metrics_by_lane( m+'_true_localstd' )
+                self.calc_metrics_by_lane( m+'_true_localstd_hd' )
         else:
             self.annotate( 'Skipping multilane analysis, as this is not a multilane chip' )
 
@@ -2570,6 +2579,9 @@ class ChipCal:
         data = {}
         for key in [ x for x in self.metrics.keys() if met in x.lower() ]:
             data[key] = self.metrics[key]
+        if met == 'offset':
+            for key in [ x for x in self.metrics.keys() if 'pixel' in x.lower() ]:
+                data[key] = self.metrics[key]
         if flatten==True:
             data = misc.flatten_dict( data )
         misc.serialize( data )

@@ -56,6 +56,7 @@
 {% endblock sub-nav %}
 {%block extra-main-class%}clearbg{%endblock extra-main-class%}
 {% block content %}
+<input type="hidden" name="lockAssayParams" value="{{helper.getStepDict.Kits.savedObjects.meta.lockAssayParams|join:',' }}" />
             <div class="content group">
                 <!--img src="resources/img/Torrent_Browser_Chevron2.jpg" alt="Torrent_Browser_Chevron2" width="1352" height="56" style="margin-bottom:20px;" /-->           
                 <div class="row-fluid chevrons workflow">
@@ -339,6 +340,19 @@
             $("#showSummary").hide();        
         });
 
+        function check_lock_assay_params() {
+            var lockAssayParams = $('input[name = "lockAssayParams"]').val().split(",");
+            if(lockAssayParams) {
+                $.each(lockAssayParams, function (i, val) {
+                    if ($("#" + val).is("select")) {
+                        $("select[id=" + val + "]").prop('disabled', false);
+                    } else if ($("#" + val).is("input")) {
+                        $("input[id=" + val + "]").prop('disabled', false);
+                    }
+                });
+            }
+        }
+
         $(".submitStepForm").click(function(){
             var url = $(this).attr('href');
             var $form = $('#step_form').attr('action', url);
@@ -346,7 +360,7 @@
                 .attr("name","plan_session_key")
                 .val("{{plan_session_key}}")
                 .appendTo($form);
-
+            check_lock_assay_params();
             $form.submit();
             return false;
         });

@@ -91,6 +91,7 @@ class StepHelperDbSaver:
         save_plan_step_data = step_helper.steps.get(StepNames.SAVE_PLAN, "")
 
         isFavorite = False
+        enableTecParam = False
 
         categories = application_step_data.prepopulatedFields.get(
             ApplicationFieldNames.CATEGORIES, ""
@@ -222,6 +223,35 @@ class StepHelperDbSaver:
         x_mixedTypeRNA_regionfile = reference_step_data.savedFields[
             ReferenceFieldNames.MIXED_TYPE_RNA_HOT_SPOT_BED_FILE
         ]
+        try:
+            # Dynamic Manifold Params
+            fromTemplteMeta = {}
+
+            # Handle dynamic tec params for plan, template and plan by sample
+            if save_plan_step_data:
+                fromTemplteMeta.update(save_plan_step_data.savedObjects.get('meta'))
+            elif step_helper.steps.get("Save_plan_by_sample"):
+                fromTemplteMeta.update(step_helper.steps["Save_plan_by_sample"].getCurrentSavedObjectDict().get('meta'))
+            elif save_template_step_data:
+                fromTemplteMeta.update(save_template_step_data.savedObjects.get('meta'))
+
+            if "tecParam" in fromTemplteMeta.get("fromTemplateCategories", None) or fromTemplteMeta.get("isAmpliseqTecParamEnabled"):
+                if x_chipType == fromTemplteMeta.get("fromTemplateChipType") \
+                        and x_sequencekitname == fromTemplteMeta.get("fromTemplateSequenceKitname"):
+                    enableTecParam = True
+                    templateObj = PlannedExperiment.objects.get(pk=fromTemplteMeta["fromTemplateId"])
+                    x_chipTecDfltAmbient = templateObj.get_chipTecDfltAmbient()
+                    x_chipTecSlope = templateObj.get_chipTecSlope()
+                    x_chipTecMinThreshold = templateObj.get_chipTecMinThreshold()
+                    x_manTecDfltAmbient = templateObj.get_manTecDfltAmbient()
+                    x_manTecSlope = templateObj.get_manTecSlope()
+                    x_manTecMinThreshold = templateObj.get_manTecMinThreshold()
+                else:
+                    logger.debug(
+                        "step_helper_db_saver.__get_universal_params() save_step_data dynamic manifold tec param mismatch. Setting the default chip based tec param"
+                    )
+        except Exception as err:
+            logger.debug("step_helper_db_saver.__get_universal_params() save_step_data dynamic manifold tec param unknown errors %s" % str(err))
 
         x_beadfindargs = analysisParams_step_data.savedFields[
             AnalysisParamsFieldNames.AP_BEADFIND_SELECTED
@@ -382,8 +412,19 @@ class StepHelperDbSaver:
             "x_thumbnailbasecallerargs": x_thumbnailbasecallerargs,
             "x_thumbnailalignmentargs": x_thumbnailalignmentargs,
             "x_thumbnailionstatsargs": x_thumbnailionstatsargs,
-            "x_custom_args": x_custom_args,
+            "x_custom_args": x_custom_args
         }
+        if fromTemplteMeta:
+            retval["x_metaData"] = fromTemplteMeta
+        if enableTecParam:
+            retval.update({
+                "x_chipTecDfltAmbient": x_chipTecDfltAmbient,
+                "x_chipTecSlope": x_chipTecSlope,
+                "x_chipTecMinThreshold": x_chipTecMinThreshold,
+                "x_manTecDfltAmbient": x_manTecDfltAmbient,
+                "x_manTecSlope": x_manTecSlope,
+                "x_manTecMinThreshold": x_manTecMinThreshold
+            })
         return retval
 
     def __get_specific_params_by_sample(
@@ -550,7 +591,7 @@ class StepHelperDbSaver:
             # 'sampleTubeLabel' : sampleTubeLabel.strip().lstrip("0") if sampleTubeLabel else "",
             "sampleTubeLabel": sampleTubeLabel.strip() if sampleTubeLabel else "",
             "chipBarcode": chipBarcode.strip() if chipBarcode else "",
-            "metaData": self.__update_metaData_for_LIMS(existing_meta, LIMS_meta),
+            "x_metaData": self.__update_metaData_for_LIMS(existing_meta, LIMS_meta),
             "isReusable": isReusable,
             "x_notes": note,
             "x_sample": sample,

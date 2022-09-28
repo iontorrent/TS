@@ -20,6 +20,7 @@ typedef struct {
     int te;
     int qe;
     int n_best;
+    int fitflag;
 } hash_t;
 
 class AffineSWOptimizationHash {
@@ -28,11 +29,11 @@ public:
 
   bool process(const string &b, const string &a, int qsc, int qec,
                   int mm, int mi, int o, int e, int dir,
-                  int *opt, int *te, int *qe, int *n_best);
+                  int *opt, int *te, int *qe, int *n_best, int* fitflag);
 
   void add(const string &b, const string &a, int _qsc, int _qec,
            int mm, int mi, int o, int e, int dir,
-           int *opt, int *te, int *qe, int *n_best);
+           int *opt, int *te, int *qe, int *n_best, int* fitflag);
 
   ~AffineSWOptimizationHash();
 private:

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .center { margin-left:auto; margin-right:auto; }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+  $(function() {
+
+    $.fn.serializeObject = function() {
+     var o = {};
+     var a = this.serializeArray();
+     $.each(a,
+      function() {
+       if (o[this.name] != null) {
+        if (!o[this.name].push) {
+         o[this.name] = [o[this.name]];
+        }
+        o[this.name].push(this.value || '');
+       } else {
+        o[this.name] = this.value || '';
+       }
+      });
+     return o;
+    };
+
+    function populateCoverageAnalysisList(selectorID) {
+      if( selectorID == '' ) return;
+      $('#'+selectorID).empty();
+      var nItems = 0;
+      var runtypeUrl = '/rundb/api/v1/results/'+TB_result+'/pluginresults/?format=json';
+      $.ajaxSetup({async:false});
+      $.get( runtypeUrl, function(data) {
+        $.each( data, function(intIndex,plugin) {
+          if( plugin['Name'].startsWith("coverageAnalysis") ) {
+            pluginPath = plugin['Path']
+            var pluginID = plugin['Name']+"_out."+plugin['id'];
+            $('#'+selectorID).append("<option value='"+pluginPath+"'>"+pluginID+"</option>");
+            ++nItems;
+          }
+        });
+      });
+      if( nItems ) {
+        orderSelectorList(selectorID);
+      } else {
+        $('#'+selectorID).append("<option value=''>None available</option>");
+      }
+    }
+
+    function orderSelectorList(selectorID,firstItem) {
+      var lst = $('#'+selectorID+' option');
+      lst.sort(function(a,b) {
+        if( a.text < b.text ) return 1;
+        if( a.text > b.text ) return -1;
+        return 0;
+      });
+      $('#'+selectorID).empty();
+      if( firstItem ) {
+        $('#'+selectorID).append("<option value=''>"+firstItem+"</option>");
+      }
+      $('#'+selectorID).append(lst);
+      if( $('#'+selectorID+' option').size() > 0 )
+        $('#'+selectorID+' option')[0].selected = true;
+    }
+
+    populateCoverageAnalysisList('coverage_analysis_path')
+
+    $(function() {
+     $('#postbutton').click(function() {
+      if( $('#coverage_analysis_path').val() == "" ) {
+        alert("Plugin requires a completed coverageAnalysis report.");
+        return false;
+      }
+      obj = $('#GBU_HBU_Analysis').serializeObject();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+       type: 'POST',
+       url: pluginURL,
+       async: false,
+       contentType: "application/json; charset=utf-8",
+       success: function(data)
+       {
+        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check GBU_HBU_Analysis.html in the Plugin Summary</p></div>');
+        setTimeout("parent.$.fn.colorbox.close()",1000);
+       },
+       data: pluginAPIJSON,
+       dataType: "json"
+      });
+     });
+    });
+
+  });
+ </script>
+</head>
+
+<body>
+ <form id="GBU_HBU_Analysis" name="GBU_HBU_Analysis">
+  <div style="text-align:center">
+   <h1>GBU_HBU_Analysis Plugin</h1>
+  </div>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td><span class="help" title="This plugin analyses the gene target coverage (reads) reported by the coverageAnalysis plugin. If no runs are listed to chose from then this plugin must be run.">coverageAnalysis run:</span></td>
+     <td><select id="coverage_analysis_path" name="coverage_analysis_path"></select></td>
+    </tr><tr>
+     <td><span class="help" title="Specifies how to treat replicate barcodes. This is only employed when compiling the wmGBU and WIG files for genes covered across all panels. The default value 'Mean' specifies to take the average, which for weighted averaging is equivalent to treating replicates as just more data points for amplicon representation. The values 'Best' and 'Worst' specifiy to use just the single replicate that has the highest or lowest Mean Base Read Depth for each individual amplicon. The value 'MBRD' specifies to additionally weight the contribution of an amplicon for each barcode by the Mean Base Read Depth for the amplicon. Note that this weights contributions for each amplicon across all barcodes, not just the GBU values between the replicate barcodes for a particular panel (QC plate).">Replicate barcode resolution:</span></td>
+     <td><select id="dup_resolve" name="dup_resolve">
+       <option val="Mean">Mean</option> <option val="Best">Best</option>
+       <option val="Worst">Worst</option> <option val="MBRD">MBRD</option></select></td>
+    </tr>
+   </table>
+   <br/>
+   <div align="center" id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="launch_mode" name="launch_mode" value="Manual"/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+Generate Gene Base Uniformity (GBU), Hotspot Base Uniformity (HBU), and Panel Base Uniformity (PBU) for hg19 genome from an existing coveageAnalysis report.
+   </div>
+ </form>
+</body>
+</html>
+

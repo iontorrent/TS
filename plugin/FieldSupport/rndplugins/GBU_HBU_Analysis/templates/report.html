@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+
+<link rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" href="lifechart/lifegrid.css"/>
+
+<link rel="stylesheet" href="slickgrid/css/smoothness/jquery-ui-1.8.16.custom.css"/>
+<link rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" href="lifechart/lifegrid.css"/>
+<link rel="stylesheet" type="text/css" href="lifechart/tabbar.css"/>
+
+<link rel="stylesheet" href="slickgrid/slick.grid.css"/>
+<link rel="stylesheet" href="lifechart/columnpicker.css"/>
+<link rel="stylesheet" href="slickgrid/plugins/slick.headerbuttons.css"/>
+
+<script src="flot/js/jquery-1.7.2.min.js"></script>
+<script src="flot/js/jquery-ui-1.8.20.custom.min.js"></script>
+<script src="flot/js/jquery.rightClick.js"></script>
+<script src="flot/jquery.flot.min.js"></script>
+<script src="flot/jquery.flot.selection.min.js"></script>
+<script src="flot/jquery.flot.axislabels.js"></script>
+
+<script src="slickgrid/lib/firebugx.js"></script>
+<script src="slickgrid/lib/jquery-1.7.min.js"></script>
+<script src="slickgrid/lib/jquery-ui-1.8.16.custom.min.js"></script>
+<script src="slickgrid/lib/jquery.event.drag-2.2.js"></script>
+<script src="slickgrid/slick.core.js"></script>
+<script src="slickgrid/slick.grid.js"></script>
+<script src="slickgrid/slick.dataview.js"></script>
+
+<script src="lifechart/HBUTable.js"></script>
+<script src="lifechart/GBUTable.js"></script>
+
+{% load humanize %}
+
+<style type="text/css">
+  body {
+    background:white;
+    padding: 0;
+    margin: 8px;
+  }
+  .block-rounded {
+    min-width:420px;
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help;
+    border-bottom: 1px dotted #A9A9A9
+  }
+</style>
+
+<title>GBU_HBU_Analysis Barcode Report</title>
+
+</head>
+
+<body>
+
+<h1><center>GBU_HBU_Analysis Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}</center></h3>
+
+<table class="center">
+<tr><td>
+{% if Panel_Target_Regions %}
+  <b>Panel: {{Panel_Target_Regions}}</b><br/>
+</td></tr><tr><td>
+{% endif %}
+
+<table class="center block-rounded"><tr>
+  <td><div class="statsdata">
+  <table>
+    <tr><td class="inleft"><span title="{{help_dict.pbu_cds_5}}">Panel base uniformity over full CDS+5 regions</span></td>
+        <td class="inright">{{Panel_Base_Uniformity__CDS_5_|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.num_genes}}">Number of target genes</span></td>
+    	  <td class="inright">{{Number_of_genes|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.Matched_Genes}}">Number of identified genes</span></td>
+        <td class="inright">{{Number_of_CDS_genes_matched|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.Number_of_amplicons}}">Number of amplicons</span></td>
+        <td class="inright">{{Number_of_amplicons|intcomma}}</td></tr>
+  </table></div></td>
+</tr></table>
+
+</td></tr></table>
+
+<br/>
+{% if cdspad_gbu_link %}
+<div id="GBUTable" gbuurl="{{cdspad_gbu_down_link}}" class="center" style="width:500px"></div><br/>
+{% endif %}
+
+{% if hbu_down_link2 %}
+<div id="HBUTable" hbuurl="{{hbu_down_link2}}" class="center" style="width:500px"></div><br/>
+{% endif %}
+
+<br/>
+<table class="center"><tr><td>
+{% if cdspad_gbu_link %}
+  <li><a href="{{cdspad_gbu_down_link}}" title='Click to download a CSV file of the gene base uniformity (GBU) and coverage statistics for all CDS (coding/exonic) regions extended by 5 bases (upstream and downstream) for all genes in the panel.'>Download Gene Base Uniformity (GBU) stats</a></li>
+{% endif %}
+{% if hbu_down_link2 %}
+  <li><a href="{{hbu_down_link2}}" title='Click to download a CSV file of the hotspot base uniformity (HBU) for all genes in the panel.'>Download Hotspot Base Uniformity (HBU) stats</a></li>
+{% endif %}
+{% if hbu_cov_link %}
+  <li><a href="{{hbu_cov_link}}" title='Click to download a CSV file of the coverage and normalized coverage for all hotspots in the panel.'>Download hotspot coverage stats</a></li>
+{% endif %}
+{% if unmatched_genes_link %}
+  <li><a href="{{unmatched_genes_link}}" title='Click to download a table (XLS) file of gene IDs that were not matched to the master gene list, and number of amplicons in the panel that referenced that gene id.'>Download the unmatched gene list</a></li>
+{% endif %}
+
+</td></tr></table>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2017 Life Technologies Corporation. All Rights Reserved.</span>
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>

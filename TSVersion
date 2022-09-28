@@ -1,4 +1,4 @@
 # Version for target of current development cycle
 TS_MAJOR=5
-TS_MINOR=16
-TS_RELEASE=0
+TS_MINOR=18
+TS_RELEASE=1

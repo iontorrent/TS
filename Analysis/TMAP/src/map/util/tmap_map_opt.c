@@ -110,10 +110,11 @@ static char *tmap_map_opt_input_types[] = {"INT", "FLOAT", "NUM", "FILE", "STRIN
 #define __tmap_map_opt_option_print_func_tf_init(_name) \
   static void tmap_map_opt_option_print_func_##_name(void *arg) { \
       tmap_map_opt_t *opt = (tmap_map_opt_t*)arg; \
-      tmap_file_fprintf(tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, (1 == opt->_name) ? "true" : "false", KMAG, KNRM); \
+      /* tmap_file_fprintf(tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, (1 == opt->_name) ? "true" : "false", KMAG, KNRM); */ \
   }
 
-// verbosity
+
+  // verbosity
 #define __tmap_map_opt_option_print_func_verbosity_init() \
   static void tmap_map_opt_option_print_func_verbosity(void *arg) { \
       tmap_file_fprintf(tmap_file_stderr, "%s[%s%s%s]%s", KMAG, KYEL, (1 == tmap_progress_get_verbosity()) ? "true" : "false", KMAG, KNRM); \
@@ -188,9 +189,11 @@ __tmap_map_opt_option_print_func_chars_init(fn_sam, "stdout")
 __tmap_map_opt_option_print_func_int64_init(bam_start_vfo)
 __tmap_map_opt_option_print_func_int64_init(bam_end_vfo)
 __tmap_map_opt_option_print_func_tf_init(use_param_ovr)
+__tmap_map_opt_option_print_func_tf_init(ovr_candeval)
 __tmap_map_opt_option_print_func_tf_init(use_bed_in_end_repair)
 __tmap_map_opt_option_print_func_tf_init(use_bed_in_mapq)
 __tmap_map_opt_option_print_func_tf_init(use_bed_read_ends_stat)
+__tmap_map_opt_option_print_func_int_init(amplicon_scope)
 __tmap_map_opt_option_print_func_int_init(score_match)
 __tmap_map_opt_option_print_func_int_init(pen_mm)
 __tmap_map_opt_option_print_func_int_init(pen_gapo)
@@ -232,11 +235,19 @@ __tmap_map_opt_option_print_func_double_init(repair_identity_drop_limit)
 __tmap_map_opt_option_print_func_int_init(repair_max_primer_zone_dist)
 __tmap_map_opt_option_print_func_int_init(repair_clip_ext)
 
+
+
 __tmap_map_opt_option_print_func_int_init(shm_key)
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
 __tmap_map_opt_option_print_func_double_init(sample_reads)
 #endif
 __tmap_map_opt_option_print_func_int_init(vsw_type)
+__tmap_map_opt_option_print_func_int_init(vsw_fallback)
+__tmap_map_opt_option_print_func_tf_init(confirm_vsw_corr)
+__tmap_map_opt_option_print_func_tf_init(candidate_ext)
+__tmap_map_opt_option_print_func_tf_init(correct_failed_vsw)
+__tmap_map_opt_option_print_func_tf_init(use_nvsw_on_nonstd_bases)
+
 __tmap_map_opt_option_print_func_verbosity_init()
 
 __tmap_map_opt_option_print_func_tf_init(do_realign)
@@ -246,6 +257,8 @@ __tmap_map_opt_option_print_func_int_init(realign_gip_score)
 __tmap_map_opt_option_print_func_int_init(realign_gep_score)
 __tmap_map_opt_option_print_func_int_init(realign_bandwidth)
 __tmap_map_opt_option_print_func_int_init(realign_cliptype)
+__tmap_map_opt_option_print_func_int_init(realign_maxlen)
+__tmap_map_opt_option_print_func_int_init(realign_maxclip)
 
 __tmap_map_opt_option_print_func_tf_init(report_stats)
 __tmap_map_opt_option_print_func_chars_init(realign_log, "")
@@ -513,7 +526,7 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
       "3 - all alignments",
       NULL};
   static char *vsw_type[] = {
-      "NB: currently only #1, #4, and #6 have been tested",
+      "NB: currently only #1, #2, #4, and #6 have been tested",
       "1 - lh3/ksw.c/nh13",
       "2 - simple VSW",
       "3 - SHRiMP2 VSW [not working]",
@@ -605,6 +618,12 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            NULL,
                            tmap_map_opt_option_print_func_use_param_ovr,
                            TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "ovr-candeval", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "use location-specific parameters overriding at candidate evaluation stage",
+                           NULL,
+                           tmap_map_opt_option_print_func_ovr_candeval,
+                           TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "no-bed-er", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
                            "use of amplicon edge coordinates from BED file in end repair",
@@ -622,6 +641,12 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "use read ends statistics for REPAiR (read-end position alignment repair) if provided in BED file",
                            NULL,
                            tmap_map_opt_option_print_func_use_bed_read_ends_stat,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "ampl-scope", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "read padding used for amplicon search",
+                           NULL,
+                           tmap_map_opt_option_print_func_amplicon_scope,
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "score-match", required_argument, 0, 'A', 
                            TMAP_MAP_OPT_TYPE_INT,
@@ -750,11 +775,11 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            tmap_map_opt_option_print_func_rand_read_name,
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "prefix-exclude", required_argument, 0, 0,
-			   TMAP_MAP_OPT_TYPE_INT,
-			   "specify how many letters of prefix of name to be excluded when do randomize by name",
-			   NULL,
-			   tmap_map_opt_option_print_func_prefix_exclude,
-			   TMAP_MAP_ALGO_GLOBAL);
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "specify how many letters of prefix of name to be excluded when do randomize by name",
+                           NULL,
+                           tmap_map_opt_option_print_func_prefix_exclude,
+                           TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "suffix-exclude", required_argument, 0, 0,
                            TMAP_MAP_OPT_TYPE_INT,
                            "specify how many letters of suffix of name to be excluded when do randomize by name",
@@ -887,6 +912,36 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            vsw_type,
                            tmap_map_opt_option_print_func_vsw_type,
                            TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "vsw-fallback", required_argument, 0, 'H',
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "the fallback vectorized smith-waterman algorithm",
+                           NULL,
+                           tmap_map_opt_option_print_func_vsw_fallback,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "confirm-vsw-corr", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "confirm corrections of assymetric VSW scores with standard SW",
+                           NULL,
+                           tmap_map_opt_option_print_func_confirm_vsw_corr,
+                           TMAP_MAP_ALGO_GLOBAL);
+ tmap_map_opt_options_add(opt->options, "no-candidate-ext", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "do not extend reference zone for partially aligned candidates",
+                           NULL,
+                           tmap_map_opt_option_print_func_candidate_ext,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "no-vsw-fallback", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "do not use fallback alignment method if primary method fails",
+                           NULL,
+                           tmap_map_opt_option_print_func_correct_failed_vsw,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "no-nonstd-bases", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "do not process candidate locations containing non-standard nucleotides",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_nvsw_on_nonstd_bases,
+                           TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "help", no_argument, 0, 'h', 
                            TMAP_MAP_OPT_TYPE_NONE,
                            "print this message",
@@ -942,6 +997,18 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "realignment clip type",
                            realignment_clip_type,
                            tmap_map_opt_option_print_func_realign_cliptype,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-maxlen", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment maximal supported sequence length",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_maxlen,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-maxclip", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment maximal supported clip length",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_maxclip,
                            TMAP_MAP_ALGO_GLOBAL);
 
   tmap_map_opt_options_add(opt->options, "stats", no_argument, 0, 0, 
@@ -1491,9 +1558,11 @@ tmap_map_opt_init(int32_t algo_id)
   opt->bam_start_vfo = 0;
   opt->bam_end_vfo = 0;
   opt->use_param_ovr = 0;
+  opt->ovr_candeval = 0;
   opt->use_bed_in_end_repair = 1;
   opt->use_bed_in_mapq = 1;
   opt->use_bed_read_ends_stat = 0;
+  opt->amplicon_scope = TMAP_MAP_OPT_AMPLICON_SCOPE;
   opt->score_match = TMAP_MAP_OPT_SCORE_MATCH;
   opt->pen_mm = TMAP_MAP_OPT_PEN_MM;
   opt->pen_gapo = TMAP_MAP_OPT_PEN_GAPO;
@@ -1507,7 +1576,7 @@ tmap_map_opt_init(int32_t algo_id)
   opt->unroll_banding = 0;
   opt->long_hit_mult = 3.0;
   opt->score_thr = 8;
-  opt->reads_queue_size = 262144;
+  opt->reads_queue_size = 65535;
   opt->num_threads = tmap_detect_cpus();
   opt->num_threads_autodetected = 1;
   opt->aln_output_mode = TMAP_MAP_OPT_ALN_MODE_RAND_BEST;
@@ -1539,6 +1608,11 @@ tmap_map_opt_init(int32_t algo_id)
   opt->sample_reads = 1.0;
 #endif
   opt->vsw_type = 4;
+  opt->vsw_fallback = 1;
+  opt->confirm_vsw_corr = 0;
+  opt->candidate_ext = 1;
+  opt->correct_failed_vsw = 1;
+  opt->use_nvsw_on_nonstd_bases = 1;
 
   opt->do_realign = 0;
   opt->realign_mat_score = TMAP_MAP_OPT_REALIGN_SCORE_MATCH;
@@ -1547,6 +1621,8 @@ tmap_map_opt_init(int32_t algo_id)
   opt->realign_gep_score = TMAP_MAP_OPT_REALIGN_SCORE_GE;
   opt->realign_bandwidth = TMAP_MAP_OPT_REALIGN_BW;
   opt->realign_cliptype = 2;
+  opt->realign_maxlen = TMAP_MAP_OPT_REALIGN_MAXLEN;
+  opt->realign_maxclip = TMAP_MAP_OPT_REALIGN_MAXCLIP;
   opt->report_stats = 0;
   opt->realign_log = NULL;
   // tail repeat clipping
@@ -1925,8 +2001,11 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if(0 == c && 0 == strcmp("bam-end-vfo", options[option_index].name)) {
           opt->bam_end_vfo = strtol(optarg,NULL,0);
       }
-      else if((0 == c && 0 == strcmp("par-ovr", options[option_index].name))) {
+      else if(0 == c && 0 == strcmp("par-ovr", options[option_index].name)) {
           opt->use_param_ovr = 1;
+      }
+      else if(0 == c && 0 == strcmp("ovr-candeval", options[option_index].name)) {
+          opt->ovr_candeval = 1;
       }
       else if((0 == c && 0 == strcmp("no-bed-er", options[option_index].name))) {
           opt->use_bed_in_end_repair = 0;
@@ -1936,6 +2015,9 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       }
       else if((0 == c && 0 == strcmp("repair", options[option_index].name))) {
           opt->use_bed_read_ends_stat = 1;
+      }
+      else if (0 == c && 0 == strcmp("ampl-scope", options[option_index].name)) {
+          opt->amplicon_scope = atoi(optarg);
       }
       else if(c == 'A' || (0 == c && 0 == strcmp("score-match", options[option_index].name))) {
           opt->score_match = atoi(optarg);
@@ -1957,6 +2039,21 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       }
       else if(c == 'H' || (0 == c && 0 == strcmp("vsw-type", options[option_index].name))) {
           opt->vsw_type = atoi(optarg); 
+      }
+      else if(0 == c && 0 == strcmp("vsw-fallback", options[option_index].name)) {
+          opt->vsw_fallback = atoi(optarg); 
+      }
+      else if(0 == c && 0 == strcmp("confirm-vsw-corr", options[option_index].name)) {
+          opt->confirm_vsw_corr = 1;
+      }
+      else if(0 == c && 0 == strcmp("no-candidate-ext", options[option_index].name)) {
+          opt->candidate_ext = 0;
+      }
+      else if(0 == c && 0 == strcmp("no-vsw-fallback", options[option_index].name)) {
+          opt->correct_failed_vsw = 0;
+      }
+      else if(0 == c && 0 == strcmp("no-nonstd-bases", options[option_index].name)) {
+          opt->use_nvsw_on_nonstd_bases = 0;
       }
       else if(c == 'I' || (0 == c && 0 == strcmp("use-seq-equal", options[option_index].name))) {
           opt->seq_eq = 1;
@@ -2116,6 +2213,12 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       }
       else if (0 == c && 0 == strcmp ("r-clip", options [option_index].name)) {
           opt->realign_cliptype = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-maxlen", options [option_index].name)) {
+          opt->realign_maxlen = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-maxclip", options [option_index].name)) {
+          opt->realign_maxclip = atoi (optarg);
       }
       else if (0 == c && 0 == strcmp ("stats", options [option_index].name)) {
           opt->report_stats = 1;
@@ -2460,25 +2563,25 @@ tmap_map_opt_check_global(tmap_map_opt_t *opt_a, tmap_map_opt_t *opt_b)
         tmap_error("option -A was specified outside of the common options", Exit, CommandLineArgument);
     }
     if(opt_a->pen_mm != opt_b->pen_mm) {
-        tmap_error("option -M was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -M was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->pen_gapo != opt_b->pen_gapo) {
-        tmap_error("option -O was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -O was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->pen_gape != opt_b->pen_gape) {
-        tmap_error("option -E was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -E was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->pen_gapl != opt_b->pen_gapl) {
-        tmap_error("option -G was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -G was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->gapl_len != opt_b->gapl_len) {
-        tmap_error("option -K was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -K was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->bw != opt_b->bw) {
-        tmap_error("option -w was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -w was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->softclip_type != opt_b->softclip_type) {
-        tmap_error("option -g was specified outside of the common options", Exit, CommandLineArgument);
+        tmap_error("option -g was specified outside of the common options", Warn, CommandLineArgument);
     }
     if(opt_a->dup_window != opt_b->dup_window) {
         tmap_error("option -W was specified outside of the common options", Exit, CommandLineArgument);
@@ -2490,7 +2593,7 @@ tmap_map_opt_check_global(tmap_map_opt_t *opt_a, tmap_map_opt_t *opt_b)
         tmap_error("option -U was specified outside of the common options", Exit, CommandLineArgument);
     }
     if(opt_a->score_thr != opt_b->score_thr) {
-        tmap_error("option -T was specified outside of the common options", Exit, CommandLineArgument);
+       tmap_error("option -T was specified outside of the common options", Exit, CommandLineArgument);
     }
     if(opt_a->reads_queue_size != opt_b->reads_queue_size) {
         tmap_error("option -q was specified outside of the common options", Exit, CommandLineArgument);
@@ -2529,6 +2632,9 @@ tmap_map_opt_check_global(tmap_map_opt_t *opt_a, tmap_map_opt_t *opt_b)
 #endif
     if(opt_a->vsw_type != opt_b->vsw_type) {
         tmap_error("option -H was specified outside of the common options", Exit, CommandLineArgument);
+    }
+    if(opt_a->vsw_fallback != opt_b->vsw_fallback) {
+        tmap_error("option --vsw-fallback was specified outside of the common options", Exit, CommandLineArgument);
     }
     if(opt_a->long_hit_mult != opt_b->long_hit_mult) {
         tmap_error("option --long-hit-mult was specified outside of the common options", Exit, CommandLineArgument);
@@ -2668,9 +2774,15 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int64(opt->bam_start_vfo, 0, INT64_MAX, "--bam-start-vfo");
   tmap_error_cmd_check_int64(opt->bam_end_vfo, 0, INT64_MAX, "--bam-end-vfo");
   tmap_error_cmd_check_int(opt->use_param_ovr, 0, 1, "--par-ovr");
+  tmap_error_cmd_check_int(opt->ovr_candeval, 0, 1, "--ovr-candeval");
+  tmap_error_cmd_check_int(opt->confirm_vsw_corr, 0, 1, "--confirm-vsw-corr");
+  tmap_error_cmd_check_int(opt->candidate_ext, 0, 1, "--no-candidate-ext");
+  tmap_error_cmd_check_int(opt->correct_failed_vsw, 0, 1, "--no-err-fallback");
+  tmap_error_cmd_check_int(opt->use_nvsw_on_nonstd_bases, 0, 1, "--no-nonstd-bases");
   tmap_error_cmd_check_int(opt->use_bed_in_end_repair, 0, 1, "--no-bed-er");
   tmap_error_cmd_check_int(opt->use_bed_in_mapq, 0, 1, "--no-bed-mapq");
   tmap_error_cmd_check_int(opt->use_bed_read_ends_stat, 0, 1, "--repair");
+  tmap_error_cmd_check_int(opt->amplicon_scope, 0, INT32_MAX, "--ampl-scope");
   tmap_error_cmd_check_int(opt->score_match, 1, INT32_MAX, "-A");
   tmap_error_cmd_check_int(opt->pen_mm, 1, INT32_MAX, "-M");
   tmap_error_cmd_check_int(opt->pen_gapo, 1, INT32_MAX, "-O");
@@ -2722,6 +2834,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   // Warn users
   switch(opt->vsw_type) {
     case 1:
+    case 2:
     case 4:
     case 6:
       break;
@@ -2729,7 +2842,18 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
       tmap_error("the option -H value has not been extensively tested; proceed with caution", Warn, CommandLineArgument);
       break;
   }
-  
+  tmap_error_cmd_check_int(opt->vsw_fallback, 1, 10, "-H");
+  // Warn users
+  switch(opt->vsw_fallback) {
+    case 1:
+    case 2:
+    case 4:
+    case 6:
+      break;
+    default:
+      tmap_error("the option --vsw-fallback value has not been extensively tested; proceed with caution", Warn, CommandLineArgument);
+      break;
+  }
   // flowspace options
   tmap_error_cmd_check_int(opt->fscore, 0, INT32_MAX, "-X");
   tmap_error_cmd_check_int(opt->softclip_key, 0, 1, "-y");
@@ -2758,6 +2882,8 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->realign_gep_score, -127, 128, "--r-gep");
   tmap_error_cmd_check_int(opt->realign_bandwidth, 0, 256, "--r-bw");
   tmap_error_cmd_check_int(opt->realign_cliptype, 0, 4, "--r-clip");
+  tmap_error_cmd_check_int(opt->realign_maxlen, 0, 4096, "--r-maxlen");
+  tmap_error_cmd_check_int(opt->realign_maxclip, 0, 256, "--r-maxclip");
 
   // stats report  
   tmap_error_cmd_check_int(opt->report_stats, 0, 1, "--stats");
@@ -2902,9 +3028,15 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->bam_start_vfo = opt_src->bam_start_vfo;
     opt_dest->bam_end_vfo = opt_src->bam_end_vfo;
     opt_dest->use_param_ovr = opt_src->use_param_ovr;
+    opt_dest->confirm_vsw_corr = opt_src->confirm_vsw_corr;
+    opt_dest->candidate_ext = opt_src->candidate_ext;
+    opt_dest->correct_failed_vsw = opt_src->correct_failed_vsw;
+    opt_dest->use_nvsw_on_nonstd_bases= opt_src->use_nvsw_on_nonstd_bases;
+    opt_dest->ovr_candeval = opt_src->ovr_candeval;
     opt_dest->use_bed_in_end_repair = opt_src->use_bed_in_end_repair;
     opt_dest->use_bed_in_mapq = opt_src->use_bed_in_mapq;
     opt_dest->use_bed_read_ends_stat = opt_src->use_bed_read_ends_stat;
+    opt_dest->amplicon_scope = opt_src->amplicon_scope;
     opt_dest->score_match = opt_src->score_match;
     opt_dest->pen_mm = opt_src->pen_mm;
     opt_dest->pen_gapo = opt_src->pen_gapo;
@@ -2958,6 +3090,7 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->sample_reads = opt_src->sample_reads;
 #endif
     opt_dest->vsw_type = opt_src->vsw_type;
+    opt_dest->vsw_fallback = opt_src->vsw_fallback;
 
     // realignment control
     opt_dest->do_realign = opt_src->do_realign;
@@ -3037,9 +3170,11 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "bam_start_vfo=%ld\n", opt->bam_start_vfo);
   fprintf(stderr, "bam_end_vfo=%ld\n", opt->bam_end_vfo);
   fprintf(stderr, "use_param_ovr=%d\n", opt->use_param_ovr);
+  fprintf(stderr, "ovr_candeval=%d\n", opt->ovr_candeval);
   fprintf(stderr, "use_bed_in_end_repair=%d\n", opt->use_bed_in_end_repair);
   fprintf(stderr, "use_bed_in_mapq=%d\n", opt->use_bed_in_mapq);
   fprintf(stderr, "use_bed_read_ends_stat=%d\n", opt->use_bed_read_ends_stat);
+  fprintf(stderr, "amplicon_scope=%d\n", opt->amplicon_scope);
   fprintf(stderr, "score_match=%d\n", opt->score_match);
   fprintf(stderr, "pen_mm=%d\n", opt->pen_mm);
   fprintf(stderr, "pen_gapo=%d\n", opt->pen_gapo);
@@ -3089,6 +3224,11 @@ tmap_map_opt_print(tmap_map_opt_t *opt)
   fprintf(stderr, "sample_reads=%lf\n", opt->sample_reads);
 #endif
   fprintf(stderr, "vsw_type=%d\n", opt->vsw_type);
+  fprintf(stderr, "vsw_fallback=%d\n", opt->vsw_fallback);
+  fprintf(stderr, "confirm_vsw_corr=%d\n", opt->confirm_vsw_corr);
+  fprintf(stderr, "candidate_ext=%d\n", opt->candidate_ext);
+  fprintf(stderr, "correct_failed_vsw=%d\n", opt->correct_failed_vsw);
+  fprintf(stderr, "use_nvsw_on_nonstd_bases=%d\n", opt->use_nvsw_on_nonstd_bases);
   fprintf(stderr, "min_seq_len=%d\n", opt->min_seq_len);
   fprintf(stderr, "max_seq_len=%d\n", opt->max_seq_len);
   fprintf(stderr, "seed_length=%d\n", opt->seed_length);

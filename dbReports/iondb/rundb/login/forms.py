@@ -5,6 +5,7 @@ from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.auth.models import User as AuthUser
 from iondb.rundb import labels
+from iondb.rundb.login.password_validator import PasswordValidator
 
 
 class UserRegistrationForm(
@@ -17,7 +18,9 @@ class UserRegistrationForm(
     requires the password to be entered twice to catch typos.
 
     """
-
+    password1 = forms.CharField(label=_("Password"),
+                                widget=forms.PasswordInput,
+                                help_text=_("The password must contain at least a uppercase letter, a digit, special chars(.,@#$%^&*()_-+!;) and minimum 10 characters."))
     email = forms.EmailField(
         widget=forms.TextInput(attrs={"maxlength": 75}),
         label=labels.User.email.verbose_name,
@@ -32,11 +35,32 @@ class UserRegistrationForm(
 
     def save(self, commit=True):
         user = super(UserRegistrationForm, self).save(commit=False)
-        user.set_email(self.cleaned_data["email"])
+        user.email = self.cleaned_data["email"]
         if commit:
             user.save()
         return user
 
+    def clean_password2(self):
+        password2 = str(self.cleaned_data.get("password2"))
+        if password2:
+            passwordValidator = PasswordValidator(password2)
+            exec_validation_methods = PasswordValidator.validation_methods
+            error_list = {}
+            for method in exec_validation_methods:
+                if 'username' in method:
+                    username = str(self.cleaned_data.get("username"))
+                    message = getattr(passwordValidator, method)(username)
+                else:
+                    message = getattr(passwordValidator, method)()
+
+                if isinstance(message, list):
+                    error_list[method] = str(''.join(message))
+                elif message is not None:
+                    error_list[method] = message
+            if error_list:
+                raise forms.ValidationError(map(str, error_list.values()))
+
+        return password2
 
 class AuthenticationRememberMeForm(AuthenticationForm):
 

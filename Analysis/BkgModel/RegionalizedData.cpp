@@ -372,9 +372,9 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float copy_stringency
     my_beads.LowCopyBeadsAreLowQuality (final_filter, top_filter);
 
     int test_sampled = my_beads.NumberSampled();
-    printf("DEBUGFILTER: %d %d %d %d %f %f %f %f %f %f %f %f\n", region->index, test_sampled, num_sampled, my_beads.numLBeads,
-           min_percentage, max_percentage, robust_filter, stringent_filter, final_filter, top_filter,
-           low_filter, high_filter);
+//    printf("DEBUGFILTER: %d %d %d %d %f %f %f %f %f %f %f %f\n", region->index, test_sampled, num_sampled, my_beads.numLBeads,
+//           min_percentage, max_percentage, robust_filter, stringent_filter, final_filter, top_filter,
+//           low_filter, high_filter);
 
     // should check if not enough beads and rebuild filter if we fail
 

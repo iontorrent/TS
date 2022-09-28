@@ -2,13 +2,44 @@
 
 
 #include "WellsManager.h"
+#include "pthread.h"
+
+
+WellsManager::WellsManager( WellsManager *rw)
+:
+  keys_(rw->keys_),
+  chunk_size_row_(rw->chunk_size_row_),
+  chunk_size_col_(rw->chunk_size_col_),
+  chunk_size_flow_(rw->chunk_size_flow_),
+      do_norm_(rw->do_norm_),
+	  compress_multi_taps_(rw->compress_multi_taps_),
+      chip_type_(rw->chip_type_),
+	  num_flows_(rw->num_flows_),
+	  verbose_(rw->verbose_),
+      ion_flow_order(rw->ion_flow_order),
+	  read_class_map(rw->read_class_map)
+{
+
+	  raw_wells_.resize(rw->raw_wells_.size());
+    for (unsigned int i=0; i<rw->raw_wells_.size(); ++i){
+    	raw_wells_.at(i).Init(rw->raw_wells_.at(i));
+    }
+    if(do_norm_){
+        wells_norm_.resize(raw_wells_.size());
+        for (unsigned int i=0; i<raw_wells_.size(); ++i){
+          wells_norm_.at(i).SetFlowOrder(ion_flow_order, norm_method_);
+          wells_norm_.at(i).SetWells(&raw_wells_.at(i), read_class_map, i);
+        }
+
+    }
+}
 
 
 WellsManager::WellsManager(const vector<string> &wells_file_names, bool verbose)
     : chunk_size_row_(0), chunk_size_col_(0), chunk_size_flow_(0),
       do_norm_(false), compress_multi_taps_(true),
       chip_type_("unknown"), num_flows_(0), verbose_(verbose),
-      ion_flow_order(NULL), read_class_map(NULL)
+      norm_method_(""), ion_flow_order(NULL), read_class_map(NULL)
 {
   raw_wells_.resize(wells_file_names.size());
   if (verbose) {
@@ -96,11 +127,16 @@ void WellsManager::OpenForIncrementalRead()
 
 void WellsManager::LoadChunk(size_t rowStart,  size_t rowHeight,
                              size_t colStart,  size_t colWidth,
-                             size_t flowStart, size_t flowDepth)
+                             size_t flowStart, size_t flowDepth,
+							 pthread_mutex_t *mutex)
 {
   for (unsigned int i=0; i<raw_wells_.size(); ++i){
+	if(mutex)
+	  pthread_mutex_lock(mutex);
     raw_wells_[i].SetChunk(rowStart, rowHeight, colStart, colWidth, flowStart, flowDepth);
     raw_wells_[i].ReadWells();
+    if(mutex)
+      pthread_mutex_unlock(mutex);
     if (do_norm_){
       wells_norm_[i].CorrectSignalBias(keys_);
       wells_norm_[i].DoKeyNormalization(keys_);
@@ -121,6 +157,7 @@ void WellsManager::SetWellsContext(
   keys_ = keys;
   read_class_map = rcm;
   compress_multi_taps_ = compress_multi_taps;
+  norm_method_=norm_method;
 
   if (norm_method == "off"){
     do_norm_ = false;
@@ -189,22 +226,25 @@ void WellsManager::GetMeasurementsOneWell(const size_t &row, const size_t &col, 
   // Multi-tap compression. wells file access through .At
   if (compress_multi_taps_) {
     int sig_idx = 0;
+	int32_t idx=raw_wells_[0].GetInternalIndex(row,col);
+
     for (int flow = 0; flow < num_flows; ++flow){
       if (flow>0 and ion_flow_order->nuc_at(flow-1)== ion_flow_order->nuc_at(flow)){
         wells_measurements[flow] = 0.0;
-        wells_measurements[sig_idx] += raw_wells_[0].At(row,col,flow);
+        wells_measurements[sig_idx] += raw_wells_[0].AtWithIndex(idx,flow);
       }
       else {
         sig_idx = flow;
-        wells_measurements[flow] = raw_wells_[0].At(row,col,flow);
+        wells_measurements[flow] = raw_wells_[0].AtWithIndex(idx,flow);
       }
     }
   }
-  else //*/
+  else {
+	int32_t idx=raw_wells_[0].GetInternalIndex(row,col);
 
   for (int flow = 0; flow < num_flows; ++flow)
-    wells_measurements[flow] = raw_wells_[0].At(row,col,flow);
-
+    wells_measurements[flow] = raw_wells_[0].AtWithIndex(idx,flow);
+  }
   NaNcheck(row, col, num_flows, wells_measurements);
 }
 

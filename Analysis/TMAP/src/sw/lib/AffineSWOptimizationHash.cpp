@@ -79,7 +79,7 @@ static uint64_t hashDNA(const string &s) {
 
 bool AffineSWOptimizationHash::process(const string &b, const string &a, int _qsc, int _qec,
                                           int mm, int mi, int o, int e, int dir,
-                                          int *opt, int *te, int *qe, int *n_best)
+                                          int *opt, int *te, int *qe, int *n_best, int* fitflag)
 {
   int i;
   if(_qsc != qsc || _qec != qec || 0 != a.compare(query)) { // reset the hash?
@@ -102,6 +102,7 @@ bool AffineSWOptimizationHash::process(const string &b, const string &a, int _qs
           (*te) = hash[htpos].te;
           (*qe) = hash[htpos].qe;
           (*n_best) = hash[htpos].n_best;
+          if (fitflag) (*fitflag) = hash[htpos].fitflag;
           return true;
       }
   }
@@ -110,7 +111,7 @@ bool AffineSWOptimizationHash::process(const string &b, const string &a, int _qs
 
 void AffineSWOptimizationHash::add(const string &b, const string &a, int _qsc, int _qec,
                                           int mm, int mi, int o, int e, int dir,
-                                          int *opt, int *te, int *qe, int *n_best)
+                                          int *opt, int *te, int *qe, int *n_best, int* fitflag)
 {
   uint32_t hh = hashDNA(b);
   int htpos = hh % size;
@@ -120,6 +121,7 @@ void AffineSWOptimizationHash::add(const string &b, const string &a, int _qsc, i
   hash[htpos].te = (*te);
   hash[htpos].qe = (*qe);
   hash[htpos].n_best = (*n_best);
+  hash[htpos].fitflag = (fitflag != NULL) ? (*fitflag) : 0;
   hash[htpos].dir = dir;
   hash[htpos].b = b;
 }

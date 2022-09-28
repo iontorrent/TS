@@ -542,6 +542,7 @@ class PluginMixin( object ):
         """
         # order matters here! self.startplugin is an @property
         if (not self.csa) and getattr( self , 'startplugin' , None ):
+        #if False:
             print( 'Using startplugin class attribute.' )
         else:
             print( 'Reading startplugin.json . . .' )
@@ -556,7 +557,10 @@ class PluginMixin( object ):
                 
         # Define some needed variables
         self.plugin_dir    = self.startplugin['runinfo']['plugin_dir'  ] # This is the directory your plugin code lives in
-        
+        try:
+            self.purification_dir = self.startplugin['runinfo']['purification_data_dir'][0]['csaLogPath']
+        except:
+            self.purification_dir = None
         # For RUO TS, the following is True:
         #     On thumbnails, this is the 'thumbnail' directory
         #     On full chip, this is the calibration directory (thumbnail lives within there)

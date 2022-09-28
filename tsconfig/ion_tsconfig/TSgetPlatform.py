@@ -3,10 +3,18 @@ import sys
 import subprocess
 import json
 import requests
+import sys
 
-sys.path.append("/opt/ion/")
-os.environ["DJANGO_SETTINGS_MODULE"] = "iondb.settings"
-from django.conf import settings
+try:
+    sys.path.append("/opt/ion/")
+    os.environ["DJANGO_SETTINGS_MODULE"] = "iondb.settings"
+    from django.conf import settings
+except ImportError as Err:
+    print(Err)
+    sys.exit(0)
+except Exception as Err:
+    print(Err)
+    sys.exit(0)
 
 def getMajorPlatform():
     try:

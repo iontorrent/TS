@@ -307,6 +307,12 @@ class DifferentialSeparator : public AvgKeyIncorporation
     /** Do a beadfind/bead classification based on options passed in. */
     void FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, GridMesh<struct FitTauEParams> &emptyEstimates,
                  std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlows, float *taub_est);
+    void FitTauEThread(int bin_start, int bin_end,
+    		DifSepOpt &opts, TraceStoreCol &traceStore,
+    		GridMesh<struct FitTauEParams> &emptyEstimates,
+            char *filteredWells, float *ftime, int *allZeroFlows,
+    		int allZeroFlows_size, float *taub_est,
+    		int &converged, int &no_wells);
     void FitKeys(DifSepOpt &opts, GridMesh<struct FitTauEParams> &emptyEstimates, 
                  TraceStoreCol &traceStore, std::vector<KeySeq> &keys, 
                  std::vector<float> &ftime, TraceSaver &saver,
@@ -319,6 +325,10 @@ class DifferentialSeparator : public AvgKeyIncorporation
                      vector<float> &bfMetric, DifSepOpt &opts, std::vector<float> &traceSd);
     void DoRegionClustering(DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
                             std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh);
+    void RegionalClusteringThread(int start_bin, int end_bin,
+    		DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
+            std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh, stringstream *modelOutput);
+
     void ClusterIndividualWells(DifSepOpt &opts, Mask &bfMask, Mask &mask, TraceStoreCol &traceStore,
                                 GridMesh<MixModel> &modelMesh, std::vector<KeyFit> &wells, 
                                 std::vector<float> &confidence, std::vector<char> &clusters);
@@ -370,7 +380,17 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void WellDeviation(TraceStoreCol &store,
                        int rowStep, int colStep,
                        vector<char> &filter,
-                       vector<float> &mad);
+                       vector<float> &mad,
+					   int ncores);
+    void WellDeviationThread(TraceStoreCol *store,
+    		GridMesh<float> *mesh,
+                                              int rowStep,
+    										  int colStep,
+                                              char *filter,
+    										  int filter_len,
+                                              float *mad,
+    										  int bin_start,
+    										  int bin_end);
 
     void WellDeviationRegion(TraceStoreCol &store,
                              int row_start, int row_end,
@@ -380,8 +400,8 @@ class DifferentialSeparator : public AvgKeyIncorporation
                              float *mean, float *m2,
                              float *normalize,
                              float *summary,
-                             vector<char> &filters,
-                             vector<float> &mad);
+                             char *filters,
+                             float *mad);
 
     void RankWellsBySignal(int flow0, int flow1, TraceStore &store,
                            float iqrMult,
@@ -446,7 +466,8 @@ class DifferentialSeparator : public AvgKeyIncorporation
                        Mask &mask,
                        int minWells,
                        vector<char> &filter,
-                       vector<char> &refWells);
+                       vector<char> &refWells,
+					   int ncores);
 
     static float IQR (SampleQuantiles<float> &s);
 

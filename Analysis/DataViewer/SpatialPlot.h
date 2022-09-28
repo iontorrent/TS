@@ -177,7 +177,18 @@ protected:
     int histMax=0;
 #define NUM_HIST_BINS 256
     int histData[NUM_HIST_BINS]={};
+
+    int bitsNeededData[16]={};
+    int bitsNeededMax=0;
+    int bitsNeededMin=0;
+
     int display_histogram=0;
+
+    int AverageSubState=0;
+    int lastAverageSub=0;
+    int AverageSubApplied=0;
+
+    int display_bitsNeeded=0;
 
 protected slots:
     virtual void updatePixmap(const QImage &image);
@@ -189,7 +200,7 @@ protected slots:
     void axisDoubleClick_traces(QCPAxis *axis, QCPAxis::SelectablePart part, QMouseEvent *event);
 
 private:
-
+    void DisplayHistogram(int *hist, int len, int minVal, int maxVal, int useLog);
     void mousePressEvent(QMouseEvent *);
     void mouseReleaseEvent(QMouseEvent *);
     void scroll(int deltaX, int deltaY);

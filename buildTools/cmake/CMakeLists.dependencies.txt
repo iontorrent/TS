@@ -3,7 +3,9 @@
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
 #set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
 
-set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+if(NOT ION_UPDATE_SERVER)
+    set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+endif()
 
 # Use the closest ION_UPDATE_SERVER we can find.
 #message(STATUS "Searching for an ION_UPDATE_SERVER...")
@@ -206,9 +208,9 @@ endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "6.100.0+ion0")
+  set(proj_version "6.100.0+ion1")
   set(proj_name_version "${proj_name}-${proj_version}")
-  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-6.100.0+ion0.patch")
+  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-6.100.0+ion1.patch")
   ExternalProject_add(${proj_name}_proj
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-6.100.0.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
@@ -285,7 +287,7 @@ include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.
 # md5sum : 028c9110bd80d40e13dbd8270ee7eb2b
 if(NOT ION_USE_SYSTEM_HTSLIB)
   set(proj_name "htslib")
-  set(proj_version "1.2.1+ion0")
+  set(proj_version "1.2.1+ion2")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}_proj
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/htslib-1.2.1.tar.gz"
@@ -297,7 +299,7 @@ if(NOT ION_USE_SYSTEM_HTSLIB)
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
     INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/htslib-1.2+ion0.patch"
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/htslib-1.2+ion2.patch"
   )
   set(ION_HTSLIB_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libhts.a")
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
@@ -313,7 +315,7 @@ endif()
 # md5sum f94f6ea20f5d581459f90daa39020a60
 if (NOT ION_USE_SYSTEM_SAMTOOLS)
   set(proj_name "samtools")
-  set(proj_version "1.2+ion2")
+  set(proj_version "1.2+ion4")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     DEPENDS htslib_proj
@@ -325,7 +327,7 @@ if (NOT ION_USE_SYSTEM_SAMTOOLS)
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make
     INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-1.2+ion2.patch"
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-1.2+ion4.patch"
   )
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
   set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libbam.a")

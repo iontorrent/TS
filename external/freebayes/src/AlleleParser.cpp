@@ -112,7 +112,7 @@ bool AlleleParser::GetNextHotspotLocation(int& chr, long& position) const
 	chr = hotspot_alleles_.front().chr;
 	position = hotspot_alleles_.front().pos;
 	return true;
-  }
+  } 
   if (hotspot_reader_->HasMoreVariants()) {
     chr = hotspot_reader_->next_chr();
     position = hotspot_reader_->next_pos();
@@ -513,6 +513,7 @@ void AlleleParser::BlacklistAlleleIfNeeded(AlleleDetails& allele, int total_cov,
 	    int dif = real_var_pos-hint_position;
 	    alt = alt.substr(dif);
 	    rlen -= dif;
+	    hint_position += dif; // fix the starting location of hint allele
 	}
 	if (rlen > 0 and alt.size() > 0) {
 	    int arlen = allele.ref_length-allele.minimized_prefix;
@@ -598,7 +599,7 @@ bool AlleleParser::decompose_allele(AlleleDetails &allele, long hp, long rlen, i
     ae = allele.alt_sequence.size()-1; ale = allele.raw_cigar.size()-1;
     pos = allele.position+allele.ref_length-1;
     while (pos >hp+rlen-1) {
-	if (ale < 0) return false;
+	if (ale < 0) return false;  // rlen can be 0
 	char x = allele.raw_cigar[ale];
         if (x == 'M') {
             ae--; pos--;
@@ -609,31 +610,33 @@ bool AlleleParser::decompose_allele(AlleleDetails &allele, long hp, long rlen, i
         }
 	ale--;
     }
-    if (ab > ae or alb > ale) return false; 
+    //if (ab > ae or alb > ale) return false; 
+    if (ab > ae+1 or alb > ale+1) return false; // allow rlen to be zero
     if (last == 'D' and allele.raw_cigar[alb] == 'D') return false; // a deletion is broken in the middle, not a decomposition
     return true;
 }
 
-string AlleleParser::get_alt(AlleleDetails &allele, long hp, long rlen)
+bool AlleleParser::get_alt(AlleleDetails &allele, long hp, long rlen, string& a_alt)
 {
     int ab, ae, alb, ale;
-    string s;
-    s.clear();
-    if (not decompose_allele(allele, hp, rlen, ab, ae, alb, ale)) return s;
+    if (not decompose_allele(allele, hp, rlen, ab, ae, alb, ale)) return false;
     if (hp+rlen > allele.position+allele.ref_length) {
 	string extra = ref_reader_->substr(allele.chr, allele.position+allele.ref_length, hp+rlen-(allele.position+allele.ref_length));
-	return allele.alt_sequence.substr(ab)+extra;
-    }
-    return allele.alt_sequence.substr(ab, ae-ab+1);
+	a_alt = allele.alt_sequence.substr(ab)+extra;
+    } else a_alt = allele.alt_sequence.substr(ab, ae-ab+1);
+    return true;
 }
 
 bool AlleleParser::to_ref(AlleleDetails &allele, long hp, long rlen)
 {
     int ab, ae, alb, ale;
     if (not decompose_allele(allele, hp, rlen, ab, ae, alb, ale)) return false;
-    string ref = ref_reader_->substr(allele.chr, hp, rlen);
-    string cig;
-    cig.assign(ref.size(), 'M');
+    string ref, cig;
+    ref.clear(); cig.clear();
+    if (rlen > 0) { // handle rlen zero
+	ref = ref_reader_->substr(allele.chr, hp, rlen);
+    	cig.assign(ref.size(), 'M');
+    }
     if (hp+rlen >= allele.position+allele.ref_length) {
 	int lz = ref.size()-(hp+rlen-(allele.position+allele.ref_length));
         allele.alt_sequence = allele.alt_sequence.substr(0, ab)+ref.substr(0, lz);
@@ -660,9 +663,23 @@ void AlleleParser::SegmentBlacklist(int pos, int chr, int total_cov, int total_f
     long int hint_position = hotspot_reader_->hint_position();
     long int rlen = hotspot_reader_->hint_rlen();
     string alt = hotspot_reader_->hint_alt();
+    long int o_hint_pos = hint_position;
+    if (alt.size() == 0) { hotspot_reader_->hint_next();continue;}
     if (hint_chr_index != chr) break;
+    /*
+    int pref =  hotspot_reader_->hint_prefix();
+    if (pref > 0) {
+	hint_position += pref;
+	rlen -= pref;
+	alt = alt.substr(pref);
+    }
+    */
+    if ((rlen == 1 or alt.size() == 1) and alt[0] == ref_reader_->substr(hint_chr_index, hint_position,1)[0]) {
+	hint_position++; rlen--;
+	if (alt.size() > 1) alt = alt.substr(1); else alt.clear();
+    } // There is other cases of suffix part being modified. Later. Likely not needed as it is often part of HP
 
-    if (alt.size() > 0) {
+    {
       bool need_cont = false;
       int tfc= 0, trc=0, tc=0;
       vector<AlleleDetails*> alist;
@@ -671,11 +688,13 @@ void AlleleParser::SegmentBlacklist(int pos, int chr, int total_cov, int total_f
         AlleleDetails& allele = I->second;
 	int arlen = allele.ref_length;
 	if (allele.filtered) continue;
-	if (hint_chr_index == chr and hint_position < allele.position+ arlen) {
+	if (hint_chr_index == chr and o_hint_pos < allele.position+ arlen) {
 	    need_cont = true;
-	    if (hint_position >= allele.position) {
-		string a = get_alt(allele, hint_position, rlen);
-	    	if (a == alt) {
+	    if (hint_position >= allele.position and hint_position < allele.position+ arlen) {
+		string a;
+		bool f = get_alt(allele, hint_position, rlen, a);
+	    	if (f and a == alt) {
+		    //cerr << hint_position << "alt=" << a << "SVB=" << alt << "refLen=" << rlen << " old pos=" << o_hint_pos << allele.alt_sequence << allele.position << endl;
 		    tc += allele.coverage; tfc += allele.coverage_fwd; trc += allele.coverage_rev;
 		    alist.push_back(&allele);
 		}
@@ -722,7 +741,12 @@ void AlleleParser::SegmentBlacklist(int pos, int chr, int total_cov, int total_f
 
       		    for (int sample_idx = 0; sample_idx < num_samples_; ++sample_idx) {
         		fp->samples.at(sample_idx).coverage +=  alist[i]->samples.at(sample_idx).coverage;
+			fp->samples.at(sample_idx).coverage_rev += alist[i]->samples.at(sample_idx).coverage_rev;
+			fp->samples.at(sample_idx).coverage_fwd += alist[i]->samples.at(sample_idx).coverage_fwd;
 		    }
+		    // healed allele has bigger influencing region. Keep this for sake of look ahead. healed influence region may not be correct. trusting the original
+		    //if (fp->minimized_prefix > alist[i]->minimized_prefix) fp->minimized_prefix = alist[i]->minimized_prefix;
+		    //if (fp->minimized_suffix >  alist[i]->minimized_suffix) fp->minimized_suffix = alist[i]->minimized_suffix;
 		    //cerr << "Segement coverage " << fp->coverage << " " << alist[i]->coverage << " " << fp->coverage_fwd << " " << fp->coverage_rev << " " << fp->filtered << endl;
 		  } else {
 		    string ref = ref_reader_->substr(alist[i]->chr, alist[i]->position, alist[i]->ref_length); // ref
@@ -1206,6 +1230,50 @@ bool AlleleParser::is_fake_hotspot(AlleleDetails& allele)
     // return to original val
     min_indel_alt_fraction_ = s1; min_alt_fraction_ = s2;
     return r_v;
+}
+
+bool AlleleParser::is_fake_hotspot(AlleleDetails& allele, vector<AlleleDetails *>& mnp_list)
+{
+    bool r = is_fake_hotspot(allele);
+    if (not r or subset_of(allele, mnp_list)) return false;
+    return true;
+}
+
+AlleleDetails *AlleleParser::subset_of(AlleleDetails& allele, vector<AlleleDetails *>& mnp_list)
+{
+    if (allele.type != ALLELE_SNP and allele.type != ALLELE_MNP) return NULL;
+    for (unsigned int i = 0; i < mnp_list.size(); i++) {
+	AlleleDetails *b = mnp_list[i];
+	if (&allele == b or b->type != ALLELE_MNP) continue;
+	int start = allele.position+ allele.minimized_prefix-b->position;
+	// if (start < b->minimized_prefix or allele.position+allele.ref_length-allele.minimized_suffix > b->position+b->ref_length-b->minimized_suffix) continue;
+        int len = allele.ref_length - allele.minimized_prefix -  allele.minimized_suffix;
+	if (start < b->minimized_prefix or start+len > (int) (b->ref_length-b->minimized_suffix)) continue; // equvilant to above
+	string s = b->alt_sequence.substr(allele.position+ allele.minimized_prefix-b->position, len);
+	string t = allele.alt_sequence.substr(allele.minimized_prefix, len);
+	if (s == t) return b;
+    }
+    return NULL;
+}
+
+AlleleDetails *AlleleParser::subset_of(int ref_length, int pref, int suff, int pos, string alt, vector<AlleleDetails *>& mnp_list)
+{
+    if ((unsigned) ref_length != alt.size()) return NULL;
+    AlleleDetails b;
+    b.position = pos; b.ref_length = ref_length; b.minimized_prefix = pref; b.minimized_suffix = suff; 
+    b.is_hotspot = true; b.alt_sequence = alt;
+    b.type = ALLELE_MNP;
+    return subset_of(b, mnp_list);
+}
+
+void AlleleParser::find_mnps(vector<AlleleDetails *>& mnp_list)
+{
+    mnp_list.clear();
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+	AlleleDetails& allele = I->second;
+	if (allele.filtered or allele.type != ALLELE_MNP or is_fake_hotspot(allele)) continue;
+	mnp_list.push_back(&allele);
+    }
 }
 
 // -------------------------------------------------------------------------
@@ -1907,6 +1975,8 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
   // ZZ remove duplicate and also save hotspot for fill in later.
 
   long next_pos = min(position_ticket->pos + haplotype_length, position_ticket->target_end);
+  vector<AlleleDetails*> mnp_list;
+  find_mnps(mnp_list);
   vector< vector<HotspotAllele> > save_hotspots;
   while (hotspot_reader_->HasMoreVariants()) {
     if ((hotspot_reader_->next_chr() > position_ticket->chr) or
@@ -1948,8 +2018,16 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 		if (ref_length > haplotype_length) continue;
 	    }	
 	    // use the map to find duplicate, maybe we can get the coverage as well for AO. ZZ 6/29/15
-	    pileup::iterator x = allele_pileup_.find(Allele(allele.type,pos,ref_length,alt.size(),alt.c_str()));
-	    if (x == allele_pileup_.end()) continue;
+	    Allele al(allele.type,pos,ref_length,alt.size(),alt.c_str());
+	    pileup::iterator x = allele_pileup_.find(al);
+            int new_suf = haplotype_length-allele.ref_length+allele.suffix_padding-pos_offset; // TS-17918
+	    if (x == allele_pileup_.end()) {
+		if (subset_of(ref_length, pos_offset, new_suf, pos, alt, mnp_list)) {
+		    allele_pileup_[al].add_hotspot(allele, num_samples_, pos_offset, new_suf);
+		    allele.length = -1;
+		}
+		continue;
+	    }
 	    if (x->second.filtered or x->second.is_hotspot) continue;
 	    /*
 	    if (x->second.is_hotspot) continue; // two hotspot are effective same, do nothing now.
@@ -1960,7 +2038,6 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
 	    x->second.hotspot_params = &allele;
 	    x->second.filtered = false;
 	    x->second.is_black_listed = '.';
-	    int new_suf = haplotype_length-allele.ref_length+allele.suffix_padding-pos_offset; // TS-17918
 	    if (x->second.minimized_prefix >= pos_offset and x->second.minimized_suffix >=  new_suf) { // not change if the alignment shift the hotspot allele
 		x->second.minimized_prefix = pos_offset; x->second.minimized_suffix = new_suf;
 	    }
@@ -2118,6 +2195,8 @@ bool AlleleParser::FillVariantFlowDisCheck(VariantCandidate &v, string &refstrin
                 bool exist_allele = false;
 		//cout << "ZZ:isAltFakeHotspot :";
 		//cout << "Freebayes pos:" << v.variant.position << v.variant.ref << endl;
+		vector<AlleleDetails*> mnp_list;
+		find_mnps(mnp_list);
                 for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
                         AlleleDetails& allele = I->second;
                         if (allele.filtered)
@@ -2126,7 +2205,7 @@ bool AlleleParser::FillVariantFlowDisCheck(VariantCandidate &v, string &refstrin
                         //common_ref_len = max(common_ref_len, allele.ref_length);
                         //v.variant.alt.push_back(allele.alt_sequence);
                         v.variant.isAltHotspot.push_back(allele.is_hotspot); // Indicates the alt "allele" is HS or de novo?
-                        if (allele.is_hotspot and is_fake_hotspot(allele)) v.variant.isAltFakeHotspot.push_back(true);
+                        if (allele.is_hotspot and is_fake_hotspot(allele, mnp_list)) v.variant.isAltFakeHotspot.push_back(true);
 			else v.variant.isAltFakeHotspot.push_back(false);
 			//cout << (v.variant.isAltFakeHotspot.back()? "true ":"false ") << allele.position << " " << position_ticket->pos;
                         if (allele.is_hotspot and allele.hotspot_params)

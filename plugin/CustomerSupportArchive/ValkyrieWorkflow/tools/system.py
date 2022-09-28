@@ -3,7 +3,10 @@ Advanced system functions
 '''
 import os, sys
 import subprocess
-from network import get_domain
+try:
+    from network import get_domain
+except ModuleNotFoundError:
+    from .network import get_domain
 
 def makedir( dirname ):
     '''

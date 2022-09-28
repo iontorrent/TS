@@ -8,6 +8,10 @@
             {% if summary.showDeprecationMsg %}
                 <li><i class="fa fa-exclamation-circle text-warning"></i>{{ summary.showDeprecationMsg }}</li>
             {% endif %}
+            {% if summary.showPasswordWarningMsg %}
+                <li><i class="fa fa-exclamation-circle text-warning"></i>{{ summary.showPasswordWarningMsg|safe }}
+                <a href={% url 'configure_account' %}#user>here</a></li>
+            {% endif %}
             {% if summary.update_status.lower == "available" or "ready" in summary.update_status.lower %}
                 <li><a id="live_button" class="btn btn-success" href="/admin/update">Update available</a></li>
             {% elif "fail" in summary.update_status.lower %}

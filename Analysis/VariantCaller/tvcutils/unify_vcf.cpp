@@ -491,11 +491,24 @@ void VcfOrderedMerger::perform() {
   allele_subset.print_stats();
 }
 
+//static string get_gt(map<string, vector<string> > & sampleOutput)
+string get_gt(vcf::Variant *v)
+{
+      if (v->samples.empty()) return "./.";
+      map<string, vector<string> > & sampleOutput = v->samples[v->sampleNames[0]];
+      map<string, vector<string> >::const_iterator itg = sampleOutput.find("GT");
+      if (itg == sampleOutput.end()) return "./.";
+      return itg->second[0];
+}
+
+
 static bool in_gt(vcf::Variant *v, int i, bool &alt_called)
 {
 	alt_called = false;
          string gt_field;
-            stringstream gt(v->samples[v->sampleNames[0]]["GT"][0]);
+            //stringstream gt(v->samples[v->sampleNames[0]]["GT"][0]);
+	    //stringstream gt(get_gt(v->samples[v->sampleNames[0]]));
+	    stringstream gt(get_gt(v));
             while (getline(gt, gt_field, '/')){
                 if (gt_field!="."){
                     int called_allele = std::stoi(gt_field);
@@ -650,7 +663,8 @@ vcf::Variant* VcfOrderedMerger::merge_overlapping_variants() {
   vcf::Variant& novel_v = *novel_queue.current();
   vcf::Variant& assembly_v = *assembly_queue.current();
 
-  string gt = novel_queue.current()->samples[novel_queue.current()->sampleNames[0]]["GT"][0];
+  //string gt = get_gt(novel_queue.current()->samples[novel_queue.current()->sampleNames[0]]);
+  string gt = get_gt(novel_queue.current());
   if (false /*(gt == "./." || gt == "0/0"*/) {
     // Logging novel and indel merge
     cout << UNIFY_VARIANTS " Advanced merge of IndelAssembly variant " << assembly_queue.current()->sequenceName
@@ -765,7 +779,9 @@ bool VcfOrderedMerger::find_match_new(vcf::Variant* merged_entry, vcf::Variant* 
 	if (left+*omapalti+right == ll+*omapalt+rr) {
 	    idx = omapalti-merged_entry->info["OMAPALT"].begin()+1;
   	    string gt_field;
-  	    stringstream gt(merged_entry->samples[merged_entry->sampleNames[0]]["GT"][0]);
+  	    //stringstream gt(merged_entry->samples[merged_entry->sampleNames[0]]["GT"][0]);
+	    //stringstream gt(get_gt(merged_entry->samples[merged_entry->sampleNames[0]]));
+	    stringstream gt(get_gt(merged_entry));
 	    gt_v = 4;
   	    while (getline(gt, gt_field, '/')){
 		//if (pos == 7578381 and hotspot->position == 7578383) cerr << "gt_field=" << gt_field << endl;
@@ -975,7 +991,8 @@ void VcfOrderedMerger::annotate_subset(vcf::Variant* variant) {
 
   // unpack called alleles -- First genotype then PPA
   set<int> called_alts;
-  string gt_str = variant->samples[variant->sampleNames[0]]["GT"][0];
+  //string gt_str = get_gt(variant->samples[variant->sampleNames[0]]);
+  string gt_str = get_gt(variant);
   genotype_to_set(called_alts, gt_str, '/');
 
   map<string, vector<string> >::iterator it;

@@ -74,7 +74,7 @@ def downsample(data,scale=None,blocksize=None,subsample=True,clipedges=False):
             avgdata[i,j] = np.ma.masked_invalid(data[imin:imax,jmin:jmax]).mean()
     return avgdata
 
-def GBI( image , mask , dist , nn_gain=1 , ignore_self=False, block_rc=None ):
+def GBI( image , mask=None , dist=10 , nn_gain=1 , ignore_self=False, block_rc=None ):
     """
     Adapted from Todd Rearick's GenerateBackgroundImage Matlab function for nn-subtraction
     Note that mask is pinned pixels and will be ignored for the calculations.
@@ -87,6 +87,9 @@ def GBI( image , mask , dist , nn_gain=1 , ignore_self=False, block_rc=None ):
     if block_rc is None:
         block_rc = image.shape[:2]
 
+    if nn_gain is None:
+        nn_gain = 1
+
     # Excpand the rc 
     block_R, block_C = block_rc
 
@@ -97,8 +100,8 @@ def GBI( image , mask , dist , nn_gain=1 , ignore_self=False, block_rc=None ):
         raise ValueError( 'rc must evenly divide into the image size' )
 
     # Calculate the number of blocks
-    region_rows = rows / block_R
-    region_cols = cols / block_C
+    region_rows = int( rows / block_R )
+    region_cols = int( cols / block_C )
 
     for r in range( region_rows ):
         for c in range( region_cols ):
@@ -106,9 +109,19 @@ def GBI( image , mask , dist , nn_gain=1 , ignore_self=False, block_rc=None ):
             cls = slice( c * block_C, ( c+1 ) * block_C )
 
             roi    = image[ rws, cls ]
-            badpx  = np.zeros( roi.shape[:-1], dtype=np.bool )   # All pixels are good
+            if mask is None:
+                badpx   = np.zeros( roi.shape[:-1], dtype=np.bool )   # All pixels are good
+            else:
+                badpx   = mask[rws,cls]
 
-            output[rws,cls] = roi - _GBI_block( roi, badpx, 10 )
+            try:
+                gain = nn_gain[rws,cls].reshape(block_R, block_C,1)
+            except TypeError:
+                # must be a scalar
+                gain = nn_gain
+
+
+            output[rws,cls] = _GBI_block( roi, badpx, dist, nn_gain=gain )
     return output
 
 def _GBI_block( image , mask , dist , nn_gain=1 , ignore_self=False ):

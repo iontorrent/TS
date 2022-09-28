@@ -29,7 +29,8 @@ private:
     void DoubleClick(int x,int y);
     void getBlockSize(QString dir, int &blockRows, int &blockCols);
     void CreateHistogram();
-
+    void SubAverage();
+    void CalculateBitsNeededData();
 
     int zeroState=0;
     int RowNoiseState=0;

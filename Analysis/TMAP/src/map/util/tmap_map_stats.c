@@ -103,6 +103,25 @@ tmap_map_stats_add(tmap_map_stats_t *dest, tmap_map_stats_t *src)
   dest->bases_fully_tailclipped += src->bases_fully_tailclipped;
 
   dest->num_filtered_als += src->num_filtered_als;
+
+  dest->read_clipping_extensions += src->read_clipping_extensions;
+  dest->nonstd_base_fallbacks_fwd += src->nonstd_base_fallbacks_fwd;
+  dest->nonstd_base_fallbacks_rev += src->nonstd_base_fallbacks_rev;
+  dest->vect_sw_calls += src->vect_sw_calls;
+  dest->fallback_vsw_calls += src->fallback_vsw_calls;
+  dest->fallback_sw_calls += src->fallback_sw_calls;
+  dest->overflows += src->overflows;
+  dest->vswfails += src->vswfails;
+  dest->totswfails += src->totswfails;
+  dest->symmetric_scores += src->symmetric_scores;
+  dest->asymmetric_scores_corrected += src->asymmetric_scores_corrected;
+  dest->asymmetric_scores_failed += src->asymmetric_scores_failed;
+
+  dest->amplicon_searches += src->amplicon_searches;
+  dest->amplicon_search_successes += src->amplicon_search_successes;
+  dest->amplicon_overlaps += src->amplicon_overlaps;
+  dest->candeval_overrides += src->candeval_overrides;
+  dest->multiple_candeval_overrides += src->multiple_candeval_overrides;
 }
 
 void
@@ -238,5 +257,24 @@ tmap_map_stats_print(tmap_map_stats_t *s)
   fprintf (stderr, "bases_fully_tailclipped=%llu\n", (unsigned long long int)s->bases_fully_tailclipped);
 
   fprintf (stderr, "num_filtered_als=%llu\n", (unsigned long long int)s->num_filtered_als);
+
+  fprintf (stderr, "read_clipping_extensions=%llu\n", (unsigned long long int)s->read_clipping_extensions);
+  fprintf (stderr, "vect_sw_calls=%llu\n", (unsigned long long int)s->vect_sw_calls);
+  fprintf (stderr, "fallback_vsw_calls=%llu\n", (unsigned long long int)s->fallback_vsw_calls);
+  fprintf (stderr, "fallback_sw_calls=%llu\n", (unsigned long long int)s->fallback_sw_calls);
+
+  fprintf (stderr, "nonstd_base_fallbacks_fwd=%llu\n", (unsigned long long int)s->nonstd_base_fallbacks_fwd);
+  fprintf (stderr, "nonstd_base_fallbacks_rev=%llu\n", (unsigned long long int)s->nonstd_base_fallbacks_rev);
+  fprintf (stderr, "overflows=%llu\n", (unsigned long long int)s->overflows);
+  fprintf (stderr, "symmetric_scores=%llu\n", (unsigned long long int)s->symmetric_scores);
+  fprintf (stderr, "asymmetric_scores_corrected=%llu\n", (unsigned long long int)s->asymmetric_scores_corrected);
+  fprintf (stderr, "asymmetric_scores_failed=%llu\n", (unsigned long long int)s->asymmetric_scores_failed);
+  
+  fprintf (stderr, "amplicon_searches=%llu\n", (unsigned long long int)s->amplicon_searches);
+  fprintf (stderr, "amplicon_search_successes=%llu\n", (unsigned long long int)s->amplicon_search_successes);
+  fprintf (stderr, "amplicon_overlaps=%llu\n", (unsigned long long int)s->amplicon_overlaps);
+  fprintf (stderr, "candeval_overrides=%llu\n", (unsigned long long int)s->candeval_overrides);
+  fprintf (stderr, "multiple_candeval_overrides=%llu\n", (unsigned long long int)s->multiple_candeval_overrides);
+
 
 }

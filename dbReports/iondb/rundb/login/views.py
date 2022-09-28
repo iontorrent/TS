@@ -2,6 +2,7 @@
 
 import json
 import urlparse
+import datetime
 from django.contrib.auth import REDIRECT_FIELD_NAME, login as auth_login
 from django.contrib.sites.models import get_current_site
 from django import shortcuts, template
@@ -15,7 +16,6 @@ from django.http import HttpResponseRedirect, HttpResponse
 
 from iondb.rundb.login.forms import UserRegistrationForm, AuthenticationRememberMeForm
 from iondb.rundb.models import Message
-
 from iondb.rundb.plan.views import reset_page_plan_session
 from iondb.rundb.sample.views import clear_samplesetitem_session
 
@@ -164,6 +164,8 @@ def registration(request):
 
             # update UserProfile to indicate this account needs activation
             new_user.userprofile.needs_activation = True
+            new_user.userprofile.is_password_valid = True
+            new_user.userprofile.last_password_changed_on = datetime.datetime.utcnow()
             new_user.userprofile.save()
 
             # Send global message notifying of pending registration

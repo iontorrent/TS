@@ -35,19 +35,26 @@
 #include <unistd.h>
 #include "tmap_vsw_definitions.h"
 #include "lib/AffineSWOptimizationWrapper.h"
+#include "../map/util/tmap_map_stats.h"
 
 #ifdef __cplusplus
 extern "C" 
 {
 #endif
 
+
+#define VSW_DEFAULT_METHOD 2 // this is a non-vectorized implementation
+
 /*!
   Used to run the underlying vectorized smith waterman (VSW) types
   */
-typedef struct {
+typedef struct __tmap_vsw_t
+{
     int32_t type; /*!< the vectorized smith waterman type */
+    int32_t fallback_type; /*!< the vectorized smith waterman type of fallback algorithm */
     tmap_vsw_wrapper_t *algorithm; /*!< the main VSW algorithm */
-    tmap_vsw_wrapper_t *algorithm_default; /*!< the VSW algorithm to test if the main algorithm fails */
+    tmap_vsw_wrapper_t *algorithm_fallback; /*!< the fallback VSW algorithm */
+    tmap_vsw_wrapper_t *algorithm_default; /*!< the VSW algorithm to use if the main/fallback algorithms fail */
     int32_t query_start_clip; /*!< 1 if we are to clip the start of the query, 0 otherwise */
     int32_t query_end_clip; /*!< 1 if we are to clip the end of the query, 0 otherwise */
     tmap_vsw_opt_t *opt; /*!< the alignment parameters */
@@ -63,16 +70,22 @@ typedef struct {
   @return                   the query sequence in vectorized form
   */
 tmap_vsw_t*
-tmap_vsw_init(const uint8_t *query, int32_t qlen,
+tmap_vsw_init (const uint8_t *query, int32_t qlen,
               int32_t query_start_clip, int32_t query_end_clip,
               int32_t type,
+              int32_t fallback_type, 
               tmap_vsw_opt_t *opt);
+
+void tmap_vsw_set_params (tmap_vsw_t* vsw,
+                            int32_t query_start_clip,
+                            int32_t query_end_clip,
+                            tmap_vsw_opt_t* opt);
 
 /*!
   @param  vsw  the structure to destroy
   */
 void
-tmap_vsw_destroy(tmap_vsw_t *vsw);
+tmap_vsw_destroy (tmap_vsw_t *vsw);
 
 /*!
   Performs alignment in the sequencing direction.  This will update query_end and target_end
@@ -92,12 +105,17 @@ tmap_vsw_destroy(tmap_vsw_t *vsw);
   cases, if there are still several possibilities, choose the one with the largest value of 
   target_end among them). 
   */
+
 int32_t
-tmap_vsw_process_fwd(tmap_vsw_t *vsw,
+tmap_vsw_process_fwd (tmap_vsw_t *vsw,
                  const uint8_t *query, int32_t qlen,
                  uint8_t *target, int32_t tlen, 
                  tmap_vsw_result_t *result,
-                 int32_t *overflow, int32_t score_thr, int32_t direction);
+                 int32_t *overflow, int32_t score_thr, int32_t direction, 
+                 uint32_t confirm_conflicts, 
+                 uint32_t fallback_failed,
+                 uint32_t fallback_noniupac,
+                 tmap_map_stats_t* stat);
 
 /*!
   Performs alignment in the reverse of the sequencing direction.  This will update query_start 
@@ -117,12 +135,17 @@ tmap_vsw_process_fwd(tmap_vsw_t *vsw,
   cases, if there are still several possibilities, choose the one with the largest value of 
   target_end among them). 
   */
+
 int32_t
-tmap_vsw_process_rev(tmap_vsw_t *vsw,
+tmap_vsw_process_rev (tmap_vsw_t *vsw,
                  const uint8_t *query, int32_t qlen,
                  uint8_t *target, int32_t tlen, 
                  tmap_vsw_result_t *result,
-                 int32_t *overflow, int32_t score_thr, int32_t direction);
+                 int32_t *overflow, int32_t score_thr, int32_t direction, 
+                 uint32_t confirm_conflicts, 
+                 uint32_t fallback_failed,
+                 uint32_t fallback_noniupac,
+                 tmap_map_stats_t* stat);
 
 #ifdef __cplusplus
 }

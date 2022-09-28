@@ -283,7 +283,9 @@ RawWells::RawWells()
 {
   mSaveAsUShort = false;
   Init ("", "", 0,0,0);
+  mIs_copy=1;
 }
+
 
 RawWells::RawWells ( const char *experimentPath, const char *rawWellsName, int rows, int cols )
 {
@@ -315,11 +317,13 @@ RawWells::~RawWells()
 {
   Close();
   // JZ add for multithreading
-  CleanupHdf5();
+  if(!mIs_copy)
+	  CleanupHdf5();
 }
 
 void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int rows, int cols, int flows )
 {
+  mIs_copy=0;
   mSaveCopies = false;
   mSaveRes = false;
   mConvertWithCopies = true;
@@ -355,6 +359,59 @@ void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int 
   mInfo.SetValue ( RAWWELLS_VERSION_KEY, RAWWELLS_VERSION_VALUE );
 
 }
+
+void RawWells::Init ( RawWells &rw)
+{
+	  mIs_copy=1;
+
+ 	  mDirectory = rw.mDirectory;
+	  mFileLeaf = rw.mFileLeaf;
+	  mFilePath = rw.mFilePath;
+	  mFlowOrder = rw.mFlowOrder;
+	  mRows = rw.mRows;
+	  mCols = rw.mCols;
+	  mFlows = rw.mFlows;
+	  mCurrentWell = rw.mCurrentWell;
+	  WELL_NOT_LOADED = rw.WELL_NOT_LOADED;
+	  WELL_NOT_SUBSET = rw.WELL_NOT_SUBSET;
+	  mSaveCopies = rw.mSaveCopies;
+	  mSaveRes = rw.mSaveRes;
+	  mConvertWithCopies = rw.mConvertWithCopies;
+	  //mInfo = rw.mInfo;
+	  mRankData = rw.mRankData;
+	  mStepSize = rw.mStepSize;
+	  mCompression = rw.mCompression;
+	  mHFile = rw.mHFile;
+	  mWriteOnClose = rw.mWriteOnClose;
+	  mRanks.copy(rw.mRanks);
+	  mWells.copy(rw.mWells);
+	  mResErr.copy(rw.mResErr);
+	  mInfoKeys.copy(rw.mInfoKeys);
+	  mInfoValues.copy(rw.mInfoValues);
+	  mWellChunkSizeRow = rw.mWellChunkSizeRow;
+	  mWellChunkSizeCol = rw.mWellChunkSizeCol;
+	  mWellChunkSizeFlow = rw.mWellChunkSizeFlow;
+	  mCurrentRegionRow = rw.mCurrentRegionRow;
+	  mCurrentRegionCol = rw.mCurrentRegionCol;
+	  mCurrentRow = rw.mCurrentRow;
+	  mCurrentCol = rw.mCurrentCol;
+	  mFirsttimeGetRegionData = rw.mFirsttimeGetRegionData;
+	  mIsLegacy = rw.mIsLegacy;
+	  mSaveAsUShort = rw.mSaveAsUShort;
+	  mLower = rw.mLower;
+	  mUpper = rw.mUpper;
+
+	  //WellData data; ///< For returning pointers to internal object, all memory owned internally
+
+//	  WellChunk mChunk;
+//	  std::vector<int32_t> mIndexes; ///< Conversion of well index on chip to index in mFlowData below.
+//	  std::vector<float> mFlowData; ///< Big chunk of data...
+//	  std::vector<float> mResData; ///< residual error
+
+	  mWellsCopies.resize(mRows * mCols, 1.0);
+	  mWellsCopies2.resize(mRows * mCols, 1.0);
+}
+
 
 void RawWells::CreateEmpty ( int numFlows, const char *flowOrder, int rows, int cols )
 {
@@ -1438,6 +1495,7 @@ void RawWells::OpenWellsToRead()
   InitIndexes();
 }
 
+
 void RawWells::OpenResToRead()
 {
   mResErr.Close();
@@ -1740,8 +1798,11 @@ void RawWells::ReadWells()
         uint64_t localCount = 0;
         for ( size_t row = currentRowStart; row < currentRowEnd; row++ )
         {
+	  int32_t dbidxr=GetInternalIndex(row,currentColStart);
+
           for ( size_t col = currentColStart; col < currentColEnd; col++ )
           {
+	    int dbidx=dbidxr+col-currentColStart;
             int idx = ToIndex ( col, row );
             if ( mIndexes[idx] >= 0 )
             {
@@ -1755,7 +1816,7 @@ void RawWells::ReadWells()
 					else
 						val = -1.0;
 				}
-                Set ( row, col, flow, val );
+				WriteFlowgramWithIndex(flow,dbidx,val);
               }
             }
             localCount++;
@@ -1969,6 +2030,12 @@ float RawWells::AtWithoutChecking ( size_t row, size_t col, size_t flow ) const
   return AtWithoutChecking ( ToIndex ( col,row ), flow );
 }
 
+
+int32_t RawWells::GetInternalIndex(size_t row, size_t col) const
+{
+  return mIndexes[ToIndex ( col,row )];
+}
+
 float RawWells::AtWithoutChecking ( size_t well, size_t flow ) const
 {
   uint64_t ii = ( uint64_t ) mIndexes[well] * mChunk.flowDepth + flow - mChunk.flowStart;
@@ -2108,7 +2175,8 @@ void RawWells::CloseWithoutCleanupHdf5()
 void RawWells::Close()
 {
   CloseWithoutCleanupHdf5();
-  CleanupHdf5();
+  if(!mIs_copy)
+	  CleanupHdf5();
 }
 
 void RawWells::GetRegion ( int &rowStart, int &height, int &colStart, int &width )

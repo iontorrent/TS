@@ -28,7 +28,7 @@ public:
 
   virtual int process(const string& b, const string& a, int qsc, int qec,
                       int mm, int mi, int o, int e, int dir,
-                      int *opt, int *te, int *qe, int *n_best);
+                      int *opt, int *te, int *qe, int *n_best, int* fitflag);
 private:
 
   int opt, query_end,target_end,n_best;

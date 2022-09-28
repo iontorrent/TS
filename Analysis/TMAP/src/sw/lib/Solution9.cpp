@@ -16,7 +16,7 @@ using namespace std;
 #include <cassert>
 
 int Solution9Reference::process(string b, string a, int qsc, int qec, int mm, int mi, int o, int e, int dir,
-                                int *_opt, int *_te, int *_qe, int *_n_best) {
+                                int *_opt, int *_te, int *_qe, int *_n_best, int* fitflag) {
     int n = b.size(), m = a.size();
 
     int id = -1;

@@ -2197,7 +2197,7 @@
       "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "Ion 550 Kit-Chef",
-      "categories" : "s5v1Kit;",
+      "categories" : "s5v1Kit;samplePrepProtocol;cerebro_550_cycling",
       "defaultCartridgeUsageCount" : 2,
       "cartridgeExpirationDayLimit" : 8,
       "cartridgeBetweenUsageAbsoluteMaxDayLimit" : 30,

@@ -1,5 +1,5 @@
 # Copyright (C) 2015 Thermo Fisher Scientific. All Rights Reserved.
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8.12)
 
 project (MapLab)
 
@@ -17,6 +17,7 @@ add_subdirectory (context_align)
 add_subdirectory (tmap_samtools_lib)
 add_subdirectory (tmap_lib)
 add_subdirectory (tmap_lib_test)
+add_subdirectory (tmap_lib_unit_tests)
 
 add_subdirectory (cigar_man_lib)
 add_subdirectory (cigar_man_lib_test)

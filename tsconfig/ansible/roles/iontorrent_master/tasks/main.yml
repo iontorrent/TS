@@ -152,20 +152,21 @@
 
 #-----------------------------------------------------------------------------
 # Enable a console for S5 only
+#  added fixes for TS-18116/TS-18164 and FST-14720
 #-----------------------------------------------------------------------------
 - name: GRUB console enabled (14.04)
-  lineinfile: dest=/etc/default/grub
-                insertafter=EOF
-                line='GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"'
-                regexp='GRUB_CMDLINE_LINUX=.*'
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    line: 'GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"'
+    regexp: 'GRUB_CMDLINE_LINUX.*'
   when: S5_virtual_guest|bool == True and ansible_distribution_version == "14.04"
   notify: update grub
 
 - name: GRUB console enabled (18.04)
-  lineinfile: dest=/etc/default/grub
-                insertafter=EOF
-                line='GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0 console=tty0 console=ttyS0,115200n8"'
-                regexp='GRUB_CMDLINE_LINUX=.*'
+  lineinfile:
+    dest: "{{ grub_config_file }}"
+    line: 'GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8 net.ifnames=0 biosdevname=0 elevator=deadline"'
+    regexp: 'GRUB_CMDLINE_LINUX.*'
   when: S5_virtual_guest|bool == True and ansible_distribution_version == "18.04"
   notify: update grub
 #-----------------------------------------------------------------------------

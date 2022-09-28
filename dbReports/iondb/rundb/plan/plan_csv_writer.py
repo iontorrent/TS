@@ -114,6 +114,14 @@ class PlanCSVcolumns:
     REALIGN = "Enable Realignment"
     CATEGORIES = "Categories"
     CUSTOM_ARGS = "Custom Args"
+    # Dynamic tec manifold : TS-18354
+    # Show only when exported template has these settings
+    CHIPTEC_DFLT_AMBIENT = "Chip Heater (Do not change)"
+    CHIPTEC_SLOPE = "Chip Slope (Do not change)"
+    CHIPTEC_MIN_THRESHOLD = "Chip Min Threshold (Do not change)"
+    MANTEC_DFLT_AMBIENT = "Manifold Heater (Do not change)"
+    MANTEC_SLOPE = "Manifold Slope (Do not change)"
+    MANTEC_MIN_THRESHOLD = "Manifold Min Threshold (Do not change)"
 
     FUSIONS_REF = "Fusions Reference library"
     FUSIONS_TARGET_BED = "Fusions Target regions BED file"
@@ -259,6 +267,41 @@ def _get_fusions_target_regions_bed_file(template):
         filePath = _get_bed_file_path(template.get_mixedType_rna_bedfile())
     return filePath
 
+def _get_chipTecDfltAmbient(template):
+    ct = None
+    if template:
+        ct = template.get_chipTecDfltAmbient()
+    return ct
+
+def _get_chipTecSlope(template):
+    cts = None
+    if template:
+        cts = template.get_chipTecSlope()
+    return cts
+
+def _get_chipTecMinThreshold(template):
+    ctmt = None
+    if template:
+        ctmt = template.get_chipTecMinThreshold()
+    return ctmt
+
+def _get_manTecDfltAmbient(template):
+    mt = None
+    if template:
+        mt = template.get_manTecDfltAmbient()
+    return mt
+
+def _get_manTecSlope(template):
+    mts = None
+    if template:
+        mts = template.get_manTecSlope()
+    return mts
+
+def _get_manTecMinThreshold(template):
+    mtmt = None
+    if template:
+        mtmt = template.get_manTecMinThreshold()
+    return mtmt
 
 def _get_plugins(template, delimiter):
     plugins = ""
@@ -605,6 +648,26 @@ def get_template_data_for_batch_planning(templateId, single_samples_file):
         logger.exception(format_exc())
         return [], [], []
 
+def get_dynamicTecParams(template):
+    dynamicTecParams = []
+    chipTecDfltAmbient = _get_chipTecDfltAmbient(template)
+    chipTecSlope = _get_chipTecSlope(template)
+    chipTecMinThreshold = _get_chipTecMinThreshold(template)
+    manTecDfltAmbient = _get_manTecDfltAmbient(template)
+    manTecSlope = _get_manTecSlope(template)
+    manTecMinThreshold = _get_manTecMinThreshold(template)
+
+
+    if chipTecDfltAmbient or manTecDfltAmbient:
+        dynamicTecParams = [
+            (PlanCSVcolumns.CHIPTEC_DFLT_AMBIENT, chipTecDfltAmbient),
+            (PlanCSVcolumns.CHIPTEC_SLOPE, chipTecSlope),
+            (PlanCSVcolumns.CHIPTEC_MIN_THRESHOLD, chipTecMinThreshold),
+            (PlanCSVcolumns.MANTEC_DFLT_AMBIENT, manTecDfltAmbient),
+            (PlanCSVcolumns.MANTEC_SLOPE, manTecSlope),
+            (PlanCSVcolumns.MANTEC_MIN_THRESHOLD, manTecMinThreshold),
+        ]
+    return dynamicTecParams
 
 def get_sampleAnnotations(template):
     annotations = []
@@ -745,6 +808,12 @@ def export_template_keys(custom_args):
         "custom_args": PlanCSVcolumns.CUSTOM_ARGS,
         "mixedTypeRNA_reference": PlanCSVcolumns.FUSIONS_REF,
         "mixedTypeRNA_targetRegionBedFile": PlanCSVcolumns.FUSIONS_TARGET_BED,
+        "chipTecDfltAmbient": PlanCSVcolumns.CHIPTEC_DFLT_AMBIENT,
+        "chipTecSlope": PlanCSVcolumns.CHIPTEC_SLOPE,
+        "chipTecMinThreshold": PlanCSVcolumns.CHIPTEC_MIN_THRESHOLD,
+        "manTecDfltAmbient": PlanCSVcolumns.MANTEC_DFLT_AMBIENT,
+        "manTecSlope": PlanCSVcolumns.MANTEC_SLOPE,
+        "manTecMinThreshold": PlanCSVcolumns.MANTEC_MIN_THRESHOLD,
     }
     # QC values
     keys.update(
@@ -808,6 +877,11 @@ def get_template_data_for_export(templateId):
         (PlanCSVcolumns.COLUMN_TARGET_BED, _get_target_regions_bed_file(template)),
         (PlanCSVcolumns.COLUMN_HOTSPOT_BED, _get_hotspot_regions_bed_file(template)),
     ]
+
+    # Add dynamic Tec params only if exists in the template
+    dynamicTecParams = get_dynamicTecParams(template)
+    if dynamicTecParams:
+        data.extend(dynamicTecParams)
 
     # add fusions reference for DNA/Fusions application
     if RunType.is_dna_rna(runType):

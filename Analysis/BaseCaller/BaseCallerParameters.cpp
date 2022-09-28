@@ -223,6 +223,8 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --compress-multi-taps   BOOL       Compress the signal from adjacent multi-tap flows [false]\n");
     printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
     printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
+    printf ("     --bad-path-limit        INT        number of bad paths before aborting [10000]\n");
+    printf ("     --many-path-limit       INT        number of >=3 path decisions before aborting  [10000]\n");
     printf ("\n");
     printf ("Chip/Block division:\n");
     printf ("  -r,--rows                  INT-INT    subset of rows to be processed [all rows]\n");
@@ -403,7 +405,7 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     char default_run_id[6]; // Create a run identifier from full output directory string
     ion_run_to_readname (default_run_id, (char*)bc_files.output_directory.c_str(), bc_files.output_directory.length());
     context_vars.run_id                      = opts.GetFirstString ('-', "run-id", default_run_id);
-    num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
+    num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(numCores(), 4));
     num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 0);
     compress_output_bam_                     = opts.GetFirstBoolean('-', "compress-bam", true);
 
@@ -413,7 +415,7 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
 
     // Treephaser options
 #if defined( __SSE3__ )
-    context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
+    context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-vec");
 #else
     context_vars.dephaser                    = opts.GetFirstString ('-', "dephaser", "treephaser-swan");
 #endif
@@ -427,6 +429,10 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     context_vars.calibrate_TFs               = opts.GetFirstBoolean('-', "calibrate-tfs", false);
     context_vars.trim_zm                     = opts.GetFirstBoolean('-', "trim-zm", true);
     context_vars.compress_multi_taps         = opts.GetFirstBoolean('-', "compress-multi-taps", false);
+    context_vars.bad_path_limit              = opts.GetFirstInt    ('-', "bad-path-limit", 10000);
+    context_vars.many_path_limit             = opts.GetFirstInt    ('-', "many-path-limit",10000);
+    context_vars.InitialPaths                = opts.GetFirstInt    ('-', "initial-paths",-1);
+    context_vars.MaxMetrDiff                 = opts.GetFirstDouble ('-', "max-metr-diff",0.3);
 
     context_vars.inline_control              = opts.GetFirstBoolean('-', "inline-control", false);
     if (context_vars.inline_control and not bc_files.inline_control_reference_file.empty()){
@@ -524,7 +530,7 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
     bc.wells_norm_method      = context_vars.wells_norm_method;
     bc.keynormalizer          = context_vars.keynormalizer;
     bc.dephaser               = context_vars.dephaser;
-    bc.sse_dephaser           = (bc.dephaser == "treephaser-sse" or bc.dephaser == "treephaser-solve");
+    bc.sse_dephaser           = (bc.dephaser == "treephaser-vec" or bc.dephaser == "treephaser-sse" or bc.dephaser == "treephaser-solve");
     bc.windowSize             = context_vars.windowSize;
     bc.diagonal_state_prog    = context_vars.diagonal_state_prog;
     bc.skip_droop             = context_vars.skip_droop;
@@ -532,6 +538,10 @@ bool BaseCallerParameters::SetBaseCallerContextVars(BaseCallerContext & bc)
     bc.calibrate_TFs          = context_vars.calibrate_TFs;
     bc.trim_zm                = context_vars.trim_zm;
     bc.compress_multi_taps    = context_vars.compress_multi_taps;
+    bc.BadPathLimit           = context_vars.bad_path_limit;
+    bc.ManyPathLimit          = context_vars.many_path_limit;
+    bc.InitialPaths           = context_vars.InitialPaths;
+    bc.MaxMetrDiff            = context_vars.MaxMetrDiff;
 
     bc.flow_predictors_       = context_vars.flow_predictors_;
     bc.inline_control         = context_vars.inline_control;

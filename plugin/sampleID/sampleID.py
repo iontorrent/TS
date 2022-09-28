@@ -8,7 +8,7 @@ from ion.plugin import *
 
 class sampleID(IonPlugin):
   '''Sample identification using analysis of reads targeting high-frequency SNPs and genderspecific alleles. (Ion supprted)'''
-  version = '5.16.0.3'
+  version = '5.18.0.2'
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]

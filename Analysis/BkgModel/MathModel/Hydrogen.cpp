@@ -3,6 +3,7 @@
 #include "math.h"
 #include <algorithm>
 #include "MathUtil.h"
+#include "Vecs.h"
 
 
 // shielding layer to insulate from choice
@@ -119,19 +120,19 @@ void MathModel::UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (
   int i;
   int common_start;
 
-  float totocc[FLOW_STEP], totgen[FLOW_STEP];
-  float pact[FLOW_STEP],pact_new[FLOW_STEP];
-  float  c_dntp_top[FLOW_STEP], c_dntp_bot[FLOW_STEP];
-  float  hplus_events_sum[FLOW_STEP], hplus_events_current[FLOW_STEP]; // mean events per molecule, cumulative and current
-  float enzyme_dt[FLOW_STEP];
-  float Aint[FLOW_STEP];
+  v4f totocc, totgen;
+  v4f pact,pact_new=LD_VEC4F(0);
+  v4f  c_dntp_top, c_dntp_bot;
+  v4f  hplus_events_sum, hplus_events_current; // mean events per molecule, cumulative and current
+  v4f enzyme_dt;
+  v4f Aint;
 
 // A a pointer, so isolate by copying
   for (int q=0;q<FLOW_STEP;q++)
     Aint[q] = A[q];
 
   MixtureMemo mix_memo[4];
-  float tA[FLOW_STEP];
+  v4f tA;
   for (int q=0; q<FLOW_STEP; q++)
     tA[q] = mix_memo[q].Generate (Aint[q],math_poiss); // don't damage A now that it is a pointer
 
@@ -154,27 +155,15 @@ void MathModel::UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (
   for (int q=0; q<FLOW_STEP; q++)
     hplus_events_current[q] = 0.0f; // Events per molecule
 
-  for (int q=0; q<FLOW_STEP; q++)
-    memset (ival_offset[q],0,sizeof (float[npts]));  // zero the points we don't compute
-
-  float scaled_kr[FLOW_STEP];
-  for (int q=0; q<FLOW_STEP; q++)
-    scaled_kr[q] = kr[q]*molecules_to_micromolar_conversion[q]/d[q]; // convert molecules of polymerase to active concentraction
-  float half_kr[FLOW_STEP];
-  for (int q=0; q<FLOW_STEP; q++)
-    half_kr[q] = kr[q] *0.5f/SUB_STEPS; // for averaging
-
-
-  float c_dntp_bot_plus_kmax[FLOW_STEP];
-  for (int q=0; q<FLOW_STEP; q++)
-    c_dntp_bot_plus_kmax[q] = 1.0f/kmax[q];
-
-  float c_dntp_old_effect[FLOW_STEP];
-  for (int q=0; q<FLOW_STEP; q++)
-    c_dntp_old_effect[q] = 0.0f;
-  float c_dntp_new_effect[FLOW_STEP];
-  for (int q=0; q<FLOW_STEP; q++)
-    c_dntp_new_effect[q] = 0.0f;
+  v4f mtmcV=*(v4f *)molecules_to_micromolar_conversion;
+  v4f krV=*(v4f *)kr;
+  v4f dV=*(v4f *)d;
+  v4f kmaxV=*(v4f *)kmax;
+  v4f scaled_kr = krV*mtmcV/dV; // convert molecules of polymerase to active concentraction
+  v4f half_kr = krV * (0.5f/(float)SUB_STEPS); // for averaging
+  v4f c_dntp_bot_plus_kmax = 1.0f/kmaxV;
+  v4f c_dntp_old_effect = LD_VEC4F(0);
+  v4f c_dntp_new_effect = LD_VEC4F(0);
 
 
   float sum_totgen = 0.0f;
@@ -194,68 +183,62 @@ void MathModel::UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (
     common_start = 0;
     printf ("Error: i_start outside of range\n");
   }
+	  for (i=0;i<common_start;i++){
+		  for (int q=0; q<4; q++)
+			  ival_offset[q][i]=0;
+	  }
 
-  // first non-zero index of the computed [dNTP] array for this nucleotide
-  int c_dntp_top_ndx = common_start*SUB_STEPS;
+	  // first non-zero index of the computed [dNTP] array for this nucleotide
+	  int c_dntp_top_ndx = common_start*SUB_STEPS;
 
-  for (i=common_start;i < npts;i++)
-  {
-    if (sum_totgen > 0.0f)
-    {
-      // cannot accelerate here because half_kr is distinct per
-      for (int q=0; q<FLOW_STEP; q++)
-        enzyme_dt[q] = deltaFrameSeconds[i]*half_kr[q];
+	  for (i=common_start;i < npts;i++)
+	  {
+		if (sum_totgen > 0.0f)
+		{
+		  // cannot accelerate here because half_kr is distinct per
+			enzyme_dt = deltaFrameSeconds[i]*half_kr;
 
-      for (int st=1; (st <= SUB_STEPS) && (sum_totgen > 0.0f);st++)  // someone needs computation
-      {
-        // update top of well concentration in the bulk for FLOW_STEP flows
-        for (int q=0; q<FLOW_STEP; q++)
-          c_dntp_top[q] = nuc_rise_ptr[q][c_dntp_top_ndx];
-        c_dntp_top_ndx += 1;
+//		  for (int st=1; (st <= SUB_STEPS) && (sum_totgen > 0.0f);st++)  // someone needs computation
+		  {
+			// update top of well concentration in the bulk for 4 flows
+			for (int q=0; q<4; q++)
+			  c_dntp_top[q] = nuc_rise_ptr[q][c_dntp_top_ndx];
+			c_dntp_top_ndx += 1;
 
-        // assume instantaneous equilibrium within the well
-        for (int q=0; q<FLOW_STEP; q++)
-          c_dntp_bot[q] = c_dntp_top[q]/ (1.0f+ scaled_kr[q]*pact[q]*c_dntp_bot_plus_kmax[q]); // the level at which new nucs are used up as fast as they diffuse in
-        for (int q=0; q<FLOW_STEP; q++)
-          c_dntp_bot_plus_kmax[q] = 1.0f/ (c_dntp_bot[q] + kmax[q]); // scale for michaelis-menten kinetics, assuming nucs are limiting factor
+			// assume instantaneous equilibrium within the well
+			c_dntp_bot = c_dntp_top/ (1.0f+ scaled_kr*pact*c_dntp_bot_plus_kmax); // the level at which new nucs are used up as fast as they diffuse in
+			c_dntp_bot_plus_kmax = 1.0f/ (c_dntp_bot + kmaxV); // scale for michaelis-menten kinetics, assuming nucs are limiting factor
 
-        // Now compute effect of concentration on enzyme rate
-        for (int q=0; q<FLOW_STEP; q++)
-          c_dntp_old_effect[q] = c_dntp_new_effect[q];
-        for (int q=0; q<FLOW_STEP; q++)
-          c_dntp_new_effect[q] = c_dntp_bot[q]*c_dntp_bot_plus_kmax[q]; // current effect of concentration on enzyme rate
+			// Now compute effect of concentration on enzyme rate
+			c_dntp_old_effect = c_dntp_new_effect;
+			c_dntp_new_effect = c_dntp_bot*c_dntp_bot_plus_kmax; // current effect of concentration on enzyme rate
 
-        // update events per molecule
-        for (int q=0; q<FLOW_STEP; q++)
-          hplus_events_current[q] = enzyme_dt[q]* (c_dntp_new_effect[q]+c_dntp_old_effect[q]); // events per molecule is average rate * time of rate
-        for (int q=0; q<FLOW_STEP; q++)
-          hplus_events_sum[q] += hplus_events_current[q];
+			// update events per molecule
+			hplus_events_current = enzyme_dt* (c_dntp_new_effect+c_dntp_old_effect); // events per molecule is average rate * time of rate
+			hplus_events_sum += hplus_events_current;
 
-        // how many active molecules left at end of time period given poisson process with total intensity of events
-        for (int q=0; q<FLOW_STEP; q++)
-          pact_new[q] = mix_memo[q].GetStep (hplus_events_sum[q]);
+			// how many active molecules left at end of time period given poisson process with total intensity of events
+			for (int q=0; q<4; q++)
+			  pact_new[q] = mix_memo[q].GetStep ((float)hplus_events_sum[q]);
 
 
-        // how many hplus were generated
-        for (int q=0; q<FLOW_STEP; q++)
-          totgen[q] -= ( (pact[q]+pact_new[q]) * 0.5f) * hplus_events_current[q]; // active molecules * events per molecule
-        for (int q=0; q<FLOW_STEP; q++)
-          pact[q] = pact_new[q];
-        for (int q=0; q<FLOW_STEP; q++)
-          totgen[q] = std::max (totgen[q],0.0f);
-        // or is there a "max" within command?
-        sum_totgen = 0.0f;
-        for (int q=0; q<FLOW_STEP; q++)
-          sum_totgen += totgen[q];
-      }
+			// how many hplus were generated
+			totgen -= ( (pact+pact_new) * 0.5f) * hplus_events_current; // active molecules * events per molecule
+			pact = pact_new;
+			totgen = __builtin_ia32_maxps (totgen,(v4f){0,0,0,0});
+			// or is there a "max" within command?
+			sum_totgen = 0.0f;
+			for (int q=0; q<4; q++)
+			  sum_totgen += totgen[q];
+		  }
 
-    }
-    for (int q=0; q<FLOW_STEP; q++)
-      ival_offset[q][i] = (totocc[q]-totgen[q]);
+		}
+		v4f tmptot=totocc-totgen;
+		for (int q=0; q<4; q++)
+		  ival_offset[q][i] = tmptot[q];
 
   }
 }
-
 
 // try to simplify
 void MathModel::SimplifyComputeCumulativeIncorporationHydrogens (

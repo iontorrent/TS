@@ -1,0 +1,12 @@
+diff -ruN ../htslib-1.2.1/hfile.c ./hfile.c
+--- ../htslib-1.2.1/hfile.c	2015-02-03 11:22:23.000000000 -0500
++++ ./hfile.c	2020-11-26 13:03:05.724999147 -0500
+@@ -200,7 +200,7 @@
+ int hflush(hFILE *fp)
+ {
+     if (flush_buffer(fp) < 0) return EOF;
+-    if (fp->backend->flush(fp) < 0) { fp->has_errno = errno; return EOF; }
++//if (fp->backend->flush(fp) < 0) { fp->has_errno = errno; return EOF; }
+     return 0;
+ }
+ 

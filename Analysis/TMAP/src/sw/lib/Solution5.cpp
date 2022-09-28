@@ -211,7 +211,7 @@ Solution5::~Solution5() {
 int Solution5::
 process(const string& s_target, const string& s_query, int qsc, int qec, int v_match_score, 
         int v_mismatch_score, int v_gap_open, int v_gap_extension, int v_direction,
-        int *_opt, int *_te, int *_qe, int *_n_best)
+        int *_opt, int *_te, int *_qe, int *_n_best, int* fitflag)
 {
   if (testcase_id==0)
     {

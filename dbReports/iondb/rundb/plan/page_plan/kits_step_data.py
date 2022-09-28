@@ -81,6 +81,7 @@ class KitsFieldNames:
     PLAN_CATEGORIES = "planCategories"
     ADVANCED_SETTINGS_CHOICE = "advancedSettingsChoice"
     ADVANCED_SETTINGS = "advancedSettings"
+    META_DATA = "metaData"
 
 
 class KitsStepData(AbstractStepData):
@@ -256,6 +257,7 @@ class KitsStepData(AbstractStepData):
         self.savedFields[KitsFieldNames.FLOWS] = 0
         self.savedFields[KitsFieldNames.LIBRARY_READ_LENGTH] = 0
         self.savedFields[KitsFieldNames.READ_LENGTH] = 0
+        self.savedFields[KitsFieldNames.META_DATA] = {}
 
         self.prepopulatedFields[
             KitsFieldNames.IS_BARCODE_KIT_SELECTION_REQUIRED

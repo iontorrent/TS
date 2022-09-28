@@ -22,7 +22,7 @@ public:
     int V[MAX_DIM][MAX_DIM];
 
     int process(string b, string a, int qsc, int qec, int mm, int mi, int o, int e, int dir,
-                         int *opt, int *te, int *qe, int *n_best);
+                         int *opt, int *te, int *qe, int *n_best, int* fitflag);
 };
 
 class Solution9 : public Solution {

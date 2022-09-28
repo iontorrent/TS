@@ -140,7 +140,7 @@ function getIonReporterColumns(){
     var headerText = 'Ion Reporter Workflow <label class="checkbox inline" style="font:inherit;" ' +
                 'title="Show all available or show filtered IR workflows">' +
                 '<input id="irWorkflowShowAll" type="checkbox" style="margin:0;">Show All Workflows</label>'
-    if (!($('[name=planCategories]').val() === 'onco_immune;immunology')){
+    if (($('[name=planCategories]').val().indexOf("multi_ir_workflow_support") < 0)) {
         irWorkflowField = {
             field: "irWorkflow", title: "Ion Reporter Workflow",
             width: '350px',
@@ -148,7 +148,7 @@ function getIonReporterColumns(){
             editor: irWorkflowEditor,
             headerTemplate: headerText,
             template: dropDnTemplate({'html': $('#irWorkflowColumnTemplate').html()}),
-            hidden: ($('[name=planCategories]').val() === 'onco_immune;immunology')
+            hidden: ($('[name=planCategories]').val().indexOf("multi_ir_workflow_support") > 0)
         };
     } else {
         irWorkflowField = {

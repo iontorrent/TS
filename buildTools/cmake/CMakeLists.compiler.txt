@@ -92,6 +92,7 @@ if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
                      "-maxrregcount=48" )
 else()
   SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
+                     "-Wno-deprecated-gpu-targets"
                      "-D_MWAITXINTRIN_H_INCLUDED" "-D_FORCE_INLINES" "-std=c++11" "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
                      "-gencode=arch=compute_20,code=sm_20"
                      "-gencode=arch=compute_30,code=sm_30"

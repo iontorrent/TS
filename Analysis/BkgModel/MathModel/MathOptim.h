@@ -138,7 +138,7 @@ float ErfApprox ( float x );
 float Expm2Approx ( float x );
 inline float ExpApprox ( float x )
 {
-	  x = 1.0 + x / 256.0;
+	  x = 1.0f + x / 256.0f;
 	  x *= x; x *= x; x *= x; x *= x;
 	  x *= x; x *= x; x *= x; x *= x;
 	  return x;

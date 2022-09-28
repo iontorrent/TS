@@ -27,6 +27,7 @@ from django.http import (
     HttpResponseRedirect,
     HttpResponse,
     HttpResponseServerError,
+    StreamingHttpResponse,
 )
 from django.shortcuts import get_object_or_404, render_to_response
 from django.template import RequestContext
@@ -2347,6 +2348,15 @@ def plain_text(request, full_path):
     return HttpResponse(FileWrapper(open(full_path, "rb")), mimetype="text/plain")
 
 
+def download_file(request, full_path):
+    response = StreamingHttpResponse(open(full_path, "rb"))
+    response["Content-Type"] = "application/octet-stream"
+    response["Content-Disposition"] = 'attachment; filename="%s"' % os.path.basename(
+        full_path
+    )
+    return response
+
+
 # These handlers are in strict priority order, i.e. as soon as one matches
 # the search for a match halts.  More specific patterns must preceed more
 # general patterns that might incorrectly match them.
@@ -2361,12 +2371,12 @@ FILE_HANDLERS = [
         (r"basecaller_results/.*\.txt$", show_whitespace_csv),
         (r"sigproc_results/.*\.txt$", show_whitespace_csv),
         (r"\.dat$", show_whitespace_csv),
-        (r"\.bin$", show_binary),
-        (r"\.bam$", show_binary),
-        (r"\.bai$", show_binary),
-        (r"\.h5$", show_binary),
+        (r"\.bin$", download_file),
+        (r"\.bam$", download_file),
+        (r"\.bai$", download_file),
+        (r"\.h5$", download_file),
         (r"\.sff$", show_binary),
-        (r"\.wells$", show_binary),
+        (r"\.wells$", download_file),
         (r"\.stats$", show_config),
         (r"\.summary$", show_config),
         (r"\.png$", show_png_image),

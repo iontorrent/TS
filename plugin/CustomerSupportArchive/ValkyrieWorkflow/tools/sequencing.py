@@ -224,6 +224,12 @@ class BamFile:
 
 class Bfmask:
     """ Class to support bfmask.bin files."""
+    MASKS = ( 'empty', 'bead', 'live', 'dud', 
+              'reference', 'tf', 'lib', 'pinned', 
+              'ignore', 'washout', 'exclude', 'keypass', 
+              'badkey', 'short', 'badppf', 'badresidual' 
+            )
+
     def __init__( self , bfFile, best=False ):
         """ 
         Reads info from beadfind file and sets up properties 
@@ -239,6 +245,15 @@ class Bfmask:
         else:
             self.file = bfFile
             self.read_file ( bfFile )
+
+    def get_pixel_masks( self, row, col ):
+        ''' Return a list of all mask names applied to a given pixel '''
+        masks = []
+        val = self.data[row,col]
+        for i, name in enumerate( self.MASKS ):
+            if np.right_shift(val,i) & 1:
+                masks.append( name )
+        return masks
 
     def read_file( self, bfFile ):
         raw = np.fromfile( bfFile , dtype=np.dtype('u2') )
@@ -282,22 +297,24 @@ class Bfmask:
         # Get mask reshaped and initialize masks
         self.data = raw[4:].reshape(( self.rows , self.cols ))
         bits = self._interpret()
-        self.empty       = bits[:,:,0]
-        self.bead        = bits[:,:,1]
-        self.live        = bits[:,:,2]
-        self.dud         = bits[:,:,3]
-        self.reference   = bits[:,:,4]
-        self.tf          = bits[:,:,5]
-        self.lib         = bits[:,:,6]
-        self.pinned      = bits[:,:,7]
-        self.ignore      = bits[:,:,8]
-        self.washout     = bits[:,:,9]
-        self.exclude     = bits[:,:,10]
-        self.keypass     = bits[:,:,11]
-        self.badkey      = bits[:,:,12]
-        self.short       = bits[:,:,13]
-        self.badppf      = bits[:,:,14]
-        self.badresidual = bits[:,:,15]
+        for i, mask in enumerate( self.MASKS ):
+            setattr( self, mask, bits[:,:,i] )
+        #self.empty       = bits[:,:,0]
+        #self.bead        = bits[:,:,1]
+        #self.live        = bits[:,:,2]
+        #self.dud         = bits[:,:,3]
+        #self.reference   = bits[:,:,4]
+        #self.tf          = bits[:,:,5]
+        #self.lib         = bits[:,:,6]
+        #self.pinned      = bits[:,:,7]
+        #self.ignore      = bits[:,:,8]
+        #self.washout     = bits[:,:,9]
+        #self.exclude     = bits[:,:,10]
+        #self.keypass     = bits[:,:,11]
+        #self.badkey      = bits[:,:,12]
+        #self.short       = bits[:,:,13]
+        #self.badppf      = bits[:,:,14]
+        #self.badresidual = bits[:,:,15]
         
         # Add some post-processing
         self.masks.extend(['filtered','filtpass'])
@@ -679,7 +696,7 @@ class DatasetsBasecaller:
             else:
                 run_url = basecaller_dir
                 
-            full_url = '{}/metal/basecaller_results/datasets_basecaller.json'.format( basecaller_dir )
+            full_url = '{}/metal/basecaller_results/datasets_basecaller.json'.format( run_url )
             print( full_url )
             ans = requests.get( full_url, auth=_apiauth ) 
             self.data = ans.json()
@@ -2026,7 +2043,7 @@ class WellsFile:
         try:
             unmasked_wells = self.tfs != -1
             self.tfs[ unmasked_wells ] = self.tfs[ unmasked_wells ] / self.rescale
-        except AttributeError:
+        except (AttributeError, TypeError):
             pass
 
         if len( self.filenames ) == 1:
@@ -2257,6 +2274,23 @@ class WellsFile:
             data.tofile( filename )
         except AttributeError:
             self._logging( '  WARNING: tf key signals not present and not saved', 2 )
+
+class SeparatorH5:
+    SUMMARY = ( 'keyIndex', 'mT0', 'snr', 'mad', 'sd',
+                'bfMetric', 'tauE', 'tauB', 'onemerAvg', 'bfMetric2',
+                'peaksig', 'flag', 'goodLive', 'isRef', 'bufferMetric',
+                'traceSd', 'acqT0', 'mFilteredWells', 'mBfSdFrame', 'mBfSSQ',
+                'mAcqSSQ', 'bfMetric3', 'mBfConfidence0', 'mBfConfidence1', 'noise',
+              )
+
+    def __init__( self, filename ):
+        self.filename = filename
+        h5 = h5py.File( filename, 'r' )
+
+
+        for i, key in enumerate(self.SUMMARY):
+            setattr( self, key, h5['separator']['summary'][i] )
+
 
 #---------------------------------------------------------------------------#
 # Define functions

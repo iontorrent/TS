@@ -30,12 +30,12 @@ class ZeromerMatDiff {
       if (m_trace_data != NULL) {
         Cleanup();
       }
-      m_trace_data = (float *) memalign(32, sizeof(float) * total_size);
-      m_ref_data = (float *) memalign(32, sizeof(float) * total_size);
-      m_zeromer_est = (float *) memalign(32, sizeof(float) * total_size);
-      m_taub = (float *) memalign(32, sizeof(float) * total_rows);
-      m_shifted_ref = (float *) memalign(32, sizeof(float) * total_size);
-      m_bad_wells = (char *) memalign(32, sizeof(char) * num_wells);
+      m_trace_data = (float *) memalign(64, sizeof(float) * total_size);
+      m_ref_data = (float *) memalign(64, sizeof(float) * total_size);
+      m_zeromer_est = (float *) memalign(64, sizeof(float) * total_size);
+      m_taub = (float *) memalign(64, sizeof(float) * total_rows);
+      m_shifted_ref = (float *) memalign(64, sizeof(float) * total_size);
+      m_bad_wells = (char *) memalign(64, sizeof(char) * num_wells);
       m_total_size = total_size;
       m_num_well_flows = total_rows;
       m_num_wells = num_wells;
@@ -106,10 +106,10 @@ class ZeromerMatDiff {
                           //                         int flow_start, int flow_end,
                           int *zero_flows, int num_zeromer_flows,
                           int frame_start, int frame_end) {
-    m_row_start = row_start;
-    m_row_end = row_end;
-    m_col_start = col_start;
-    m_col_end = col_end;
+//    m_row_start = row_start;
+//    m_row_end = row_end;
+//    m_col_start = col_start;
+//    m_col_end = col_end;
     int row_size = ceil((row_end - row_start) / (float)row_step_sample);
     int col_size = ceil((col_end - col_start) / (float)col_step_sample);
     int flow_size = num_zeromer_flows;
@@ -242,7 +242,7 @@ class ZeromerMatDiff {
     }
   }
 
-  int m_row_start, m_row_end, m_col_start, m_col_end;
+//  int m_row_start, m_row_end, m_col_start, m_col_end;
   size_t m_num_wells, m_num_well_flows, m_num_flows, m_total_size, m_num_frames;
   float *m_trace_data, *m_ref_data, *m_zeromer_est, *m_taub, *m_shifted_ref;
   char *m_bad_wells;

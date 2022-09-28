@@ -27,6 +27,7 @@ get_hms = ValkyrieDebug.get_hms
 from tools import html as H
 from tools import sparklines
 from tools.libpreplog import LibPrepLog 
+from collections import OrderedDict
 
 # Required for lane wetting detection
 #from skimage.measure import compare_ssim
@@ -41,16 +42,22 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
     
     Plugin to analyze timing of Valkyrie workflow for run tracking and performance monitoring.
     
+    Latest Update | CN: v1.1.32 added additional try/except in pipPrepTest section for csa. Also for csa,
+                        updated path block html uses to find flow_spark.svg
+    Latest Update | CN: v1.1.30 bugfix for when robot waste is very clogged, bugfix for when there are None values in flow data. bugfix in pinch measure      
+                        empty libPrepLog no longer registers as a plugin error- just says not found. 
+    Latest Update | CN: Added pipette pickup tip errors, alert and metrics, added is_integrated metric      
+    Latest Update | CN: Added pipette alert and metrics for pipette pressure tests     
+    Latest Update | CN: Added pipette timedout errors to pipette error section     
+    Latest Update | CN: separated bottom tube errors by pipette. Added pipette serial numbers.     
+    Latest Update | CN: added pipPress plots    
     Latest Update | CN: Bug-proof plugin. Search for !! to find changes.    
     Latest Update | CN: Only make symlink to tube bottom log csv if link does not already exist.    
     Latest Update | CN: Flow rate sparkline will include reseq flows, if reseq run on ValkTS.    
     Latest Update | CN: added CW and CW+MW flow rate median and std to results.json   
     Latest Update | CN: added libpreplog stuff   
-    Latest Update | CN: fix bug in debug_reader that was causing VW to crash for non reseq runs. Bugfix to run type categorization   
-    Latest Update | CN: Handles reseq runs. time_to_seq_done is time to reseq done for reseq runs.   
-    Latest Update | BP: Updated tools (v1.1.19)
     """
-    version       = "1.1.20" # must also change the version number in launch function
+    version       = "1.1.32" # must also change the version number in launch function
     allow_autorun = True
     
     runTypes      = [ RunType.THUMB , RunType.FULLCHIP , RunType.COMPOSITE ]
@@ -59,13 +66,25 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         print( "Start Plugin" )
         self.init_plugin( )
        
-        self.version = "1.1.20"
+        self.version = "1.1.32"
+        print('Version {}'.format(self.version))
 
         self.metrics['software_version'] = str(self.explog.metrics['ReleaseVersion'])
         self.metrics['dev_scripts_used'] = self.explog.metrics['Valkyrie_Dev_Scripts']
         self.metrics['datacollect']      = str(self.explog.metrics['DatacollectVersion'])
         self.metrics['scripts_version']  = str(self.explog.metrics['ScriptsVersion'])
         
+        self.metrics['plugin_error'] = False # initialize value
+
+        try:
+            if self.purification_dir:
+                print('Found purification path from startplugin.json: {}'.format(self.purification_dir))
+                self.metrics['is_integrated'] = True
+            else:
+                self.metrics['is_integrated'] = False
+        except:
+            print('!! Unable to determine if this is an integrated run')
+
         # Set up debug_log path
         self.debug_log = os.path.join( self.calibration_dir , 'debug' )
         
@@ -158,6 +177,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 self.analysis_timing['Sample-Level Plugins'] = self.sample_plugin_timing
         except:
             print('!! Something went wrong when analyzing summary logs. Skipping')
+            self.metrics['plugin_error'] = True
             
         # If we found OIA data, let's analyze and add to the analysis_timing dictionary.
         oia_timing = os.path.join( self.raw_data_dir, 'onboard_results', 'sigproc_results', 'timing.txt' )
@@ -171,6 +191,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 print( self.oia_timing.overall )
             except:
                 print('!! Something went wrong when analyzing OIA data. Skipping analysis')
+                self.metrics['plugin_error'] = True
             
         
         ###########################################################################
@@ -187,23 +208,38 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             self.metrics['conical_clog_check'] = self.debugInfo.ccc_metrics  # conical clog check happens in PostRunClean and PostChipClean
             if self.debugInfo.postChipClean:
                 self.metrics['pcc'] = self.debugInfo.pcc_metrics             # save all metrics generated from all other postChipClean tests
+        if self.debugInfo.plugin_error:
+            self.metrics['plugin_error'] = True
+        
+        
         self.flows = FlowInfo( self.calibration_dir, self.results_dir, self.explog.metrics['flow_order'].lower(), self.do_reseq, self.reseq_flow_order, true_active=self.true_active )
         if self.flows.hasFlowData:
             self.metrics['flow_rate'].update( self.flows.flow_metrics )
+        if self.flows.plugin_error:
+            self.metrics['plugin_error'] = True
        
         # New- libPrepLog
         if self.ss_file_found: 
             self.libpreplog = LibPrepLogCSV( self.calibration_dir, self.results_dir, self.expt_start, self.ss.data, seq_end=self.seq_end  )
-            if self.libpreplog.hasLog:
+            if self.libpreplog.hasData:
                 self.metrics['libpreplog'] = self.libpreplog.lpl_metrics 
         else:
             print('Skipping analysis of libpreplog since ScriptStatus.csv not found')
             self.libpreplog = LibPrepLogCSV( self.calibration_dir, self.results_dir, self.expt_start )
-             
+        
+        if self.libpreplog.plugin_error:
+            self.metrics['plugin_error'] = True
+
+        # Analyze new Pipette Tests
+        self.pipPresTests = PipettePresTests( self.calibration_dir, self.results_dir )
+        if self.pipPresTests.plugin_error:
+            self.metrics['plugin_error'] = True
+        elif self.pipPresTests.found_pipPres:
+            self.metrics['pipPresTest'] = self.pipPresTests.results 
 
         # Analyze Tube Bottom locations
         self.analyze_tube_bottoms( )
-        
+       
         # Look for blocked tips
         self.count_blocked_tips( )
 
@@ -215,10 +251,16 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         
         # Find pipette errors such as er52
         self.find_pipette_errors( ) # function to find er52 and other pipette errors
+
+        # Search for instances in which pipette failed to pickup tip
+        self.find_pipette_failed_to_pickup_tip( )
         
         # Check if plugin completed before postrun cleans were complete
         self.did_plugin_run_too_early( )
         # self.message = '' when PostRun data was found and the plugin did not run too early
+        
+        # Find pipette serial numbers
+        self.find_pipette_serialNumbers( )
 
         # Create graphic of which modules were used....Or just make an html table.
         self.write_block_html( )
@@ -720,6 +762,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             fig.savefig( os.path.join( self.results_dir , 'flow_spark.svg' ), format='svg' )
         except:
             print('!! Something went wrong when making flow rate sparkline') 
+            self.metrics['plugin_error'] = True
             
     def analyze_workflow_timing( self, do_reseq=False ):
         """ 
@@ -842,15 +885,26 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         except:
             print('!! Something went wrong when analyzing the ScriptStatus file or making timing plot. Skipping analysis')
             self.ss_file_found = False
+            self.metrics['plugin_error'] = True
             return None
                     
     def analyze_tube_bottoms( self ):
         """ 
         Analyzes the debug csv that checks tubes for their bottom location (only occurs when running BottomFind) 
         """
+        print('Analyzing tube bottom log')
         self.metrics['bottomlog'] = {}
-        missed    = []
+        missed    = [] # original metrics. total, both pipettes together
         bent_tips = []
+       
+        # New metrics separated by pipette id
+        pip1_all        = [] # might be useful to know total number of bottom finds per pipette
+        pip1_missed     = []
+        pip1_bent_tips  = []
+        pip2_all        = []
+        pip2_missed     = []
+        pip2_bent_tips  = []
+        
         try: 
             tbl = os.path.join( self.calibration_dir, 'TubeBottomLog.csv' )
             if os.path.exists( tbl ):
@@ -867,23 +921,63 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                             # This line ignores other lines in the CSV that do not have a zcal value.
                             _ = float( row['zcal'] )
                             
-                            # Change to not count all levels of warnings, but only the most extreme.
+                            # Old metrics: not counting warnings, but only the most extreme.
                             if 'Bent tip' in row['bent_tip']:
                                 bent_tips.append( row['tube'] )
-                                
-                            # Change to not count all levels of warnings, but only the most extreme.
                             if 'Not reaching bottom' in row['missed_bottom']:
                                 missed.append( row['tube'] )
+                            
+                            # New metrics looking at each attempt in each line  
+                            attempts = row['bottom_found'].replace('[','').replace(']','')
+                            attempts = [float(attempt) for attempt in attempts.split()]
+                            for attempt in attempts:
+                                if attempt < -2:
+                                    if row['pipette']=='1':
+                                        pip1_missed.append( row['tube'] )
+                                    else:
+                                        pip2_missed.append( row['tube'] )
+                                if attempt > 2:
+                                    if row['pipette']=='1':
+                                        pip1_bent_tips.append( row['tube'] )
+                                    else:
+                                        pip2_bent_tips.append( row['tube'] )
+                                # To get total
+                                if row['pipette']=='1':
+                                    pip1_all.append( row['tube'] )
+                                else:
+                                    pip2_all.append( row['tube'] )
+
                         except( ValueError, TypeError ):
                             # Don't care, must not have been a row with a real zcal value and thus other useful info.
                             pass
                         
                 # Summarize metrics
-                self.metrics['bottomlog'] = { 'missed_bottom'       : ', '.join( missed ),
-                                              'missed_bottom_count' : len( missed ),
-                                              'bent_tips'           : ', '.join( bent_tips ),
-                                              'bent_tips_count'     : len( bent_tips )
+                self.metrics['bottomlog'] = { 'missed_bottom'          : ', '.join( missed ),
+                                              'missed_bottom_count'    : len( missed ),
+                                              'bent_tips'              : ', '.join( bent_tips ),
+                                              'bent_tips_count'        : len( bent_tips ),
+                                              'missed_bottom_p1'       : ', '.join( pip1_missed ),
+                                              'missed_bottom_p1_count' : len( pip1_missed ), 
+                                              'bent_tips_p1'           : ', '.join( pip1_bent_tips ),
+                                              'bent_tips_p1_count'     : len( pip1_bent_tips ) , 
+                                              'total_p1'               : len( pip1_all ) ,
+                                              'missed_bottom_p2'       : ', '.join( pip2_missed ),
+                                              'missed_bottom_p2_count' : len( pip2_missed ), 
+                                              'bent_tips_p2'           : ', '.join( pip2_bent_tips ),
+                                              'bent_tips_p2_count'     : len( pip2_bent_tips ) , 
+                                              'total_p2'               : len( pip2_all ) ,
                                               }
+                print('> 2 mm above zcal (missed bottom)')
+                print('Pipette 1 :  {}'.format(self.metrics['bottomlog']['missed_bottom_p1_count']))
+                print('Pipette 2 :  {}'.format(self.metrics['bottomlog']['missed_bottom_p2_count']))
+                
+                print('> 2 mm below zcal (bent tip)')
+                print('Pipette 1 :  {}'.format(self.metrics['bottomlog']['bent_tips_p1_count']))
+                print('Pipette 2 :  {}'.format(self.metrics['bottomlog']['bent_tips_p2_count']))
+                
+                print('Total tube bottom finds')
+                print('Pipette 1 :  {}'.format(self.metrics['bottomlog']['total_p1']))
+                print('Pipette 2 :  {}'.format(self.metrics['bottomlog']['total_p2']))
                 
                 # Make a symlink to the raw file for easy access
                 if not os.path.exists( os.path.join( self.results_dir, 'TubeBottomLog.csv' ) ):
@@ -896,20 +990,133 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         except:
             print('!! Something went wrong when analyzing TubeBottomLov.csv. Skipping analysis')
             self.has_tube_bottom_log = False
+            self.metrics['plugin_error'] = True
+
+    def find_pipette_failed_to_pickup_tip( self ):
+        '''
+        Search for er75, which means pipette failed to pick up a tip. After 5 attempts, pipette will try tip at different location 
+        '''
+        ############################## Define helper functions
+        def new_tip_loc( matches ):
+            if len(matches) >= 2:
+                if 'tip_loc' in matches[-2]: # matches[-1] is the one we are currently evaluating
+                    return True              # 'UNABLE TO PICKUP TIP' line is the last line printed before moving to a different chip location
+                time_delta = ( get_timestamp(matches[-1]) - get_timestamp(matches[-2]) ).seconds
+                print('       time_delta: {}'.format(time_delta))
+                if time_delta < 4:
+                    return False # if timestamp is within 4 seconds of previous, then assume the attempt is on the same tip location
+                else:
+                    return True 
+            else:
+                return False # to handle first er75 event 
+        
+        def get_timestamp( match_dict ):
+            mon = match_dict['mon']
+            day = match_dict['day']
+            time = match_dict['time']
+            timestring = '{} {} {} {}'.format( datetime.datetime.now().year, mon, day, time ) 
+            return datetime.datetime.strptime( timestring, '%Y %b %d %H:%M:%S' )
+
+        def get_previous( matches ):
+            ''' matches[-1] corresponds to the pipette failured attempt in the new location. We want info from the previous '''
+            if len(matches) < 2: # handle case where there was only one failed attempt and we are looking at that one failed attempt outside the loop.
+                tip_loc = 'Unknown'
+                pip_id  = matches[-1]['pipette_id']
+                return tip_loc, pip_id
+            if 'tip_loc' in matches[-2]:            # we should expect to have at least 5 entries in matches if this is true
+                tip_loc = matches[-2]['tip_loc']    # we only know the tip loc when 'UNABLE' line is printed after it gives up on that tip location
+                pip_id  = matches[-3]['pipette_id']         # pipette ID will not be in 'UNABLE' line, so must look to the previous
+            else:
+                tip_loc = 'Unknown'
+                pip_id = matches[-2]['pipette_id']
+            return tip_loc, pip_id
+        ##############################
+        print('Searching for er75 or er62, which means pipette failed to pickup tip')
+        try:
+            self.search_for_tip_pickup_errors = True
+            regex_GTid   = re.compile( r"/var/log/[\w.]+:(?P<mon>[\w]+)[ ]+(?P<day>[\d]+)[ ](?P<time>[\d:]+) [\w:.\-_ ]+ pipette recv id = (?P<pipette_id>[\d]), ret = GTid(?P<number>[\d]+)er(?P<error>[^0]+)" ) 
+            regex_giveup = re.compile( r"/var/log/[\w.]+:(?P<mon>[\w]+)[ ]+(?P<day>[\d]+)[ ](?P<time>[\d:]+) [\w:.\-_ ]+ UNABLE TO PICKUP TIP AT (?P<tip_loc>[\w_]+).  RETRYING AT A DIFFERENT LOCATION" )
+            matches  = [] # list of groupdicts for all lines that match
+            tip_locs = [] 
+            attempt_count  = 0
+            lines = self.debug.all_lines
+            for line in lines:
+                match = regex_GTid.match( line )
+                match_giveup = regex_giveup.match( line )
+                if match:
+                    print(line)
+                    matches.append(match.groupdict())
+                    if new_tip_loc( matches ):
+                        print('       Failed attempt is at a New Tip Loc. Log previous attempt set')
+                        try:
+                            tip_loc, pip_id = get_previous( matches )  
+                            tip_loc_dict = {'tip_loc': tip_loc, 'failed_attempts': attempt_count, 'pipette': pip_id }
+                            print('       {}'.format(tip_loc_dict))
+                            tip_locs.append( tip_loc_dict ) 
+                        except:
+                            print('       Something went wrong when searching for pip_id and tip_loc for previous attempt set. Skipping...')
+                        attempt_count = 1 # reset attempt counter to 1 
+                    else:
+                        attempt_count += 1
+                if match_giveup:
+                    print(line)
+                    matches.append( match_giveup.groupdict() )
+
+            # Handle very last failed attempt
+            if len(matches) > 0:
+                print('Lets log the very last failed attempt group')
+                tip_loc, pip_id = get_previous( matches )
+                tip_loc_dict = {'tip_loc': tip_loc, 'failed_attempts': attempt_count, 'pipette': pip_id }
+                print('       {}'.format(tip_loc_dict))
+                tip_locs.append( tip_loc_dict )
+            
+            # Save metrics to display
+            self.struggle_to_pickup_tips = {}
+            self.unable_to_pickup_tips = {}
+            for id in ['1','2']:
+                num_attempts = [] # only cases where pipette was eventually successful
+                unable_to_pickup = []
+                for tip_loc in tip_locs:
+                    if tip_loc['pipette']==id:
+                        if tip_loc['tip_loc']=='Unknown':
+                            num_attempts.append(tip_loc['failed_attempts'])
+                        else:
+                            unable_to_pickup.append(tip_loc['tip_loc'])
+                        
+                num_attempts = np.asarray(num_attempts)
+                self.struggle_to_pickup_tips['pipette_{}'.format(id)] = {'tip_loc_count':len(num_attempts),'failed_attempt_avg':'{:.1f}'.format(np.average(num_attempts))}
+                self.unable_to_pickup_tips['pipette_{}'.format(id)] = unable_to_pickup
+            print(self.struggle_to_pickup_tips)
+            print(self.unable_to_pickup_tips)
+
+            self.metrics['tip_pickup_errors'] = {'p1':{}, 'p2':{}}
+            for id in ['1','2']:
+                self.metrics['tip_pickup_errors']['p{}'.format(id)]['struggle_count'] = self.struggle_to_pickup_tips['pipette_{}'.format(id)]['tip_loc_count']
+                self.metrics['tip_pickup_errors']['p{}'.format(id)]['struggle_attempt_avg'] = self.struggle_to_pickup_tips['pipette_{}'.format(id)]['failed_attempt_avg']
+                self.metrics['tip_pickup_errors']['p{}'.format(id)]['unable_count'] = len(self.unable_to_pickup_tips['pipette_{}'.format(id)])
+                self.metrics['tip_pickup_errors']['p{}'.format(id)]['unable_locs'] = ', '.join(self.unable_to_pickup_tips['pipette_{}'.format(id)])
+        except:
+            print('!! Something went wrong when searching for tip pickup errors, such as er75 and er62. Skipping Analysis.')
+            self.search_for_tip_pickup_errors = False
+            self.metrics['plugin_error'] = True
 
     def find_pipette_errors( self ):
         '''
         Function to determine if either pipette experienced an ERROR 52. This error means that the pipette did not complete its aspiration.
         The pipette may not have aspirated or dispensed everything it was supposed to. When one er52 happens, more are likely to follow.
-        Now adding in other pipette errors that will not yet be added to chipdb 
+        Now adding in other general pipette errors.
+        Oct-2020 adding pipette timeout errors
         '''
         print('Seaching for er52 and other pipette errors in debug log...')
         er52 = {'pipette_1':0, 'pipette_2':0} # initiate dictionary containing times of er52 errors - now only used to make results.json
         pipette_errors = { 'pipette_1':{'count':0, 'messages':[]}, 'pipette_2':{'count':0, 'messages':[]} } # for all pipette errors, including er52. Use in block html
         self.search_for_pipette_errors = True 
         try:
-            error_regex = re.compile( r"[\w:./\-_ ]+ ValueError: ERROR: (?P<function>[\w]+) pipette (?P<pipette_id>[\d]) returned error = (?P<error_str>[\w:\- !=<>.]+)"  ) # does not identify er52
-            
+            general_error_regex = re.compile( r"[\w:./\-_ ]+ ValueError: ERROR: (?P<function>[\w]+) pipette (?P<pipette_id>[\d]) returned error = (?P<error_str>[\w:\- !=<>.]+)"  ) # does not identify er52
+            timeout_to_error_regex = re.compile( r"[\w:./\-_ ]+ pipette timedout waiting for response (?P<function>[\w,]+) id = (?P<pipette_id>[\d]), pipCmd = (?P<pipCmd>[\w]+)"  ) # only for pipette timout errors
+            timeout_from_error_regex = re.compile( r"[\w:./\-_ ]+ pipette timedout waiting for response (?P<function>[\w,]+) id = (?P<pipette_id>[\d]) for response to (?P<pipCmd>[\w]+)"  ) # only for pipette timout errors
+            print('About to do parellel grep for pipette errors...') 
+            #self.debug.parallel_grep( filter_on_starttime=False ) # just to test
             lines = self.debug.all_lines
             for line in lines:
                 # First check if line is from er52
@@ -928,13 +1135,40 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                     print( 'Line flagged for pipette error: {}'.format(line) )
 
                 # See if the line matches the regex for the format of the generic pipette error    
-                match = error_regex.match( line )
+                match = general_error_regex.match( line )
                 if match:
                     function = match.groupdict()['function']
                     message = match.groupdict()['error_str']
                     pipette_id = str(match.groupdict()['pipette_id'])
                     pipette_errors['pipette_{}'.format(pipette_id)]['count']+=1
                     pipette_errors['pipette_{}'.format(pipette_id)]['messages'].append( '{}: {}'.format(function,message) )
+                
+                if 'timedout' in line:
+                    match_to   = timeout_to_error_regex.match( line ) # two different types of timedout lines require two different regex and message
+                    match_from = timeout_from_error_regex.match( line )
+                    if match_to:
+                        match = match_to
+                        pipCmd =  match.groupdict()['pipCmd'][0:4]
+                        if pipCmd in ['RFid','ZIid']:
+                            pass # fine with these types 
+                        else:
+                            print('Timedout line: {}'.format(line))
+                            pipette_id = str(match.groupdict()['pipette_id'])
+                            message = 'pipette timedout waiting for response {} pipCmd = {}'.format(match.groupdict()['function'].replace(',',''),match.groupdict()['pipCmd'])
+                            pipette_errors['pipette_{}'.format(pipette_id)]['count']+=1
+                            pipette_errors['pipette_{}'.format(pipette_id)]['messages'].append( '{}'.format(message) )
+                    if match_from:
+                        match = match_from
+                        pipCmd =  match.groupdict()['pipCmd'][0:4]
+                        if pipCmd in ['RFid','ZIid']:
+                            pass
+                        else:
+                            print('Timedout line: {}'.format(line))
+                            pipette_id = str(match.groupdict()['pipette_id'])
+                            message = 'pipette timedout waiting for response {} pip for response to {}'.format(match.groupdict()['function'].replace(',',''),match.groupdict()['pipCmd'])
+                            pipette_errors['pipette_{}'.format(pipette_id)]['count']+=1
+                            pipette_errors['pipette_{}'.format(pipette_id)]['messages'].append( '{}'.format(message) )
+            
             self.metrics['er52'] = er52
 
             # All this just to get the messages into the right format for results.json
@@ -948,6 +1182,34 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         except:
             print('!! Something went wrong when searching for pipette errors, such as er52. Skipping Analysis.')
             self.search_for_pipette_errors = False
+            self.metrics['plugin_error'] = True
+
+    def find_pipette_serialNumbers( self ):
+        '''
+        Searches debug for pipette serial numbers.
+        '''
+        print('Searching for pipette serial numbers...')
+        sns = {'1': None, '2':None}
+        self.metrics['serial_number_pip1']= sns['1'] # will update if found
+        self.metrics['serial_number_pip2']= sns['2']
+        try:
+            regex = re.compile( r'[\w:./\-_ ]+ python: pipette: recv id = (?P<id>[\d]), ret = (?P<part1>[\w\-]+)/(?P<part2>[\w]+)/(?P<serial>[\d]+)')
+            # need to grep whole debug since lines we need are before start of run
+            print('About to do parellel grep for pipette serial numbers...') 
+            self.debug.parallel_grep( filter_on_starttime=False )
+            lines = self.debug.all_lines
+            for i,line in enumerate(lines):
+                match = regex.match(line)
+                if match:
+                    matchdict = match.groupdict()
+                    sns[matchdict['id']] = matchdict['serial'] 
+
+            self.metrics['serial_number_pip1']= sns['1']
+            self.metrics['serial_number_pip2']= sns['2']
+            print(sns)
+        except:
+            print('!! Something went wrong when searching for pipette serial numbers.')
+            self.metrics['plugin_error'] = True
 
     def analyze_pipette_behavior( self ):
         """ Reads the debug log to extract the time pipettes spend on mixing steps
@@ -979,6 +1241,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             print( '-------COMPLETE: Analyzing Pipette Behavior-------' )
         except:
             print( '!! Something went wrong when analyzing pipette behavoir. Skipping Analysis.')
+            self.metrics['plugin_error'] = True
 
     #############################################
     #   BEGIN -- HELPERS FOR PIPETTE BEHAVIOR   #
@@ -1157,6 +1420,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         except:
             print('!! Something went wrong when looking for blocked tips. Skipping Analysis.')
             self.searched_for_blocked_tips = False
+            self.metrics['plugin_error'] = True
 
     def analyze_vacuum_logs( self ):
         ''' Reads the vacuum log csv files'''
@@ -1165,7 +1429,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         
         lanes = ['lane 1', 'lane 2', 'lane 3', 'lane 4', 'lane 5', 'lane 0']
         real_lanes = ['lane 1', 'lane 2', 'lane 3', 'lane 4']
-        try:
+        #try:
+        if True:
             v5 = os.path.join( self.calibration_dir, 'vacuum_data_lane5.csv' )
             vlog = os.path.join( self.calibration_dir, 'vacuum_log.csv' )
             
@@ -1193,9 +1458,10 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             # If there are no vacuum logs in any lane, set self.has_vacuum_logs False
             if not any( [self.metrics['vacLog'][lane]['log_found'] for lane in real_lanes ] ) :
                 self.has_vacuum_logs = False
-        except:
-            print( '!! Something went wrong when analyzing the vacuum logs. Skipping analysis')
-            self.has_vacuum_logs = False
+        #except:
+        #    print( '!! Something went wrong when analyzing the vacuum logs. Skipping analysis')
+        #    self.has_vacuum_logs = False
+        #    self.metrics['plugin_error'] = True
                     
     def extract_vacLog_data( self, filepath ):
         '''Create empty array that will contain a list of dictionaries, one dict for each process'''
@@ -1309,6 +1575,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         pumping_to_goal_temp = [] # boolean array for if pumping to target/initial pressure
         venting_to_target_temp = [] # for new PostRun
         pumping_to_maintain_target_temp = [] # boolean array for if pumping to maintain target pressure   
+        pump_start_time = None # set initial value incase we don't find a pump start time
 
         pump_has_started = False # changed to True if conditions are met
         pressure_reached_target = False # changed to True if conditions are met
@@ -1395,13 +1662,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         process_dict['pumping to goal']=pumping_to_goal_temp
         process_dict['venting to target']=venting_to_target_temp
         process_dict['pumping to maintain target']=pumping_to_maintain_target_temp
-        
         process_dict['Pump Start Time'] = pump_start_time
         process_dict['Pressure Reached Target'] = pressure_reached_target
-        try:
-            process_dict['Pressure Reached Target Time'] = pressure_reached_target_time
-        except:
-            pass
         try:
             process_dict['Duty Cycle at End']           = float(np.sum(pumping_to_maintain_target_temp[t_after_target_index:])) /float( len(pumping_to_maintain_target_temp[t_after_target_index:]))*100 
             process_dict['Amplitude of Oscillation']    = np.std(pressure_temp[t_after_target_index:])* math.sqrt(3)
@@ -1418,7 +1680,14 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 process_dict['Time to Target'] = pump_reached_target_time - pump_start_time
                 process_dict['Vent Open Time'] = pump_start_time
             else:
-                process_dict['Time to Target'] = time_temp[-1] - pump_start_time # entire time is spends pumping
+                if pump_start_time == None:
+                    process_dict['Time to Target'] = 0 
+                    process_dict['Duty Cycle at End'] = 0 
+                    process_dict['Pressure Reached Target'] = True 
+                    print('Did not find time to target. Assume pump never turned on since pressure was already lower than target')
+                else:
+                    process_dict['Time to Target'] = time_temp[-1] - pump_start_time # entire time is spends pumping
+
         else: # PostRun
             process_dict['Pressure Reached Initial'] =  pressure_reached_initial
             if pressure_reached_initial:
@@ -1429,7 +1698,11 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 else:
                     process_dict['Time to Target']= time_temp[-1] - pump_reached_initial_time
             else:
-                process_dict['Time to Initial'] = time_temp[-1] - pump_start_time        
+                try:
+                    process_dict['Time to Initial'] = time_temp[-1] - pump_start_time        
+                except:
+                    process_dict['Time to Initial'] = None
+                    print('Unable to determine time to initial. Perhaps because we do not have a pump start time.')
 
     def analyze_process_ClogCheck( self, process, process_dict ):
         '''Handles all clog check steps that occur during PostLibClean'''
@@ -1746,7 +2019,10 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 plt.bar(process['time (s)'], np.asarray(process['pumping to maintain target'])*bar_height, bottom = bar_loc, width=dt, color='gray', edgecolor='none' )
                 plt.bar(process['time (s)'], np.asarray(process['pumping to goal'])*bar_height, bottom = bar_loc, width=dt, color='orange', edgecolor='none' )
                 if finalP <= initP: # VacuumDry (<) and old PostRuns (=)
-                    plt.text(t_pumpStart+process['Time to Target']/20,bar_loc+bar_height/4,str( "{:.1f}".format(process['Time to Target'])+' s' ), fontsize=fontsize)            
+                    if (process['Time to Target'] == None) or (t_pumpStart == None):
+                        plt.text(2,bar_loc+bar_height/4,'Pump never turned on', fontsize=fontsize)
+                    else:
+                        plt.text(t_pumpStart+process['Time to Target']/20,bar_loc+bar_height/4,str( "{:.1f}".format(process['Time to Target'])+' s' ), fontsize=fontsize)            
                 else: # new PostRun
                     if process['Time to Initial']>=5.5:
                         plt.text(t_pumpStart+process['Time to Initial']/20,bar_loc+bar_height/4,str( "{:.1f}".format(process['Time to Initial'])+' s' ), fontsize=fontsize)
@@ -1784,6 +2060,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                         color = 'green'
                     else:
                         color = 'red'
+                        plt.title('Suspected Clog', fontsize=fontsize, fontweight='bold')
                 except:
                     color = 'red'
 
@@ -1825,6 +2102,7 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                         color = 'green'
                     else:
                         color = 'red'
+                        plt.title('Suspected Leak', fontsize=fontsize, fontweight='bold')
                 except:
                     color = 'red'
 
@@ -2004,6 +2282,8 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
         styles = H.Style()
         styles.add_css( 'td.active'  , { 'background-color': '#0f0' } )
         styles.add_css( 'td.inactive', { 'background-color': '#000' } )
+        styles.add_css( 'td.info'   , { 'background-color': 'white',
+                                         'color': '#000' } ) # used to be white (#fff) but I changed it to black
         styles.add_css( 'td.error'   , { 'background-color': '#FF4500',
                                          'font-weight': 'bold',
                                          'color': '#000' } ) # used to be white (#fff) but I changed it to black
@@ -2144,7 +2424,6 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                 """ % ( str(p1_num),  self.metrics['blocked_tips']['p1_tubes']  ) )
                 alert = H.TableCell( code , width="20px" , align='center' )
                 alert.attrs['class'] = 'flag'
-            #fails  = H.TableCell( self.metrics['blocked_tips']['p1_tubes'] , width='600px' )
             for cell in [label, space, alert]:
                 row1.add_cell( cell )
                 
@@ -2190,7 +2469,9 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             blockage_table.add_row( row2 )
             blockage_table.add_row( row3 )
             
-            alarmrow.add_cell( H.TC( blockage_table , width='15%' ) )
+            alarmrow.add_cell( H.TC( blockage_table , width='12%' ) )
+        else:
+            alarmrow.add_cell( H.TC( '&nbsp', width='12%' ) )
             
         # Need to add info about the TubeBottomLog.csv in the block html, including link to csv
         if self.has_tube_bottom_log:
@@ -2200,68 +2481,128 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             space     = H.TableCell( '&nbsp', width="5px" )
             
             row0   = H.TableRow( )
-            row0.add_cell( H.TC( 'Tube Bottom Log', True , align='right' , width="125px") )
-            row0.add_cell( space )
-            row0.add_cell( H.TableCell( '&nbsp', width="20px" ) )
-            
+            row0.add_cell( H.TC( 'Tube Bottom Log', True , align='right' , width="130px") )
+            for pipette in ['1','2']:
+                row0.add_cell( space )
+                try:
+                    pip_sn  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( 'P{}'.format(pipette), 'pip serial#: {}'.format(self.metrics['serial_number_pip{}'.format(pipette)]) ) )
+                    pip_id = H.TableCell( pip_sn , width="20px" , align='center' )
+                    pip_id.attrs['class'] = 'info'
+                    row0.add_cell( pip_id )
+                except:
+                    row0.add_cell( H.TC( 'P{}'.format(pipette), False, align='left', width="20px" ) )
+
+
             # Missed Bottom - changed nomenclature based on feedback from Shawn.
             row1   = H.TableRow( )
-            label  = H.TableCell( '> 2 mm <em>above</em> zcal', align='right' , width="125px")
-            mb_num = self.metrics['bottomlog']['missed_bottom_count']
-            if mb_num == 0:
-                alert = H.TableCell( '', width="20px" )
-                alert.attrs['class'] = 'active'
-            else:
-                code  = textwrap.dedent("""\
-                <span class="tooltip">%s</span>
-                <div class="tooltiptext">%s</div>
-                """ % ( str(mb_num), self.metrics['bottomlog']['missed_bottom'] ) )
-                alert = H.TableCell( code , width="20px" , align='center' )
-                alert.attrs['class'] = 'error'
-            #fails  = H.TableCell( self.metrics['bottomlog']['missed_bottom'] , width='600px' )
-            for cell in [label, space, alert]:
-                row1.add_cell( cell )
+            label  = H.TableCell( '> 2 mm <em>above</em> zcal', align='right' , width="130px")
+            row1.add_cell(label)
+            
+            for pipette in [1,2]:
+                row1.add_cell(space)
+                mb_num = self.metrics['bottomlog']['missed_bottom_p{}_count'.format(pipette)]
+                if mb_num == 0:
+                    alert = H.TableCell( '', width="20px" )
+                    alert.attrs['class'] = 'active'
+                else:
+                    code  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( str(mb_num), self.metrics['bottomlog']['missed_bottom_p{}'.format(pipette)] ) )
+                    alert = H.TableCell( code , width="20px" , align='center' )
+                    alert.attrs['class'] = 'error'
+                row1.add_cell(alert)
                 
             # Bent Tube - changed nomenclature based on feedback from Shawn.
             row2   = H.TableRow( )
-            label  = H.TableCell( '> 2 mm <em>below</em> zcal', align='right' , width="125px")
-            space  = H.TableCell( '&nbsp', width="5px" )
-            bt_num = self.metrics['bottomlog']['bent_tips_count']
-            if bt_num == 0:
-                alert = H.TableCell( '', width="20px" )
-                alert.attrs['class'] = 'active'
-            else:
-                code  = textwrap.dedent("""\
-                <span class="tooltip">%s</span>
-                <div class="tooltiptext">%s</div>
-                """ % ( str(bt_num), self.metrics['bottomlog']['bent_tips'] ) )
-                alert = H.TableCell( code , width="20px" , align='center' )
-                alert.attrs['class'] = 'error'
-            #fails  = H.TableCell( self.metrics['bottomlog']['bent_tips'] , width='600px' )
-            for cell in [label, space, alert]:
-                row2.add_cell( cell )
+            label  = H.TableCell( '> 2 mm <em>below</em> zcal', align='right' , width="130px")
+            row2.add_cell(label)
+            for pipette in [1,2]:
+                row2.add_cell(space) 
+                bt_num = self.metrics['bottomlog']['bent_tips_p{}_count'.format(pipette)]
+                if bt_num == 0:
+                    alert = H.TableCell( '', width="20px" )
+                    alert.attrs['class'] = 'active'
+                else:
+                    code  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( str(bt_num), self.metrics['bottomlog']['bent_tips_p{}'.format(pipette)] ) )
+                    alert = H.TableCell( code , width="20px" , align='center' )
+                    alert.attrs['class'] = 'error'
+                row2.add_cell(alert)
                 
             tip_table.add_row( row0 )
             tip_table.add_row( row1 )
             tip_table.add_row( row2 )
             
-            alarmrow.add_cell( H.TC( tip_table, width='15%' ) )
+            alarmrow.add_cell( H.TC( tip_table, width='13%' ) )
         else:
-            alarmrow.add_cell( H.TC( '&nbsp', width='15%' ) )
-       
-        if self.search_for_pipette_errors:
-            # Pipette Malfunction Errors including Error 52
-            er52_table  = H.Table( border='0' )
-            space       = H.TableCell( '&nbsp', width="5px" )
+            alarmrow.add_cell( H.TC( '&nbsp', width='13%' ) )
+        
+        
+        # Pipette Pressure Tests
+        if self.pipPresTests.found_pipPres:
+            # Table
+            # row per failure type, columns are label, colored box (green if ok, red if not), list of failed steps
+            ppt_table = H.Table( border='0' )
+            space     = H.TableCell( '&nbsp', width="5px" )
+            
             row0   = H.TableRow( )
-            row0.add_cell( H.TC( 'Pipette Errors', True , align='right' , width="100px") )
-            row0.add_cell( space )
-            row0.add_cell( H.TableCell( '&nbsp', width="20px" ) )
-            er52_table.add_row( row0 )
+            row0.add_cell( H.TC( 'PipPres Tests', True , align='right' , width="110px") )
+            for pipette in ['1','2']:
+                row0.add_cell( space )
+                row0.add_cell( H.TC( 'P{}'.format(pipette), False, align='left', width="20px" ) )
+            ppt_table.add_row( row0 )
 
-            for id in [1,2]:
+            for type in [('waterWell_fail','water well'),('inCoupler_fail','coupler'),('vacTest_fail','vacuum')]:
                 row   = H.TableRow( )
-                label  = H.TableCell( 'Pipette {}'.format(id), align='right' , width="100px")
+                label  = H.TableCell( type[1], align='right' , width="110px")
+                row.add_cell(label)
+            
+                for pipette in [1,2]:
+                    row.add_cell(space)
+                    num = self.pipPresTests.results[type[0]]['p{}_count'.format(pipette)] 
+                    if num > 0:
+                        code  = textwrap.dedent("""\
+                        <span class="tooltip">%s</span>
+                        <div class="tooltiptext">%s</div>
+                        """ % ( str(num), self.pipPresTests.results[type[0]]['p{}'.format(pipette)]) )
+                        alert = H.TableCell( code , width="20px" , align='center' )
+                        alert.attrs['class'] = 'error'
+                    elif self.pipPresTests.results[type[0]]['did_test']:
+                        alert = H.TableCell( '', width="20px" )
+                        alert.attrs['class'] = 'active'
+                    else:
+                        alert = H.TableCell( '', width="20px" )
+                        alert.attrs['class'] = 'inactive' 
+                    row.add_cell(alert)
+                ppt_table.add_row( row )
+            
+            alarmrow.add_cell( H.TC( ppt_table , width='11%' ) )
+        else:
+            alarmrow.add_cell( H.TC( '&nbsp', width='11%' ) )
+        
+        # Table for Pipette Malfunction errors and/or pipette tip pickup errors            
+        er52_table  = H.Table( border='0' )
+        space       = H.TableCell( '&nbsp', width="5px" )
+        row0   = H.TableRow( )
+        row0.add_cell( H.TC( 'Pipette Errors', True , align='right' , width="150px") )
+        for pipette in ['1','2']:
+            row0.add_cell( space )
+            row0.add_cell( H.TC( 'P{}'.format(pipette), False, align='left', width="15px" ) )
+        er52_table.add_row( row0 )
+            
+        if self.search_for_pipette_errors:
+            # First Row for pipette errors er52/timeout/other
+            row1 = H.TableRow( )
+            label  = H.TableCell( 'er52/timeout/other', align='right' , width="150px")
+            row1.add_cell( label )
+            for id in [1,2]:
+                row1.add_cell(space)
                 count = self.pipette_errors['pipette_{}'.format(id)]['count']
                 alert = H.TableCell( '', width="20px" )
                 if count == 0:
@@ -2274,11 +2615,57 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
                     """ % ( str(count), self.pipette_errors['pipette_{}'.format(id)]['messages'] ) )
                     alert = H.TableCell( code , width="20px" , align='center' )
                     alert.attrs['class'] = 'error'
-                for cell in [label, space, alert]:
-                    row.add_cell( cell )
-                er52_table.add_row( row )
-                
-            alarmrow.add_cell( H.TC( er52_table , width='15%' ) )
+                row1.add_cell( alert )
+            er52_table.add_row( row1 )
+        if self.search_for_tip_pickup_errors:
+            row_struggle = H.TableRow( )
+            label  = H.TableCell( 'struggle to pickup tip', align='right' , width="150px")
+            row_struggle.add_cell(label)
+            for id in [1,2]:
+                row_struggle.add_cell(space)
+                count = self.struggle_to_pickup_tips['pipette_{}'.format(id)]['tip_loc_count'] 
+                alert = H.TableCell( '', width="20px" )
+                if count == 0:
+                    alert = H.TableCell( '', width="20px" )
+                    alert.attrs['class'] = 'active'
+                else:
+                    message = 'Averge number of failed attempts per tip location: {}'.format( self.struggle_to_pickup_tips['pipette_{}'.format(id)]['failed_attempt_avg'] ) 
+                    code  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( str(count), message ) )
+                    alert = H.TableCell( code , width="20px" , align='center' )
+                    alert.attrs['class'] = 'error'
+                row_struggle.add_cell( alert )
+            er52_table.add_row( row_struggle )
+            
+            row_unable = H.TableRow( )
+            label  = H.TableCell( 'unable to pickup tip', align='right' , width="150px")
+            row_unable.add_cell(label)
+            for id in [1,2]:
+                row_unable.add_cell(space)
+                count = len(self.unable_to_pickup_tips['pipette_{}'.format(id)]) 
+                alert = H.TableCell( '', width="20px" )
+                if count == 0:
+                    alert = H.TableCell( '', width="20px" )
+                    alert.attrs['class'] = 'active'
+                else:
+                    message = ', '.join( self.unable_to_pickup_tips['pipette_{}'.format(id)] ) 
+                    code  = textwrap.dedent("""\
+                    <span class="tooltip">%s</span>
+                    <div class="tooltiptext">%s</div>
+                    """ % ( str(count), message ) )
+                    alert = H.TableCell( code , width="20px" , align='center' )
+                    alert.attrs['class'] = 'error'
+                row_unable.add_cell( alert )
+            er52_table.add_row( row_unable )
+
+
+        if self.search_for_pipette_errors or self.search_for_tip_pickup_errors:
+            alarmrow.add_cell( H.TC( er52_table , width='14%' ) )
+        else:
+            alarmrow.add_cell( H.TC( '&nbsp', width='14%' ) )
+
             
         
         # Errors and Warnings for vacuum logs    
@@ -2365,11 +2752,12 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             except:
                 print('Error when trying to create vacuum_postlib_html') ###
                 
-            alarmrow.add_cell( H.TC( vacLog_table, width='15%' ) )
+            alarmrow.add_cell( H.TC( vacLog_table, width='12%' ) )
         else:
-            alarmrow.add_cell( H.TC( '&nbsp', width='15%' ) )
+            alarmrow.add_cell( H.TC( '&nbsp', width='12%' ) )
         
-        if os.path.exists( 'flow_spark.svg' ):
+        #if os.path.exists( 'flow_spark.svg' ):
+        if os.path.exists( os.path.join( self.results_dir, 'flow_spark.svg' ) ):
             flow_img = H.Image( os.path.join( 'flow_spark.svg' ), width='100%' )
             fail4    = H.TC( flow_img.as_link() )
             alarmrow.add_cell( fail4 )
@@ -2650,11 +3038,21 @@ class ValkyrieWorkflow( IonPlugin , PluginMixin ):
             links.add_item( H.ListItem( 'No flow data found' ) )
         
         if self.libpreplog.hasLog:
-            lp = H.Link('libPrep_log.html')
-            lp.add_body( 'libPrep_log.html' )
-            links.add_item( H.ListItem( lp ) )
+            if self.libpreplog.hasData:
+                lp = H.Link('libPrep_log.html')
+                lp.add_body( 'libPrep_log.html' )
+                links.add_item( H.ListItem( lp ) )
+            else:
+                links.add_item( H.ListItem( 'libPrep_log.csv is empty.' ) )
         else:
-            links.add_item( H.ListItem( 'libPrep_log analysis unavailable' ) )
+            links.add_item( H.ListItem( 'libPrep_log.csv not found.' ) )
+        
+        if self.pipPresTests.found_pipPres:
+            ppt = H.Link('PipettePressureTests.html')
+            ppt.add_body('PipettePressureTests.html')
+            links.add_item( H.ListItem( ppt ) )
+        else:
+            links.add_item( H.ListItem( 'PipPress directory not found' ) )
 
         # Add link to oia_timing if it was made
         if os.path.exists( os.path.join( self.results_dir, 'oia_timing.png' ) ):
@@ -2887,6 +3285,7 @@ class DebugInfo:
         self.expt_start = expt_start
         self.filepath = filepath
         self.outdir   = outdir
+        self.plugin_error = False # set to false, change to true if error
         
         try:
             self.debug_lines = debug_lines # used to check if conical clog check was skipped due to low W3 flow 
@@ -2907,8 +3306,9 @@ class DebugInfo:
             self.hasDebugInfo = True
             # Next extract pinch clearing measurements, group data by name and lane, make plots, and generate html page.
             pinch_data = self.extract_pinch_data( debugInfo_raw )
-            self.plot_pinch_data( pinch_data )
-            self.write_pinch_data_html( pinch_data )
+            if self.pinchMeas:
+                self.plot_pinch_data( pinch_data )
+                self.write_pinch_data_html( pinch_data )
             # Next handle postRunClean - only care about the conical clog check, not so much the start and end time of PostRun
             pr_ccc_data = self.extract_postRunClean( debugInfo_raw )
             
@@ -2941,6 +3341,7 @@ class DebugInfo:
             print('!! Something went wrong when analyzing DebugInfo.json containing postChipClean data. Skipping analysis.')
             self.hasDebugInfo = False
             self.foundConicalClogCheck = False
+            self.plugin_error = True
             return None
             
     def extract_pinch_data( self, debugInfo_all ):
@@ -2950,6 +3351,7 @@ class DebugInfo:
             if not obj['name'] in ['end','(null)','PostChipClean','PostRunClean','fluidicsAtCust']: # to isolate dictionaries related to pinch measurements
                 name_list_all.append(obj['name'])  # for example, a name might be 'RP-Pinch MW4 Clearing' 
         name_list = set(name_list_all) 
+        print('name_list: {}'.format(name_list))
 
         pinch_dict = {}
         keys = ['timestamp','flowRate', 'manPres', 'regPres', 'tankPres'] # timestamp is first since it is used to determine if a new name is needed for reSeq prerun
@@ -2961,12 +3363,13 @@ class DebugInfo:
             for point in debugInfo_all['objs']:
                 if point['name']==name:
                     dict_name = name # dict_name will change if reseq PreRun pinch measure points are found
-                    pinch_dict[dict_name]['valves'] = point['valves']
                     for key in keys:
                         if key =='timestamp': # will be the first key
                             dt_timestamp = datetime.datetime.strptime( point[key] , '%m_%d_%Y_%H:%M:%S' )
                             if dt_timestamp < self.expt_start:
                                 include_lane = False
+                                print('time stamp {} is before exp start {}. Ignoring'.format(dt_timestamp,self.expt_start))
+                                break 
                             if found_first_point:
                                 if (dt_timestamp-first_timestamp).total_seconds() > 200:
                                     dict_name = name.replace('PreRun','PreRun_ReSeq')# update the name to include ReSeq
@@ -2977,19 +3380,19 @@ class DebugInfo:
                             pinch_dict[dict_name][key].append( dt_timestamp )
                             if not found_first_point:
                                 first_timestamp = dt_timestamp # use this to determine if there is a large time jump between one PreRun point and the next. If time jump, then the second PreRun is for reseq
+                                found_first_point = True
+                                try:
+                                    lanes_all.append( name.split('CW')[1].split(' ')[0] )
+                                except:
+                                    pass
                         else:
                             pinch_dict[dict_name][key].append(point[key])
-                    found_first_point = True
-            # only append if timestamp shows measurement happened after start of experiment 
-            if include_lane:
-                try:
-                    lanes_all.append( name.split('CW')[1].split(' ')[0] )
-                except:
-                    pass
-        
         lanes = list(set(lanes_all)) # convert to list to enable indexing
         if len(lanes)>0:
             self.pinchMeas = True
+        else:
+            print('Did not find any lanes that underwent pinch measurement')
+            return None
         
         org_by_lane = {'Lane {}'.format(lane):{} for lane in lanes }
         for lane in lanes:
@@ -3682,6 +4085,7 @@ class FlowInfo:
         self.reseq_flow_order = reseq_flow_order
         print('flow order: {}'.format(flow_order) )
         self.true_active = true_active
+        self.plugin_error = False
        
         try:
             # If resequencing happened according to explog, look for flow data files in reseq folder
@@ -3745,6 +4149,7 @@ class FlowInfo:
         except:
             print( '!! Something went wrong when analyzing detailed flow data. Skipping Analysis')
             self.hasFlowData = False
+            self.plugin_error = True
             return None
 
     def combine_flow_data( self, pres_data_raw, flowR_data_raw, flow_order, reseq=False ):
@@ -3808,11 +4213,20 @@ class FlowInfo:
         print('Staging flow rates: {}'.format(metrics_dict))
         
         # CW and MW+CW flow rates will not depend on the nuc. 
+        print('len of flow_data_f CW: {}, first value {}'.format( len(flow_data_f['CW']['flowRate']),flow_data_f['CW']['flowRate'][0] ))
         metrics_dict['CW_median'] = np.median( flow_data_f['CW']['flowRate'] )
-        metrics_dict['CW_std']    = np.std( flow_data_f['CW']['flowRate'] )
         metrics_dict['CW_MW_median'] = np.median( flow_data_f['CW+MW']['flowRate'] )
-        metrics_dict['CW_MW_std']    = np.std( flow_data_f['CW+MW']['flowRate'] )
-        
+        try:
+            metrics_dict['CW_std']    = np.std( flow_data_f['CW']['flowRate'] )
+            metrics_dict['CW_MW_std']    = np.std( flow_data_f['CW+MW']['flowRate'] )
+        except:
+            print('Removing nones before trying to find standard deviation of CW and CW_MW flow rate')
+            CW_FR    = [val for val in flow_data_f['CW']['flowRate'] if val != None]
+            CW_MW_FR = [val for val in flow_data_f['CW+MW']['flowRate'] if val != None]
+            print('len of flow_data_f no none CW: {}'.format( len(CW_FR) ) )
+            print('len of flow_data_f no none CWMW: {}'.format( len(CW_MW_FR) ) )
+            metrics_dict['CW_std']    = np.std( CW_FR )
+            metrics_dict['CW_MW_std']    = np.std( CW_MW_FR )
         if not reseq:
             self.flow_metrics = metrics_dict   
 
@@ -4016,15 +4430,20 @@ class LibPrepLogCSV:
         self.expt_start = expt_start
         self.filepath = filepath 
         self.outdir   = outdir
+        self.plugin_error = False
         try:
             lpl = LibPrepLog( path=self.filepath )
-            self.hasLog = lpl.found
+            self.hasLog   = lpl.found
+            self.hasData  = lpl.has_data 
+
             self.lpl_metrics = {} # start with it empty, populate if we find metrics we want
-            if not self.hasLog:
+            if not self.hasData:
+                print('LibPrepLog missing data. Has log = {}'.format(self.hasLog))
                 return None 
             if module_timing==None:
                 self.hasLog = False # even though we actually have it, we don't want to analyze without module_timing data
                 return None
+            
             # Make keys for libpreplog_metrics
             self.save_headers = ['PCRHeatSink','Heatsink1','Heatsink2','Ambient1','Ambient2','Ambient3']
             for hd in self.save_headers:
@@ -4048,6 +4467,7 @@ class LibPrepLogCSV:
         except:
             self.hasLog = False
             print('!! Something went wrong when analyzing LibPrepLog. Skipping Analysis')
+            self.plugin_error = True
             return None
     
     def build_module_dict( self, module_timing ):
@@ -4254,16 +4674,205 @@ class LibPrepLogCSV:
         with open ( os.path.join( self.outdir, 'libPrep_log.html'), 'w') as f:
             f.write( str(doc) )
 
-#class PipetteTests:
-#    def __init__(self, filepath, outdir, lanes ):
-#        self.filepath = filepath 
-#        self.outdir   = outdir
-#        self.lanes = lanes # active lanes
+class PipettePresTests:
+    def __init__(self, resultdir, outdir, lanes=[1,2,3,4] ):
+        self.filepath = os.path.join(resultdir, 'pipPres' ) 
+        self.outdir   = outdir
+        self.lanes = lanes # active lanes, or perhaps I should look for all
+        self.found_pipPres = True
+        self.plugin_error = False
+        try:
+            if not os.path.exists( self.filepath ):
+                self.found_pipPres = False
+                return None
+            # dict for metrics
+            self.results = { 'waterWell_fail': {'p1_count':0, 'p1':[], 'p2_count':0, 'p2':[], 'did_test': False},
+                                    'inCoupler_fail': {'p1_count':0, 'p1':[], 'p2_count':0, 'p2':[], 'did_test': False},
+                                      'vacTest_fail': {'p1_count':0, 'p1':[], 'p2_count':0, 'p2':[], 'did_test': False},
+                                    }
 
-        # First start with VacuumPressure tests
-#       graphVacPressures(
+            # Generate graphs from the three tests.
+            self.lane_colors = ['black','orangered','forestgreen','mediumblue']
+            try:
+                self.graphVacPressures()
+            except:
+                print('!! Something went wrong when plotting the pipPres vacuum pressures')
+                self.plugin_error = True
+            try:
+                self.graphPipPressure('pipPressure')
+            except:
+                print('!! Something went wrong when plotting the pipPres pip pressures')
+                self.plugin_error = True
+            try:
+                self.graphPipPressure('pipInCoupler')
+            except:
+                print('!! Something went wrong when plotting the pipPres pipInCoupler pressures')
+                self.plugin_error = True
 
+            # convert fail list into comma delimited string
+            for key in self.results:
+                for pip in [1,2]:
+                    self.results[key]['p{}'.format(pip)] = ', '.join( self.results[key]['p{}'.format(pip)] )
+            print(self.results)
+            
+            self.write_pipPres_html()
+        except:
+            print('!! Something went wrong in PipettePresTests class. Skipping...') 
+            self.plugin_error = True
+            self.found_pipPres = False
 
+    def graphPipPressure( self, basename ):
+        fig = plt.figure(figsize=(5,3))
+        pip1 = plt.subplot2grid((1,2),(0,0))
+        pip2 = plt.subplot2grid((1,2),(0,1),sharey=pip1)
+        
+        for lane,color in zip([1,2,3,4],self.lane_colors):
+            for pip,ax in zip([1,2],[pip1,pip2]):
+                for attempt,alpha in zip( [0,1], [1,0.5] ):
+                    filename = '{}_lane{}_try{}_PIP{}.csv'.format(basename,lane,attempt,pip)
+                    t = []
+                    p = []
+                    try:
+                        with open(os.path.join(self.filepath,filename)) as csv_file:
+                            csv_reader = csv.reader(csv_file, delimiter=',')
+                            list_csv = list(csv_reader)
+                        p0 = float(list_csv[0][0])
+                        for i,line in enumerate(list_csv):
+                            t.append(i)
+                            p.append(float(line[0])-p0)
+                        label = 'L{}_try{}'.format(lane,attempt)
+                        ax.plot(t,p,color=color,alpha=alpha,label=label)
+                        self.checkPipPresTest( p, pip, label, basename ) 
+                    except:
+                        pass
+        pip2.legend(loc=(1.05,0.2))
+        pip1.set_ylabel('pipette pressure reading')
+        pip1.set_title('Pipette 1')
+        pip2.set_title('Pipette 2')
+        plt.setp(pip2.get_yticklabels(),visible=False)
+
+        for ax in [pip1,pip2]:
+            ax.set_xlabel('index')
+            ax.set_axisbelow(True)
+            ax.grid(which='major',linewidth='0.2',color='gray')
+
+        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+        fig.savefig( os.path.join( self.outdir, 'pipPres_{}.png'.format(basename) ),format='png',bbox_inches='tight')
+        plt.close()
+
+    def checkPipPresTest( self, trace, pipette, trace_name, basename ):
+        '''
+        for pipPressure: Pass if point 500 is less than -70. 
+        for pipInCoupler: pass if final point is less than -500
+        '''
+        if len(trace) < 10:
+            print('Skipping {} {} because array length is only {} points.'.format(basename,trace_name,len(trace)))
+            return
+
+        if basename=='pipPressure':
+            thresh = -70
+            value = trace[500]
+            type = 'waterWell_fail'
+        elif basename=='pipInCoupler':
+            thresh = -500
+            value = trace[-1]
+            type = 'inCoupler_fail'
+            print('{} {} array length {} last point {}'.format(basename,trace_name,len(trace),trace[-1]))
+        elif basename=='vac':
+            thresh = -5.5
+            value = trace[-1]
+            type = 'vacTest_fail'
+        self.results[type]['did_test'] = True 
+        
+        if value>thresh:
+           self.results[type]['p{}_count'.format(pipette)]+=1
+           self.results[type]['p{}'.format(pipette)].append(trace_name)
+
+    def graphVacPressures( self ):
+        fig = plt.figure(figsize=(5,3))
+        pip1 = plt.subplot2grid((1,2),(0,0))
+        pip2 = plt.subplot2grid((1,2),(0,1),sharey=pip1)
+        
+        for lane,color in zip([1,2,3,4],self.lane_colors):
+            for pip,ax in zip([1,2],[pip1,pip2]):
+                filename = 'Vacuum_PressureDataLANE{}_PIP{}.csv'.format(lane,pip)
+                t = []
+                p = []
+                try:
+                    with open(os.path.join(self.filepath,filename)) as csv_file:
+                        csv_reader = csv.reader(csv_file, delimiter=',')
+                        list_csv = list(csv_reader)
+                    for i,line in enumerate(list_csv):
+                        t.append(float(line[3]))
+                        p.append(float(line[5]))
+                    label = 'L{}'
+                    ax.plot(t,p,color=color,label=label.format(lane))
+                    self.checkPipPresTest( p, pip, label, 'vac' )
+                except:
+                    pass
+        pip2.legend(loc=(1.05,0.3))
+        pip1.set_ylabel('vacuum pressure reading (PSI)')
+        pip1.set_title('Pipette 1')
+        pip2.set_title('Pipette 2')
+        plt.setp(pip2.get_yticklabels(),visible=False)
+
+        for ax in [pip1,pip2]:
+            ax.set_xlabel('seconds')
+            ax.set_axisbelow(True)
+            ax.grid(which='major',linewidth='0.2',color='gray')
+
+        fig.subplots_adjust(hspace=0.1, wspace=0.1)
+        fig.savefig( os.path.join( self.outdir, 'pipPres_vacPressures.png'),format='png',bbox_inches='tight')
+        plt.close()
+    
+    def write_pipPres_html( self ):
+        doc = H.Document()
+        doc.add( H.Header('Pipette Pressure Tests',2) )
+        doc.add( H.HR() )
+        
+        images  = ['pipPres_pipPressure.png','pipPres_pipInCoupler.png','pipPres_vacPressures.png']
+        headers = [ 'Pipette Pressure: aspirate from water well',
+                    'Pipette Pressure: aspirate from chip coupler',
+                    'Vacuum Pressure: test vacuum leak caused by pipette' ]
+        
+        des_pipPressure  = ( 'Pressure curves are captured when each pipette aspirates from the water well during'+
+                             ' post run deck clean. Two aspirations are performed per active lane per pipette. The pressure'
+                             ' curves are baseline corrected by setting the first point equal to zero. A bad '+
+                             ' pipette will have a pressure reading that does not significantly deviate from baseline.')   
+        
+        des_pipInCoupler = ( 'Pressure curves are captured when each pipette aspirates from each active lane of'+
+                             ' the chip coupler. Two aspirations are performed per active lane per pipette. The pressure'
+                             ' curves are baseline corrected by setting the first point equal to zero. If the tip attatchment'+
+                             ' is good, the aspirate will stop prematurely because the pipette thinks there is a blockage.'+   
+                             ' For a bad tip attatchement, the pressure deviation from baseline will be small and the pressure'+
+                             ' will return to baseline upon completing the aspiration.')   
+            
+        des_vacPressures  = ( 'The pipete tip is inserted into chip coupler and vac pressure is monitored as'+
+                              ' the vac is pumped down to -6PSI. For a good pipette, pressure should remain'+
+                              ' close to -6PSI. A bad tip will act as a leak the vac pressure will drift'+
+                              ' towards baseline after reaching the target pressure of -6PSI.')   
+
+        descriptions = [ des_pipPressure, des_pipInCoupler, des_vacPressures ]
+
+        for (im, header, des) in zip(images,headers,descriptions):
+            if os.path.exists(os.path.join( self.outdir, im)):
+                doc.add( H.Header(header,3) )
+                vacpres_table = H.Table( border = '0' )
+                row = H.TableRow()
+                img = H.Image(im)
+                img_cell = H.TableCell( img.as_link() )
+                row.add_cell( img_cell )
+                vacpres_table.add_row( row )
+                # Description
+                row_des = H.TableRow()
+                des_cell = H.TableCell( H.Paragraph(des), width='600px' ) 
+                row_des.add_cell( des_cell )
+                vacpres_table.add_row( row_des )
+                doc.add( vacpres_table ) 
+                doc.add( H.HR() )
+            
+        with open ( os.path.join( self.outdir, 'PipettePressureTests.html'), 'w') as f:
+            f.write( str(doc) )
 
 class SummaryLog:
     """ Class for reading and interacting with summary log files on Valkyrie TS """

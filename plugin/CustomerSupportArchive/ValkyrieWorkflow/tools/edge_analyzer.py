@@ -21,7 +21,7 @@ except ImportError:
         print( 'Did not import chipcal in tools.edge_analyzer' )
 
 # for 510/520/530 and 540/541, we may want to add in 50, 150, and 250 wells.
-RINGS               = [0,50,100,150,200,250,300,400,500,1000,1500,2000,2500,5000,7500,10000]
+RINGS               = [0,50,100,150,200,250,300,400,500,600,750,1000,1250,1500,2000,2500,5000,7500,10000]
 IMAGE_RINGS         = [0,2,4,6,8,10,13,16,32,50] # each superpixel is ~31px for GX5v2
 SMALL_IMAGE_RINGS   = [0,1,2,3,4,5,6,7,8,10,13,16,32,50] 
 RING        = 'ring'
@@ -55,9 +55,9 @@ class EdgeAnalyzer:
         self.min_size = min_size
         return None
     
-    def parse_chip( self, mask_shape=RING, minimum_width=1000 ):
+    def parse_chip( self, mask_shape=RING, minimum_width=1000, lanes=False ):
         """ Creates a series of masks all at once for edge to center analysis. """
-        #rings      = [0,100,200,300,400,500,1000,1500,2000,2500,5000,7500]
+        #rings      = [0,100,200,300,400,500,600,750,1000,1250,1500,2000,2500,5000,7500]
         chip_rings = []
         for i,r in enumerate(self.RINGS):
             minimum_width = minimum_width
@@ -99,14 +99,38 @@ class EdgeAnalyzer:
         ring_mask[ new_mask ] = (i+2)
         self.chip_rings       = chip_rings
         self.ring_mask        = ring_mask
+
         self.ring_pixel_count = [ (ring_mask == i).sum() for i in range( len(chip_rings) + 1 ) ]
-        
+
+        if any( lanes ):
+            print( 'lanes detected: {}'.format( lanes ) )
+            self.lanes   = lanes
+            sm_lane_cols    = self.start_mask.shape[1]/4
+            for lane in lanes:
+                print( 'Setting attributes for lane {}'.format( lane ) )
+                lane_mask   = np.zeros( self.start_mask.shape )
+                lane_slice  = slice( int( (lane-1)*sm_lane_cols ), int( lane*sm_lane_cols ) )
+                lane_mask[ :, lane_slice ] = self.start_mask[ :, lane_slice ]
+                setattr( self, 'lane{}_mask'.format( lane ), lane_mask.astype( bool )  )
+                print( 'Set lane{}_mask'.format( lane ) )
+                
+                lane_ring_mask = np.array( ring_mask )
+                lane_ring_mask[ np.logical_not(lane_mask) ] = 0
+                lrm_name = 'lane{}_ring_mask'.format( lane )
+                setattr( self, lrm_name, lane_ring_mask )
+                print( 'Set lane{}_ring_mask'.format( lane ) )
+                rpc = [ (lane_ring_mask == i).sum() for i in range( len(chip_rings) + 1 ) ]
+                setattr( self, 'lane{}_ring_pixel_count'.format(lane), rpc )
+                print( 'Set lane{}_ring_pixel_count'.format( lane ) )
+                    
         # Create xlabels
         self.xlabels = [ str(y) for y in self.chip_rings ] + ['center']
         
+        print( 'Done parsing chip' )
+
         return None
     
-    def make_ringplot( self, data, ylabel=None, ylim=None, imgpath=None, operation=np.mean, downsample=False ):
+    def make_ringplot( self, data, ylabel=None, ylim=None, imgpath=None, operation=np.mean, downsample=False, extra_mask=None, lane=None ):
         """ 
         Creates a visualization of data as a function of 'rings' from the edge of the active array.
         Different operations can be applied using the operation kwarg, such as np.std.
@@ -115,10 +139,16 @@ class EdgeAnalyzer:
         vals = []
         x    = self.chip_rings[:-1] + np.diff( self.chip_rings ) / 2.
         for idx in range( 1 , len(x)+2 ):
+            mask = self.ring_mask == idx
+            if extra_mask is not None:
+                mask = np.logical_and( mask, extra_mask )
+            elif lane is not None:
+                mask = getattr( self, 'lane{}_ring_mask'.format( lane ) ) == idx
+
             if downsample:
-                vals.append( operation( data[ self.ring_mask==idx ][::10] ) )
+                vals.append( operation( data[ mask ][::10] ) )
             else:
-                vals.append( operation( data[ self.ring_mask==idx ] ) )
+                vals.append( operation( data[ mask ] ) )
         plt.figure(figsize=(12,4))
         xax = np.append( x , np.mean([self.chip_rings[-1],self.min_size/2]) )
         plt.plot( xax , vals , 'o-' )

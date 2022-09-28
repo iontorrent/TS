@@ -130,6 +130,6 @@ public:
         int query_start_clip, int query_end_clip,
         int match_score, int mismatch_score,
         int gap_open, int gap_extension, int dir,
-        int *opt, int *te, int *qe, int *n_best);
+        int *opt, int *te, int *qe, int *n_best, int* fitflag);
 };
 #endif // SOLUTION7_H

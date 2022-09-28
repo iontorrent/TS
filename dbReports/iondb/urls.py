@@ -80,8 +80,9 @@ urlpatterns = patterns(
     url(r"^admin/tsvm_log/(.+)/$", "iondb.rundb.admin.tsvm_get_log", name="tsvm_log"),
     # password change doesn't accept extra_context
     (r"^admin/password_change/done/", admin.site.password_change_done),
-    (r"^admin/password_change/", admin.site.password_change),
+    (r"^admin/password_change/", "iondb.rundb.admin.configure_account_admin"),
     (r"^admin/logout/", admin.site.logout),
+
     (r"^admin/$", admin.site.index, {"extra_context": {"is_VM": is_TsVm()}}),
     (
         r"^admin/(?P<app_label>\w+)/$",

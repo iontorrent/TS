@@ -26,7 +26,7 @@ Solution6::Solution6() {
 
 int Solution6::process(const string& bs, const string& as, int qsc, int qec,
                           int mm, int mi, int oe, int e, int dir,
-                          int *_opt, int *_te, int *_qe, int *_n_best) {
+                          int *_opt, int *_te, int *_qe, int *_n_best, int* fitflag) {
     const int n = bs.size(), m = as.size();
     int opt = NINF, query_end=-1, target_end=-1, n_best=0;
     oe += e;

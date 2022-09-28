@@ -21,7 +21,7 @@ tmap_vsw_wrapper_process(tmap_vsw_wrapper_t *v,
                          const uint8_t *query, int32_t qlen,
                          int mm, int mi, int o, int e, int dir,
                          int qsc, int qec,
-                         int *opt, int *te, int *qe, int *n_best)
+                         int *opt, int *te, int *qe, int *n_best, int* fitflag)
 {
   /*
   fprintf(stderr, "query=%d qlen=%d target=%d tlen=%d\n",
@@ -47,7 +47,7 @@ tmap_vsw_wrapper_process(tmap_vsw_wrapper_t *v,
           -1, -1, -1, -1);
   */
 
-  return v->process(target, tlen, query, qlen, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best);
+  return v->process(target, tlen, query, qlen, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best, fitflag);
 }
 
 void

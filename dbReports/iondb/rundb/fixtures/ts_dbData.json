@@ -754,6 +754,91 @@
       "uid": "APPCAT0026"
     }
   },
+   {
+    "pk": 27,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "multi_ir_workflow_support",
+      "displayedValue": "Multi IR Workflow Support",
+      "description": "Multi IR Workflow launch Support",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0027"
+    }
+  },
+  {
+    "pk": 28,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "samplePrepProtocol",
+      "value": "cerebro_550",
+      "displayedValue": "MRD 550 Templating Script",
+      "description": "Use Ion Chef script protocol optimized for Cerebro 550",
+      "isDefault": true,
+      "isActive": true,
+      "categories": "cerebro_550_cycling",
+      "samplePrep_instrumentType": "IC",
+      "sequencing_instrumentType": "S5",
+      "uid": "CV0007"
+    }
+  },
+   {
+      "pk": 29,
+      "model": "rundb.common_cv",
+      "fields": {
+        "cv_type": "libraryPrepProtocol",
+        "value": "myeloid_dl8_v2_qc",
+        "displayedValue": "Myeloid V2 QC",
+        "description": "Myeloid V2 QC Library Prep Protocol",
+        "isDefault": false,
+        "isActive": false,
+        "isVisible": false,
+        "categories": "myeloid",
+        "samplePrep_instrumentType": "",
+        "sequencing_instrumentType": "",
+        "uid": "CV0022"
+      }
+    },
+
+  {
+    "pk": 30,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "tecParam",
+      "displayedValue": "Dynamic Manifold Tec parameter support",
+      "description": "Dynamic Manifold Tec parameter support",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0028"
+    }
+  },
+  {
+    "pk": 31,
+    "model": "rundb.common_cv",
+    "fields": {
+      "cv_type": "applicationCategory",
+      "value": "exome",
+      "displayedValue": "exome",
+      "description": "Ampliseq Exome Panels",
+      "isDefault": false,
+      "isActive": true,
+      "isVisible": false,
+      "categories": "AMPS;AMPS_RNA;AMPS_DNA_RNA;AMPS_HD_DNA;AMPS_HD_RNA;AMPS_HD_DNA_RNA;AMPS_HD_DNA_RNA_1;AMPS_EXOME",
+      "samplePrep_instrumentType": "",
+      "sequencing_instrumentType": "",
+      "uid": "APPCAT0029"
+    }
+  },
   {
     "pk": 1,
     "model": "rundb.chefpcrplateconfig",

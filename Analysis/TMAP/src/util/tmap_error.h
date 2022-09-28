@@ -46,7 +46,7 @@ enum {
     ReadFileError, /*!< could not read from a file */
     WriteFileError, /*!< could not write from a file */
     EndOfFile, /*!< reached the end-of-file prematurely */
-    ThreadError, /*!< error starting/joining threads */
+    ThreadError, /*!< error starting/joining threads or mantaining sync control structure */
     SigInt, /*!< SIGINT signal caught */
     SharedMemoryGet, /*!< could not get the shared memory */
     SharedMemoryAttach, /*!< could not attach the shared memory */

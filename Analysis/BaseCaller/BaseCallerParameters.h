@@ -119,6 +119,10 @@ struct BCcontextVars {
                                       //                         "unclipped" - Normalized and phased but unclipped.
     string    wells_norm_method;      //!< Well file normalization method
     bool      compress_multi_taps;    //!< Compress the signal from adjacent multi-tap flows
+    int       bad_path_limit;
+    int       many_path_limit;
+    int       InitialPaths;
+    float     MaxMetrDiff;
 
     // Treephaser options
     string    keynormalizer;          //!< Name of selected key normalization algorithm
@@ -167,6 +171,11 @@ struct BaseCallerContext {
     bool                      trim_zm;                //!< Trim the ZM tag when writing it to the bam file
     bool                      compress_multi_taps;    //!< Compress the signal from adjacent multi-tap flows
     bool                      inline_control;         //!< Switch to trigger inline control statistics
+    int                       BadPathLimit;           //!< number of dead end paths before aborting
+    int                       ManyPathLimit;          //!< number of >3 path decisions before aborting
+    int                       InitialPaths;           //!< number of initial paths to explore
+    float                     MaxMetrDiff;            //!< maximum metric diff to create a new path
+
 
     // Important outside entities accessed by BaseCaller
     ion::ChipSubset           chip_subset;            //!< Chip coordinate & region handling for Basecaller
@@ -184,7 +193,9 @@ struct BaseCallerContext {
     MolecularTagTrimmer       *tag_trimmer;           //!< Class for tag accounting within read groups
 
     // Threaded processing
-    pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
+    pthread_mutex_t           mutex;                  //!< Shared general mutex for BaseCaller worker threads
+    pthread_mutex_t           load_mutex;             //!< Shared load mutex for BaseCaller worker threads
+    pthread_mutex_t           metric_mutex;           //!< Shared metric mutex for BaseCaller worker threads
 
     // Basecalling results saved here
     OrderedDatasetWriter      lib_writer;                 //!< Writer object for library BAMs
@@ -193,7 +204,8 @@ struct BaseCallerContext {
     set<unsigned int>         unfiltered_set;             //!< Indicates which wells are to be saved to unfiltered BAMs
     OrderedDatasetWriter      unfiltered_writer;          //!< Writer object for unfiltered BAMs for a random subset of library reads
     OrderedDatasetWriter      unfiltered_trimmed_writer;  //!< Writer object for unfiltered trimmed BAMs for a random subset of library reads
-
+    WellsManager              *wells_mngr;
+    
     bool SetKeyAndFlowOrder(OptArgs& opts, const char * FlowOrder, const int NumFlows);
 
     void ClassifyAndSampleWells(const BCwellSampling & SamplingOpts);

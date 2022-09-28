@@ -19,7 +19,7 @@ public:
 
     virtual int process(const string& bs, const string& as, int qsc, int qec,
                         int mm, int mi, int oe, int e, int dir,
-                        int *opt, int *te, int *qe, int *n_best);
+                        int *opt, int *te, int *qe, int *n_best, int* fitflag);
 };
 
 #endif // SOLUTION6_H

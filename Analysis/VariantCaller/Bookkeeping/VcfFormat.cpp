@@ -166,7 +166,7 @@ string getVCFHeader(const ExtendParameters *parameters, ReferenceReader& ref_rea
 			   << "##INFO=<ID=LOD,Number=A,Type=Float,Description=\"Limit of Detection at genomic location.\">" << endl;
   }
   if (parameters->my_controls.report_ppa){
-	  headerss << "##INFO=<ID=PPA,Number=1,Type=String,Description=\"Possible Polyplody Alleles (PPA) that are not reported in GT.\">" << endl;
+	  headerss << "##INFO=<ID=PPA,Number=1,Type=String,Description=\"Possible Polyploidy Alleles (PPA) that are not reported in GT.\">" << endl;
   }
   if (parameters->my_controls.disable_filters){
 	  headerss << "##INFO=<ID=BAI,Number=1,Type=Integer,Description=\"The 0-based index of the best alt allele.\">" << endl

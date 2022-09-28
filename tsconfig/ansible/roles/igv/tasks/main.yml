@@ -152,6 +152,7 @@
     - ansible_distribution_version == "14.04"
     - has_network_access
 
+
 - name: Fixing igv loading issue.
   xml:
     path: /usr/share/tomcat8/conf/server.xml

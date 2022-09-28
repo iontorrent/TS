@@ -81,6 +81,24 @@ typedef struct
     uint64_t bases_fully_tailclipped;
     // number of filtered alignments 
     uint64_t num_filtered_als;
+    // statistics on candidate evaluation
+    uint64_t vect_sw_calls;
+    uint64_t fallback_vsw_calls;
+    uint64_t fallback_sw_calls;
+    uint64_t read_clipping_extensions;
+    uint64_t nonstd_base_fallbacks_fwd;
+    uint64_t nonstd_base_fallbacks_rev;
+    uint64_t overflows;
+    uint64_t vswfails;
+    uint64_t totswfails;
+    uint64_t symmetric_scores;
+    uint64_t asymmetric_scores_corrected;
+    uint64_t asymmetric_scores_failed;
+    uint64_t amplicon_searches;
+    uint64_t amplicon_search_successes;
+    uint64_t amplicon_overlaps;
+    uint64_t candeval_overrides;
+    uint64_t multiple_candeval_overrides;
 } tmap_map_stats_t;
 
 /*!

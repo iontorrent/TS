@@ -9,7 +9,7 @@ from ion.plugin import *
 from django.utils.datastructures import SortedDict
 
 class FilterDuplicates(IonPlugin):
-	version = '5.16.0.0'
+	version = '5.18.0.0'
 	runtypes = [ RunType.COMPOSITE, RunType.FULLCHIP, RunType.THUMB ]
 
 	envDict = dict(os.environ)
@@ -17,7 +17,7 @@ class FilterDuplicates(IonPlugin):
 	def runFilter(self):
 		# Making environment variables from json with an external script isn't feasible, because python won't read env changes made by its children. Fortunately, it looks like it's also unnecessary because we have the environment dictionary handy.
 		runVar = Popen(['/bin/bash', '-c', 'python %s/filterDuplicates_plugin.py -a %s -o %s -m Results.json'%(self.envDict['DIRNAME'], self.envDict['ANALYSIS_DIR'], self.envDict['RESULTS_DIR'])], stdout=PIPE, env=self.envDict)
-		print runVar.communicate()[0]
+		print(runVar.communicate()[0])
 		
 		cpCmd = Popen(['cp', 'FilteredBam_block.html', 'FilterDuplicates.html'])
 		cpCmd.communicate()

@@ -1,0 +1,847 @@
+diff -rupN ../armadillo-6.100.0/CMakeLists.txt ./CMakeLists.txt
+--- ../armadillo-6.100.0/CMakeLists.txt	2015-10-01 22:44:31.000000000 -0400
++++ ./CMakeLists.txt	2020-11-21 22:24:22.115022157 -0500
+@@ -25,20 +25,28 @@ message(STATUS "Configuring Armadillo ${
+ ## You will then need to link your programs with -lblas -llapack instead of -larmadillo
+ ## If you're using OpenBLAS, link your programs with -lopenblas -llapack instead of -larmadillo
+ 
+-set(ARMA_USE_WRAPPER true)
++option(ARMA_USE_WRAPPER "Use WRAPPER libraries" OFF)
++mark_as_advanced(ARMA_USE_WRAPPER)
+ 
+ 
+ # the settings below will be automatically configured by the rest of this script
+ 
+-set(ARMA_USE_LAPACK           false)
+-set(ARMA_USE_BLAS             false)
+-set(ARMA_USE_ATLAS            false)
+-set(ARMA_USE_HDF5_ALT         false)
+-set(ARMA_USE_ARPACK           false)
+-set(ARMA_USE_EXTERN_CXX11_RNG false)
+-set(ARMA_USE_SUPERLU          false)  # Caveat: only SuperLU version 4.3 can be used!
++option(ARMA_USE_LAPACK "Use LAPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_LAPACK)
++option(ARMA_USE_BLAS "Use BLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_BLAS)
++option(ARMA_USE_ATLAS "Use ATLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_ATLAS)
++option(ARMA_USE_HDF5_ALT "Use HDF5 libraries" OFF)
++mark_as_advanced(ARMA_USE_HDF5_ALT)
++option(ARMA_USE_ARPACK "Use ARPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_ARPACK)
++option(ARMA_USE_EXTERN_CXX11_RNG "Use CXX11_RNG libraries" OFF)
++mark_as_advanced(ARMA_USE_EXTERN_CXX11_RNG)
++option(ARMA_USE_SUPERLU "Use SuperLU" OFF)
++mark_as_advanced(ARMA_USE_SUPERLU)
+ 
+-project(armadillo CXX)
++option(BUILD_SHARED_LIBS "build shared library" ON)
+ 
+ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_aux/Modules/")
+ 
+@@ -72,6 +80,13 @@ endif()
+ ## Find LAPACK and BLAS libraries, or their optimised versions
+ ##
+ 
++option(ARMA_USE_MKL "Use MKL libraries" OFF)
++mark_as_advanced(ARMA_USE_MKL)
++option(ARMA_USE_ACMLMP "Use ACMLMP libraries" OFF)
++mark_as_advanced(ARMA_USE_ACMLMP)
++option(ARMA_USE_ACML "Use ACML libraries" OFF)
++mark_as_advanced(ARMA_USE_ACML)
++
+ if(APPLE)
+   
+   set(ARMA_OS macos)
+@@ -91,22 +106,41 @@ else()
+   
+   set(ARMA_OS unix)
+   
+-  include(ARMA_FindMKL)
+-  include(ARMA_FindACMLMP)
+-  include(ARMA_FindACML)
+-  include(ARMA_FindOpenBLAS)
+-  include(ARMA_FindATLAS)
+-  include(ARMA_FindBLAS)
+-  include(ARMA_FindLAPACK)
+-  
+-  message(STATUS "     MKL_FOUND = ${MKL_FOUND}"     )
+-  message(STATUS "  ACMLMP_FOUND = ${ACMLMP_FOUND}"  )
+-  message(STATUS "    ACML_FOUND = ${ACML_FOUND}"    )
+-  message(STATUS "OpenBLAS_FOUND = ${OpenBLAS_FOUND}")
+-  message(STATUS "   ATLAS_FOUND = ${ATLAS_FOUND}"   )
+-  message(STATUS "    BLAS_FOUND = ${BLAS_FOUND}"    )
+-  message(STATUS "  LAPACK_FOUND = ${LAPACK_FOUND}"  )
+-  
++  if(ARMA_USE_MKL)
++    include(ARMA_FindMKL)
++    message(STATUS "MKL_FOUND      = ${MKL_FOUND}"     )
++  endif()
++
++  if(ARMA_USE_ACMLMP)
++    include(ARMA_FindACMLMP)
++    message(STATUS "ACMLMP_FOUND   = ${ACMLMP_FOUND}"  )
++  endif()
++
++  if(ARMA_USE_ACML)  
++    include(ARMA_FindACML)
++    message(STATUS "ACML_FOUND     = ${ACML_FOUND}"    )
++  endif()
++
++  if(ARMA_USE_OpenBLAS)
++    include(ARMA_FindOpenBLAS)
++    message(STATUS "OpenBLAS_FOUND = ${OpenBLAS_FOUND}")
++  endif()
++
++  if(ARMA_USE_ATLAS)
++    include(ARMA_FindATLAS)
++    message(STATUS "   ATLAS_FOUND = ${ATLAS_FOUND}"   )
++  endif()
++
++  if(ARMA_USE_BLAS)
++    include(ARMA_FindBLAS)
++    message(STATUS "    BLAS_FOUND = ${BLAS_FOUND}"    )
++  endif()
++
++  if(ARMA_USE_LAPACK)
++    include(ARMA_FindLAPACK)
++    message(STATUS "  LAPACK_FOUND = ${LAPACK_FOUND}"  )
++  endif()
++
+   if(MKL_FOUND OR ACMLMP_FOUND OR ACML_FOUND)
+     
+     set(ARMA_USE_LAPACK true)
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/arma_static_check.hpp ./include/armadillo_bits/arma_static_check.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/arma_static_check.hpp	2013-12-18 23:50:42.000000000 -0500
++++ ./include/armadillo_bits/arma_static_check.hpp	2020-11-21 22:24:22.115022157 -0500
+@@ -20,7 +20,7 @@ struct arma_type_check_cxx1998
+   apply()
+     {
+     static const char
+-    junk[ ERROR___INCORRECT_OR_UNSUPPORTED_TYPE ? -1 : +1 ];
++    junk[ ERROR___INCORRECT_OR_UNSUPPORTED_TYPE ? -1 : +1 ]={0};
+     }
+   };
+ 
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/arrayops_meat.hpp ./include/armadillo_bits/arrayops_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/arrayops_meat.hpp	2015-09-21 12:22:08.000000000 -0400
++++ ./include/armadillo_bits/arrayops_meat.hpp	2020-11-22 07:21:10.939683892 -0500
+@@ -38,21 +38,69 @@ arrayops::copy_small(eT* dest, const eT*
+   switch(n_elem)
+     {
+     case 16:  dest[15] = src[15];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 15:  dest[14] = src[14];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 14:  dest[13] = src[13];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 13:  dest[12] = src[12];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 12:  dest[11] = src[11];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 11:  dest[10] = src[10];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 10:  dest[ 9] = src[ 9];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  9:  dest[ 8] = src[ 8];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  8:  dest[ 7] = src[ 7];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  7:  dest[ 6] = src[ 6];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  6:  dest[ 5] = src[ 5];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  5:  dest[ 4] = src[ 4];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  4:  dest[ 3] = src[ 3];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  3:  dest[ 2] = src[ 2];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  2:  dest[ 1] = src[ 1];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  1:  dest[ 0] = src[ 0];
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     default:  ;
+     }
+   }
+@@ -638,21 +686,69 @@ arrayops::inplace_set_small(eT* dest, co
+   switch(n_elem)
+     {
+     case 16: dest[15] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 15: dest[14] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 14: dest[13] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 13: dest[12] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 12: dest[11] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 11: dest[10] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 10: dest[ 9] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  9: dest[ 8] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  8: dest[ 7] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  7: dest[ 6] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  6: dest[ 5] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  5: dest[ 4] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  4: dest[ 3] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  3: dest[ 2] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  2: dest[ 1] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case  1: dest[ 0] = val;
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     default:;
+     }
+   }
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/auxlib_meat.hpp ./include/armadillo_bits/auxlib_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/auxlib_meat.hpp	2015-09-17 06:00:55.000000000 -0400
++++ ./include/armadillo_bits/auxlib_meat.hpp	2020-11-21 22:24:22.115022157 -0500
+@@ -526,11 +526,11 @@ auxlib::det_tinymat(const Mat<eT>& X, co
+     {
+     case 0:
+       return eT(1);
+-      break;
++//      break;
+     
+     case 1:
+       return X[0];
+-      break;
++//      break;
+     
+     case 2:
+       {
+@@ -538,7 +538,7 @@ auxlib::det_tinymat(const Mat<eT>& X, co
+       
+       return ( Xm[pos<0,0>::n2]*Xm[pos<1,1>::n2] - Xm[pos<0,1>::n2]*Xm[pos<1,0>::n2] );
+       }
+-      break;
++//      break;
+     
+     case 3:
+       {
+@@ -558,7 +558,7 @@ auxlib::det_tinymat(const Mat<eT>& X, co
+       
+       return ( val1 - val2 + val3 );
+       }
+-      break;
++ //     break;
+     
+     case 4:
+       {
+@@ -593,7 +593,7 @@ auxlib::det_tinymat(const Mat<eT>& X, co
+       
+       return val;
+       }
+-      break;
++//      break;
+     
+     default:
+       return eT(0);
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/diskio_meat.hpp ./include/armadillo_bits/diskio_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/diskio_meat.hpp	2015-07-08 00:49:42.000000000 -0400
++++ ./include/armadillo_bits/diskio_meat.hpp	2020-11-21 22:24:22.119022161 -0500
+@@ -2306,15 +2306,15 @@ diskio::load_auto_detect(Mat<eT>& x, std
+       {
+       case csv_ascii:
+         return load_csv_ascii(x, f, err_msg);
+-        break;
++//        break;
+       
+       case raw_binary:
+         return load_raw_binary(x, f, err_msg);
+-        break;
++//        break;
+         
+       case raw_ascii:
+         return load_raw_ascii(x, f, err_msg);
+-        break;
++//        break;
+       
+       default:
+         err_msg = "unknown data in ";
+@@ -2322,7 +2322,7 @@ diskio::load_auto_detect(Mat<eT>& x, std
+       }
+     }
+   
+-  return false;
++//  return false;
+   }
+ 
+ 
+@@ -4063,11 +4063,11 @@ diskio::load_auto_detect(Cube<eT>& x, st
+       
+       case raw_binary:
+         return load_raw_binary(x, f, err_msg);
+-        break;
++//        break;
+         
+       case raw_ascii:
+         return load_raw_ascii(x, f, err_msg);
+-        break;
++//        break;
+         
+       default:
+         err_msg = "unknown data in ";
+@@ -4075,7 +4075,7 @@ diskio::load_auto_detect(Cube<eT>& x, st
+       }
+     }
+   
+-  return false;
++//  return false;
+   }
+ 
+ 
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/field_meat.hpp ./include/armadillo_bits/field_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/field_meat.hpp	2015-09-22 10:26:10.000000000 -0400
++++ ./include/armadillo_bits/field_meat.hpp	2020-11-21 22:24:22.119022161 -0500
+@@ -2234,11 +2234,11 @@ field_aux::save(const field< Mat<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, name);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, name);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2259,11 +2259,11 @@ field_aux::save(const field< Mat<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, os);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, os);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2284,15 +2284,15 @@ field_aux::load(field< Mat<eT> >& x, con
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, name, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, name, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, name, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2313,15 +2313,15 @@ field_aux::load(field< Mat<eT> >& x, std
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, is, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, is, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, is, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2342,11 +2342,11 @@ field_aux::save(const field< Col<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, name);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, name);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2367,11 +2367,11 @@ field_aux::save(const field< Col<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, os);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, os);
+-      break;
++ //     break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2392,15 +2392,15 @@ field_aux::load(field< Col<eT> >& x, con
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, name, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, name, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, name, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2421,15 +2421,15 @@ field_aux::load(field< Col<eT> >& x, std
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, is, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, is, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, is, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2450,11 +2450,11 @@ field_aux::save(const field< Row<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, name);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, name);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2475,11 +2475,11 @@ field_aux::save(const field< Row<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, os);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::save_ppm_binary(x, os);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2500,15 +2500,15 @@ field_aux::load(field< Row<eT> >& x, con
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, name, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, name, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, name, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2529,15 +2529,15 @@ field_aux::load(field< Row<eT> >& x, std
+     {
+     case auto_detect:
+       return diskio::load_auto_detect(x, is, err_msg);
+-      break;
++//      break;
+     
+     case arma_binary:
+       return diskio::load_arma_binary(x, is, err_msg);
+-      break;
++//      break;
+       
+     case ppm_binary:
+       return diskio::load_ppm_binary(x, is, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2558,7 +2558,7 @@ field_aux::save(const field< Cube<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, name);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2579,7 +2579,7 @@ field_aux::save(const field< Cube<eT> >&
+     {
+     case arma_binary:
+       return diskio::save_arma_binary(x, os);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2601,7 +2601,7 @@ field_aux::load(field< Cube<eT> >& x, co
+     case auto_detect:
+     case arma_binary:
+       return diskio::load_arma_binary(x, name, err_msg);
+-      break;
++//      break;
+     
+     default:
+       err_msg = " [unsupported type] filename = ";
+@@ -2623,7 +2623,7 @@ field_aux::load(field< Cube<eT> >& x, st
+     case auto_detect:
+     case arma_binary:
+       return diskio::load_arma_binary(x, is, err_msg);
+-      break;
++//      break;
+       
+     default:
+       err_msg = " [unsupported type] filename = ";
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/fn_norm.hpp ./include/armadillo_bits/fn_norm.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/fn_norm.hpp	2015-09-22 22:50:47.000000000 -0400
++++ ./include/armadillo_bits/fn_norm.hpp	2020-11-21 22:24:22.119022161 -0500
+@@ -42,11 +42,11 @@ norm
+       {
+       case 1:
+         return op_norm::vec_norm_1(P);
+-        break;
++//        break;
+       
+       case 2:
+         return op_norm::vec_norm_2(P);
+-        break;
++//        break;
+       
+       default:
+         {
+@@ -61,11 +61,11 @@ norm
+       {
+       case 1:
+         return op_norm::mat_norm_1(P);
+-        break;
++//        break;
+       
+       case 2:
+         return op_norm::mat_norm_2(P);
+-        break;
++//        break;
+       
+       default:
+         arma_stop("norm(): unsupported matrix norm type");
+@@ -73,7 +73,7 @@ norm
+       }
+     }
+   
+-  return T(0);  // prevent erroneous compiler warnings
++//  return T(0);  // prevent erroneous compiler warnings
+   }
+ 
+ 
+@@ -191,11 +191,11 @@ norm
+       {
+       case 1:
+         return op_norm::vec_norm_1(P_fake_vector);
+-        break;
++//        break;
+       
+       case 2:
+         return op_norm::vec_norm_2(P_fake_vector);
+-        break;
++//        break;
+       
+       default:
+         {
+@@ -210,11 +210,11 @@ norm
+       {
+       case 1:
+         return op_norm::mat_norm_1(P);
+-        break;
++//        break;
+       
+       case 2:
+         return op_norm::mat_norm_2(P);
+-        break;
++//        break;
+       
+       default:
+         arma_stop("norm(): unsupported or unimplemented norm type for sparse matrices");
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/fn_svds.hpp ./include/armadillo_bits/fn_svds.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/fn_svds.hpp	2015-04-06 21:57:28.000000000 -0400
++++ ./include/armadillo_bits/fn_svds.hpp	2020-11-21 22:24:22.119022161 -0500
+@@ -31,12 +31,9 @@ svds_helper
+   typedef typename T1::elem_type eT;
+   typedef typename T1::pod_type   T;
+   
+-  if(arma_config::arpack == false)
++  if(arma_config::arpack != false)
+     {
+-    arma_stop("svds(): use of ARPACK needs to be enabled");
+-    return false;
+-    }
+-  
++
+   arma_debug_check
+     (
+     ( ((void*)(&U) == (void*)(&S)) || (&U == &V) || ((void*)(&S) == (void*)(&V)) ),
+@@ -127,6 +124,10 @@ svds_helper
+   arma_debug_warn( (S.n_elem < k), "svds(): warning: found fewer singular values than specified" );
+   
+   return true;
++    }else{
++        arma_stop("svds(): use of ARPACK needs to be enabled");
++        return false;
++        }
+   }
+ 
+ 
+@@ -152,12 +153,9 @@ svds_helper
+   typedef typename T1::elem_type eT;
+   typedef typename T1::pod_type   T;
+   
+-  if(arma_config::arpack == false)
++  if(arma_config::arpack != false)
+     {
+-    arma_stop("svds(): use of ARPACK needs to be enabled");
+-    return false;
+-    }
+-  
++
+   arma_debug_check
+     (
+     ( ((void*)(&U) == (void*)(&S)) || (&U == &V) || ((void*)(&S) == (void*)(&V)) ),
+@@ -251,6 +249,10 @@ svds_helper
+   arma_debug_warn( (S.n_elem < k), "svds(): warning: found fewer singular values than specified" );
+   
+   return true;
++    }else{    arma_stop("svds(): use of ARPACK needs to be enabled");
++    return false;
++    }
++
+   }
+ 
+ 
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/mul_gemm.hpp ./include/armadillo_bits/mul_gemm.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/mul_gemm.hpp	2015-09-25 23:48:54.000000000 -0400
++++ ./include/armadillo_bits/mul_gemm.hpp	2020-11-22 07:22:27.207799262 -0500
+@@ -37,9 +37,21 @@ class gemm_emul_tinysq
+     switch(A.n_rows)
+       {
+       case  4:  gemv_emul_tinysq<do_trans_A, use_alpha, use_beta>::apply( C.colptr(3), A, B.colptr(3), alpha, beta );
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+       case  3:  gemv_emul_tinysq<do_trans_A, use_alpha, use_beta>::apply( C.colptr(2), A, B.colptr(2), alpha, beta );
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+       case  2:  gemv_emul_tinysq<do_trans_A, use_alpha, use_beta>::apply( C.colptr(1), A, B.colptr(1), alpha, beta );
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+       case  1:  gemv_emul_tinysq<do_trans_A, use_alpha, use_beta>::apply( C.colptr(0), A, B.colptr(0), alpha, beta );
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+       default:  ;
+       }
+     }
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/op_find_meat.hpp ./include/armadillo_bits/op_find_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/op_find_meat.hpp	2014-05-09 23:22:57.000000000 -0400
++++ ./include/armadillo_bits/op_find_meat.hpp	2020-11-21 22:24:22.123022165 -0500
+@@ -116,7 +116,7 @@ op_find::helper
+       else if(is_same_type<op_type, op_rel_gteq_post>::yes)  { not_zero_i = (tpi >= val); }
+       else if(is_same_type<op_type, op_rel_eq       >::yes)  { not_zero_i = (tpi == val); }
+       else if(is_same_type<op_type, op_rel_noteq    >::yes)  { not_zero_i = (tpi != val); }
+-      else not_zero_i = false;
++      else {not_zero_i = false;}
+       
+            if(is_same_type<op_type, op_rel_lt_pre   >::yes)  { not_zero_j = (val <  tpj); }
+       else if(is_same_type<op_type, op_rel_lt_post  >::yes)  { not_zero_j = (tpj <  val); }
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/podarray_meat.hpp ./include/armadillo_bits/podarray_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/podarray_meat.hpp	2013-12-30 21:52:13.000000000 -0500
++++ ./include/armadillo_bits/podarray_meat.hpp	2020-11-22 07:19:32.459532759 -0500
+@@ -334,13 +334,37 @@ podarray<eT>::copy_row(const Mat<eT>& A,
+       break;
+     
+     case 8:  out[7] = A.at(row, 7);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 7:  out[6] = A.at(row, 6);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 6:  out[5] = A.at(row, 5);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 5:  out[4] = A.at(row, 4);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 4:  out[3] = A.at(row, 3);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 3:  out[2] = A.at(row, 2);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 2:  out[1] = A.at(row, 1);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 1:  out[0] = A.at(row, 0);
++#if __GNUC__ > 5
++    __attribute__ ((fallthrough));
++#endif
+     case 0:  ;
+     }
+   }
+diff -rupN ../armadillo-6.100.0/include/armadillo_bits/SpSubview_iterators_meat.hpp ./include/armadillo_bits/SpSubview_iterators_meat.hpp
+--- ../armadillo-6.100.0/include/armadillo_bits/SpSubview_iterators_meat.hpp	2015-08-01 11:29:48.000000000 -0400
++++ ./include/armadillo_bits/SpSubview_iterators_meat.hpp	2020-11-21 22:24:22.123022165 -0500
+@@ -586,7 +586,7 @@ SpSubview<eT>::const_row_iterator::const
+   // loop across all valid columns looking for elements in row 0 (and add to
+   // our sum), then in row 1, and so forth, until we get to the desired
+   // position.
+-  uword cur_pos = -1;  // TODO: HACK: -1 is not a valid unsigned integer; using -1 is relying on wraparound/overflow, which is not portable
++  uword cur_pos = (uword)-1;  // TODO: HACK: -1 is not a valid unsigned integer; using -1 is relying on wraparound/overflow, which is not portable
+   uword cur_row = 0;
+   uword cur_col = 0;
+ 
+diff -rupN ../armadillo-6.100.0/.project ./.project
+--- ../armadillo-6.100.0/.project	1969-12-31 19:00:00.000000000 -0500
++++ ./.project	2020-11-21 22:24:22.123022165 -0500
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<projectDescription>
++	<name>armadillo-6.100.0+ion1</name>
++	<comment></comment>
++	<projects>
++	</projects>
++	<buildSpec>
++		<buildCommand>
++			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
++			<triggers>clean,full,incremental,</triggers>
++			<arguments>
++			</arguments>
++		</buildCommand>
++		<buildCommand>
++			<name>org.eclipse.cdt.managedbuilder.core.ScannerConfigBuilder</name>
++			<triggers>full,incremental,</triggers>
++			<arguments>
++			</arguments>
++		</buildCommand>
++	</buildSpec>
++	<natures>
++		<nature>org.eclipse.cdt.core.cnature</nature>
++		<nature>org.eclipse.cdt.core.ccnature</nature>
++		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
++		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
++	</natures>
++</projectDescription>

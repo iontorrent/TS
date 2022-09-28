@@ -11,12 +11,29 @@ $(document).ready(function () {
     // 8 - categorized applProduct for the application, target technique and categories
     var categorizedApplProductInUse = null;
     var isInit = true;
+    var lockAssayParams = $('input[name = "lockAssayParams"]').val().split(",");
 
     $("form").submit(function(){
         $("select[name=barcodeId]").prop('disabled', false);
         $('.advanced').each(function(){ $(this).prop('disabled',false); });
+        check_lock_assay_params();
     });
 
+    function check_lock_assay_params() {
+        if(lockAssayParams) {
+            $.each(lockAssayParams, function (i, val) {
+                if ($("#" + val).is("select")) {
+                    $("select[id=" + val + "]").prop('disabled', false);
+                    if (val.toLowerCase().indexOf("templatekit") >= 0) {
+                        $("input[id=IonChef__templatekitType]").prop('disabled', false);
+                        $("input[id=IA__templatekitType]").prop('disabled', false);
+                    }
+                } else if ($("#" + val).is("input")) {
+                    $("input[id=" + val + "]").prop('disabled', false);
+                }
+            });
+        }
+    }
 
     function init_protocol_n_readLength_visibility() {
         var templateKit = templateKits[$("#templateKit").val()];
@@ -673,6 +690,9 @@ $(document).ready(function () {
             updateSummaryPanel("#selectedFlows", flowsSpinner.spinner("value"));
         });
     }
+    if(lockAssayParams && lockAssayParams.indexOf("flows") !== -1) {
+        flowsSpinner.spinner("disable").prop('disabled',true);
+    }
 
 
     var readLengthSpinner = $("#libraryReadLength").spinner({min: 0, max: 1000});
@@ -707,6 +727,7 @@ $(document).ready(function () {
             update_TemplateKit_select();
             update_SequencingKit_select();
         }
+
         set_default_flows_from_category_rules();
         show_chiptype_warning($(this).val());
         updateSummaryPanel("#selectedChipType", chipNameToDisplayName[$(this).val()]);

@@ -1,7 +1,7 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#ifndef TREEPHASERSSE_H
-#define TREEPHASERSSE_H
+#ifndef TREEPHASERVEC_H
+#define TREEPHASERVEC_H
 
 #include "DPTreephaser.h"
 
@@ -46,46 +46,71 @@
 // MAX_STEPS set large enough to handle minimum window size
 #define MAX_STEPS (1+(MAX_VALS/DPTreephaser::kMinWindowSize_))
 #define MAX_PATHS 8
+#define NUM_SAVED_PATHS 4
+#define NUM_BEST_PATH 1
+#define MAX_ACT_PATHS (MAX_PATHS+NUM_BEST_PATH+NUM_SAVED_PATHS)
+#define BEST_PATH MAX_PATHS
+#define SAVED_PATHS (MAX_PATHS+NUM_BEST_PATH)
 
 #define MAX_PATH_DELAY 40
 
 //#pragma pack(push, 1)
-struct __attribute__((packed)) ALIGN(64) PathRec {
+struct __attribute__((packed)) ALIGN(64) PathRecV {
   int flow;
   int window_start;
   int window_end;
   float res;
   float metr;
   float flowMetr;
-  int dotCnt;
+  float newSignal;
   float penalty;
-  float state[MAX_VALS] ALIGN(64);
-  float pred[MAX_VALS]  ALIGN(64);
-  char sequence[2*MAX_VALS + 12]; // +12 makes the enitre struct align well
-  int  sequence_length;
   int last_hp;
   int nuc;
+  float dist;
+
+  // cache entries
+  int saved;
+  int cached_flow;
+  int cached_flow_ws;
+  int cached_flow_seq;
+
+  // per-flow metrics
+  v4f state[MAX_VALS] ALIGN(64);
+  float pred[MAX_VALS]  ALIGN(64);
+  v4f pred_Buf[MAX_VALS]  ALIGN(64);
   float calib_A[MAX_VALS] ALIGN(64);
   float calib_B[MAX_VALS] ALIGN(64);
   float state_inphase[MAX_VALS] ALIGN(64);
+
+  // per-basse metrics
+  int  sequence_length;
+  char sequence[2*MAX_VALS + 12]; // +12 makes the entire struct align well
 };
 //#pragma pack(pop)
 
 
-class TreephaserSSE {
+class TreephaserVEC {
 public:
 
   //! @brief      Default constructor
-  TreephaserSSE();
+  TreephaserVEC();
 
   //! @brief      Constructor
   //! @param[in]  flow_order  Flow order object
   //! @param[in]  windowSize  Size of the normalization window to use.
-  TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
+  TreephaserVEC(const ion::FlowOrder& flow_order, const int windowSize);
 
   //! @brief      Set flow order and initialize internal variables
   //! @param[in]  flow_order  Flow order object
   void SetFlowOrder(const ion::FlowOrder& flow_order);
+
+  void SetBadPathLimit(int bad_path_limit){bad_path_limit_=bad_path_limit;}
+
+  void SetManyPathLimit(int many_path_limit){many_path_limit_=many_path_limit;}
+
+  void SetInitalPaths(int initial_paths){initial_paths_=initial_paths;}
+
+  void SetMaxMetrDiff(float max_metr_diff){max_metr_diff_=max_metr_diff;}
 
   //! @brief      Set the normalization window size
   //! @param[in]  windowSize  Size of the normalization window to use.
@@ -102,8 +127,8 @@ public:
 
   //! @brief      Iterative solving and normalization routine
   void NormalizeAndSolve(BasecallerRead& read);
-  PathRec* parent;
-  int best;
+//  PathRecV* parent;
+//  int best;
 
   //! @brief      Set pointers to recalibration model
   bool SetAsBs(const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs){
@@ -132,55 +157,76 @@ public:
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
   void  ComputeQVmetrics(BasecallerRead& read);
-  void  ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_=false);
+  void  ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_=false, const bool flow_quality = false);
 
   int nuc_char_to_int(char nuc) {if (nuc=='A') return 0; if (nuc=='C') return 1; if (nuc=='G') return 2; if (nuc=='T') return 3; return -1;}
 
 protected:
 
-  inline void CalcResidualI(PathRec RESTRICT_PTR parent,
+  inline void CalcResidualI(PathRecV RESTRICT_PTR parent,
   		int flow, int j, v4f &rS, v4f rTemp1s_, v4f &rPenNeg, v4f &rPenPos);
 
+  inline v4i CheckWindowStartBase(v4i rBeg, v4i rParNuc, int flow, v4f rS);
+  inline void CheckWindowStart1(v4i & rBeg, v4i rParNuc, int flow, v4f rS);
+  inline void CheckWindowStart2(v4i & rBeg, v4i rParNuc, int flow, v4f rS, v4i rEnd);
+  inline void CheckWindowEnd(v4i rBeg, v4i rParNuc, int flow, v4f & rS, v4i & rEnd, v4f rAlive, v4i rFlowEnd);
+  inline void advanceI( float parentState, int j, v4i rParNuc, v4f ts_tr, v4f & rAlive, v4f & rS);
+  inline void advanceE(int j, v4i rParNuc, v4f ts_tr, v4f & rAlive, v4f & rS);
+  void catchup (PathRecV RESTRICT_PTR parent,PathRecV RESTRICT_PTR best, int begin_flow, int end_flow);
+
   //! @brief     Solving a read
-  bool  Solve(int begin_flow, int end_flow);
+  bool  Solve(int begin_flow, int end_flow, int save_flow, int numActivePaths, float maxMetrDiff);
   //! @brief     Normalizing a read
+  PathRecV *sortPaths(int & pathCnt, int &parentPathIdx, int & badPaths, int numAcitvePaths);
+  float computeParentDist(PathRecV RESTRICT_PTR parent, int end_flow);
+  void CopyPath(PathRecV RESTRICT_PTR dest, PathRecV RESTRICT_PTR parent,
+		PathRecV RESTRICT_PTR child, int saveFlow, int &numSaved,
+		int cached_flow, int cached_flow_ws, int cached_flow_seq);
+  void CopyPathNew(PathRecV RESTRICT_PTR dest, PathRecV RESTRICT_PTR parent,
+		PathRecV RESTRICT_PTR child, int saveFlow, int &numSaved,
+		int cached_flow, int cached_flow_ws, int cached_flow_seq);
+  void CopyPathDeep(PathRecV RESTRICT_PTR dest, PathRecV RESTRICT_PTR src);
   void  WindowedNormalize(BasecallerRead& read, int step);
   //! @brief     Make recalibration changes to predictions explicitly visible
-  void  RecalibratePredictions(PathRec *maxPathPtr);
+  void  RecalibratePredictions(PathRecV *maxPathPtr);
   //! @brief     Resetting recalibration data structure
   void  ResetRecalibrationStructures(int num_flows);
   //! @brief      Initialize floating point array variables with a value
-  void InitializeVariables(float init_val);
+  void InitializeVariables();
 
   void  sumNormMeasures();
-  void  advanceState4(PathRec RESTRICT_PTR parent, int end);
-  void  advanceStateInPlace(PathRec RESTRICT_PTR path, int nuc, int end);
+  void  advanceState4(PathRecV RESTRICT_PTR parent, int end);
+  void  advanceStateInPlace(PathRecV RESTRICT_PTR path, int nuc, int end, int end_flow);
+  inline float CalcNewSignal(int nuc, PathRecV RESTRICT_PTR parent);
 
   // There was a small penalty in making these arrays class members, as opposed to static variables
-  ALIGN(64) short ts_NextNuc[4][MAX_VALS];
-  ALIGN(64) float ts_Transition[4][MAX_VALS];
-  ALIGN(64) v4i_u   ts_NextNuc4[MAX_VALS];
-  ALIGN(64) v4f_u ts_Transition4[MAX_VALS];
+  ALIGN(64) v4i ts_NextNuc[MAX_VALS];
+  ALIGN(64) v4f ts_Transition[MAX_VALS];
 
   ALIGN(64) float rd_NormMeasure[MAX_VALS];
+  ALIGN(64) float rd_NormMeasureAdj[MAX_VALS];
+
   ALIGN(64) float rd_SqNormMeasureSum[MAX_VALS];
 
-  ALIGN(64) PathRec sv_pathBuf[MAX_PATHS+1];
+  ALIGN(64) PathRecV sv_pathBuf[MAX_ACT_PATHS];
 
   ALIGN(64) float ft_stepNorms[MAX_STEPS];
 
-  ALIGN(64) v4f_u ad_MinFrac;
-  ALIGN(16) v4i_u ad_FlowEnd;
-  ALIGN(16) v4i_u ad_Idx;
-  ALIGN(16) v4i_u ad_End;
-  ALIGN(16) v4i_u ad_Beg;
-  ALIGN(64)v4f_u state_Buf[MAX_VALS+1];
-  ALIGN(64)v4f_u pred_Buf[MAX_VALS+1];
-  ALIGN(64)v4f_u nres_Buf[MAX_VALS+1];
-  ALIGN(64)v4f_u pres_Buf[MAX_VALS+1];
+  ALIGN(16) v4i ad_FlowEnd;
+  ALIGN(16) v4i flow_Buf;
+  ALIGN(16) v4i winEnd_Buf;
+  ALIGN(16) v4i winStart_Buf;
+  ALIGN(64)v4f nres_WE;
+  ALIGN(64)v4f pres_WE;
+  ALIGN(64)v4f metrV={0,0,0,0};
+  ALIGN(64)v4f penParV={0,0,0,0};
+  ALIGN(64)v4f penNegV={0,0,0,0};
+  ALIGN(64)v4f resV={0,0,0,0};
+  ALIGN(64)v4f distV={0,0,0,0};
+
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows
 
-  PathRec *sv_PathPtr[MAX_PATHS+1];
+  PathRecV *sv_PathPtr[MAX_ACT_PATHS];
   int ad_Adv;
   int num_flows_;
   int ts_StepCnt;
@@ -197,7 +243,11 @@ protected:
   bool     recalibrate_predictions_;            //!< Switch to use recalibration model during metric generation
   bool     skip_recal_during_normalization_;    //!< Switch to skip recalibration during the normalization phase
   bool     state_inphase_enabled_;              //!< Switch to save inphase population of molecules
+  int      bad_path_limit_;                      //!< number of dead end paths before aborting
+  int      many_path_limit_;                     //!< number of >3 path decisions before aborting
+  int      initial_paths_;                       //!< number of initial max paths to use in solve
+  float    max_metr_diff_;                       //!< maximum metric difference to create a branch
 
 };
 
-#endif // TREEPHASERSSE_H
+#endif // TREEPHASERVEC_H

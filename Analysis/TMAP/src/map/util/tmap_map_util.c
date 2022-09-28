@@ -4,8 +4,10 @@
 #include <unistd.h>
 #include <math.h>
 #include <assert.h>
+#include <alloca.h>
 #include "../../util/tmap_alloc.h"
 #include "../../util/tmap_error.h"
+#include "../../util/tmap_bsearch.h"
 #include "../../util/tmap_histo.h"
 #include "../../util/tmap_sam_convert.h"
 #include "../../util/tmap_progress.h"
@@ -24,7 +26,6 @@
 #include "tmap_map_util.h"
 #include "tmap_map_align_util.h"
 #include "../../sw/tmap_sw.h"
-#include "../../util/tmap_histo.h"
 
 // #define CONCURRENT_PARAMETERS_CACHE 1
 #ifdef CONCURRENT_PARAMETERS_CACHE
@@ -104,11 +105,11 @@ tmap_map_get_amplicon
     int32_t seqid,
     uint32_t start,
     uint32_t end,
+    uint32_t strand,
     uint32_t *ampl_start,
     uint32_t *ampl_end,
     tmap_map_locopt_t** locopt,
-     tmap_map_endstat_p_t* read_ends,
-    uint32_t strand
+    tmap_map_endstat_p_t* read_ends
 )
 {
     uint32_t *srh;
@@ -196,6 +197,264 @@ tmap_map_get_amplicon
         return 0;
 }
 
+typedef struct __tmap_map_amplicon_info
+{
+    uint32_t ampl_start;
+    uint32_t ampl_end;
+    tmap_map_locopt_t* locopt;
+    tmap_map_endstat_p_t read_ends;
+}
+tmap_map_amplicon_info;
+
+typedef struct __candeval_overrides_s
+{
+    tmap_map_amplicon_info* source;
+    int32_t softclip_type;
+    int32_t max_adapter_bases_for_soft_clipping;
+    tmap_vsw_opt_t vsw;
+} 
+candeval_overrides_s;
+
+uint32_t candeval_overrides_same (candeval_overrides_s* p1, candeval_overrides_s* p2)
+{
+    return p1->softclip_type == p2->softclip_type &&
+           p1->max_adapter_bases_for_soft_clipping == p2->max_adapter_bases_for_soft_clipping &&
+           p1->vsw.score_match == p2->vsw.score_match &&
+           p1->vsw.pen_mm == p2->vsw.pen_mm &&
+           p1->vsw.pen_gapo == p2->vsw.pen_gapo &&
+           p1->vsw.pen_gape == p2->vsw.pen_gape &&
+           p1->vsw.score_thres == p2->vsw.score_thres;
+}
+
+#define AMPL_INFO_INIT_CAPACITY 0
+static uint32_t capacity_snapper (uint32_t desired_capacity)
+{
+    // use closest higher degree of 2, but not less then AMPL_INFO_INIT_CAPACITY
+
+    assert (desired_capacity <= INT32_MAX); // for the logic below to work, the upper bit should be 0
+    uint8_t exp = 0;
+    if (desired_capacity == 0)
+        return 0;
+    if (desired_capacity == 1)
+        return 1;
+    while (desired_capacity)
+    {
+        desired_capacity >>= 1;
+        ++exp;
+    }
+    uint32_t capacity = 1 << exp;
+#if AMPL_INFO_INIT_CAPACITY > 0
+    if (capacity < AMPL_INFO_INIT_CAPACITY)
+        capacity = AMPL_INFO_INIT_CAPACITY;
+#endif
+    return capacity;
+}
+
+static void init_amplicon_info (tmap_map_amplicon_info** ampl_info, uint32_t* capacity, uint32_t preallocate)
+{
+    assert (ampl_info);
+    assert (capacity);
+    preallocate = capacity_snapper (preallocate);
+    if (preallocate)
+        *ampl_info = (tmap_map_amplicon_info*) tmap_calloc (preallocate, sizeof (tmap_map_amplicon_info), "amplicon_info");
+    else 
+        *ampl_info = NULL;
+    *capacity = preallocate;
+}
+static void manage_amplicon_info (tmap_map_amplicon_info** ampl_info, uint32_t* capacity, uint32_t needed_size)
+{
+    assert (ampl_info);
+    assert (capacity);
+    if (needed_size >= *capacity)
+    {
+        uint32_t new_capacity = capacity_snapper (needed_size);
+        *ampl_info = tmap_realloc (*ampl_info, new_capacity * sizeof (tmap_map_amplicon_info), "amplicon_info");
+    }
+}
+static void destroy_amplicon_info (tmap_map_amplicon_info** ampl_info, uint32_t* capacity)
+{
+    assert (ampl_info);
+    assert (capacity);
+    free (*ampl_info);
+    *ampl_info = NULL;
+    *capacity = 0;
+}
+
+// checks if amplicon overrides any of the candidate evaluation parameters;
+// it yes, returns true and fills the passed in 'overrides' structure with the correct parameters (the non-overriden filled with default values)
+static uint32_t ampl_candeval_parameters_from_locopt (tmap_map_opt_t* stage_opts, tmap_map_locopt_t* locopt, uint8_t strand,  candeval_overrides_s* overrides)
+{
+    uint32_t rv = 0;
+
+    // preset to defaults
+    overrides->softclip_type = stage_opts->softclip_type;
+    overrides->max_adapter_bases_for_soft_clipping = stage_opts->max_adapter_bases_for_soft_clipping;
+    overrides->vsw.score_match = stage_opts->score_match;
+    overrides->vsw.pen_mm = stage_opts->pen_mm;
+    overrides->vsw.pen_gapo = stage_opts->pen_gapo;
+    overrides->vsw.pen_gape = stage_opts->pen_gape;
+    overrides->vsw.score_thres = stage_opts->score_thr;
+    overrides->source = NULL;
+
+    if (!locopt)
+        return rv;
+
+    // softclip_type
+    if (locopt->softclip_type.over && locopt->softclip_type.value != stage_opts->softclip_type)
+    {
+        overrides->softclip_type = locopt->softclip_type.value;
+        rv = 1;
+    }
+    // "-J" parameter (--max-adapter-bases-for-soft-clipping) may be overriden for high or low amplicon end or for both. End-based spec takes over.
+    if (locopt->max_adapter_bases_for_soft_clipping_he.over && strand == 0) // read's 3' mapped to the higher end and overriden
+    {
+        if (locopt->max_adapter_bases_for_soft_clipping_he.value != stage_opts->max_adapter_bases_for_soft_clipping)
+        {
+            overrides->max_adapter_bases_for_soft_clipping = locopt->max_adapter_bases_for_soft_clipping_he.value;
+            rv = 1;
+        }
+    }
+    else if (locopt->max_adapter_bases_for_soft_clipping_le.over && strand == 1) // read's 3' mapped to the lower end and overriden
+    {
+        if (locopt->max_adapter_bases_for_soft_clipping_le.value != stage_opts->max_adapter_bases_for_soft_clipping)
+        {
+            overrides->max_adapter_bases_for_soft_clipping = locopt->max_adapter_bases_for_soft_clipping_le.value;
+            rv = 1;
+        }
+    }
+    else if (locopt->max_adapter_bases_for_soft_clipping.over)
+    {
+        if (locopt->max_adapter_bases_for_soft_clipping.value != stage_opts->max_adapter_bases_for_soft_clipping)
+        {
+            overrides->max_adapter_bases_for_soft_clipping = locopt->max_adapter_bases_for_soft_clipping.value;
+            rv = 1;
+        }
+    }
+    // score_match
+    if (locopt->score_match.over && locopt->score_match.value != stage_opts->score_match)
+    {
+        overrides->vsw.score_match = locopt->score_match.value;
+        rv = 1;
+    }
+    // pen_mm
+    if (locopt->pen_mm.over && locopt->pen_mm.value != stage_opts->pen_mm)
+    {
+        overrides->vsw.pen_mm = locopt->pen_mm.value;
+        rv = 1;
+    }
+    // pen_gapo
+    if (locopt->pen_gapo.over && locopt->pen_gapo.value != stage_opts->pen_gapo)
+    {
+        overrides->vsw.pen_gapo = locopt->pen_gapo.value;
+        rv = 1;
+    }
+    // pen_gape
+    if (locopt->pen_gape.over && locopt->pen_gape.value != stage_opts->pen_gape)
+    {
+        overrides->vsw.pen_gape = locopt->pen_gape.value;
+        rv = 1;
+    }
+    // score_thres
+    if (locopt->score_thr.over && locopt->score_thr.value != stage_opts->score_thr)
+    {
+        overrides->vsw.score_thres = locopt->score_thr.value;
+        rv = 1;
+    }
+    return rv;
+}
+
+static uint32_t ampl_candeval_parameters (tmap_map_opt_t* stage_opts, tmap_map_amplicon_info* amplinfo, uint8_t strand,  candeval_overrides_s* overrides)
+{
+    uint32_t rv = ampl_candeval_parameters_from_locopt (stage_opts, amplinfo->locopt, strand,  overrides);
+    if (rv)
+        overrides->source = amplinfo;
+    return rv;
+}
+
+// same as above using sam as a data source for overrides
+static uint32_t ampl_candeval_parameters_from_sam (tmap_map_opt_t* stage_opts, tmap_map_sam_t* sam, candeval_overrides_s* overrides)
+{
+    return ampl_candeval_parameters_from_locopt (stage_opts, sam->param_ovr, sam->strand,  overrides);
+}
+
+// finds amplions intersecting with given start-end interval
+// fills in the array of tmap_map_ampliocn_info at the address pointed by touched_ampls;
+// allocates or re-allocates this array (updating address at touched_ampls), in this case updates touched_ampls_capacity
+// returns number of touched_amplsactually filled in
+// (always replaces whatever content is in the passed **touched_amplicons
+int
+tmap_map_get_overlapping_amplicons
+(
+    tmap_refseq_t *refseq, 
+    int32_t seqid,
+    uint32_t start,
+    uint32_t end,
+    uint32_t allowance, 
+    tmap_map_amplicon_info** touched_ampls, // pointer to the array of ampliocn info structures, NULL if not allocated yest
+    uint32_t* touched_ampls_capacity) // capacity (allocated size) of touched_ampls array (for ammortized re-allocation and re-use)
+{
+    if (!refseq->bed_exist || refseq->bednum [seqid] == 0)
+        return 0;
+
+    // find all amplions where ampl_ends are above start and ampl_starts are below end
+
+    // WARNING: the code below assumes that both ampl_starts AND ampl_ends arrays are sorted
+    //    This is true for current implementation: the BED loading code discards all fully contained amplicons, recording only the outermost ones.
+    //    When we switch to handling inner amplicons as well, we'll need to add another level of indirection when searching for the ampl_ends, as the original bed-derived array may be unordered.
+
+    start += allowance;
+    end = (allowance > end)?0:(end - allowance);
+
+    // find first amplicon with ampl_end equal or above start
+    uint32_t* ampl_starts = refseq->bedstart [seqid];
+    uint32_t* ampl_ends = refseq->bedend [seqid];
+    uint32_t  ampl_no = refseq->bednum [seqid];
+
+    uint32_t* first_ampl = (uint32_t*) tmap_binary_search (&start, ampl_ends, ampl_no, sizeof (*ampl_ends), lt_uint32);
+    uint32_t first_idx = first_ampl - ampl_ends;
+    if (first_idx == ampl_no)
+        return 0;
+
+    // find last amplicon with ampl_start equal or above end. This is a sentinel, excluded from overlapped list
+    uint32_t* last_ampl = (uint32_t*) tmap_binary_search (&end, ampl_starts, ampl_no, sizeof (*ampl_starts), lt_uint32);
+    uint32_t last_idx = last_ampl - ampl_starts;
+    if (last_idx == 0)
+        return 0;
+
+    if (first_idx == last_idx)
+        return 0;
+
+    // reallocate result storage if needed
+    manage_amplicon_info (touched_ampls, touched_ampls_capacity, last_idx - first_idx);
+
+    // fill in results
+    uint32_t ampl_idx;
+    tmap_map_amplicon_info* cur_ainfo = *touched_ampls;
+    for (ampl_idx = first_idx; ampl_idx != last_idx; ++ampl_idx, ++cur_ainfo)
+    {
+        cur_ainfo->ampl_start = ampl_starts [ampl_idx];
+        cur_ainfo->ampl_end = ampl_ends [ampl_idx];
+        if (refseq->parovr && refseq->parovr [seqid] && refseq->parovr [seqid][ampl_idx] != UINT32_MAX)
+           cur_ainfo->locopt = refseq->parmem + refseq->parovr [seqid][ampl_idx];
+        else
+           cur_ainfo->locopt = NULL;
+        if (refseq->read_ends && refseq->read_ends [seqid] && refseq->read_ends [seqid][ampl_idx].index != UINT32_MAX)
+        {
+            tmap_map_endstat_t* src = refseq->read_ends [seqid] + ampl_idx;
+            cur_ainfo->read_ends.positions = refseq->endposmem + src->index;
+            cur_ainfo->read_ends.starts_count = src->starts_count;
+            cur_ainfo->read_ends.ends_count = src->ends_count;
+        }
+        else
+        {
+            cur_ainfo->read_ends.positions = NULL;
+            cur_ainfo->read_ends.starts_count = 0;
+            cur_ainfo->read_ends.ends_count = 0;
+        }
+    }
+    return last_idx - first_idx;
+}
+
 
 // use softclip settings from tmap parameters
 // disallow 3' softclip, if
@@ -206,15 +465,15 @@ tmap_map_get_amplicon
 static void
 tmap_map_util_set_softclip
 (
-    tmap_map_opt_t *opt,
+    int32_t softclip_type,
     tmap_seq_t *seq,
     int32_t max_adapter_bases_for_soft_clipping,
     int32_t *softclip_start,
     int32_t *softclip_end
 )
 {
-    (*softclip_start) = (TMAP_MAP_OPT_SOFT_CLIP_LEFT == opt->softclip_type || TMAP_MAP_OPT_SOFT_CLIP_ALL == opt->softclip_type) ? 1 : 0;
-    (*softclip_end) = (TMAP_MAP_OPT_SOFT_CLIP_RIGHT == opt->softclip_type || TMAP_MAP_OPT_SOFT_CLIP_ALL == opt->softclip_type) ? 1 : 0;
+    (*softclip_start) = (TMAP_MAP_OPT_SOFT_CLIP_LEFT == softclip_type || TMAP_MAP_OPT_SOFT_CLIP_ALL == softclip_type) ? 1 : 0;
+    (*softclip_end) = (TMAP_MAP_OPT_SOFT_CLIP_RIGHT == softclip_type || TMAP_MAP_OPT_SOFT_CLIP_ALL == softclip_type) ? 1 : 0;
     // check if the ZB tag is present...
     if (TMAP_SEQ_TYPE_SAM == seq->type || TMAP_SEQ_TYPE_BAM == seq->type) // SAM/BAM
     {
@@ -1197,7 +1456,7 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
         uint32_t end = start+tmp_sam.target_len-1;
         uint32_t ampl_start, ampl_end;
         if (tmp_sam.score != best_score) continue;
-        if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start, end, &ampl_start, &ampl_end, NULL, NULL, tmp_sam.strand)) 
+        if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start, end, tmp_sam.strand, &ampl_start, &ampl_end, NULL, NULL)) 
         {
             /*
             if (abs(ampl_start-start) < 15 && abs(ampl_end-end) < 15) {
@@ -1462,6 +1721,7 @@ tmap_map_util_sw_gen_score_helper
 (
     tmap_refseq_t *refseq,
     tmap_map_sams_t *sams,
+    tmap_seq_t *origseq,
     tmap_seq_t *seq,
     tmap_map_sams_t *sams_tmp,
     int32_t *idx,
@@ -1474,364 +1734,491 @@ tmap_map_util_sw_gen_score_helper
     uint32_t end_pos,
     int32_t *target_mem,
     uint8_t **target,
-    int32_t softclip_start,
-    int32_t softclip_end,
+    // int32_t softclip_start,
+    // int32_t softclip_end,
     int32_t prev_n_best,
     int32_t max_seed_band, // NB: this may be modified as banding is unrolled
     int32_t prev_score, // NB: must be greater than or equal to the scoring threshold
     tmap_vsw_opt_t *vsw_opt,
     tmap_rand_t *rand,
-    tmap_map_opt_t *opt
+    tmap_map_opt_t *opt,
+    tmap_map_amplicon_info** amplicons,
+    uint32_t* amplicons_capacity,
+    tmap_map_stats_t *stat      // statistics
+
 )
 {
-  tmap_map_sam_t tmp_sam;
-  uint8_t *query;
-  uint32_t qlen;
-  int32_t tlen, overflow = 0, is_long_hit = 0;
+    tmap_map_sam_t tmp_sam;
+    uint8_t *query;
+    uint32_t qlen;
+    int32_t tlen, overflow = 0, is_long_hit = 0;
 
-  // choose a random one within the window
-  if(start == end) {
-      tmp_sam = sams->sams[start];
-  }
-  else {
-      int32_t r = (int32_t)(tmap_rand_get(rand) * (end - start + 1));
-      r += start;
-      tmp_sam = sams->sams[r];
-  }
+    // choose a random one within the window
+    if (start == end) 
+    {
+        tmp_sam = sams->sams [start];
+    }
+    else 
+    {
+        int32_t r = (int32_t) (tmap_rand_get (rand) * (end - start + 1));
+        r += start;
+        tmp_sam = sams->sams [r];
+    }
 
-  if(0 < opt->long_hit_mult && seq_len * opt->long_hit_mult <= end_pos - start_pos + 1) {
-      is_long_hit = 1;
-  }
+    if (0 < opt->long_hit_mult && seq_len * opt->long_hit_mult <= end_pos - start_pos + 1) 
+        is_long_hit = 1;
 
-  // update the query sequence
-  query = (uint8_t*)tmap_seq_get_bases(seq)->s;
-  qlen = tmap_seq_get_bases_length(seq);
+    // update the query sequence
+    query = (uint8_t*) tmap_seq_get_bases (seq)->s;
+    qlen = tmap_seq_get_bases_length (seq);
 
-  // add in band width
-  // one-based
-  if(start_pos < opt->bw) {
-      start_pos = 1;
-  }
-  else {
-      start_pos -= opt->bw - 1;
-  }
-  end_pos += opt->bw - 1;
-  if(refseq->annos[sams->sams[end].seqid].len < end_pos) {
-      end_pos = refseq->annos[sams->sams[end].seqid].len; // one-based
-  }
+    // add in band width
+    // one-based
+    if (start_pos < opt->bw)
+        start_pos = 1;
+    else
+        start_pos -= opt->bw - 1;
 
-  // get the target sequence
-  tlen = end_pos - start_pos + 1;
-  if((*target_mem) < tlen) { // more memory?
-      (*target_mem) = tlen;
-      tmap_roundup32((*target_mem));
-      (*target) = tmap_realloc((*target), sizeof(uint8_t)*(*target_mem), "target");
-  }
-  // NB: IUPAC codes are turned into mismatches
-  if(NULL == tmap_refseq_subseq2(refseq, sams->sams[end].seqid+1, start_pos, end_pos, (*target), 1, NULL)) {
-      tmap_error("bug encountered", Exit, OutOfRange);
-  }
+    end_pos += opt->bw - 1;
+    if (refseq->annos [sams->sams [end].seqid].len < end_pos)
+        end_pos = refseq->annos [sams->sams [end].seqid].len; // one-based
 
-  // reverse compliment the target
-  if(1 == strand) {
-      tmap_reverse_compliment_int((*target), tlen);
-  }
+    // get the target sequence
+    tlen = end_pos - start_pos + 1;
+    if ((*target_mem) < tlen) 
+    {  // more memory?
+        (*target_mem) = tlen;
+        tmap_roundup32 ((*target_mem));
+        (*target) = tmap_realloc ((*target), sizeof (uint8_t)*(*target_mem), "target");
+    }
+    // NB: IUPAC codes are turned into mismatches
+    if (NULL == tmap_refseq_subseq2 (refseq, sams->sams [end].seqid+1, start_pos, end_pos, (*target), 1, NULL)) 
+    {
+        tmap_error ("bug encountered", Exit, OutOfRange);
+    }
 
-  // Debugging
-#ifdef TMAP_VSW_DEBUG
-  int j;
-  fprintf(stderr, "seqid:%u start_pos=%u end_pos=%u strand=%d\n", sams->sams[end].seqid+1, start_pos, end_pos, strand);
-  for(j=0;j<qlen;j++) {
-      fputc("ACGTN"[query[j]], stderr);
-  }
-  fputc('\n', stderr);
-  for(j=0;j<tlen;j++) {
-      fputc("ACGTN"[(*target)[j]], stderr);
-  }
-  fputc('\n', stderr);
-#endif
+    // reverse compliment the target
+    if (1 == strand)
+        tmap_reverse_compliment_int ((*target), tlen);
 
-  // initialize the bounds
-  tmp_sam.result.query_start = tmp_sam.result.query_end = 0;
-  tmp_sam.result.target_start = tmp_sam.result.target_end = 0;
 
-  /**
-   * Discussion on choosing alignments.
-   *
-   * In general, we would like to choose the alignment using the *most* number
-   * of query bases.  The complication comes when using soft-clipping.
-   *
-   * When no soft-clipping occurs, then the whole query will be used.
-   *
-   * When there is only soft-clipping at the 3' end of the query (end of the
-   * read), we can search for the alignment with the greatest query end when
-   * searching in the 5'->3' direction.  Since the query start is fixed, as there
-   * is no 5' start-clipping, we are then guaranteed to find the alignment with
-   * the most number of query bases if we fix the query end when we align in the
-   * 3'->5' direction.
-   *
-   * When there is only soft-clipping at the 5' end of the query (start of the
-   * read), we can search for the alignment with the greatest query end when
-   * searching in the 5'->3' direction, as the query end is fixed.  Then, when
-   * aligning in the 3'->5' direction, we can search for the alignment with the
-   * smallest query start (which in the 3'->5' direction is the one with the one
-   * with the largest query end).
-   *
-   * We cannot guarantee anything if we are allowing soft-clipping on both the
-   * 5' and 3' ends.
-   */
-
-  // NB: this aligns in the sequencing direction
-  // DVK: bug #11386
-  {
-  const int16_t TARGET_EDGE_ALLOWANCE = 4;
-  const int16_t MAX_TARGET_LEN_FOR_VSW = 32000;
-  int8_t target_causes_read_clipping;
-  int8_t first_run = 1;
-  int32_t score = 0, prev_score = 0;
-  uint32_t new_end_pos, new_start_pos;
-  tmap_vsw_result_t result;
-  do
-  {
-        // initial assumption
-        target_causes_read_clipping = 0;
-
-        // initialize the bounds - why?
-        result.query_start = result.query_end = 0;
-        result.target_start = result.target_end = 0;
-        score = tmap_vsw_process_fwd(vsw, query, qlen, (*target), tlen,
-                                       &result, &overflow, opt->score_thr, 1);
-
-        if (1 == overflow)
-            return INT32_MIN;
-
-        if (!first_run && score <= prev_score)  // check for zone edge crossing on first run always, then only if score is improved
-            break; // if score did not improve, get out and keep last result/score in tmp_sam
-
-        // query clip may be recoverable if it has 3' clip and alignment goes to target zone end
-        new_end_pos = end_pos;
-        new_start_pos = start_pos;
-        if (tlen - result.target_end < TARGET_EDGE_ALLOWANCE && qlen > result.query_end)
+    // #define DEBUG_VSW_ASSYMETRY
+    #ifdef DEBUG_VSW_ASSYMETRY
+    {
+    int j;
+    // fprintf (stderr, "seqid:%u start_pos=%u end_pos=%u strand=%d\n", sams->sams [end].seqid+1, start_pos, end_pos, strand);
+    for (j = 0; j < qlen; j++) 
+    {
+        if (query [j] >= 4)
         {
-            // extend target if possible
-            new_end_pos += qlen - result.query_end + TARGET_EDGE_ALLOWANCE;
-            if(refseq->annos[sams->sams[end].seqid].len < new_end_pos)
+            tmap_warning ("QUERY [%d] = %d\n", j, query [j]);
+            // query [j] = 0;
+        }
+        // fputc ("ACGTN" [query [j]], stderr);
+    }
+    // fputc ('\n', stderr);
+    for (j = 0; j < tlen; j++) 
+    {
+        if ((*target) [j] >= 4)
+        {
+            tmap_warning ("TARGET [%d] = %d\n", j, (*target) [j]);
+            // (*target) [j] = 0;
+        }
+        // fputc ("ACGTN" [(*target) [j]], stderr);
+    }
+    // fputc ('\n', stderr);
+    }
+    #endif
+
+    // initialize the bounds
+    tmp_sam.result.query_start = tmp_sam.result.query_end = 0;
+    tmp_sam.result.target_start = tmp_sam.result.target_end = 0;
+
+    /**
+    * Discussion on choosing alignments.
+    *
+    * In general, we would like to choose the alignment using the *most* number
+    * of query bases.  The complication comes when using soft-clipping.
+    *
+    * When no soft-clipping occurs, then the whole query will be used.
+    *
+    * When there is only soft-clipping at the 3' end of the query (end of the
+    * read), we can search for the alignment with the greatest query end when
+    * searching in the 5'->3' direction.  Since the query start is fixed, as there
+    * is no 5' start-clipping, we are then guaranteed to find the alignment with
+    * the most number of query bases if we fix the query end when we align in the
+    * 3'->5' direction.
+    *
+    * When there is only soft-clipping at the 5' end of the query (start of the
+    * read), we can search for the alignment with the greatest query end when
+    * searching in the 5'->3' direction, as the query end is fixed.  Then, when
+    * aligning in the 3'->5' direction, we can search for the alignment with the
+    * smallest query start (which in the 3'->5' direction is the one with the one
+    * with the largest query end).
+    *
+    * We cannot guarantee anything if we are allowing soft-clipping on both the
+    * 5' and 3' ends.
+    */
+
+    // NB: this aligns in the sequencing direction
+    // DVK: bug #11386
+    {
+        const int16_t TARGET_EDGE_ALLOWANCE = 4;
+        const int16_t MAX_TARGET_LEN_FOR_VSW = 32000;
+        int8_t target_causes_read_clipping;
+        uint32_t clipping_extensions = 0;
+        int8_t first_run = 1;
+        int32_t score = 0, prev_score = 0;
+        uint32_t new_end_pos, new_start_pos;
+        tmap_vsw_result_t result;
+        uint32_t amplicons_no = 0;
+        uint32_t ampl_found = 0;
+        tmap_map_amplicon_info best_ampl;
+        memset (&best_ampl, 0, sizeof (best_ampl));
+        do
+        {
+            // initial assumption
+            target_causes_read_clipping = 0;
+            ampl_found = 0;
+
+            // initialize the bounds - why?
+            result.query_start = result.query_end = 0;
+            result.target_start = result.target_end = 0;
+
+            // handle amplicons - find if parameters overriding is needed
+            if (opt->use_param_ovr && opt->ovr_candeval)
             {
-                new_end_pos = refseq->annos[sams->sams[end].seqid].len; // one-based
+                // find amplicons
+                amplicons_no = tmap_map_get_overlapping_amplicons (refseq, sams->sams [end].seqid, start_pos, end_pos, opt->amplicon_scope, amplicons, amplicons_capacity);
+                ++stat->amplicon_searches;
+                if (amplicons_no)
+                    ++stat->amplicon_search_successes;
+                if (amplicons_no > 1)
+                    ++stat->amplicon_overlaps;
             }
-        }
-        // similarly process 5' clips
-        if (result.target_start < TARGET_EDGE_ALLOWANCE && result.query_start > 0)
-        {
-            if (result.query_start + TARGET_EDGE_ALLOWANCE > new_start_pos)
-                new_start_pos -= result.query_start + TARGET_EDGE_ALLOWANCE;
-            else
-                new_start_pos = 1;
-        }
-        if (new_end_pos > end_pos || new_start_pos < start_pos )
-        {
-            end_pos = new_end_pos;
-            start_pos = new_start_pos;
-            // get the target sequence
-            tlen = end_pos - start_pos + 1;
-            if((*target_mem) < tlen)
-            { // more memory?
-                (*target_mem) = tlen;
-                tmap_roundup32((*target_mem));
-                (*target) = tmap_realloc((*target), sizeof(uint8_t)*(*target_mem), "target");
+
+            // make list of distinct overrides that do not match stage params
+            candeval_overrides_s* overrides = (candeval_overrides_s*) alloca (sizeof (candeval_overrides_s) * amplicons_no); 
+            int overrides_no = 0; 
+            for (tmap_map_amplicon_info *ainfo = *amplicons, *sent = *amplicons + amplicons_no; ainfo != sent; ++ainfo)
+            {
+                // set parameters overrides: fill in first unoccupied slot in 'overrides'
+                uint32_t differs = ampl_candeval_parameters (opt, ainfo, strand, overrides + overrides_no);
+                if (!differs) // matched default and thus was not recorded
+                    continue;
+                // check if matches any prior one; increment overrides_no only if unique
+                uint32_t match_found = 0;
+                for (candeval_overrides_s* older_override = overrides, *older_sent = overrides + overrides_no; older_override != older_sent && ! match_found; ++older_override)
+                    if (candeval_overrides_same (older_override, overrides + overrides_no))
+                        match_found = 1;
+                if (!match_found)
+                    ++overrides_no;
             }
-            // NB: IUPAC codes are turned into mismatches
-            if(NULL == tmap_refseq_subseq2(refseq, sams->sams[end].seqid+1, start_pos, end_pos, (*target), 1, NULL))
-                tmap_error("bug encountered", Exit, OutOfRange);
+            // if no amplicons found (or no overriding ordered), use global params to compute score
+            if (!overrides_no)
+            {
+                score = tmap_vsw_process_fwd (vsw, query, qlen, (*target), tlen,
+                                        &result, &overflow, opt->score_thr, 1, opt->confirm_vsw_corr, opt->correct_failed_vsw, opt->use_nvsw_on_nonstd_bases, stat);
+            }
+            else // run for every override 
+            {
+                ++stat->candeval_overrides;
+                if (overrides_no > 1)
+                    ++stat->multiple_candeval_overrides;
+                int32_t softclip_start, softclip_end;
+                // save default parameters
+                tmap_vsw_opt_t orig_vsw_opt = *(vsw->opt);
+                int32_t orig_softclip_start = vsw->query_start_clip, orig_softclip_end = vsw->query_end_clip;
+                // run for every override
+                int32_t best_score = INT32_MIN;
+                candeval_overrides_s* best_params = NULL;
+                for (candeval_overrides_s* override = overrides, *ovr_sent = overrides + overrides_no; override != ovr_sent; ++override)
+                {
+                    tmap_map_util_set_softclip (override->softclip_type, origseq, override->max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+                    tmap_vsw_set_params (vsw, softclip_start, softclip_end, &(override->vsw));
+                    score = tmap_vsw_process_fwd (vsw, query, qlen, (*target), tlen,
+                                        &result, &overflow, opt->score_thr, 1, opt->confirm_vsw_corr, opt->correct_failed_vsw, opt->use_nvsw_on_nonstd_bases, stat);
+                    if (score > best_score)
+                    {
+                        best_score = score;
+                        best_params = override;
+                        ampl_found = 1;
+                    }
+                }
+                if (ampl_found)
+                {
+                    // pick the best (highest) one
+                    score = best_score;
+                    // remember what was the best amplicon (best_ampl)
+                    best_ampl = *best_params->source;
+                }
+                // reset vsw parameters to orig
+                tmap_vsw_set_params (vsw, orig_softclip_start, orig_softclip_end, &(orig_vsw_opt));
+            }
+            if (1 == overflow)
+                return INT32_MIN;
 
-            // reverse compliment the target
-            if (1 == strand)
-                tmap_reverse_compliment_int((*target), tlen);
+            if (!first_run && score <= prev_score)  // check for zone edge crossing on first run always, then only if score is improved
+                break; // if score did not improve, get out and keep last result/score in tmp_sam
 
-            target_causes_read_clipping = 1;
+            // query clip may be recoverable if it has 3' clip and alignment goes to target zone end
+            new_end_pos = end_pos;
+            new_start_pos = start_pos;
+            if (tlen - result.target_end < TARGET_EDGE_ALLOWANCE && qlen > result.query_end)
+            {
+                // extend target if possible
+                new_end_pos += qlen - result.query_end + TARGET_EDGE_ALLOWANCE;
+                if (refseq->annos [sams->sams [end].seqid].len < new_end_pos)
+                {
+                    new_end_pos = refseq->annos [sams->sams [end].seqid].len; // one-based
+                }
+            }
+            // similarly process 5' clips
+            if (result.target_start < TARGET_EDGE_ALLOWANCE && result.query_start > 0)
+            {
+                if (result.query_start + TARGET_EDGE_ALLOWANCE > new_start_pos)
+                    new_start_pos -= result.query_start + TARGET_EDGE_ALLOWANCE;
+                else
+                    new_start_pos = 1;
+            }
+            if (opt->candidate_ext && (new_end_pos > end_pos || new_start_pos < start_pos))
+            {
+                end_pos = new_end_pos;
+                start_pos = new_start_pos;
+                // get the target sequence
+                tlen = end_pos - start_pos + 1;
+                if ((*target_mem) < tlen)
+                { // more memory?
+                    (*target_mem) = tlen;
+                    tmap_roundup32 ((*target_mem));
+                    (*target) = tmap_realloc ((*target), sizeof (uint8_t) * (*target_mem), "target");
+                }
+                // NB: IUPAC codes are turned into mismatches
+                if (NULL == tmap_refseq_subseq2 (refseq, sams->sams [end].seqid + 1, start_pos, end_pos, (*target), 1, NULL))
+                    tmap_error ("bug encountered", Exit, OutOfRange);
+
+                // reverse compliment the target
+                if (1 == strand)
+                    tmap_reverse_compliment_int ((*target), tlen);
+
+                target_causes_read_clipping = 1;
+                ++clipping_extensions;
+            }
+            prev_score = score;
+            first_run = 0;
+            if (start_pos + MAX_TARGET_LEN_FOR_VSW < end_pos)
+                break;
         }
+        while (target_causes_read_clipping);
+        stat->read_clipping_extensions += clipping_extensions;
         tmp_sam.score = score;
         tmp_sam.result = result;
-        prev_score = score;
-        first_run = 0;
-        if (start_pos + MAX_TARGET_LEN_FOR_VSW < end_pos)
-            break;
-  }
-  while (target_causes_read_clipping);
+        if (ampl_found) // found the best scoring out of (one or more) overlapping amplicons
+        {
+            tmp_sam.ampl_start = best_ampl.ampl_start;
+            tmp_sam.ampl_end = best_ampl.ampl_end;
+            tmp_sam.param_ovr = best_ampl.locopt;
+            tmp_sam.read_ends = best_ampl.read_ends;
+        }
+        else if (amplicons_no == 1) // regardless of how good/bad the match is and whether overrides were defined, if there is only one overlapping amplicon, bind it
+        {
+            tmp_sam.ampl_start = (*amplicons)->ampl_start;
+            tmp_sam.ampl_end = (*amplicons)->ampl_end;
+            tmp_sam.param_ovr = (*amplicons)->locopt;
+            tmp_sam.read_ends = (*amplicons)->read_ends;
+        }
+        else
+        {
+            tmp_sam.ampl_start = 0;
+            tmp_sam.ampl_end = 0;
+            tmp_sam.param_ovr = NULL;
+            tmp_sam.read_ends.positions = NULL, tmp_sam.read_ends.starts_count = 0, tmp_sam.read_ends.ends_count = 0;
+        }
+    }
 
-  }
-
-  if (1 < tmp_sam.result.n_best)
-  {
-    // What happens if soft-clipping or not soft-clipping causes two
-    // alignments to be equally likely? So while we could set the scores to be
-    // similar, we can also down-weight the score a little bit.
-    tmp_sam.score_subo = tmp_sam.score - opt->pen_gapo - opt->pen_gape;
-    //tmp_sam.score_subo = tmp_sam.score - 1;
-  }
-  if (1 == is_long_hit)
-  {
-    // if we have many seeds that span a large tandem repeat, then we should
-    // downweight the sub-optimal score
-    tmp_sam.score_subo = tmp_sam.score - opt->pen_gapo - opt->pen_gape;
-  }
-
-
-  if(opt->score_thr <= tmp_sam.score) { // NB: we could also specify 'prev_score <= tmp_sam.score'
-      int32_t add_current = 1; // yes, by default
-
-      // Save local variables
-      // TODO: do we need to save this data in this fashion?
-      int32_t t_end = end;
-      int32_t t_start = start;
-      int32_t t_end_pos = end_pos;
-      uint32_t t_start_pos = start_pos;
-
-      if(1 == opt->unroll_banding // unrolling is turned on
-         && 0 <= max_seed_band  // do we have enough bases to unrooll
-         && 1 < end - start + 1 // are there enough seeds in this group
-         && ((prev_n_best < 0 && 1 < tmp_sam.result.n_best) // we need to do a first timeunroll
-             || (prev_n_best == tmp_sam.result.n_best))) { // unroll was not successful, try again
-          uint32_t start_pos_prev=0;
-          uint32_t start_pos_cur=0, end_pos_cur=0;
-          uint32_t unrolled = 0;
-
-          while(0 == unrolled) {
-
-              // Reset local variables
-              start = t_start;
-              end = t_end;
-
-              //fprintf(stderr, "max_seed_band=%d start=%d end=%d\n", max_seed_band, start, end);
-              // NB: band based on EXACT start position
-              int32_t n = end + 1;
-              end = start;
-              while(start < n) {
-                  int32_t cur_score;
-                  // reset start and end position
-                  if(start == end) {
-                      tmap_map_util_sw_get_start_and_end_pos(&sams->sams[start], seq_len, strand, &start_pos, &end_pos);
-                      start_pos_prev = start_pos;
-                  }
-                  if(end + 1 < n) {
-                      if(sams->sams[end].strand == sams->sams[end+1].strand
-                         && sams->sams[end].seqid == sams->sams[end+1].seqid) {
-                          tmap_map_util_sw_get_start_and_end_pos(&sams->sams[end+1], seq_len, strand, &start_pos_cur, &end_pos_cur);
+    if (1 < tmp_sam.result.n_best)
+    {
+        // What happens if soft-clipping or not soft-clipping causes two
+        // alignments to be equally likely? So while we could set the scores to be
+        // similar, we can also down-weight the score a little bit.
+        tmp_sam.score_subo = tmp_sam.score - opt->pen_gapo - opt->pen_gape;
+        //tmp_sam.score_subo = tmp_sam.score - 1;
+    }
+    if (1 == is_long_hit)
+    {
+        // if we have many seeds that span a large tandem repeat, then we should
+        // downweight the sub-optimal score
+        tmp_sam.score_subo = tmp_sam.score - opt->pen_gapo - opt->pen_gape;
+    }
 
 
-                             // fprintf(stderr, "start_pos_cur=%u start_pos_prev=%u max_seed_band=%d\n",
-                             // start_pos_cur, start_pos_prev, max_seed_band);
+    if (opt->score_thr <= tmp_sam.score) 
+    { // NB: we could also specify 'prev_score <= tmp_sam.score'
+        int32_t add_current = 1; // yes, by default
 
+        // Save local variables
+        // TODO: do we need to save this data in this fashion?
+        int32_t t_end = end;
+        int32_t t_start = start;
+        int32_t t_end_pos = end_pos;
+        uint32_t t_start_pos = start_pos;
 
-                          // consider start positions only
-                          if(start_pos_cur - start_pos_prev <= max_seed_band) { // consider start positions only
-                              end++;
-                              if(end_pos < end_pos_cur) {
-                                  end_pos = end_pos_cur;
-                              }
-                              start_pos_prev = start_pos_cur;
-                              continue; // there may be more to add
-                          } } } // do not recurse if we did not unroll if(0 < max_seed_band && t_start == start && t_end == end) { // we did not unroll any max_seed_band = (max_seed_band >> 1); break; }
-                  unrolled = 1; // we are going to unroll
+        if (   1 == opt->unroll_banding // unrolling is turned on
+            && 0 <= max_seed_band  // do we have enough bases to unrooll
+            && 1 < end - start + 1 // are there enough seeds in this group
+            && (   (prev_n_best < 0 && 1 < tmp_sam.result.n_best) // we need to do a first time unroll
+                || (prev_n_best == tmp_sam.result.n_best))) 
+        { // unroll was not successful, try again
+            uint32_t start_pos_prev=0;
+            uint32_t start_pos_cur=0, end_pos_cur=0;
+            uint32_t unrolled = 0;
 
-                  // TODO: we could hash the alignment result, as unrolling may
-                  // cause many more SWs
+            while (0 == unrolled) 
+            {
+                // Reset local variables
+                start = t_start;
+                end = t_end;
 
-                  // recurse
-                  cur_score = tmap_map_util_sw_gen_score_helper(refseq, sams, seq, sams_tmp, idx, start, end,
+                //fprintf (stderr, "max_seed_band=%d start=%d end=%d\n", max_seed_band, start, end);
+                // NB: band based on EXACT start position
+                int32_t n = end + 1;
+                end = start;
+                while (start < n) 
+                {
+                    int32_t cur_score;
+                    // reset start and end position
+                    if (start == end) 
+                    {
+                        tmap_map_util_sw_get_start_and_end_pos (&sams->sams [start], seq_len, strand, &start_pos, &end_pos);
+                        start_pos_prev = start_pos;
+                    }
+                    if (end + 1 < n) 
+                    {
+                        if (   sams->sams [end].strand == sams->sams [end+1].strand
+                            && sams->sams [end].seqid == sams->sams [end+1].seqid) 
+                        {
+                            tmap_map_util_sw_get_start_and_end_pos (&sams->sams [end+1], seq_len, strand, &start_pos_cur, &end_pos_cur);
+
+                            // consider start positions only
+                            if (start_pos_cur - start_pos_prev <= max_seed_band) 
+                            { // consider start positions only
+                                end++;
+                                if (end_pos < end_pos_cur) 
+                                    end_pos = end_pos_cur;
+                                start_pos_prev = start_pos_cur;
+                                continue; // there may be more to add
+                            } 
+                        } 
+                    } // do not recurse if we did not unroll if (0 < max_seed_band && t_start == start && t_end == end) { // we did not unroll any max_seed_band = (max_seed_band >> 1); break; }
+                    unrolled = 1; // we are going to unroll
+
+                    // TODO: we could hash the alignment result, as unrolling may
+                    // cause many more SWs
+
+                    // recurse
+                    cur_score = tmap_map_util_sw_gen_score_helper (refseq, sams, origseq, seq, sams_tmp, idx, start, end,
                                                                 strand, vsw, seq_len, start_pos, end_pos,
                                                                 target_mem, target,
-                                                                softclip_start, softclip_end,
+                                                                // softclip_start, softclip_end,
                                                                 tmp_sam.result.n_best,
                                                                 (max_seed_band <= 0) ? -1 : (max_seed_band >> 1),
                                                                 tmp_sam.score,
-                                                                vsw_opt, rand, opt);
+                                                                vsw_opt, rand, opt,
+                                                                amplicons,
+                                                                amplicons_capacity,
+                                                                stat
+                                                                );
 
-                  if(cur_score == tmp_sam.score) add_current = 0; // do not add the current alignment, we found it during unrolling
-                  // update start/end
-                  end++;
-                  start = end;
-              }
-          }
-      }
+                    if (cur_score == tmp_sam.score) 
+                        add_current = 0; // do not add the current alignment, we found it during unrolling
+                    // update start/end
+                    end++;
+                    start = end;
+                }
+            }
+        }
 
-      // Reset local variables
-      // TODO: do we need to reset this data in this fashion?
-      end = t_end;
-      start = t_start;
-      end_pos = t_end_pos;
-      start_pos = t_start_pos;
+        // Reset local variables
+        // TODO: do we need to reset this data in this fashion?
+        end = t_end;
+        start = t_start;
+        end_pos = t_end_pos;
+        start_pos = t_start_pos;
 
-      if(1 == add_current) {
-          tmap_map_sam_t *s = NULL;
+        if (1 == add_current) 
+        {
+            tmap_map_sam_t *s = NULL;
 
-          if(sams_tmp->n <= (*idx)) {
-              tmap_map_sams_realloc(sams_tmp, (*idx)+1);
-              //tmap_error("bug encountered", Exit, OutOfRange);
-          }
+            if (sams_tmp->n <= (*idx)) 
+            {
+                tmap_map_sams_realloc (sams_tmp, (*idx)+1);
+                //tmap_error ("bug encountered", Exit, OutOfRange);
+            }
 
-          s = &sams_tmp->sams[(*idx)];
-          // shallow copy previous data
-          (*s) = tmp_sam;
-          //s->result = tmp_sam.result;
+            s = &sams_tmp->sams [(*idx)];
+            // shallow copy previous data
+            (*s) = tmp_sam;
+            //s->result = tmp_sam.result;
 
-          // nullify the cigar
-          s->n_cigar = 0;
-          s->cigar = NULL;
+            // nullify the cigar
+            s->n_cigar = 0;
+            s->cigar = NULL;
 
-          // adjust target length and position NB: query length is implicitly
-          // stored in s->query_end (consider on the next pass)
-          s->pos = start_pos - 1; // zero-based
-          s->target_len = s->result.target_end + 1;
+            // adjust target length and position NB: query length is implicitly
+            // stored in s->query_end (consider on the next pass)
+            s->pos = start_pos - 1; // zero-based
+            s->target_len = s->result.target_end + 1;
 
-          if(1 == strand) {
-              if(s->pos + tlen <= s->result.target_end) s->pos = 0;
-              else s->pos += tlen - s->result.target_end - 1;
-          }
+            if (1 == strand) 
+            {
+                if (s->pos + tlen <= s->result.target_end) s->pos = 0;
+                else s->pos += tlen - s->result.target_end - 1;
+            }
 
-          /*
-          fprintf(stderr, "strand=%d pos=%d n_best=%d %d-%d %d-%d %d\n",
-                  strand,
-                  s->pos,
-                  s->result.n_best,
-                  s->query_start,
-                  s->query_end,
-                  s->target_start,
-                  s->result.target_end,
-                  s->target_len);
-                  */
+            /*
+            fprintf (stderr, "strand=%d pos=%d n_best=%d %d-%d %d-%d %d\n",
+                    strand,
+                    s->pos,
+                    s->result.n_best,
+                    s->query_start,
+                    s->query_end,
+                    s->target_start,
+                    s->result.target_end,
+                    s->target_len);
+                    */
 
-          // # of seeds
-          s->n_seeds = (end - start + 1);
-          // update aux data
-          tmap_map_sam_malloc_aux(s);
-          switch(s->algo_id) {
+            // # of seeds
+            s->n_seeds = (end - start + 1);
+            // update aux data
+            tmap_map_sam_malloc_aux (s);
+            switch (s->algo_id) 
+            {
             case TMAP_MAP_ALGO_MAP1:
-              (*s->aux.map1_aux) = (*tmp_sam.aux.map1_aux);
-              break;
+                (*s->aux.map1_aux) = (*tmp_sam.aux.map1_aux);
+                break;
             case TMAP_MAP_ALGO_MAP2:
-              (*s->aux.map2_aux) = (*tmp_sam.aux.map2_aux);
-              break;
+                (*s->aux.map2_aux) = (*tmp_sam.aux.map2_aux);
+                break;
             case TMAP_MAP_ALGO_MAP3:
-              (*s->aux.map3_aux) = (*tmp_sam.aux.map3_aux);
-              break;
+                (*s->aux.map3_aux) = (*tmp_sam.aux.map3_aux);
+                break;
             case TMAP_MAP_ALGO_MAP4:
-              (*s->aux.map4_aux) = (*tmp_sam.aux.map4_aux);
-              break;
+                (*s->aux.map4_aux) = (*tmp_sam.aux.map4_aux);
+                break;
             case TMAP_MAP_ALGO_MAPVSW:
-              (*s->aux.map_vsw_aux) = (*tmp_sam.aux.map_vsw_aux);
-              break;
+                (*s->aux.map_vsw_aux) = (*tmp_sam.aux.map_vsw_aux);
+                break;
             default:
-              tmap_error("bug encountered", Exit, OutOfRange);
-              break;
-          }
-          (*idx)++;
-      }
-  }
-  return tmp_sam.score;
+                tmap_error ("bug encountered", Exit, OutOfRange);
+                break;
+            }
+            (*idx)++;
+        }
+    }
+    return tmp_sam.score;
 }
 
-typedef struct
+typedef struct __tmap_map_util_gen_score_t
 {
     uint32_t seqid;
     int8_t strand;
@@ -1852,7 +2239,9 @@ tmap_map_util_sw_gen_score
     tmap_seq_t **seqs,
     tmap_rand_t *rand,
     tmap_map_opt_t *opt,
-    int32_t *num_after_grouping
+    int32_t *num_after_grouping,
+    tmap_map_stats_t *stat      // statistics
+
 )
 {
   int32_t i, j;
@@ -1871,31 +2260,40 @@ tmap_map_util_sw_gen_score
   int32_t num_groups = 0, num_groups_filtered = 0;
   double stage_seed_freqc = opt->stage_seed_freqc;
   int32_t max_group_size = 0, repr_hit, filter_ok = 0;
+  tmap_map_amplicon_info *amplicons = NULL;
+  uint32_t amplicons_capacity = 0;
+  // tmap_map_amplicon_info chosen_amplicon;
 
-  if(NULL != num_after_grouping) (*num_after_grouping) = 0;
+  if (NULL != num_after_grouping) (*num_after_grouping) = 0;
 
-  if(0 == sams->n) {
+  if (0 == sams->n) {
       return sams;
   }
   // the final mappings will go here
-  sams_tmp = tmap_map_sams_init(sams);
-  tmap_map_sams_realloc(sams_tmp, sams->n);
+  sams_tmp = tmap_map_sams_init (sams);
+  tmap_map_sams_realloc (sams_tmp, sams->n);
 
-  // sort by strand/chr/pos/score
-  tmap_sort_introsort(tmap_map_sam_sort_coord, sams->n, sams->sams);
-  tmap_map_util_set_softclip(opt, seq, opt->max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+  init_amplicon_info (&amplicons, &amplicons_capacity, 0);
 
-  // initialize opt
-  vsw_opt = tmap_vsw_opt_init(opt->score_match, opt->pen_mm, opt->pen_gapo, opt->pen_gape, opt->score_thr);
+  // sort by strand / chr/pos / score
+  tmap_sort_introsort (tmap_map_sam_sort_coord, sams->n, sams->sams);
+
+  // ! This may be re-set later (in _helper) for the hits located in the overriding amplions 
+  tmap_map_util_set_softclip (opt->softclip_type, seq, opt->max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+
+  // initialize opt for initial vsw set up  - the parameters set here can be overriden later in tmap_map_util_sw_gen_score_helper, if the hit position appears to be within overriden amplicon
+  vsw_opt = tmap_vsw_opt_init (opt->score_match, opt->pen_mm, opt->pen_gapo, opt->pen_gape, opt->score_thr);
 
   // init seqs
-  seq_len = tmap_seq_get_bases_length(seqs[0]);
+  seq_len = tmap_seq_get_bases_length (seqs [0]);
+  // seq_len = tmap_seq_get_bases_length (seq);
 
   // forward
-  vsw = tmap_vsw_init((uint8_t*)tmap_seq_get_bases(seqs[0])->s, seq_len, softclip_start, softclip_end, opt->vsw_type, vsw_opt);
+  vsw = tmap_vsw_init ((uint8_t*)tmap_seq_get_bases (seqs [0])->s, seq_len, softclip_start, softclip_end, opt->vsw_type, opt->vsw_fallback, vsw_opt);
+  // vsw = tmap_vsw_init ((uint8_t*)tmap_seq_get_bases (seq)->s, seq_len, softclip_start, softclip_end, opt->vsw_type, vsw_opt);
 
   // pre-allocate groups
-  groups = tmap_calloc(sams->n, sizeof(tmap_map_util_gen_score_t), "groups");
+  groups = tmap_calloc (sams->n, sizeof (tmap_map_util_gen_score_t), "groups");
 
   // determine groups
   num_groups = num_groups_filtered = 0;
@@ -1903,41 +2301,41 @@ tmap_map_util_sw_gen_score
   start_pos = end_pos = 0;
   best_subo_score = INT32_MIN; // track the best sub-optimal hit
   repr_hit = 0;
-  while(end < sams->n) {
+  while (end < sams->n) {
       uint32_t seqid;
       uint8_t strand;
 
-      // get the strand/start/end positions
-      seqid = sams->sams[end].seqid;
-      strand = sams->sams[end].strand;
+      // get the strand / start/end positions
+      seqid = sams->sams [end].seqid;
+      strand = sams->sams [end].strand;
       //first pass, setup start and end
-      if(start == end) {
-          tmap_map_util_sw_get_start_and_end_pos(&sams->sams[start], seq_len, strand, &start_pos, &end_pos);
+      if (start == end) {
+          tmap_map_util_sw_get_start_and_end_pos (&sams->sams [start], seq_len, strand, &start_pos, &end_pos);
           end_pos_prev = end_pos;
-          repr_hit = sams->sams[end].repr_hit;
+          repr_hit = sams->sams [end].repr_hit;
       }
 
       // sub-optimal score
-      if(best_subo_score < sams->sams[end].score_subo) {
-          best_subo_score = sams->sams[end].score_subo;
+      if (best_subo_score < sams->sams [end].score_subo) {
+          best_subo_score = sams->sams [end].score_subo;
       }
 
       // check if the hits can be banded
-      //fprintf(stderr, "end=%d seqid: %d start: %d end: %d\n", end, sams->sams[end].seqid, sams->sams[end].pos, (sams->sams[end].pos + sams->sams[end].target_len));
-      if(end + 1 < sams->n) {
-          //fprintf(stderr, "%d seed start: %d end: %d next start: %d next end: %d\n", end, sams->sams[end].pos, (sams->sams[end].pos + sams->sams[end].target_len), sams->sams[end+1].pos, (sams->sams[end+1].pos + sams->sams[end+1].target_len));
-          if(sams->sams[end].strand == sams->sams[end+1].strand
-             && sams->sams[end].seqid == sams->sams[end+1].seqid) {
-              tmap_map_util_sw_get_start_and_end_pos(&sams->sams[end+1], seq_len, strand, &start_pos_cur, &end_pos_cur);
+      //fprintf (stderr, "end=%d seqid: %d start: %d end: %d\n", end, sams->sams [end].seqid, sams->sams [end].pos, (sams->sams [end].pos + sams->sams [end].target_len));
+      if (end + 1 < sams->n) {
+          //fprintf (stderr, "%d seed start: %d end: %d next start: %d next end: %d\n", end, sams->sams [end].pos, (sams->sams [end].pos + sams->sams [end].target_len), sams->sams [end + 1].pos, (sams->sams [end + 1].pos + sams->sams [end + 1].target_len));
+          if (sams->sams [end].strand == sams->sams [end + 1].strand
+             && sams->sams [end].seqid == sams->sams [end + 1].seqid) {
+              tmap_map_util_sw_get_start_and_end_pos (&sams->sams [end + 1], seq_len, strand, &start_pos_cur, &end_pos_cur);
 
-              if(start_pos_cur <= end_pos_prev // NB: beware of unsigned int underflow
+              if (start_pos_cur <= end_pos_prev // NB: beware of unsigned int underflow
                  || (start_pos_cur - end_pos_prev) <= opt->max_seed_band) {
                   end++;
-                  if(end_pos < end_pos_cur) {
+                  if (end_pos < end_pos_cur) {
                       end_pos = end_pos_cur;
                   }
                   end_pos_prev = end_pos_cur;
-                  repr_hit |= sams->sams[end].repr_hit; // representitive hit
+                  repr_hit |= sams->sams [end].repr_hit; // representitive hit
                   continue; // there may be more to add
 
               }
@@ -1947,25 +2345,25 @@ tmap_map_util_sw_gen_score
       // add a group
       num_groups++;
       // update
-      groups[num_groups-1].seqid = seqid;
-      groups[num_groups-1].strand = strand;
-      groups[num_groups-1].start = start;
-      groups[num_groups-1].end = end;
-      groups[num_groups-1].start_pos = start_pos;
-      groups[num_groups-1].end_pos = end_pos;
-      groups[num_groups-1].filtered = 0; // assume not filtered, not guilty
-      groups[num_groups-1].repr_hit = repr_hit;
-      if(max_group_size < end - start + 1) {
+      groups [num_groups-1].seqid = seqid;
+      groups [num_groups-1].strand = strand;
+      groups [num_groups-1].start = start;
+      groups [num_groups-1].end = end;
+      groups [num_groups-1].start_pos = start_pos;
+      groups [num_groups-1].end_pos = end_pos;
+      groups [num_groups-1].filtered = 0; // assume not filtered, not guilty
+      groups [num_groups-1].repr_hit = repr_hit;
+      if (max_group_size < end - start + 1) {
           max_group_size = end - start + 1;
       }
-      // update start/end
+      // update start / end
       end++;
       start = end;
   }
 
   // resize
-  if(num_groups < sams->n) {
-      groups = tmap_realloc(groups, num_groups * sizeof(tmap_map_util_gen_score_t), "groups");
+  if (num_groups < sams->n) {
+      groups = tmap_realloc (groups, num_groups * sizeof (tmap_map_util_gen_score_t), "groups");
   }
 
   // filter groups
@@ -1975,11 +2373,11 @@ tmap_map_util_sw_gen_score
   {
       num_groups_filtered = 0;
 
-      for(i=0;i<num_groups;i++)
+      for (i=0;i<num_groups;i++)
       {
-          tmap_map_util_gen_score_t *group = &groups[i];
+          tmap_map_util_gen_score_t *group = &groups [i];
 
-          // NB: if match/mismatch penalties are on the opposite strands, we may
+          // NB: if match / mismatch penalties are on the opposite strands, we may
           // have wrong score
           // NOTE:  end >(sams->n * opt->seed_freqc ) comes from
           /*
@@ -1991,13 +2389,13 @@ tmap_map_util_sw_gen_score
            * if a region has ≥fC q-hits, only then it is processed further. "
            */
           /*
-          fprintf(stderr, "repr_hit=%d size=%d freq=%lf\n",
+          fprintf (stderr, "repr_hit=%d size=%d freq=%lf\n",
                   group->repr_hit,
                   (group->end - group->start + 1),
                   ( sams->n * stage_seed_freqc));
           */
 
-          if(0 == group->repr_hit && (group->end - group->start + 1) > ( sams->n * stage_seed_freqc) )
+          if (0 == group->repr_hit && (group->end - group->start + 1) > ( sams->n * stage_seed_freqc) )
           {
               group->filtered = 0;
           }
@@ -2009,23 +2407,23 @@ tmap_map_util_sw_gen_score
       }
 
       /*
-      fprintf(stderr, "stage_seed_freqc=%lf num_groups=%d num_groups_filtered=%d\n",
+      fprintf (stderr, "stage_seed_freqc=%lf num_groups=%d num_groups_filtered=%d\n",
               stage_seed_freqc,
               num_groups,
               num_groups_filtered);
               */
 
-      if(opt->stage_seed_freqc_min_groups <= num_groups
+      if (opt->stage_seed_freqc_min_groups <= num_groups
          && (num_groups - num_groups_filtered) < opt->stage_seed_freqc_min_groups) {
           stage_seed_freqc /= 2.0;
           // reset
-          for(i=0;i<num_groups;i++)
+          for (i=0;i<num_groups;i++)
           {
-              tmap_map_util_gen_score_t *group = &groups[i];
+              tmap_map_util_gen_score_t *group = &groups [i];
               group->filtered = 0;
           }
           num_groups_filtered = 0;
-          if(stage_seed_freqc < 1.0 / sams->n)
+          if (stage_seed_freqc < 1.0 / sams->n)
           { // the filter will accept all hits
               break;
           }
@@ -2036,35 +2434,35 @@ tmap_map_util_sw_gen_score
           break;
       }
   }
-  while(1);
+  while (1);
 
-  if(num_groups < opt->stage_seed_freqc_min_groups)
+  if (num_groups < opt->stage_seed_freqc_min_groups)
   { // if too few groups, always keep
       // reset
-      for(i=0;i<num_groups;i++)
+      for (i=0;i<num_groups;i++)
       {
-          tmap_map_util_gen_score_t *group = &groups[i];
+          tmap_map_util_gen_score_t *group = &groups [i];
           group->filtered = 0;
       }
       num_groups_filtered = 0;
   }
-  else if(0 == filter_ok)
+  else if (0 == filter_ok)
   { // we could not find an effective filter
       int32_t cur_max;
       // Try filtering based on retaining the groups with most number of seeds.
       cur_max = (max_group_size * 2) - 1; // NB: this will be reduced
       // Assume all are filtered
       num_groups_filtered = num_groups;
-      while(num_groups - num_groups_filtered < opt->stage_seed_freqc_min_groups)
+      while (num_groups - num_groups_filtered < opt->stage_seed_freqc_min_groups)
       { // too many groups were filtered
           num_groups_filtered = 0;
           // halve the minimum group size
           cur_max /= 2;
           // go through the groups
-          for(i=0;i<num_groups;i++)
+          for (i=0;i<num_groups;i++)
           {
-              tmap_map_util_gen_score_t *group = &groups[i];
-              if(group->end - group->start + 1 < cur_max)
+              tmap_map_util_gen_score_t *group = &groups [i];
+              if (group->end - group->start + 1 < cur_max)
               { // filter if there were too few seeds
                   group->filtered = 1;
                   num_groups_filtered++;
@@ -2078,27 +2476,27 @@ tmap_map_util_sw_gen_score
   }
 
   /*
-  for(i=j=0;i<num_groups;i++) { // go through each group
-      tmap_map_util_gen_score_t *group = &groups[i];
-      if(1 == group->filtered && 0 == group->repr_hit) continue;
+  for (i=j=0;i<num_groups;i++) { // go through each group
+      tmap_map_util_gen_score_t *group = &groups [i];
+      if (1 == group->filtered && 0 == group->repr_hit) continue;
       j++;
   }
-  fprintf(stderr, "num_groups=%d num_groups_filtered=%d j=%d\n", num_groups, num_groups_filtered, j);
+  fprintf (stderr, "num_groups=%d num_groups_filtered=%d j=%d\n", num_groups, num_groups_filtered, j);
   */
 
   /*
-  fprintf(stderr, "final sams->n=%d num_groups=%d num_groups_filtered=%d\n",
+  fprintf (stderr, "final sams->n=%d num_groups=%d num_groups_filtered=%d\n",
           sams->n,
           num_groups,
           num_groups_filtered);
           */
 
   // process unfiltered...
-  for(i=j=0;i<num_groups;i++)
+  for (i=j=0;i<num_groups;i++)
   { // go through each group
-      tmap_map_util_gen_score_t *group = &groups[i];
+      tmap_map_util_gen_score_t *group = &groups [i];
       /*
-      fprintf(stderr, "start=%d end=%d num=%d seqid=%u strand=%d start_pos=%u end_pos=%u repr_hit=%u filtered=%d\n",
+      fprintf (stderr, "start=%d end=%d num=%d seqid=%u strand=%d start_pos=%u end_pos=%u repr_hit=%u filtered=%d\n",
               group->start,
               group->end,
               group->end - group->start + 1,
@@ -2109,9 +2507,9 @@ tmap_map_util_sw_gen_score
               group->repr_hit,
               group->filtered);
               */
-      if(1 == group->filtered && 0 == group->repr_hit) continue;
+      if (1 == group->filtered && 0 == group->repr_hit) continue;
       /*
-      fprintf(stderr, "start=%d end=%d num=%d seqid=%u strand=%d start_pos=%u end_pos=%u filtered=%d\n",
+      fprintf (stderr, "start=%d end=%d num=%d seqid=%u strand=%d start_pos=%u end_pos=%u filtered=%d\n",
               group->start,
               group->end,
               group->end - group->start + 1,
@@ -2123,41 +2521,45 @@ tmap_map_util_sw_gen_score
               */
 
       // generate the score
-      tmap_map_util_sw_gen_score_helper(refseq, sams, seqs[0], sams_tmp, &j, group->start, group->end,
+      tmap_map_util_sw_gen_score_helper (refseq, sams, seq, seqs [0], sams_tmp, &j, group->start, group->end,
                                         group->strand, vsw, seq_len, group->start_pos, group->end_pos,
                                         &target_mem, &target,
-                                        softclip_start, softclip_end,
+                                        // softclip_start, softclip_end,
                                         -1, // this is our first call
                                         opt->max_seed_band, // NB: this may be modified as banding is unrolled
                                         opt->score_thr-1,
-                                        vsw_opt, rand, opt);
+                                        vsw_opt, rand, opt,
+                                        &amplicons,
+                                        &amplicons_capacity,
+                                        stat
+                                        );
       // save the number of groups
-      if(NULL != num_after_grouping) (*num_after_grouping)++;
+      if (NULL != num_after_grouping) (*num_after_grouping)++;
   }
-  //fprintf(stderr, "unfiltered # = %d\n", j);
+  //fprintf (stderr, "unfiltered # = %d\n", j);
 
   // only if we applied the freqc filter
-  if(0 < stage_seed_freqc && 0 < opt->stage_seed_freqc_rand_repr)
+  if (0 < stage_seed_freqc && 0 < opt->stage_seed_freqc_rand_repr)
   {
       // check if we filtered too many groups, and so if we should keep
       // representative hits.
       /*
-      fprintf(stderr, "Should we get representatives %lf < %lf\n",
+      fprintf (stderr, "Should we get representatives %lf < %lf\n",
               opt->stage_seed_freqc_group_frac,
               (double)num_groups_filtered / num_groups);
               */
-      if(opt->stage_seed_freqc_group_frac <= (double)num_groups_filtered / num_groups)
+      if (opt->stage_seed_freqc_group_frac <= (double)num_groups_filtered / num_groups)
       {
           int32_t best_score = INT32_MIN, best_score_filt = INT32_MIN;
           double pr = 0.0;
           int32_t k, l, c, n;
 
           // get the best score from a group that passed the filter
-          for(k=0;k<j;k++)
+          for (k=0;k<j;k++)
           { // NB: keep k for later
-              if(best_score < sams_tmp->sams[k].score)
+              if (best_score < sams_tmp->sams [k].score)
               {
-                  best_score = sams_tmp->sams[k].score;
+                  best_score = sams_tmp->sams [k].score;
               }
           }
 
@@ -2166,49 +2568,57 @@ tmap_map_util_sw_gen_score
 
           // pick the one with the most # of seeds
           c = l = -1;
-          for(i=0;i<num_groups;i++)
+          for (i=0;i<num_groups;i++)
           {
-              tmap_map_util_gen_score_t *group = &groups[i];
-              if(0 == group->filtered) continue;
-              if(c < group->end - group->start + 1)
+              tmap_map_util_gen_score_t *group = &groups [i];
+              if (0 == group->filtered) continue;
+              if (c < group->end - group->start + 1)
               {
                   c = group->end - group->start + 1;
                   l = i;
               }
           }
-          if(0 <= l)
+          if (0 <= l)
           {
-              tmap_map_util_gen_score_t *group = &groups[l];
+              tmap_map_util_gen_score_t *group = &groups [l];
               // generate the score
-              tmap_map_util_sw_gen_score_helper(refseq, sams, seqs[0], sams_tmp, &j, group->start, group->end,
+              tmap_map_util_sw_gen_score_helper (refseq, sams, seq, seqs [0], sams_tmp, &j, group->start, group->end,
                                                 group->strand, vsw, seq_len, group->start_pos, group->end_pos,
                                                 &target_mem, &target,
-                                                softclip_start, softclip_end,
+                                                // softclip_start, softclip_end,
                                                 -1, // this is our first call
                                                 opt->max_seed_band, // NB: this may be modified as banding is unrolled
                                                 opt->score_thr-1,
-                                                vsw_opt, rand, opt);
+                                                vsw_opt, rand, opt,
+                                                &amplicons,
+                                                &amplicons_capacity,
+                                                stat
+                                               );
               group->filtered = 0; // no longer filtered
           }
 
           // now, choose uniformly
-          pr = num_groups / (1+opt->stage_seed_freqc_rand_repr);
-          for(i=c=n=0;i<num_groups;i++,c++)
+          pr = num_groups / (1 + opt->stage_seed_freqc_rand_repr);
+          for (i=c=n=0;i<num_groups;i++,c++)
           {
-              tmap_map_util_gen_score_t *group = &groups[i];
-              if(0 == group->filtered) continue;
-              if(pr < c)
+              tmap_map_util_gen_score_t *group = &groups [i];
+              if (0 == group->filtered) continue;
+              if (pr < c)
               {
-                  if(n == opt->stage_seed_freqc_rand_repr) break;
+                  if (n == opt->stage_seed_freqc_rand_repr) break;
                   // generate the score
-                  tmap_map_util_sw_gen_score_helper(refseq, sams, seqs[0], sams_tmp, &j, group->start, group->end,
+                  tmap_map_util_sw_gen_score_helper (refseq, sams, seq, seqs [0], sams_tmp, &j, group->start, group->end,
                                                     group->strand, vsw, seq_len, group->start_pos, group->end_pos,
                                                     &target_mem, &target,
-                                                    softclip_start, softclip_end,
+                                                    // softclip_start, softclip_end,
                                                     -1, // this is our first call
                                                     opt->max_seed_band, // NB: this may be modified as banding is unrolled
                                                     opt->score_thr-1,
-                                                    vsw_opt, rand, opt);
+                                                    vsw_opt, rand, opt,
+                                                    &amplicons,
+                                                    &amplicons_capacity,
+                                                    stat
+                                                   );
                   group->filtered = 0; // no longer filtered
                   n++;
                   // reset
@@ -2217,64 +2627,69 @@ tmap_map_util_sw_gen_score
           }
 
           // get the best from the filtered
-          for(;k<j;k++)
+          for (;k<j;k++)
           { // NB: k should not have been modified
-              if(best_score_filt < sams_tmp->sams[k].score)
+              if (best_score_filt < sams_tmp->sams [k].score)
               {
-                  best_score_filt = sams_tmp->sams[k].score;
+                  best_score_filt = sams_tmp->sams [k].score;
               }
           }
 
           /*
-          fprintf(stderr, "best_score=%d best_score_filt=%d\n",
+          fprintf (stderr, "best_score=%d best_score_filt=%d\n",
                   best_score,
                   best_score_filt);
                   */
           // check if we should redo ALL the filtered groups
-          if(best_score < best_score_filt)
+          if (best_score < best_score_filt)
           {
               // NB: do not redo others...
-              for(i=0;i<num_groups;i++)
+              for (i=0;i<num_groups;i++)
               {
-                  tmap_map_util_gen_score_t *group = &groups[i];
-                  if(0 == group->filtered) continue;
+                  tmap_map_util_gen_score_t *group = &groups [i];
+                  if (0 == group->filtered) continue;
                   // generate the score
-                  tmap_map_util_sw_gen_score_helper(refseq, sams, seqs[0], sams_tmp, &j, group->start, group->end,
+                  tmap_map_util_sw_gen_score_helper (refseq, sams, seq, seqs [0], sams_tmp, &j, group->start, group->end,
                                                     group->strand, vsw, seq_len, group->start_pos, group->end_pos,
                                                     &target_mem, &target,
-                                                    softclip_start, softclip_end,
+                                                    // softclip_start, softclip_end,
                                                     -1, // this is our first call
                                                     opt->max_seed_band, // NB: this may be modified as banding is unrolled
                                                     opt->score_thr-1,
-                                                    vsw_opt, rand, opt);
+                                                    vsw_opt, rand, opt,
+                                                    &amplicons,
+                                                    &amplicons_capacity,
+                                                    stat
+                                                   );
               }
           }
       }
   }
 
   // realloc
-  tmap_map_sams_realloc(sams_tmp, j);
+  tmap_map_sams_realloc (sams_tmp, j);
 
   // sub-optimal score
-  for(i=0;i<sams_tmp->n;i++)
+  for (i=0;i<sams_tmp->n;i++)
   {
-      if(best_subo_score < sams_tmp->sams[i].score_subo)
+      if (best_subo_score < sams_tmp->sams [i].score_subo)
       {
-          best_subo_score = sams_tmp->sams[i].score_subo;
+          best_subo_score = sams_tmp->sams [i].score_subo;
       }
   }
   // update the sub-optimal
-  for(i=0;i<sams_tmp->n;i++)
+  for (i=0;i<sams_tmp->n;i++)
   {
-      sams_tmp->sams[i].score_subo = best_subo_score;
+      sams_tmp->sams [i].score_subo = best_subo_score;
   }
 
   // free memory
-  tmap_map_sams_destroy(sams);
-  free(target);
-  tmap_vsw_opt_destroy(vsw_opt);
-  tmap_vsw_destroy(vsw);
-  free(groups);
+  tmap_map_sams_destroy (sams);
+  free (target);
+  destroy_amplicon_info (&amplicons, &amplicons_capacity);
+  tmap_vsw_opt_destroy (vsw_opt);
+  tmap_vsw_destroy (vsw);
+  free (groups);
 
   return sams_tmp;
 }
@@ -2457,6 +2872,7 @@ tmap_map_util_one_gap
     int *is_ins,      // 1 == Ins, 0 == Del
     int *softclip,    // length of prefix softclip
     int pad,          // the extension on either size of target buffer that is safe to access. This function checks this many bases as continuation of M segment as if no indel was present
+    int matched_bases, 
     int *extra_match  // number of consecutive matches after M segment end (check relation with pad. Are these bases in the pad??)
 )
 {
@@ -2536,7 +2952,7 @@ tmap_map_util_one_gap
             if (j == tlen)
             {
                 *indel_size = qlen-q;
-                   *is_ins = 1;
+                *is_ins = 1;
             }
             else
             {
@@ -2558,6 +2974,7 @@ tmap_map_util_one_gap
                     break;
                 (*extra_match) += 1;
             }
+	    if (*extra_match >= matched_bases) return 0; // cannot have leading indel, total duplication or no extra anchor, TS-18181
 	    int total_anchor = ((qlen < tlen-i)? qlen: tlen-i)  + (*extra_match);
 	    if (total_anchor < min_size) continue;
             if (total_anchor < 15 && *indel_size > 3 * (qlen + (*extra_match)))  // reject indels 3 or more times longer than query + matching 'pad'
@@ -2796,7 +3213,7 @@ tmap_map_util_end_repair
         return repaired;
 
     // check if we allow soft-clipping on the 5' end
-    tmap_map_util_set_softclip (opt, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+    tmap_map_util_set_softclip (opt->softclip_type, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
     int8_t o_strand = strand;
     if (end_repair > 2)  // Modern End-Repair, invoked when --end-repair parameter is above 2 (and denotes percent of mismatches above which to trim the alignment)
     {
@@ -3029,7 +3446,7 @@ tmap_map_util_end_repair
             int min_anchor = min_anchor_large_indel_rescue;
             int half_anchor = min_anchor / 2;
             if (refseq->bed_exist && use_bed_in_end_repair && total_scl >= half_anchor && s->ampl_start != 0)
-                // tmap_map_get_amplicon (refseq, s->seqid, start_o, end_o, &ampl_start, &ampl_end, NULL, o_strand)) // DK: if bed exists and coords use in end repair enabled, the amplicon coords are cached within *s (tmap_map_sam_t)
+                // tmap_map_get_amplicon (refseq, s->seqid, start_o, end_o, o_strand, &ampl_start, &ampl_end, NULL)) // DK: if bed exists and coords use in end repair enabled, the amplicon coords are cached within *s (tmap_map_sam_t)
             {
                 //total_scl is desired to be larger than 5
                 //fprintf(stderr, "%d %d %d qlen=%d\n", ampl_start, ampl_end, total_scl, qlen);
@@ -3049,11 +3466,13 @@ tmap_map_util_end_repair
                 int buffer = half_buffer + 3;
                 uint32_t start, end;
                 uint32_t pad_s, pad_e, pad;
+		uint32_t matched_bases;
                 pad_s = pad_e = pad = 0;	
                 if (strand == 0)
                 {
                     start = s->pos + s->target_len + 1 - s_pos_adj;
                     end = s->ampl_end + half_buffer;
+		    matched_bases = start-s->pos-1;
                     pad_s = 100;
                     if (pad_s > qlen - total_scl)
                         pad_s = qlen - total_scl;
@@ -3069,6 +3488,7 @@ tmap_map_util_end_repair
                     else
                         start = s->ampl_start - half_buffer;
                     end = s->pos + s_pos_adj;
+		    matched_bases = s->pos+s->target_len-end;
                     pad_e = 100;
                     if (pad_e > qlen - total_scl)
                         pad_e = qlen - total_scl;
@@ -3076,6 +3496,7 @@ tmap_map_util_end_repair
                         pad_e = refseq->annos [s->seqid].len - end;
                     pad = pad_e;
                 }
+		// effectively matched_bases = s->target_len-s_pos_adj; The target_len is the reference length after softclipping
                 tlen = end - start + 1;
                 //fprintf(stderr, "%d %d %d %d %d\n", start, end, tlen, min_anchor, pad);
                 //if (tlen >= min_anchor)
@@ -3110,6 +3531,7 @@ tmap_map_util_end_repair
                                                &is_ins,       // 1==I, 0==D
                                                &softclip,     // size of softclip
                                                pad,           // size of pad on either side of target // DK: what if assymetric, like at the end of chromosome?
+					       matched_bases, // tell the rountine how many bases the rest of cigar matched to the ref
                                                &extra_match)) //
                     {
                         free (target);
@@ -4805,6 +5227,7 @@ int find_alignment_start
 (
     tmap_map_sam_t* src_sam,    // source: raw (position-only) mapping
     tmap_map_sam_t* dest_sam,   // destination: refined (aligned) mapping
+    tmap_seq_t* seq,            // // needed to set overriden softclip
     tmap_seq_t** seqs,          // array of size 4 that contains pre-computed inverse / complement combinations
     tmap_refseq_t* refseq,      // reference server
     int32_t softclip_start,     // is 5' softclip allowed
@@ -4832,6 +5255,16 @@ int find_alignment_start
 
     // uint8_t *query_rc = NULL;
     int32_t qlen = src_sam->result.query_end + 1; // adjust based on the query end;
+// #define DEBUG_VSW_ASSYMETRY
+#ifdef DEBUG_VSW_ASSYMETRY
+    {
+    for (int dd = 0; dd != qlen; ++dd)
+        if (query_rc [dd] >= 4)
+        {
+            tmap_warning ("QUERY Base [%d] is %d\n", dd, query_rc [dd]);
+        }
+    }
+#endif
     // do not band when generating the cigar
     tmap_map_sam_t tmp_sam; // TODO: actually, only the .pos, .score and .result members change; it would be cleaner to use only them
     tmp_sam = *src_sam;
@@ -4843,24 +5276,52 @@ int find_alignment_start
     // reverse compliment the target_buf
     if(0 == src_sam->strand)
         tmap_reverse_compliment_int (target->data, target->data_len);
+#ifdef DEBUG_VSW_ASSYMETRY
+    {
+    for (int dd = 0; dd != target->data_len; ++dd)
+        if (target->data [dd] >= 4)
+        {
+            tmap_warning ("TAGET Base [%d] is %d\n", dd, target->data [dd]);
+        }
+    }
+#endif
+
+    // check if the amplicon was found and has overrides
+    candeval_overrides_s override;
+    ampl_candeval_parameters_from_sam (opt, src_sam, &override);
+    // save default parameters
+    tmap_vsw_opt_t orig_vsw_opt = *(vsw->opt);
+    int32_t orig_softclip_start = vsw->query_start_clip, orig_softclip_end = vsw->query_end_clip;
+
+    tmap_map_util_set_softclip (override.softclip_type, seq, override.max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+    // tmap_vsw_set_params (vsw, softclip_start, softclip_end, &(override.vsw));
+
+    //DK: since we compute in reverse direction, softclip_end is at the start and softclip_start is at the end of the alignment!
+    tmap_vsw_set_params (vsw, softclip_end, softclip_start, &(override.vsw));
+
 
     // NB: if match/mismatch penalties are on the opposite strands, we may
     // have wrong scores
     // NB: this aligns in the opposite direction than sequencing (3'->5')
     int32_t overflow;
+    int32_t orig_score = tmp_sam.score;
     tmp_sam.score = tmap_vsw_process_rev (vsw, query_rc, qlen, target->data, target->data_len,
                                     &tmp_sam.result, &overflow, opt->score_thr,
-                                    (1 ==  softclip_end && 1 == softclip_start) ? 0 : 1); // NB: to guarantee correct soft-clipping if both ends are clipped
+                                    (1 ==  softclip_end && 1 == softclip_start) ? 0 : 1, opt->confirm_vsw_corr, opt->correct_failed_vsw, opt->use_nvsw_on_nonstd_bases, stat); // NB: to guarantee correct soft-clipping if both ends are clipped
 
     if(1 == overflow)
-        tmap_bug();
+        tmap_bug ();
 
-    // reverse back compliment the target_buf
+    // reset vsw parameters to orig
+    tmap_vsw_set_params (vsw, orig_softclip_start, orig_softclip_end, &(orig_vsw_opt));
+
+    // reverse-compliment the target_buf back
     if(0 == tmp_sam.strand)
         tmap_reverse_compliment_int (target->data, target->data_len);
 
-    if (tmp_sam.score < opt->score_thr) // this could happen if VSW fails. Just skip the damned, with no warning ?!?
-        return 0; // TODO: may beed warning or error report here
+    if (tmp_sam.score < opt->score_thr) // this could happen if VSW fails.
+        // The score error is reported in tmap_vsw_process_rev, no need to repeat it here (the overflows are not reported on stderr but reported in stats)
+        return 0; 
 
     if (0 == tmp_sam.strand)
     {
@@ -5137,7 +5598,7 @@ void salvage_long_indel_at_edges (
             int32_t long_gap = pen_gapl;
             //ZZ: check amplicon
             // uint32_t ampl_start = 0, ampl_end = 0;
-            // if (tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, &ampl_start, &ampl_end, NULL, dest_sam->strand))
+            // if (tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, dest_sam->strand, &ampl_start, &ampl_end, NULL))
             if (dest_sam->ampl_end != 0)
             {
                 // ampl_exist = 1;
@@ -5327,7 +5788,7 @@ void salvage_long_indel_at_edges (
             // DK : if both suffix and prefix branches are executed, and the read hits the amplicon, the ampl_exist is 1 here
             //      so tmap_map_get_amplicon is not executed and 0 is used as the value of ampl_end 
             //      Removing ampl_exist check clause from here.
-            // if (ampl_exist || tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, &ampl_start, &ampl_end, NULL, dest_sam->strand))
+            // if (ampl_exist || tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, dest_sam->strand, &ampl_start, &ampl_end, NULL))
             if (dest_sam->ampl_end != 0)
             {
                     // ampl_exist = 1;
@@ -5768,7 +6229,7 @@ void end_repair (
                 max_adapter_bases_for_soft_clipping = dest_sam->param_ovr->max_adapter_bases_for_soft_clipping.value;
         }
     }
-    tmap_map_util_set_softclip (opt, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
+    tmap_map_util_set_softclip (opt->softclip_type, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
     int32_t r3 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, /* stage_swpar, */ stat, 0);
 
     max_adapter_bases_for_soft_clipping = opt->max_adapter_bases_for_soft_clipping;
@@ -5789,7 +6250,7 @@ void end_repair (
                 max_adapter_bases_for_soft_clipping = dest_sam->param_ovr->max_adapter_bases_for_soft_clipping.value;
         }
     }
-    tmap_map_util_set_softclip (opt, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
+    tmap_map_util_set_softclip (opt->softclip_type, seq, max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end); // this is done within end_repair anyway; doing redundant call here to check for ins instead of softclp inend_repair_helper
     int32_t r5 = end_repair_helper (dest_sam, seqs, seq, refseq, target, path_buf, path_buf_sz, softclip_start, softclip_end, opt, /* stage_swpar, */ stat, 1);
 
     // update alignment box (dest_sam->result), as it may be used downstream
@@ -5887,7 +6348,7 @@ tmap_map_util_find_align_starts (
     tmap_map_sams_realloc (sams_tmp, sams->n); // pre-allocate for same number of mappings
 
     // set softclip flags, rule-based
-    tmap_map_util_set_softclip (opt, seq, opt->max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
+    tmap_map_util_set_softclip (opt->softclip_type, seq, opt->max_adapter_bases_for_soft_clipping, &softclip_start, &softclip_end);
 
     // initialize opt
     vsw_opt = tmap_vsw_opt_init (opt->score_match, opt->pen_mm, opt->pen_gapo, opt->pen_gape, opt->score_thr);
@@ -5896,7 +6357,7 @@ tmap_map_util_find_align_starts (
     orig_query_len = tmap_seq_get_bases_length (seqs [0]);
 
     // reverse compliment query
-    vsw = tmap_vsw_init ((uint8_t*) tmap_seq_get_bases(seqs[1])->s, orig_query_len, softclip_end, softclip_start, opt->vsw_type, vsw_opt);
+    vsw = tmap_vsw_init ((uint8_t*) tmap_seq_get_bases(seqs[1])->s, orig_query_len, softclip_end, softclip_start, opt->vsw_type, opt->vsw_fallback, vsw_opt);
 
     for (end = 0, i = 0; end < sams->n; ++end) // for each placement
     {
@@ -5906,6 +6367,7 @@ tmap_map_util_find_align_starts (
         if (find_alignment_start (
                 src_sam,        // source: raw (position-only) mapping
                 dest_sam,       // destination: refined (aligned) mapping
+                seq,
                 seqs,           // array of size 4 that contains pre-computed inverse / complement combinations
                 refseq,         // reference server
                 softclip_start, // is 5' softclip allowed
@@ -5946,29 +6408,47 @@ void tmap_map_find_amplicons
     for (i = 0; i < sams->n; ++i) // for each placement
     {
         tmap_map_sam_t* dest_sam = sams->sams + i;
-        locopt = NULL, ampl_start = 0, ampl_end = 0;
-        ends.positions = NULL, ends.starts_count = 0, ends.ends_count = 0;
-        if (tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, &ampl_start, &ampl_end, &locopt, &ends, dest_sam->strand))
+        // only try to assign amplions for the not yet assigned ones 
+        // (if parameters overriding in candidate evaluation is enabled, the amplicons are already assigned)
+// #define DEBUG_AMPLFIND_COMPARE
+#ifndef DEBUG_AMPLFIND_COMPARE
+        if (dest_sam->ampl_start == 0 && dest_sam->ampl_end == 0)
+#endif
         {
-            dest_sam->ampl_start = ampl_start;
-            dest_sam->ampl_end = ampl_end;
-            dest_sam->param_ovr = locopt;
-            //
-            // check if override sw parameters for stage are already cached; cache if not
-            // 
-            // !!! TS-17814: do not do this here - causes race condition. Protecting against that causes seralization bottleneck
-            // do not uncomment the line that follows without #defining CONCURRENT_PARAMETERS_CACHE
-            // 
-            // cache_sw_overrides (locopt, stage_ord, stage_opt, def_sw_par);
-            // 
-            dest_sam->read_ends = ends;
-        }
-        else
-        {
-            dest_sam->ampl_start = 0;
-            dest_sam->ampl_end = 0;
-            dest_sam->param_ovr = NULL;
-            dest_sam->read_ends.positions = NULL, dest_sam->read_ends.starts_count = 0, dest_sam->read_ends.ends_count = 0;
+            locopt = NULL, ampl_start = 0, ampl_end = 0;
+            ends.positions = NULL, ends.starts_count = 0, ends.ends_count = 0;
+
+            if (tmap_map_get_amplicon (refseq, dest_sam->seqid, dest_sam->pos, dest_sam->pos + dest_sam->target_len, dest_sam->strand, &ampl_start, &ampl_end, &locopt, &ends))
+            {
+#ifdef DEBUG_AMPLFIND_COMPARE
+                if (dest_sam->ampl_start != 0 || dest_sam->ampl_end != 0)
+                {
+                    if (dest_sam->ampl_start != ampl_start || dest_sam->ampl_end != ampl_end)
+                        tmap_warning ("Old amplicon find gives result different than new: old: %d-%d, new %d-%d\n", ampl_start, ampl_end, dest_sam->ampl_start, dest_sam->ampl_end);
+                }
+#endif
+                dest_sam->ampl_start = ampl_start;
+                dest_sam->ampl_end = ampl_end;
+                dest_sam->param_ovr = locopt;
+                //
+                // check if override sw parameters for stage are already cached; cache if not
+                // 
+                // !!! TS-17814: do not do this here - causes race condition. Protecting against that causes seralization bottleneck
+                // do not uncomment the line that follows without #defining CONCURRENT_PARAMETERS_CACHE
+                // 
+                // cache_sw_overrides (locopt, stage_ord, stage_opt, def_sw_par);
+                // 
+                dest_sam->read_ends = ends;
+            }
+#if 0 // this is redundant now
+            else
+            {
+                dest_sam->ampl_start = 0;
+                dest_sam->ampl_end = 0;
+                dest_sam->param_ovr = NULL;
+                dest_sam->read_ends.positions = NULL, dest_sam->read_ends.starts_count = 0, dest_sam->read_ends.ends_count = 0;
+            }
+#endif 
         }
     }
 }

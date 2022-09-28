@@ -83,6 +83,7 @@ typedef union{
 
 typedef union{
 	v8i V;
+	v4i v4[2];
 	int A[VEC8_SIZE];
 }v8i_u;
 typedef union{
@@ -94,6 +95,7 @@ typedef union{
 	v8f V;
 	v8f V8[1];
 	float A[VEC8_SIZE];
+	v4f v4[2];
 }v8f_u;
 typedef union{
 	v8su V;

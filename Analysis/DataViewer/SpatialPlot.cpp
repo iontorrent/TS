@@ -241,50 +241,57 @@ void SpatialPlot::UpdateTraceData()
         }
     }
 }
+void SpatialPlot::DisplayHistogram(int *hist, int len, int minVal, int maxVal, int useLog)
+{
+	{
+        QVector<double> x(0);
+        QVector<double> y(0);
+        for(int bin=0;bin<len;bin++){
+        	y.push_back(hist[bin]);
+        	x.push_back(minVal + (maxVal-minVal) * bin/len);
+        }
+        _mTracePlot->graph(0)->setData(x, y);
+	}
+    for(int trc=1;trc<MAX_NUM_TRACES;trc++){
+        if(_mTracePlotSet[trc]){
+             QString name="";
+             _mTracePlot->graph(trc)->setName(name);
+             _mTracePlotSet[trc]=0;
+             QVector<double> x(0);
+             QVector<double> y(0);
+             _mTracePlot->graph(trc)->setData(x, y);
+         }
+    }
+    float ymax=0;
+    float ymin=1000;
+    float xmax = maxVal;
+    float xmin = minVal;
+
+    for(int bin=0;bin<len;bin++){
+    	if(hist[bin] > ymax)
+    		ymax = hist[bin];
+    	if(hist[bin] < ymin)
+    		ymin = hist[bin];
+    }
+
+    qDebug() << __PRETTY_FUNCTION__ << ": xmin=" << xmin << " xmax=" << xmax << " ymin=" << ymin << " ymax=" << ymax;
+    _mTraceRange=ymax-ymin;
+    _mTracePlot->xAxis->setRange(xmin, xmax);
+    _mTracePlot->yAxis->setRange(ymin, ymax);
+  	_mTracePlot->yAxis->setScaleType(useLog?QCPAxis::stLogarithmic:QCPAxis::stLinear);
+
+    _mTracePlot->replot();
+}
 
 void SpatialPlot::UpdateTracePlot()
 {
     // plot the data in traces
 	qDebug() << __PRETTY_FUNCTION__ << ": hist=" << display_histogram;
-	if(display_histogram){
-		// just use trace 0 for the histogram
-		{
-            QVector<double> x(0);
-            QVector<double> y(0);
-            for(int bin=0;bin<NUM_HIST_BINS;bin++){
-            	y.push_back(histData[bin]);
-            	x.push_back(minPixVal + (maxPixVal-minPixVal) * bin/NUM_HIST_BINS);
-            }
-            _mTracePlot->graph(0)->setData(x, y);
-		}
-        for(int trc=1;trc<MAX_NUM_TRACES;trc++){
-            if(_mTracePlotSet[trc]){
-                 QString name="";
-                 _mTracePlot->graph(trc)->setName(name);
-                 _mTracePlotSet[trc]=0;
-                 QVector<double> x(0);
-                 QVector<double> y(0);
-                 _mTracePlot->graph(trc)->setData(x, y);
-             }
-        }
-        float ymax=0;
-        float ymin=1000;
-        float xmax = maxPixVal;
-        float xmin = minPixVal;
+	if(display_bitsNeeded){
+		DisplayHistogram(bitsNeededData,sizeof(bitsNeededData)/sizeof(bitsNeededData[0]),0,16,0);
 
-        for(int bin=0;bin<NUM_HIST_BINS;bin++){
-        	if(histData[bin] > ymax)
-        		ymax = histData[bin];
-        	if(histData[bin] < ymin)
-        		ymin = histData[bin];
-        }
-
-        qDebug() << __PRETTY_FUNCTION__ << ": xmin=" << xmin << " xmax=" << xmax << " ymin=" << ymin << " ymax=" << ymax;
-        _mTraceRange=ymax-ymin;
-        _mTracePlot->xAxis->setRange(xmin, xmax);
-        _mTracePlot->yAxis->setRange(ymin, ymax);
-        _mTracePlot->yAxis->setScaleType(QCPAxis::stLogarithmic);
-        _mTracePlot->replot();
+	}else if(display_histogram){
+		DisplayHistogram(histData,sizeof(histData)/sizeof(histData[0]),minPixVal,maxPixVal,1);
 
 	}else if (traces_len)
     {

@@ -183,12 +183,16 @@ class StepHelperDbLoader:
         ] = num_samples
 
     def _metaDataFromPlan(self, step_helper, planned_experiment):
-        metaData = planned_experiment.metaData or {}
+        metaData = planned_experiment.metaData or planned_experiment.experiment.metaData or {}
         if (
             step_helper.isCreate()
             or step_helper.sh_type == StepHelperType.COPY_TEMPLATE
         ):
             metaData["fromTemplate"] = planned_experiment.planName
+            metaData["fromTemplateId"] = planned_experiment.id
+            metaData["fromTemplateChipType"] = planned_experiment.get_chipType()
+            metaData["fromTemplateSequenceKitname"] = planned_experiment.get_sequencekitname()
+            metaData["fromTemplateCategories"] = planned_experiment.get_categories_display()
             metaData["fromTemplateSource"] = (
                 "ION" if planned_experiment.isSystem else planned_experiment.username
             )
@@ -294,6 +298,8 @@ class StepHelperDbLoader:
         else:
             save_template_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE]
 
+        kits_plan_step_data = step_helper.steps[StepNames.KITS]
+
         planDisplayedName = getPlanDisplayedName(planned_experiment)
 
         if step_helper.sh_type == StepHelperType.COPY_TEMPLATE:
@@ -331,6 +337,10 @@ class StepHelperDbLoader:
             SaveTemplateStepDataFieldNames.META
         ] = self._metaDataFromPlan(step_helper, planned_experiment)
 
+        kits_plan_step_data.savedObjects[
+            SavePlanFieldNames.META
+        ] = self._metaDataFromPlan(step_helper, planned_experiment)
+
     def updatePlanSpecificStepHelper(
         self, step_helper, planned_experiment, set_template_name=False
     ):
@@ -355,6 +365,7 @@ class StepHelperDbLoader:
                 ] = planDisplayedName
 
         save_plan_step_data = step_helper.steps[StepNames.SAVE_PLAN]
+        kits_plan_step_data = step_helper.steps[StepNames.KITS]
 
         # Add a "copy of" if we're copying.
         if step_helper.isCopy():
@@ -383,6 +394,10 @@ class StepHelperDbLoader:
         # logger.debug("step_helper_db_loader.updatePlanSpecificStepHelper() LIMS_META=%s" %(save_plan_step_data.savedFields[SavePlanFieldNames.LIMS_META]))
 
         save_plan_step_data.savedObjects[
+            SavePlanFieldNames.META
+        ] = self._metaDataFromPlan(step_helper, planned_experiment)
+
+        kits_plan_step_data.savedObjects[
             SavePlanFieldNames.META
         ] = self._metaDataFromPlan(step_helper, planned_experiment)
 
@@ -853,6 +868,10 @@ class StepHelperDbLoader:
             KitsFieldNames.SAMPLE_PREP_PROTOCOL
         ] = planned_experiment.samplePrepProtocol
 
+        kits_step_data.savedFields[
+            KitsFieldNames.META_DATA
+        ] = planned_experiment.experiment.metaData or {}
+
         kits_step_data.prepopulatedFields[KitsFieldNames.PLAN_CATEGORIES] = (
             planned_experiment.categories or ""
         )
@@ -866,6 +885,7 @@ class StepHelperDbLoader:
         kits_step_data.prepopulatedFields[
             KitsFieldNames.ADVANCED_SETTINGS
         ] = json.dumps(self.get_kit_advanced_settings(step_helper, planned_experiment))
+
 
     def _updateUniversalStep_kitData_for_edit(
         self,
@@ -2434,7 +2454,7 @@ class StepHelperDbLoader:
                     KitsFieldNames.FORWARD_3_PRIME_ADAPTER: system_template.get_forward3primeadapter(),
                     KitsFieldNames.LIBRARY_KEY: system_template.get_libraryKey(),
                     KitsFieldNames.SAMPLE_PREP_PROTOCOL: system_template.samplePrepProtocol,
-                    KitsFieldNames.TF_KEY: system_template.get_tfKey(),
+                    KitsFieldNames.TF_KEY: system_template.get_tfKey()
                 }
         else:
             kits_step_data = step_helper.steps[StepNames.KITS]

@@ -13,12 +13,12 @@ import shutil
 
 from subprocess import *
 from ion.plugin import PluginCLI, IonPlugin, RunLevel, RunType
-from ion.utils import makeCSA
+import makeCSA
 
 
 class FieldSupport(IonPlugin):
     """Generate an enhanced CSA"""
-    version = '5.16.11.0'
+    version = '5.18.1.0'
     runtypes = [RunType.THUMB, RunType.FULLCHIP]
     runlevels = [RunLevel.LAST]
 
@@ -164,7 +164,7 @@ class FieldSupport(IonPlugin):
         plugin_dir = os.path.join(self.plugin_dir, "rndplugins", plugin_name)
         output_dir = os.path.join(self.start_plugin["runinfo"]["results_dir"], "FieldSupport", plugin_name)
         os.mkdir(output_dir)
-        print output_dir
+        print(output_dir)
         env = {
             "DIRNAME": plugin_dir,
             "SIGPROC_DIR": self.start_plugin["runinfo"]["sigproc_dir"],
@@ -176,7 +176,7 @@ class FieldSupport(IonPlugin):
         }
 
         if plugin_name in ('GBU_HBU_Analysis') and not self.thumbnail:
-            print "coping barcodes.json and startplugin.json"
+            print("coping barcodes.json and startplugin.json")
             p = Popen(["cp", os.path.join(self.start_plugin["runinfo"]["results_dir"], "barcodes.json"), output_dir])
             output = p.communicate()[0]
             p = Popen(["cp", os.path.join(self.start_plugin["runinfo"]["results_dir"], "startplugin.json"), output_dir])
@@ -187,7 +187,7 @@ class FieldSupport(IonPlugin):
             plugin = Popen([
             '%s/GBU_HBU_Analysis_plugin.py' % plugin_dir, '-V', version,
             os.path.join(output_dir, 'startplugin.json'), os.path.join(output_dir,'barcodes.json') ], stdout=PIPE, shell=False )
-            print plugin.communicate()[0]
+            print(plugin.communicate()[0])
 
         else:
             subprocess.check_output(["bash", "launch.sh"], cwd=plugin_dir, env=env)
@@ -231,7 +231,7 @@ class FieldSupport(IonPlugin):
         self.write_status()
 
         os.mkdir(os.path.join(results_dir, "FieldSupport"))
-        print os.path.join(results_dir, "FieldSupport")
+        print(os.path.join(results_dir, "FieldSupport"))
 
         # Now run each rndplugin
         if self.thumbnail:

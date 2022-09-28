@@ -370,8 +370,8 @@ OFFCYLE_DEPRECATION_MSG = "http://ionupdates.com/products/deprecation_data.json"
 
 EULA_TEXT_URL = "products/"
 
-PLAN_CSV_VERSION = "2.2"
-SUPPORTED_PLAN_CSV_VERSION = ["1.0", "2.0", "2.1", "2.2"]
+PLAN_CSV_VERSION = "2.3"
+SUPPORTED_PLAN_CSV_VERSION = ["1.0", "2.0", "2.1", "2.2", "2.3"]
 SAMPLE_CSV_VERSION = "2.0"
 SUPPORTED_SAMPLE_CSV_VERSION = ["1.0", "2.0"]
 

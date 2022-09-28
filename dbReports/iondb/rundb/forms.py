@@ -10,6 +10,8 @@ from django.forms.extras import widgets
 from django.forms.widgets import PasswordInput
 from django import shortcuts
 from iondb.rundb.login.forms import UserRegistrationForm
+from iondb.rundb.login.password_validator import PasswordValidator
+from django.contrib.auth.hashers import check_password
 
 from iondb.rundb import models, labels
 import datetime
@@ -554,7 +556,9 @@ class UserProfileForm(forms.ModelForm):
         password = self.cleaned_data.get("password", "")
         if password:
             self.instance.user.set_password(password)
-
+            self.instance.is_password_valid = True
+            self.instance.last_password_changed_on = datetime.datetime.utcnow()
+            self.instance.save()
         self.instance.user.save()
 
     def clean_password_confirm(self):
@@ -563,10 +567,29 @@ class UserProfileForm(forms.ModelForm):
         password2 = str(self.cleaned_data.get("password_confirm"))
 
         if password1:
+            passwordValidator = PasswordValidator(password1)
+            exec_validation_methods = PasswordValidator.validation_methods
+            error_list = {}
+            for method in exec_validation_methods:
+                if 'username' in method:
+                    username = str(self.instance.user.username)
+                    message = getattr(passwordValidator, method)(username)
+                else:
+                    message = getattr(passwordValidator, method)()
+                if isinstance(message, list):
+                    error_list[method] = str(''.join(message))
+                elif message is not None:
+                    error_list[method] = message
+            if error_list:
+                raise forms.ValidationError(', <br>&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;'.join(
+                    map(str, error_list.values())))
             if not password2:
                 raise forms.ValidationError("You must confirm your password")
             if password1 != password2:
                 raise forms.ValidationError("Your passwords do not match")
+            if check_password(password2, self.instance.user.password):
+                raise forms.ValidationError('That password has already been used')
+
         return password2
 
     class Meta:
@@ -746,10 +769,13 @@ class NetworkConfigForm(forms.Form):
                 cmd += ["--nameserver", nameserver]
             if search:
                 cmd += ["--search", search]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            stdout, stderr = proc.communicate()
-            if stderr:
-                logger.warning("Network error: %s" % stderr)
+            try:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdout, stderr = proc.communicate()
+                if stderr:
+                    logger.warning("Network error: %s" % stderr)
+            except Exception as Err:
+                logger.error(Err)
 
         network_settings = self.get_network_settings()
         host_config = ["mode", "address", "subnet", "gateway"]

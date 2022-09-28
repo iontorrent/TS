@@ -1,0 +1,49 @@
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+cmake_minimum_required(VERSION 2.6.4)
+
+project(TMAP)
+
+include(CheckCCompilerFlag)
+include(CheckCXXCompilerFlag)
+
+check_cxx_compiler_flag ( -faligned-new HAS_ALIGNED_NEW )
+if ( HAS_ALIGNED_NEW )
+  set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -faligned-new " )
+endif ()
+
+check_c_compiler_flag ( -Wno-misleading-indentation HAS_MISLEADING_INDENTATION )
+if ( HAS_MISLEADING_INDENTATION )
+  set ( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-misleading-indentation " )
+endif ()
+
+include ( buildTools/cmake/CMakeLists.version.txt )
+include ( buildTools/cmake/CMakeLists.compiler.txt )
+
+
+set (SAMTOOLS src/samtools)
+
+set (GLOBAL_SOURCES 
+___CONTENT___
+)
+
+set (samtools_SOURCES
+___CONTENT___
+)
+
+set (tmap_SOURCES
+___CONTENT___
+)
+
+include_directories ( ${CMAKE_CURRENT_BINARY_DIR} )
+include_directories ( src )
+include_directories ( ${SAMTOOLS} )
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/config.h.in"
+    "${PROJECT_BINARY_DIR}/config.h" @ONLY
+)
+
+add_executable ( tmap ${tmap_SOURCES} )
+set_target_properties ( tmap PROPERTIES COMPILE_FLAGS "-D_TMAP_BWT_RUN_TYPE=0 -D_USE_KNETFILE -DSAMTOOLS_MAIN -D__STDC_LIMIT_MACROS -DTMAP_MMAP=1" )
+target_link_libraries ( tmap m z pthread bz2 )
+install ( TARGETS tmap DESTINATION bin )

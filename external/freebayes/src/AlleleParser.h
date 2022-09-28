@@ -322,7 +322,12 @@ private:
   void InferAlleleTypeAndLength(AlleleDetails& allele) const;
   bool filtered_by_coverage_novel_allele(AlleleDetails& allele);
   bool is_fake_hotspot(AlleleDetails& allele);
-  string get_alt(AlleleDetails& allele, long hint_position, long rlen);
+  bool is_fake_hotspot(AlleleDetails& allele, vector<AlleleDetails *>& mnp_list);
+  AlleleDetails *subset_of(AlleleDetails& allele, vector<AlleleDetails *>& mnp_list);
+  AlleleDetails *subset_of(int ref_length, int pref, int suff, int pos, string alt, vector<AlleleDetails *>& mnp_list);
+  void find_mnps(vector<AlleleDetails *>& mnp_list);
+
+  bool get_alt(AlleleDetails& allele, long hint_position, long rlen, string &a_alt);
   bool to_ref(AlleleDetails& allele, long hint_position, long rlen);
   bool decompose_allele(AlleleDetails &allele, long hp, long rlen, int &ab, int &ae, int &alb, int &ale);
   AlleleDetails *find_same_allele(AlleleDetails *allele);

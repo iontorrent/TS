@@ -60,7 +60,7 @@ void buildMatrix (int match, int mismatch)
       offset = (i << 2);
       for (int j = 0; j < 4; ++j) 
         matrix[offset+j] = (j==i) ? match : mismatch;
-  }                
+  }
 }
 
 typedef struct {
@@ -1319,16 +1319,16 @@ Solution10::~Solution10() {
 // dir: direction (bool)
 int Solution10::process(const string& b, const string& a, int qsc, int qec,
                            int mm, int mi, int o, int e, int dir,
-                           int *opt, int *te, int *qe, int *n_best) {
+                           int *opt, int *te, int *qe, int *n_best, int* fitflag) {
     int n = b.size(), m = a.size();
 
-    int id = ((qsc << 1) | qec);         
+    int id = ((qsc << 1) | qec);
 
     int i;
 
-    SwStripedData *swData=NULL;    
+    SwStripedData *swData=NULL;
 
-    if (unlikely(flag)) {                
+    if (unlikely(flag)) {
         gapOpen = -(o+e);
         gapExtend = -e;
         buildMatrix(mm,mi);

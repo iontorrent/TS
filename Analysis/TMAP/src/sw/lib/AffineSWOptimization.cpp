@@ -68,7 +68,7 @@ int AffineSWOptimization::process(const uint8_t *target, int32_t tlen,
                                   const uint8_t *query, int32_t qlen,
                                   int qsc, int qec,
                                   int mm, int mi, int o, int e, int dir,
-                                  int *opt, int *te, int *qe, int *n_best) {
+                                  int *opt, int *te, int *qe, int *n_best, int* fitflag) {
     int i;
     // resize
     b.resize(tlen);
@@ -79,13 +79,13 @@ int AffineSWOptimization::process(const uint8_t *target, int32_t tlen,
 #ifdef AFFINESWOPTIMIZATION_USE_HASH
     // try the hash
     if(!hash->process(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best)) {
-        s->process(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best);
+        s->process(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best, fitflag);
         // add to the hash
-        hash->add(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best);
+        hash->add(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best, fitflag);
     }
     return (*opt);
 #else
-    return s->process(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best);
+    return s->process(b, a, qsc, qec, mm, mi, o, e, dir, opt, te, qe, n_best, fitflag);
 #endif
 }
 

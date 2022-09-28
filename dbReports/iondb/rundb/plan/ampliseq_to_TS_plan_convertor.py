@@ -49,6 +49,13 @@ class processAmpliSeqPanel(object):
         self.libkit = None
         self.library = ""
         self.libraryKey = "TCAG"
+        self.chipTecDfltAmbient = None
+        self.chipTecSlope = None
+        self.chipTecMinThreshold = None
+        self.manTecDfltAmbient = None
+        self.manTecSlope = None
+        self.manTecMinThreshold = None
+        self.categories = None
         # Kit
         self.librarykitname = ""
         self.metaData = {}
@@ -246,22 +253,33 @@ class processAmpliSeqPanel(object):
     def update_chip_inst_type(self, app=None):
         # Parse the meta data and set the default chip type and instrument type for the Panel which is being imported
         metaData = self.ampliSeq_plan_metaData
-        run_type = metaData["run_type"]
-        plan_name = metaData["plan_name"]
+        # The plan.json has PGM, Proton (legacy), and S5 chip type as choice
         instrument_type = metaData["choice"]
+        chip_type = "540"
         # "choice": "None" will be in the JSON from 3.6 schema imports
         decoratedInstType = None
         if instrument_type == "None":
             instrument_type = "s5"
         if instrument_type in self.get_s5_chips():
-            decoratedInstType = self.decorate_S5_instruments(instrument_type)
             chip_type = instrument_type
-            instrument_type = "s5"
-        else:
-            chip_type = "540"
-
-        self.platform = instrument_type
+        elif app and app.applicationGroup: # TS-18344
+            if app.defaultChipType in self.get_s5_chips():
+                chip_type = app.defaultChipType
         self.chipType = chip_type
+
+        return chip_type
+
+    def set_decorated_inst_type(self):
+        # Parse the meta data and set the default chip type and instrument type for the Panel which is being imported
+        metaData = self.ampliSeq_plan_metaData
+        instrument_type = metaData["choice"]
+        decoratedInstType = None
+        if instrument_type == "None":
+            instrument_type = "s5"
+        if instrument_type in self.get_s5_chips():
+            decoratedInstType = self.decorate_S5_instruments(instrument_type)
+            instrument_type = "s5"
+        self.platform = instrument_type
         self.decoratedInstType = decoratedInstType
 
     def get_applProductObj(self):
@@ -273,9 +291,8 @@ class processAmpliSeqPanel(object):
 
         app_group, app_group_name = self.get_applicationGroupDisplayedName()
 
-        self.update_chip_inst_type()
+        self.set_decorated_inst_type()
         instrument_type = self.platform
-        chip_type = self.chipType
         decoratedInstType = self.decoratedInstType
 
         print(
@@ -335,7 +352,7 @@ class processAmpliSeqPanel(object):
                     print(self.errMessage["E002"].format(available_choice))
                 sys.exit(1)
 
-        return app, app_group_name, instrument_type, chip_type
+        return app, app_group_name, instrument_type
 
     def get_defaultTemplateKit(self, app):
         defaultTemplateKit = app.defaultTemplateKit and app.defaultTemplateKit.name
@@ -376,17 +393,30 @@ def plan_json(
             "choice", "None"
         ),  # "None" this is default choice for legacy 3.6
         "design_name": meta["design"].get("design_name", None),
+        "categories": meta["design"]["plan"].get("categories", None),
         "plugin_details": meta["design"]["plan"].get("selectedPlugins", {}),
         "upload_id": upload_id,
+        "templatingKitName": meta["design"]["plan"].get("templatingKitName", None),
+        "samplePrepKitName": meta["design"]["plan"].get("samplePrepKitName", None),
+        "sequencekitname": meta["design"]["plan"].get("sequencekitname", None),
+        "barcodeId": meta["design"]["plan"].get("barcodeId", None),
+        "flows": meta["design"]["plan"].get("flows", None),
+        "chipTecDfltAmbient": meta["design"]["plan"].get("chipTecDfltAmbient", None),
+        "chipTecSlope": meta["design"]["plan"].get("chipTecSlope", None),
+        "chipTecMinThreshold": meta["design"]["plan"].get("chipTecMinThreshold", None),
+        "manTecDfltAmbient": meta["design"]["plan"].get("manTecDfltAmbient", None),
+        "manTecSlope": meta["design"]["plan"].get("manTecSlope", None),
+        "manTecMinThreshold": meta["design"]["plan"].get("manTecMinThreshold", None),
+        "metaData": meta["design"]["plan"].get("metaData", {})
     }
 
     ampliSeqTemplate = processAmpliSeqPanel()
     ampliSeqTemplate.ampliSeq_plan_metaData = ampliSeq_plan_metaData
 
-    app, app_group_name, instrument_type, chip_type = (
+    app, app_group_name, instrument_type = (
         ampliSeqTemplate.get_applProductObj()
     )
-    ampliSeqTemplate.update_chip_inst_type(app=app)
+    chip_type = ampliSeqTemplate.update_chip_inst_type(app=app)
 
     plugin_details, alignmentargs_override = ampliSeqTemplate.get_pluginDetails()
 
@@ -401,20 +431,38 @@ def plan_json(
         "runType": ampliSeq_plan_metaData["run_type"],
         "chipType": chip_type,
         "applicationGroupDisplayedName": app_group_name,
-        "barcodeId": app.defaultBarcodeKitName,
+        "categories": ampliSeq_plan_metaData.get("categories", None),
+        "barcodeId": ampliSeq_plan_metaData.get("barcodeId") or app.defaultBarcodeKitName,
         "bedfile": target_regions_bed_path,
         "regionfile": hotspots_bed_path,
         "sseBedFile": sse_bed_path,
-        "flows": app.defaultFlowCount,
+        "flows": ampliSeq_plan_metaData.get("flows") or app.defaultFlowCount,
         "flowsInOrder": ampliSeqTemplate.get_flowOrder(app),
         "platform": instrument_type,
         "library": meta["reference"],
-        "librarykitname": app.defaultLibraryKit and app.defaultLibraryKit.name,
-        "samplePrepKitName": app.defaultSamplePrepKit and app.defaultSamplePrepKit.name,
+        "librarykitname": ampliSeq_plan_metaData.get("librarykitname") or app.defaultLibraryKit and app.defaultLibraryKit.name,
+        "samplePrepKitName": ampliSeq_plan_metaData.get("samplePrepKitName") or app.defaultSamplePrepKit and app.defaultSamplePrepKit.name,
         "selectedPlugins": plugin_details,
-        "sequencekitname": app.defaultSequencingKit and app.defaultSequencingKit.name,
-        "templatingKitName": ampliSeqTemplate.get_defaultTemplateKit(app),
+        "sequencekitname": ampliSeq_plan_metaData.get("sequencekitname") or app.defaultSequencingKit and app.defaultSequencingKit.name,
+        "templatingKitName": ampliSeq_plan_metaData.get("templatingKitName") or ampliSeqTemplate.get_defaultTemplateKit(app),
+        "chipTecDfltAmbient": ampliSeq_plan_metaData.get("chipTecDfltAmbient", None),
+        "chipTecSlope": ampliSeq_plan_metaData.get("chipTecSlope", None),
+        "chipTecMinThreshold": ampliSeq_plan_metaData.get("chipTecMinThreshold", None),
+        "manTecDfltAmbient": ampliSeq_plan_metaData.get("manTecDfltAmbient", None),
+        "manTecSlope": ampliSeq_plan_metaData.get("manTecSlope", None),
+        "manTecMinThreshold": ampliSeq_plan_metaData.get("manTecMinThreshold", None),
+        "metaData": ampliSeq_plan_metaData.get("metaData", {})
     }
+    # Update source template meta for Dynamic Tec Params
+    templateMetadata = {
+        "fromTemplate": plan_stub.get("planName"),
+        "isAmpliseqTecParamEnabled": True if plan_stub.get("manTecDfltAmbient") or plan_stub.get("chipTecDfltAmbient") else False,
+        "fromTemplateChipType": plan_stub.get("chipType"),
+        "fromTemplateSequenceKitname": plan_stub.get("sequencekitname"),
+        "fromAmpliseqTemplateSource": True
+    }
+    plan_stub.get("metaData").update(templateMetadata)
+
     ampliSeqTemplate.update(plan_stub)
     plan_stub = ampliSeqTemplate.get_plan_stub()
 

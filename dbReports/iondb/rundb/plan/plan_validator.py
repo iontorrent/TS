@@ -616,6 +616,21 @@ def validate_plan_templating_kit_name(value, field_label, isNewPlan=None):
 
     return errors, warnings
 
+def get_dynamicTecParams(templateObj, data):
+    chipTecDfltAmbient = templateObj.experiment.chipTecDfltAmbient
+    chipTecSlope = templateObj.experiment.chipTecSlope
+    chipTecMinThreshold = templateObj.experiment.chipTecMinThreshold
+    manTecDfltAmbient = templateObj.experiment.manTecDfltAmbient
+    manTecSlope = templateObj.experiment.manTecSlope
+    manTecMinThreshold = templateObj.experiment.manTecMinThreshold
+    changed = False
+    errMsg = None
+    if {'chipTecDfltAmbient', 'chipTecSlope', 'chipTecMinThreshold', 'manTecDfltAmbient', 'manTecSlope', 'manTecMinThreshold'} <= set(data):
+        errMsg = "Use System default for Manifold temperatures. Do not provide any inputs.Default template configuration:" \
+              "(chipTecDfltAmbient: %.4f, chipTecSlope: %.4f, chipTecMinThreshold: %.4f, manTecDfltAmbient: %.4f, manTecSlope: %.4f, manTecMinThreshold: %.4f)" % \
+              (chipTecDfltAmbient, chipTecSlope, chipTecMinThreshold, manTecDfltAmbient, manTecSlope, manTecMinThreshold)
+        changed = True
+    return changed, errMsg
 
 def validate_runType(runType, field_label):
     errors = []

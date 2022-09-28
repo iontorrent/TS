@@ -87,6 +87,13 @@ function get_workflow_url(start_url, account_id) {
         return myURL;
     }
 
+	// if ReproSeq, only use ApplicationType filtering
+	if (planCategories.toLowerCase() == "repro;multi_ir_workflow_support") {
+        myURL += build_ir_workflow_filters("ApplicationType", "Low-Coverage Whole Genome Sequencing", isFilterSet);
+        console.log("myURL: " + myURL);
+        return myURL;
+    }
+
     // if Application Categories contains 'CarrierSeq'
     if (planCategories.toLowerCase().indexOf("carrierseq") != -1) {
         myURL += build_ir_workflow_filters("tag_CARRIERSEQ", "true", isFilterSet);

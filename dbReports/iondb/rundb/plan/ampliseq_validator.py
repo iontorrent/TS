@@ -42,8 +42,9 @@ def validate_reference(meta, args, reference):
 
     # The identity_hash matching the files_md5sum.fasta hash determines whether
     # or not the genome is installed
-    print("Checking reference " + ref_hash)
-    if not models.ReferenceGenome.objects.filter(identity_hash=ref_hash).exists():
+    print("Checking reference with Identity Hash %s and Short Name %s " % (ref_hash, short_name))
+    if not models.ReferenceGenome.objects.filter(identity_hash=ref_hash).exists() \
+            and not models.ReferenceGenome.objects.filter(short_name=short_name).exists():
         reference_args = {
             "identity_hash": ref_hash,
             "name": name,

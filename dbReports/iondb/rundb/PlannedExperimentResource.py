@@ -1069,7 +1069,6 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         # modify data to create a new plan
         bundle.obj = None
-        bundle.data.pop("id")
         bundle.data.pop("experiment")
         bundle.data.pop("planGUID")
         bundle.data.pop("planShortID")
@@ -1081,6 +1080,18 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         bundle.data["planExecuted"] = False
         bundle.data["isSystem"] = False
         bundle.data["isSystemDefault"] = False
+        # metaData is required for Dynamic Tech Param
+        metaData = {
+            "fromTemplate": bundle.data.get("planName"),
+            "fromTemplateId":  bundle.data.pop("id"),
+            "fromTemplateCategories": bundle.data.get("categories"),
+            "fromTemplateChipType": bundle.data.get("chipType"),
+            "fromTemplateSequenceKitname": bundle.data.get("sequencekitname"),
+            "fromTemplateSource": "ION"
+        }
+        if bundle.data.get("metaData"):
+            metaData.update(bundle.data.get("metaData"))
+        bundle.data["metaData"] = metaData
 
         return bundle
 
@@ -1271,6 +1282,17 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             sampleGrouping.displayedName if sampleGrouping else ""
         )
 
+        # Chip and Manifold Tec Parameters from experiment
+        bundle.data["chipTecDfltAmbient"] = experiment.chipTecDfltAmbient
+        bundle.data["chipTecSlope"] = experiment.chipTecSlope
+        bundle.data["chipTecMinThreshold"] = experiment.chipTecMinThreshold
+        bundle.data["manTecDfltAmbient"] = experiment.manTecDfltAmbient
+        bundle.data["manTecSlope"] = experiment.manTecSlope
+        bundle.data["manTecMinThreshold"] = experiment.manTecMinThreshold
+
+        bundle.data["metaData"] = experiment.metaData or {}
+
+
         # IonChef parameters from Experiment
 
         if experiment.chefInstrumentName:
@@ -1360,9 +1382,11 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                             reference = barcode.get("reference") or bundle.data.get(
                                 "reference", ""
                             )
+                            # this also handles the sse/svb bed files
                             for target_or_hotspot in [
                                 "targetRegionBedFile",
                                 "hotSpotRegionBedFile",
+                                "sseBedFile"
                             ]:
                                 bedfile = barcode.get(target_or_hotspot)
                                 if bedfile:
@@ -1551,7 +1575,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         return bundle
 
-    def hydrate_sseBedfile(self, bundle):
+    def hydrate_sseBedFile(self, bundle):
         bedfile = bundle.data.get("sseBedFile")
         if bedfile:
             if bedfile.lower() == "none":
@@ -2034,6 +2058,13 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         barcodedSamples = data.get("barcodedSamples") or {}
         payload_samples_key = "barcodedSamples"
         default_nuctype = templateObj.get_default_nucleotideType()
+        isDynamicTecParamsModified, errMsg = plan_validator.get_dynamicTecParams(templateObj, data)
+        if isDynamicTecParamsModified:
+            raise SDKValidationError(
+                {
+                    "Manifold Tec Params": errMsg
+                }
+            )
         if data.get("samplesList"):
             if barcodedSamples:
                 raise SDKValidationError(
@@ -2157,6 +2188,14 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     raise SDKValidationError({"samples": " | ".join(errors)})
 
         bundle.data["barcodedSamples"] = barcodedSamples
+
+        if templateObj.experiment.chipTecDfltAmbient or templateObj.experiment.manTecDfltAmbient:
+            bundle.data["chipTecDfltAmbient"] = templateObj.experiment.chipTecDfltAmbient
+            bundle.data["chipTecSlope"] = templateObj.experiment.chipTecSlope
+            bundle.data["chipTecMinThreshold"] = templateObj.experiment.chipTecMinThreshold
+            bundle.data["manTecDfltAmbient"] = templateObj.experiment.manTecDfltAmbient
+            bundle.data["manTecSlope"] = templateObj.experiment.manTecSlope
+            bundle.data["manTecMinThreshold"] = templateObj.experiment.manTecMinThreshold
 
         # validate all fields and create the plan
         bundle = self.obj_create(bundle)

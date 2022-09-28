@@ -10,7 +10,6 @@
 void MathModel::PurpleSolveTotalTrace_Vec (float **vb_out, float **blue_hydrogen, float **red_hydrogen, int len, const float *deltaFrame, float *tauB, float *etbR, float gain, int flow_block_size)
 {
   v4sf xt;
-  v4sf dt;
   v4sf etbR_vec;
   v4sf tauBV;
   v4sf one_over_two_tauBV;
@@ -46,8 +45,7 @@ void MathModel::PurpleSolveTotalTrace_Vec (float **vb_out, float **blue_hydrogen
       rh_old = rh_new;
       bh_old = bh_new;
       
-      dt = (v4sf) {deltaFrame[i],deltaFrame[i],deltaFrame[i],deltaFrame[i]};
-      xt = dt*one_over_two_tauBV;
+      xt = deltaFrame[i]*one_over_two_tauBV;
       one_over_one_plus_xt = one/ (one+xt);
 
       LOAD_4FLOATS_FLOWS (rh_new,red_hydrogen,fb,i,flow_block_size);

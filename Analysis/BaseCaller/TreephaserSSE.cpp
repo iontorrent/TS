@@ -498,10 +498,10 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
   rNucCpy = _mm_cmpeq_epi32(rNucCpy, rNucIdx);
 
   // store max_flow in ad_FlowEnd
-  _mm_store_si128((__m128i*)ad_FlowEnd, rFlowEnd);
+  _mm_store_si128((__m128i*)&ad_FlowEnd, rFlowEnd);
 
   // four child flows in four 32 bit integers
-  _mm_store_si128((__m128i*)ad_Idx, rNucIdx);
+  _mm_store_si128((__m128i*)&ad_Idx, rNucIdx);
 
   // changes datatype from int to float without doing any conversion
   __m128 rParNuc = _mm_castsi128_ps(rNucCpy);
@@ -576,7 +576,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
     rTemp1i = _mm_cmpeq_epi32(rTemp1i, rI);
 
     // filter min frac for nuc homopolymer child paths
-    rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)ad_MinFrac));
+    rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)&ad_MinFrac));
 
     // compares not less than equal to for two _m128i words. Entries will be 0xFFFF... for words where
     // (kStateWindowCutoff > child->state[flow]). Rest of the words are 0
@@ -649,7 +649,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
   if(EXPECTED(ad_Adv == 0)) {
 
     // child window start
-    _mm_store_si128((__m128i*)ad_Beg, rBeg);
+    _mm_store_si128((__m128i*)&ad_Beg, rBeg);
 
     // flow < parent->window_end - 1
     while(i < parLast) {
@@ -747,7 +747,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       rTemp1s = _mm_or_ps(rTemp1s, rParNuc);
       rTemp1s = _mm_castsi128_ps(_mm_cmpeq_epi32(_mm_castps_si128(rTemp1s), rI));
       rTemp1s = _mm_and_ps(rTemp1s, rAlive);
-      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)&ad_MinFrac));
       // child->window_end < max_flow
       rS = _mm_cmpnle_ps((_mm_castsi128_ps)(rFlowEnd), (_mm_castsi128_ps)(rEnd));
       // flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff
@@ -805,7 +805,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       rTemp1s = _mm_or_ps(rTemp1s, rParNuc);
       rTemp1s = _mm_castsi128_ps(_mm_cmpeq_epi32(_mm_castps_si128(rTemp1s), rI));
       rTemp1s = _mm_and_ps(rTemp1s, rAlive);
-      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)&ad_MinFrac));
       // child->window_end < max_flow
       rS = _mm_cmpnle_ps((_mm_castsi128_ps)(rFlowEnd), (_mm_castsi128_ps)(rEnd));
       // flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff
@@ -817,8 +817,8 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       j += 4;
     }
 
-    rEnd = _mm_min_epi16(rEnd, *((__m128i*)ad_FlowEnd));
-    _mm_store_si128((__m128i*)ad_End, rEnd);
+    rEnd = _mm_min_epi16(rEnd, *((__m128i*)&ad_FlowEnd));
+    _mm_store_si128((__m128i*)&ad_End, rEnd);
 
   } 
   // This branch is for if one of the child paths has an increase in window_start 
@@ -846,7 +846,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       __m128i rTemp1i = rBeg;
       rTemp1i = _mm_or_si128(rTemp1i, _mm_castps_si128(rParNuc));
       rTemp1i = _mm_cmpeq_epi32(rTemp1i, rI);
-      rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)&ad_MinFrac));
       rTemp1s = _mm_cmpnle_ps(rTemp1s, rS);
       rBeg = _mm_sub_epi32(rBeg, _mm_castps_si128(rTemp1s));
       rTemp1i = rBeg;
@@ -890,7 +890,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       // obtain state for child paths thar are incorporating new hp
       rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), rAlive);
       // child->state[flow] < kStateWindowCutoff
-      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)&ad_MinFrac));
       // child->window_end < max_flow
       rS = _mm_cmpnle_ps((_mm_castsi128_ps)(rFlowEnd), (_mm_castsi128_ps)(rEnd));
       // flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff
@@ -922,7 +922,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       __m128i rTemp1i = rBeg;
       rTemp1i = _mm_or_si128(rTemp1i, _mm_castps_si128(rParNuc));
       rTemp1i = _mm_cmpeq_epi32(rTemp1i, rI);
-      rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), *((__m128*)&ad_MinFrac));
       rTemp1s = _mm_cmpnle_ps(rTemp1s, rS);
       rBeg = _mm_sub_epi32(rBeg, _mm_castps_si128(rTemp1s));
       rTemp1i = rBeg;
@@ -956,7 +956,7 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       rTemp1i = _mm_or_si128(rTemp1i, _mm_castps_si128(rParNuc));
       rTemp1i = _mm_cmpeq_epi32(rTemp1i, rI);
       rTemp1s = _mm_and_ps(_mm_castsi128_ps(rTemp1i), rAlive);
-      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)ad_MinFrac));
+      rTemp1s = _mm_cmpnle_ps(rTemp1s, *((__m128*)&ad_MinFrac));
       // child->window_end < max_flow
       rS = _mm_cmpnle_ps((_mm_castsi128_ps)(rFlowEnd), (_mm_castsi128_ps)(rEnd));
       // flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff
@@ -968,9 +968,9 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       j += 4;
     }
 
-    rEnd = _mm_min_epi16(rEnd, *((__m128i*)ad_FlowEnd));
-    _mm_store_si128((__m128i*)ad_Beg, rBeg);
-    _mm_store_si128((__m128i*)ad_End, rEnd);
+    rEnd = _mm_min_epi16(rEnd, *((__m128i*)&ad_FlowEnd));
+    _mm_store_si128((__m128i*)&ad_Beg, rBeg);
+    _mm_store_si128((__m128i*)&ad_End, rEnd);
 
   }
 }
@@ -1028,9 +1028,139 @@ void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow
 }
 
 // -------------------------------------------------
+void TreephaserSSE::sortPaths(int & pathCnt)
+{
+   if(pathCnt > 3) {
+	  int m = sv_PathPtr[0]->flow;
+	  int i = 1;
+	  do {
+		int n = sv_PathPtr[i]->flow;
+		if(m < n)
+		  m = n;
+	  } while(++i < pathCnt);
+	  if((m -= MAX_PATH_DELAY) > 0) {
+		do {
+		  if(sv_PathPtr[--i]->flow < m)
+			swap(sv_PathPtr[i], sv_PathPtr[--pathCnt]);
+		} while(i > 0);
+	  }
+	}
+
+	while(pathCnt > MAX_PATHS-4) {
+	  float m = sv_PathPtr[0]->flowMetr;
+	  int i = 1;
+	  int j = 0;
+	  do {
+		float n = sv_PathPtr[i]->flowMetr;
+		if(m < n) {
+		  m = n;
+		  j = i;
+		}
+	  } while(++i < pathCnt);
+	  swap(sv_PathPtr[j], sv_PathPtr[--pathCnt]);
+	}
+
+}
+
+float TreephaserSSE::computeParentDist(PathRec RESTRICT_PTR parent, int end_flow)
+{
+	   // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
+	   // Computing squared distance between parent's predicted signal and normalized measurements
+	   float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
+	   for(int i = parent->window_start; i < parent->window_end; ++i) {
+	     if((i & 3) == 0) {
+	       if (recalibrate_predictions_) {
+	         dist += sumOfSquaredDiffsFloatSSE_recal((float*)(&(rd_NormMeasure[i])),
+	                                                 (float*)(&(parent->pred[i])),
+	                                                 (float*)(&(parent->calib_A[i])),
+	                                                 (float*)(&(parent->calib_B[i])),
+	                                                  parent->window_end-i);
+	       } else {
+	         dist += sumOfSquaredDiffsFloatSSE((float*)(&(rd_NormMeasure[i])),
+	                                           (float*)(&(parent->pred[i])),
+	                                            parent->window_end-i);
+	       }
+	       break;
+	     }
+	     if (recalibrate_predictions_)
+	       dist += Sqr(rd_NormMeasure[i]-parent->pred[i]*parent->calib_A[i]-parent->calib_B[i]);
+	     else
+	       dist += Sqr(rd_NormMeasure[i]-parent->pred[i]);
+	   }
+	   // Finished computing squared distance
+	   return dist;
+}
+
+void TreephaserSSE::CopyPath(PathRec RESTRICT_PTR dest, PathRec RESTRICT_PTR parent, PathRec RESTRICT_PTR child)
+{
+	dest->flowMetr = (child->flow == 0) ? 0 : ((child->metr + 0.5f*child->flowMetr) / child->flow);
+	char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
+	for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
+	  dest->state[i] = *((float*)(p+j));
+	  dest->pred[i] = *((float*)(p+j+(AD_PRED_OFS-AD_STATE_OFS)));
+	}
+	if(dest != parent){
+		// copy the beginning of the arrays as well
+		copySSE(dest->pred, parent->pred, parent->window_start << 2);
+		copySSE(dest->sequence, parent->sequence, parent->sequence_length);
+	}
+
+	if(state_inphase_enabled_){
+		if(dest != parent && child->flow > 0){
+		  int cpSize = (parent->flow+1)*sizeof(float);
+		  copySSE(dest->state_inphase, parent->state_inphase, cpSize);
+		}
+		//extending from parent->state_inphase[parent->flow] to fill the gap
+		for(int tempInd = parent->flow+1; tempInd < child->flow; tempInd++){
+			dest->state_inphase[tempInd] = max(dest->state[child->flow],0.01f);
+		}
+		dest->state_inphase[child->flow] = max(dest->state[child->flow],0.01f);
+	}
+
+	int psl=parent->sequence_length;
+	dest->sequence_length = psl + 1;
+	dest->sequence[psl] = flow_order_[child->flow];
+	if (psl and dest->sequence[psl] != dest->sequence[psl-1])
+	  dest->last_hp = 0;
+	else
+	  dest->last_hp = parent->last_hp;
+	dest->last_hp++;
+
+	// copy whole vector to avoid memory access to fields that have been written to by (longer) previously discarded paths XXX
+	// --> Reintroducing memory overrun since it seems to yield better performance
+	if (recalibrate_predictions_) {
+	  if(dest != parent && child->flow > 0){
+		// --- Reverting to old code with memory overrun
+		int cpSize = (parent->flow+1) << 2;
+		memcpy(dest->calib_A, parent->calib_A, cpSize);
+		memcpy(dest->calib_B, parent->calib_B, cpSize);
+		// ---
+		//copySSE(dest->calib_A, parent->calib_A, num_flows_*sizeof(float));
+		//copySSE(dest->calib_B, parent->calib_B, num_flows_*sizeof(float));
+	  }
+	  //explicitly fill zeros between parent->flow and dest->flow;
+	  for(int tempInd = parent->flow + 1; tempInd < child->flow; tempInd++){
+		dest->calib_A[tempInd] = 1.0f;
+		dest->calib_B[tempInd] = 0.0f;
+	  }
+	  int hp_length = min(dest->last_hp, MAX_HPXLEN);
+	  dest->calib_A[child->flow] = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
+	  dest->calib_B[child->flow] = (*Bs_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
+	}
+    if(dest == parent){
+	  dest->flow = child->flow;
+	  dest->window_start = child->window_start;
+	  dest->window_end = child->window_end;
+	  dest->res = child->res;
+	  dest->metr = child->metr;
+	  dest->dotCnt = child->dotCnt;
+    }
+}
 
 bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 {
+	uint32_t num_paths=0;
+	uint32_t gblPathName=0;
   sumNormMeasures();
 
   PathRec RESTRICT_PTR parent = sv_PathPtr[0];
@@ -1100,35 +1230,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 
   do {
 
-    if(pathCnt > 3) {
-      int m = sv_PathPtr[0]->flow;
-      int i = 1;
-      do {
-        int n = sv_PathPtr[i]->flow;
-        if(m < n)
-          m = n;
-      } while(++i < pathCnt);
-      if((m -= MAX_PATH_DELAY) > 0) {
-        do {
-          if(sv_PathPtr[--i]->flow < m)
-            swap(sv_PathPtr[i], sv_PathPtr[--pathCnt]);
-        } while(i > 0);
-      }
-    }
-
-    while(pathCnt > MAX_PATHS-4) {
-      float m = sv_PathPtr[0]->flowMetr;
-      int i = 1;
-      int j = 0;
-      do {
-        float n = sv_PathPtr[i]->flowMetr;
-        if(m < n) {
-          m = n;
-          j = i;
-        }
-      } while(++i < pathCnt);
-      swap(sv_PathPtr[j], sv_PathPtr[--pathCnt]);
-    }
+	sortPaths(pathCnt);
 
     parent = sv_PathPtr[0];
     int parentPathIdx = 0;
@@ -1141,225 +1243,140 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       break;
    int parent_flow = parent->flow;
 
-    // compute child path flow states, predicted signal,negative and positive penalties
+   float dist = computeParentDist(parent,end_flow);
+
+
+   int bestPathIdx = -1;
+   int childPathIdx = -1;
+
+   // current best path is parent path
+   if(bestDist > dist) {
+     bestPathIdx = parentPathIdx;
+     parentPathIdx = -1;
+   }
+
+   // compute child path flow states, predicted signal,negative and positive penalties
     advanceState4(parent, end_flow);
 
-    int n = pathCnt;
-    double bestpen = 25.0;
-    for(int nuc = 0; nuc < 4; ++nuc) {
-      PathRec RESTRICT_PTR child = sv_PathPtr[n];
 
-      child->flow = min(ad_Idx[nuc], end_flow);
-      child->window_start = ad_Beg[nuc];
-      child->window_end = min(ad_End[nuc], end_flow);
+    v4i flowV = ad_Idx;
+    v4i window_startV=ad_Beg;
+    v4i window_endV={min(ad_End[0], end_flow),min(ad_End[1], end_flow),min(ad_End[2], end_flow),min(ad_End[3], end_flow)};
+    v4i dotCntV={0};
+    v4f penParV;
+    v4f penNegV;
+    v4f metrV = LD_VEC4F(parent->res);
+    v4f resV;
+
+    float bestpen = 19.8;
+
+    for(int nuc = 0; nuc < 4; ++nuc) {
+    	char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
+    	metrV[nuc] += *((float*)(pn+ad_Beg[nuc]*16+(AD_PRES_OFS-AD_NRES_OFS)));
+    	penParV[nuc] = *((float*)(pn+ad_Idx[nuc]*16+(AD_PRES_OFS-AD_NRES_OFS)));
+    	penNegV[nuc] = *((float*)(pn+window_endV[nuc]*16));
+    	resV[nuc] = metrV[nuc] + *((float*)(pn+ad_Beg[nuc]*16));
+
+    }
+    metrV += penNegV;
+    penParV += penNegV;
+    penNegV += penParV;
+
+    int useChild[4]={0};
+    int usedChildren=0;
+    int n = pathCnt;
+
+    for(int nuc = 0; nuc < 4; ++nuc) {
 
       // Do not attempt to calculate child->last_hp in this loop; bad things happen
-      if(child->flow >= end_flow or parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)
-        continue;
-
-      // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
-      char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
-
-      // child path metric
-      float metr = parent->res + *((float*)(pn+child->window_start*16+(AD_PRES_OFS-AD_NRES_OFS)));
-
-      // sum of squared residuals for positive residuals for flows < child->flow
-      float penPar = *((float*)(pn+child->flow*16+(AD_PRES_OFS-AD_NRES_OFS)));
-
-      // sum of squared residuals for negative residuals for flows < child->window_end
-      float penNeg = *((float*)(pn+child->window_end*16));
-
-      // sum of squared residuals left of child window start
-      child->res = metr + *((float*)(pn+child->window_start*16));
-      
-      metr += penNeg;
-
-      // penPar corresponds to penalty1 in DPTreephaser.cpp
-      penPar += penNeg;
-      penNeg += penPar;
-
-      // penalty = penalty1 + (kNegativeMultiplier = 2)*penNeg
-      if(penNeg >= 20.0)
+      if(flowV[nuc] >= end_flow or parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)
         continue;
  
-      if(bestpen > penNeg)
-        bestpen = penNeg;
-      else if(penNeg-bestpen >= 0.2)
+  	  if(bestpen > penNegV[nuc])
+		bestpen = penNegV[nuc];
+  	  else if(penNegV[nuc]-bestpen >= 0.2)
         continue;
 
       // child->path_metric > sum_of_squares_upper_bound
-      if(metr > bestDist)
+      if(metrV[nuc] > bestDist)
         continue;
 
-      float newSignal = rd_NormMeasure[child->flow];
+      float newSignal = rd_NormMeasure[flowV[nuc]];
       
       // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end
       // Check 'dot' criterion
-      if(child->flow < parent->window_end){
+      if(flowV[nuc] < parent->window_end){
         if (recalibrate_predictions_)
-          newSignal -= (parent->calib_A[child->flow]*parent->pred[child->flow]+parent->calib_B[child->flow]);
+          newSignal -= (parent->calib_A[flowV[nuc]]*parent->pred[flowV[nuc]]+parent->calib_B[flowV[nuc]]);
         else
-          newSignal -= parent->pred[child->flow];
+          newSignal -= parent->pred[flowV[nuc]];
       }
-      newSignal /= *((float*)(pn+child->flow*16+(AD_STATE_OFS-AD_NRES_OFS+16)));
-      child->dotCnt = 0;
+      // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
+      char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
+      newSignal /= *((float*)(pn+flowV[nuc]*16+(AD_STATE_OFS-AD_NRES_OFS+16)));
       if(newSignal < 0.3f) {
         if(parent->dotCnt > 0)
           continue;
-        child->dotCnt = 1;
+        dotCntV[nuc] = 1;
       }
+      useChild[nuc]=1;
+      usedChildren++;
+    }
+
+//    for(int nuc = 0; nuc < 4; ++nuc) {
+//    	if(useChild[nuc]==0)
+//    		continue;
+//    	if(penNegV[nuc]-bestpen >= 0.2f)
+//    		useChild[nuc]=0;
+//    }
+
+    for(int nuc = 0; nuc < 4; ++nuc) {
+    	if(useChild[nuc]==0)
+    		continue;
+
       // child path survives at this point
-      child->metr = float(metr);
-      child->flowMetr = float(penPar);
-      child->penalty = float(penNeg);
+      PathRec RESTRICT_PTR child = sv_PathPtr[n];
+      child->flow = flowV[nuc];
+      child->window_start = window_startV[nuc];
+      child->window_end = window_endV[nuc];
+      child->metr = metrV[nuc];
+      child->flowMetr = penParV[nuc];
+      child->res = resV[nuc];
+      child->penalty = penNegV[nuc];
       child->nuc = nuc;
+      child->dotCnt = dotCntV[nuc];
       ++n;
     }
 
-    // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
-    // Computing squared distance between parent's predicted signal and normalized measurements
-    float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
-    for(int i = parent->window_start; i < parent->window_end; ++i) {
-      if((i & 3) == 0) {
-        if (recalibrate_predictions_) {
-          dist += sumOfSquaredDiffsFloatSSE_recal((float*)(&(rd_NormMeasure[i])),
-                                                  (float*)(&(parent->pred[i])),
-                                                  (float*)(&(parent->calib_A[i])),
-                                                  (float*)(&(parent->calib_B[i])),
-                                                   parent->window_end-i);
-        } else {
-          dist += sumOfSquaredDiffsFloatSSE((float*)(&(rd_NormMeasure[i])),
-                                            (float*)(&(parent->pred[i])),
-                                             parent->window_end-i);
-        }
-        break;
-      }
-      if (recalibrate_predictions_)
-        dist += Sqr(rd_NormMeasure[i]-parent->pred[i]*parent->calib_A[i]-parent->calib_B[i]);
-      else
-        dist += Sqr(rd_NormMeasure[i]-parent->pred[i]);
-    }
-    // Finished computing squared distance
-
-    int bestPathIdx = -1;
-
-    // current best path is parent path
-    if(bestDist > dist) {
-      bestPathIdx = parentPathIdx;
-      parentPathIdx = -1;
-    }
-
-    int childPathIdx = -1;
     while(pathCnt < n) {
       PathRec RESTRICT_PTR child = sv_PathPtr[pathCnt];
       // Rule that depends on finding the best nuc
       if(child->penalty-bestpen >= 0.2f) {
         sv_PathPtr[pathCnt] = sv_PathPtr[--n];
         sv_PathPtr[n] = child;
-      } 
-      else if((childPathIdx < 0) && (parentPathIdx >= 0)) {
+        usedChildren--;
+      }
+      else
+      if((childPathIdx < 0) && (parentPathIdx >= 0)) {
         sv_PathPtr[pathCnt] = sv_PathPtr[--n];
         sv_PathPtr[n] = child;
         childPathIdx = n;
       }
-      // this is the child path to be kept 
       else {
-        if (child->flow)
-          child->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow;
-        char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-        for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
-          child->state[i] = *((float*)(p+j));
-          child->pred[i] = *((float*)(p+j+(AD_PRED_OFS-AD_STATE_OFS)));
-        }
-        copySSE(child->pred, parent->pred, parent->window_start << 2);
-
-        copySSE(child->sequence, parent->sequence, parent->sequence_length);
-
-        if(state_inphase_enabled_){
-            if(child->flow > 0){
-              int cpSize = (parent->flow+1)*sizeof(float);
-              copySSE(child->state_inphase, parent->state_inphase, cpSize);
-            }
-            //extending from parent->state_inphase[parent->flow] to fill the gap
-            for(int tempInd = parent->flow+1; tempInd < child->flow; tempInd++){
-                child->state_inphase[tempInd] = max(child->state[child->flow],0.01f);
-            }
-            child->state_inphase[child->flow] = max(child->state[child->flow],0.01f);
-        }
-
-        child->sequence_length = parent->sequence_length + 1;
-        child->sequence[parent->sequence_length] = flow_order_[child->flow];
-        if (parent->sequence_length and child->sequence[parent->sequence_length] != child->sequence[parent->sequence_length-1])
-          child->last_hp = 0;
-        else
-          child->last_hp = parent->last_hp;
-        child->last_hp++;
-
-        // copy whole vector to avoid memory access to fields that have been written to by (longer) previously discarded paths XXX
-        // --> Reintroducing memory overrun since it seems to yield better performance
-        if (recalibrate_predictions_) {
-          if(child->flow > 0){
-            // --- Reverting to old code with memory overrun
-            int cpSize = (parent->flow+1) << 2;
-            memcpy(child->calib_A, parent->calib_A, cpSize);
-            memcpy(child->calib_B, parent->calib_B, cpSize);
-            // ---
-            //copySSE(child->calib_A, parent->calib_A, num_flows_*sizeof(float));
-            //copySSE(child->calib_B, parent->calib_B, num_flows_*sizeof(float));
-          }
-          //explicitly fill zeros between parent->flow and child->flow;
-          for(int tempInd = parent->flow + 1; tempInd < child->flow; tempInd++){
-            child->calib_A[tempInd] = 1.0f;
-            child->calib_B[tempInd] = 0.0f;
-          }
-          int hp_length = min(child->last_hp, MAX_HPXLEN);
-          child->calib_A[child->flow] = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
-          child->calib_B[child->flow] = (*Bs_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
-        }
+        CopyPath(child,parent,child);
         ++pathCnt;
+//        ++num_paths;
       }
     }
 
+//    printf("pathCnt=%d  ",pathCnt);
+//    for(int pthNum=0;pthNum<pathCnt;pthNum++){
+//    	printf(" (%p %d-%d)%.3f/%.3f",sv_PathPtr[pthNum],sv_PathPtr[pthNum]->window_start,sv_PathPtr[pthNum]->window_end,sv_PathPtr[pthNum]->metr,sv_PathPtr[pthNum]->penalty);
+//    }
+//    printf("\n");
     // In the event, there is no best path, one of the child is copied to the parent
     if(childPathIdx >= 0) {
-      PathRec RESTRICT_PTR child = sv_PathPtr[childPathIdx];
-      parent_flow = parent->flow; //MJ
-      parent->flow = child->flow;
-      parent->window_end = child->window_end;
-      parent->res = child->res;
-      parent->metr = child->metr;
-      (child->flow == 0) ? (parent->flowMetr == 0) : (parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow);
-      parent->dotCnt = child->dotCnt;
-      char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-      for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
-        parent->state[i] = *((float*)(p+j));
-        parent->pred[i] = *((float*)(p+j+(AD_PRED_OFS-AD_STATE_OFS)));
-      }
-
-      parent->sequence[parent->sequence_length] = flow_order_[parent->flow];
-      if (parent->sequence_length and parent->sequence[parent->sequence_length] != parent->sequence[parent->sequence_length-1])
-        parent->last_hp = 0;
-      parent->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
-      parent->sequence_length++;
-
-      //update calib_A and calib_B for parent
-      if (recalibrate_predictions_) {
-        for(int tempInd = parent_flow + 1; tempInd < child->flow; tempInd++){
-          parent->calib_A[tempInd] = 1.0f;
-          parent->calib_B[tempInd] = 0.0f;
-        }
-        parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-        parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-      }
-
-      if(state_inphase_enabled_){
-          for(int tempInd = parent_flow+1; tempInd < parent->flow; tempInd++){
-              parent->state_inphase[tempInd] = parent->state[parent->flow];
-          }
-          parent->state_inphase[parent->flow] = parent->state[parent->flow];
-      }
-
-      parent->window_start = child->window_start;
+  	  CopyPath(parent,parent,sv_PathPtr[childPathIdx]);
       parentPathIdx = -1;
     }
 
@@ -1382,6 +1399,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
     ResetRecalibrationStructures(num_flows_);
   }
 
+//  printf("num_paths=%d num_flows=%d-%d\n",num_paths,begin_flow, end_flow);
   return false;
 }
 

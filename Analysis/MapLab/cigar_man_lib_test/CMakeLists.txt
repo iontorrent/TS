@@ -1,5 +1,5 @@
 # Copyright (C) 2020 Thermo Fisher Scientific. All Rights Reserved.
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8.12)
 
 project (cigar_man_lib_test)
 

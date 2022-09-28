@@ -936,7 +936,9 @@ void SignalProcessingMasterFitter::RemainingFitStepsForInitialFlowBlock( int flo
       refine_time_fit->RefinePerFlowTimeEstimate ( region_data->my_regions.rp.nuc_shape.t_mid_nuc_shift_per_flow, flow_block_size, flow_block_start );
 
     // adjust buffering for every bead using specialized fitter
-    refine_buffering->AdjustBufferingEveryBead(flow_block_size, flow_block_start);
+//MARK
+    if (inception_state->bkg_control.gpuControl.gpuWorkLoad == 0)
+    	refine_buffering->AdjustBufferingEveryBead(flow_block_size, flow_block_start);
 
     // Set things up for double exponential smoothing.
     region_data->my_regions.tmidnuc_smoother.Initialize( & region_data->my_regions.rp );
@@ -1005,7 +1007,7 @@ void SignalProcessingMasterFitter::RegionalFittingForLaterFlowBlock( int flow_ke
   region_data->my_regions.tmidnuc_smoother.Smooth( & region_data->my_regions.rp );
   region_data->my_regions.copy_drift_smoother.Smooth( & region_data->my_regions.rp );
   region_data->my_regions.ratio_drift_smoother.Smooth( & region_data->my_regions.rp );
-
+// MARK
   refine_time_fit->RefinePerFlowTimeEstimate ( region_data->my_regions.rp.nuc_shape.t_mid_nuc_shift_per_flow, flow_block_size, flow_block_start );
 }
 
@@ -1014,7 +1016,12 @@ void SignalProcessingMasterFitter::RefineAmplitudeEstimates ( double &elapsed_ti
   // in either case, finish by fitting amplitude to finalized regional parameters
   region_data->SetFineEmphasisVectors();
   fit_timer.restart();
-  refine_fit->FitAmplitudePerFlow ( flow_block_size, flow_block_start );
+
+  //MARK
+  //my_search.ParasitePointers ( math_poiss, &region_data->my_trace,region_data->emptytrace,&region_data->my_scratch,region_data_extras.cur_bead_block, region_data_extras.cur_buffer_block, & ( region_data->my_regions ),&region_data->time_c,
+  //                             region_data_extras.my_flow,&region_data->emphasis_data );
+
+  refine_fit->FitAmplitudePerFlow ( flow_block_size, flow_block_start/*(, my_search*/);
   double fit_ampl_time = fit_timer.elapsed();
   elapsed_time += fit_ampl_time;
   if ( ( my_debug.region_trace_file != NULL ) && ( my_debug.region_only_trace_file != NULL ) )

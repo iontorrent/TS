@@ -289,6 +289,8 @@ class UserResource(ModelResource):
         if user.userprofile and user.userprofile.needs_activation:
             user.userprofile.needs_activation = False
             user.userprofile.save()
+            msg = "New pending user registration for '{0}'".format(user.username)
+            models.Message.objects.filter(body__contains=msg).delete()
 
         return HttpAccepted()
 

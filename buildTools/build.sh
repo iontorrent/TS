@@ -16,7 +16,6 @@ MODULES=${MODULES-"
   pipeline
   publishers
   tsconfig
-  RSM
 "}
 
 PROJECT_ROOT=`pwd`

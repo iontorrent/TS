@@ -111,6 +111,27 @@ ReadFilteringHistory::ReadFilteringHistory()
   adapter_decision   = false;
 }
 
+// Function resets the
+void ReadFilteringHistory::UndoBarcodeTrimming()
+{
+  if (is_filtered)
+    return;
+
+  // reset 5' trimming to point to after library key
+  n_bases_prefix = n_bases_barcode = n_bases_tag = n_bases_key;
+
+  // reset 3' trimming point to min of quality trimmer / adapter trimmer / read length
+  n_bases_filtered = n_bases;
+  if (n_bases_after_adapter_trim >=0 and n_bases_after_adapter_trim < n_bases_filtered)
+    n_bases_filtered = n_bases_after_adapter_trim;
+  if (n_bases_after_quality_trim >= 0 and n_bases_after_quality_trim < n_bases_filtered)
+    n_bases_filtered = n_bases_after_quality_trim;
+
+  n_bases_after_barcode_trim        = -1;
+  n_bases_after_tag_trim            = -1;
+  n_bases_after_extra_trim          = -1;
+}
+
 // ----------------------------------------------------------------------------
 // Let's not modify the ZD vector
 
@@ -539,7 +560,9 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
     json["Filtering"]["BaseDetails"]["final"]               = (Json::Int64)num_bases_final_;
 
     json["Filtering"]["LibraryReport"]["filtered_polyclonal"]   = (Json::Int64)(num_reads_removed_bkgmodel_polyclonal_ + num_reads_removed_polyclonal_);
-    json["Filtering"]["LibraryReport"]["filtered_primer_dimer"] = (Json::Int64) num_reads_removed_adapter_trim_;
+    json["Filtering"]["LibraryReport"]["filtered_primer_dimer"] = (Json::Int64)(num_reads_removed_adapter_trim_ +
+                                                                                num_reads_removed_barcode_trim_ +
+                                                                                num_reads_removed_tag_trim_);
     json["Filtering"]["LibraryReport"]["filtered_low_quality"] = (Json::Int64)(
                   num_reads_removed_bkgmodel_high_ppf_ +
                   num_reads_removed_bkgmodel_keypass_ +
@@ -547,10 +570,8 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
                   num_reads_removed_short_ +
                   num_reads_removed_keypass_ +
                   num_reads_removed_residual_ +
-                  num_reads_removed_barcode_trim_ +
                   num_reads_removed_quality_trim_ +
                   num_reads_removed_quality_filt_ +
-                  num_reads_removed_tag_trim_ +
                   num_reads_removed_extra_trim_);
     json["Filtering"]["LibraryReport"]["final_library_reads"]   = (Json::Int64)num_reads_final_;
 
@@ -1396,18 +1417,24 @@ bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_star
   best_adapter_overlap= -1;
   int sequence_pos = 0;
   char adapter_start_base = effective_adapter.at(0);
+  int numFlows=flow_order_.num_flows();
+  int readSize=(int)read.sequence.size();
+  const char *seq=&read.sequence[0];
+  int EALength=(int)effective_adapter.length();
+  const char *eadap=&effective_adapter[0];
 
-  for (int adapter_start_flow = 0; adapter_start_flow < flow_order_.num_flows(); ++adapter_start_flow) {
+  for (int adapter_start_flow = 0; adapter_start_flow < numFlows; ++adapter_start_flow) {
 
     // Only consider start flows that agree with adapter start
     if (flow_order_[adapter_start_flow] != adapter_start_base)
       continue;
 
-    while (sequence_pos < (int)read.sequence.size() and base_to_flow[sequence_pos] < adapter_start_flow)
+    while (sequence_pos < readSize and base_to_flow[sequence_pos] < adapter_start_flow)
       sequence_pos++;
-    if (sequence_pos >= (int)read.sequence.size())
+
+    if (sequence_pos >= readSize)
       break;
-    else if (sequence_pos>0 and read.sequence.at(sequence_pos-1)==adapter_start_base)
+    else if (sequence_pos>0 and seq[sequence_pos-1]==adapter_start_base)
       continue; // Make sure we don't get impossible configurations
 
     // Evaluate this starting position
@@ -1417,14 +1444,14 @@ bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_star
     int local_sequence_pos = sequence_pos;
     int local_start_base = sequence_pos;
 
-    for (int flow = adapter_start_flow; flow < flow_order_.num_flows(); ++flow) {
+    for (int flow = adapter_start_flow; flow < numFlows; ++flow) {
 
       int base_delta = 0;
-      while (adapter_pos < (int)effective_adapter.length() and effective_adapter.at(adapter_pos) == flow_order_[flow]) {
+      while (adapter_pos < EALength and eadap[adapter_pos] == flow_order_[flow]) {
         adapter_pos++;
         base_delta--;
       }
-      while (local_sequence_pos < (int)read.sequence.size() and base_to_flow[local_sequence_pos] == flow) {
+      while (local_sequence_pos < readSize and base_to_flow[local_sequence_pos] == flow) {
         local_sequence_pos++;
         base_delta++;
       }
@@ -1437,7 +1464,7 @@ bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_star
         local_start_base += base_delta;
       score_len_flows++;
 
-      if (adapter_pos == (int)effective_adapter.length() or local_sequence_pos == (int)read.sequence.size())
+      if (adapter_pos == EALength or local_sequence_pos == readSize)
         break;
     }
 
@@ -1447,9 +1474,9 @@ bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_star
 
     if (adapter_pos < trim_adapter_min_match_)  // Match too short
       continue;
-    if (score_match * 2 * effective_adapter.length() > trim_adapter_cutoff_)  // Match too dissimilar
+    if (score_match * 2 * EALength > trim_adapter_cutoff_)  // Match too dissimilar
       continue;
-    float final_metric = adapter_pos / (float)effective_adapter.length() - score_match; // The higher the better
+    float final_metric = adapter_pos / (float)EALength - score_match; // The higher the better
 
     if (final_metric > best_metric) {
       adapter_found = true;

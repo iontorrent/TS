@@ -51,6 +51,7 @@ errorCode = {
     "E010": "Duplicate product entry found ({0}). Check your product info.",
     "E011": "Invalid JSON file or response ({0}}",
     "E012": "Unknown system error: {0}",
+    "E013": "Invalid Product Update. Template Parameters({0}) for locking are required. Please consult Torrent Suite administrator"
 }
 
 PRODUCT_UPDATE_PATH_LOCAL = os.path.join(
@@ -505,6 +506,8 @@ def update_product(name, update_version):
     if sysTemplatesToUpdate:
         logger.debug("Going to install system templates via off-cycle release")
         for sysTemp in sysTemplatesToUpdate:
+            if sysTemp.get("metaData"):
+                validate_sysTemp_metaData(monitor_pk, sysTemp)
             ctx_sys_temp_upd = add_or_updateSystemTemplate_OffCycleRelease(**sysTemp)
             if not ctx_sys_temp_upd["isValid"]:
                 status = errorCode["E009"]
@@ -514,6 +517,29 @@ def update_product(name, update_version):
 
     updateFileMonitor(monitor_pk, "Complete")
 
+def validate_sysTemp_metaData(monitor_pk, sysTemplate):
+    lockAssayParams = sysTemplate.get("metaData").get("lockAssayParams")
+    err_msg = None
+    status = errorCode["E009"]
+    if lockAssayParams and ("runType" in lockAssayParams and "applicationGroupName" not in lockAssayParams) or \
+            ("applicationGroupName" in lockAssayParams and "runType" not in lockAssayParams):
+        if monitor_pk:
+            updateFileMonitor(monitor_pk, status)
+        err_msg = errorCode["E013"].format("runType and applicationGroupName")
+
+    if lockAssayParams and "chipType" in lockAssayParams and \
+            ("runType" not in lockAssayParams or "applicationGroupName" not in lockAssayParams):
+        if monitor_pk:
+            updateFileMonitor(monitor_pk, status)
+        err_msg = errorCode["E013"].format("chipType, runType and applicationGroupName")
+
+    if err_msg:
+        logger.debug(
+            "Error: iondb.rundb.configure.updateProducts.update_product %s", err_msg
+        )
+        raise Exception(err_msg)
+
+    return err_msg
 
 def validate_modelObject(modelsToUpdate):
     """validate incoming models to be updated or created
@@ -891,6 +917,11 @@ def validate_productFile(productFile, fileName=None):
             raise Exception(
                 "Missing product content, please consult Torrent Suite administrator."
             )
+        if ("sys_template_info" in productFileContent
+                and productFileContent["sys_template_info"]
+        ):
+            for sysTemplate in productFileContent["sys_template_info"]:
+                validate_sysTemp_metaData(None, sysTemplate)
 
         if os.path.exists(destinationFilePath):
             existingProductData = json.loads(open(destinationFilePath).read())

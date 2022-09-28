@@ -46,6 +46,10 @@ void RawSpatial::SetOption(QString txt, int state)
     	display_blocks = state;
     else if(txt == "Histogram")
     	display_histogram = state;
+    else if(txt == "AverageSub")
+    	AverageSubState = state;
+    else if(txt == "BitsNeeded")
+    	display_bitsNeeded = state;
 
     render();
 }
@@ -165,7 +169,8 @@ void RawSpatial::doConvert(int &loading)
             (AdvcApplied && !AdvcState) ||
             (stdApplied && !stdState) ||
             (noPCAApplied != noPCAState) ||
-            (lastcurDisplayFlow != curDisplayFlow)){
+            (lastcurDisplayFlow != curDisplayFlow) ||
+			(AverageSubApplied != AverageSubState)){
         // re-load the image.0...+1
         last_fname.clear();
     }
@@ -242,6 +247,7 @@ void RawSpatial::doConvert(int &loading)
         ColFlApplied=0;
         AdvcApplied=0;
         stdApplied=0;
+        AverageSubApplied=0;
         if(endX==0){
             startX=0;
             startY=0;
@@ -319,10 +325,40 @@ void RawSpatial::doConvert(int &loading)
             TakeStdDev();
             stdApplied=1;
         }
+        if(!AverageSubApplied && AverageSubState){
+        	// subtract the average signa
+        	SubAverage();
+        	AverageSubApplied=1;
+        }
+        CalculateBitsNeededData();
 
         fflush(stdout);
         UpdateTraceData();
     }
+}
+
+void RawSpatial::CalculateBitsNeededData()
+{
+	int frameStride=rows*cols;
+
+	memset(bitsNeededData,0,sizeof(bitsNeededData));
+
+	for(int frm=1;frm<frames;frm++){
+		short *imgPtr=&out[frm*frameStride];
+		short *pimgPtr=&out[(frm-1)*frameStride];
+		for(int idx=0;idx<frameStride;idx++){
+			short val = imgPtr[idx]-pimgPtr[idx];
+			if(val <0)
+				val=-val;
+			for(int bit=15;bit >=0;bit--){
+				if((1<<bit) & val){
+					bitsNeededData[bit]++;
+					break;
+				}
+			}
+		}
+	}
+
 }
 
 
@@ -455,6 +491,25 @@ inline bool EmptyWell ( uint16_t maskVal )
   return ( isEmpty && isReference); //!isPinned && !isIgnoreOrAmbig );
 }
 
+void RawSpatial::SubAverage()
+{
+	int frameStride=rows*cols;
+	for(int frm=0;frm<frames;frm++){
+		// get average value for this frame
+		short *imptr=&out[frm*frameStride];
+		uint64_t avg=0;
+		for(int idx=0;idx<frameStride;idx++){
+			avg += imptr[idx];
+	    }
+		avg /= (uint64_t)frameStride;
+		short avgs=(short)avg;
+
+		// subtract the average value
+		for(int idx=0;idx<frameStride;idx++){
+			imptr[idx] -= avgs;
+	    }
+	}
+}
 void RawSpatial::GainCorrect(short int *raw, int h, int w, int npts)
 {
     for(int frame=0;frame<npts;frame++){

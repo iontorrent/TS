@@ -9,8 +9,12 @@ import re, string, copy
 #################################################
 #                   GLOBALS                     #
 #################################################
-BOXCOLORS   = ( 'pink','lightblue','lightgreen', 'sandybrown', 'mediumpurple', 'palegoldenrod' )
-PVALCOLORS  = {'0.01':'green', '0.05':'chartreuse', '0.1':'orange', 'else':'gray' }
+SUCCESS_THERMO = '#b4bd01'
+FAIL_THERMO    = '#e61316'
+BOXCOLORS_ORIG   = ( 'pink','lightblue','lightgreen', 'sandybrown', 'mediumpurple', 'palegoldenrod' )
+BOXCOLORS_THERMO = ( '#262160','#9ad3dc','#f0b234', '#ea7600', '#471e6f', '#e61316' )
+BOXCOLORS = BOXCOLORS_ORIG
+PVALCOLORS     = {'0.01':'green', '0.05':'chartreuse', '0.1':'orange', 'else':'gray' }
 # Expanded letters to handle more than 26 elements
 LETTERS     = list( string.ascii_uppercase ) + sorted( list( set( [ '{}{}'.format(l_i,l_j) for l_j in string.ascii_uppercase for l_i in string.ascii_uppercase ] ) ) )
 FMT_N       = '\nN={}'
@@ -144,13 +148,24 @@ def make_legend_fig( names=('blank',), colors=True, type='boxes', use_letters=Fa
     # make plots that legend will be built from
     if type == 'boxes':
         vals = [[0] for x in range( len(names) ) ]
-        if use_letters:
-            labels = []
-            for i, name in enumerate( names ):
-                text = LETTERS[i] + str(': ') + name
-                labels.append( text )
-        else:
+
+        if use_letters is None:
             labels = names
+        else:
+            labels = []
+            try:
+                iter(use_letters)
+                for i, (name, ul) in enumerate( zip( names, use_letters ) ):
+                    if ul:
+                        text = LETTERS[i] + str(': ') + name
+                        labels.append( text )
+                    else:
+                        labels.append( name )
+            except TypeError:
+                for i, name in enumerate( names ):
+                    text = LETTERS[i] + str(': ') + name
+                    labels.append( text )
+
         bp = subplot_box( ax, vals, labels, colors=colors, pvals=False )
         handles = bp['boxes']
     if type == 'pvals':
@@ -208,12 +223,20 @@ def simple_boxplot( data, names, figsize=(3,3), use_letters=None, **subplot_kwar
     ax = fig.add_subplot( 111 )
 
     # Determine labels to use
-    if use_letters:
-        labels = []
-        for i, name in enumerate( names ):
-            labels.append( LETTERS[i] )
-    else:
+    if use_letters is None:
         labels = names
+    else:
+        labels = []
+        try:
+            iter(use_letters)
+            for i, (name, ul) in enumerate( zip( names, use_letters ) ):
+                if ul:
+                    labels.append( LETTERS[i] )
+                else:
+                    labels.append( name )
+        except TypeError:
+            for i, name in enumerate( names ):
+                labels.append( LETTERS[i] )
     # Make subplot
     subplot_box( ax, data, labels, **subplot_kwargs )
     # Make the figure

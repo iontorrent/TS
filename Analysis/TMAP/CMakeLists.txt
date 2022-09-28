@@ -1,5 +1,5 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
-cmake_minimum_required(VERSION 2.6.4)
+cmake_minimum_required (VERSION 2.8.12)
 
 project(TMAP)
 

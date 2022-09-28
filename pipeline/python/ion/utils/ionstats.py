@@ -74,6 +74,7 @@ def generate_ionstats_alignment_cmd(
         for bam_filename in bam_filenames[1:]:
             com += ",%s" % (bam_filename)
         com += " -o %s" % (ionstats_alignment_filename)
+        com += " --n-threads=6"
         com += " -k %s" % (library_key)
         com += " -h %d" % (int(histogram_length))
         com += " --evaluate-hp true"

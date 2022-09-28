@@ -16,13 +16,7 @@ np.seterr( 'ignore' )
 
 
 try:
-    sys.path.append('/home/scott/python/deinterlace')
-    sys.path.append('/home/brennan/0_repos/pyCextensions/')
-    sys.path.append('/home/brennan/repos/pyCextensions/')
-    sys.path.append('/rnd/brennan/pyCextensions/')
-    sys.path.append('%s/pydeint' % moduleDir)
-    sys.path.append('/software/testing')
-    import deinterlace as di
+    from .di_loader import deinterlace as di
 except ImportError as e:
     print( 'WARNING! Unable to import deinterlace' )
     warnings.warn(str(e),ImportWarning)
@@ -256,7 +250,7 @@ class DatFile( object ):
             self.bfgain_iqr = output['blocks_iqr']
             return self.bfgain_iqr
 
-    def measure_bf_signal( self ):
+    def measure_bf_signal( self, nndist=None ):
         ''' 
         Measures the beadfind signal (max deviation from neighbors) 
 
@@ -265,10 +259,10 @@ class DatFile( object ):
         try:
             return self.bfmat
         except AttributeError:
-            self.BeadFind()
+            self.BeadFind( nndist=nndist )
             return self.bfmat
 
-    def measure_bf_signal_std( self ):
+    def measure_bf_signal_std( self, nndist=None ):
         ''' 
         Measures the local variation of the beadfind signal
 
@@ -277,11 +271,11 @@ class DatFile( object ):
         try:
             return self.bfmat_std
         except AttributeError:
-            self.BeadFind()
+            self.BeadFind( nndist=nndist )
             self.bfmat_std = self.LocalVar( self.bfmat, var='std', hd=hd, dname='bfmat' )
             return self.bfmat_std
 
-    def measure_bf_signal_iqr( self ):
+    def measure_bf_signal_iqr( self, nndist=None ):
         ''' 
         Measures the local variation of the beadfind signal
 
@@ -290,7 +284,7 @@ class DatFile( object ):
         try:
             return self.bfmat_iqr
         except AttributeError:
-            self.BeadFind()
+            self.BeadFind( nndist=nndist )
             #self.bfmat_iqr = self.LocalVar( self.bfmat, var='iqr', hd=hd, dname='bfmat' )
             output = stats.chip_uniformity( self.bfmat, self.chiptype, block='micro', exclude=self.pinned )
             self.bfmat_iqr = output['blocks_iqr']
@@ -441,8 +435,8 @@ class DatFile( object ):
         vfcslice = self.VFCslice(frames)
         data = self.data[:,:,vfcslice]
         if bkgsubtract:
-            region_rows = self.rows / self.miniR
-            region_cols = self.cols / self.miniC
+            region_rows = int( self.rows / self.miniR )
+            region_cols = int( self.cols / self.miniC )
 
             self.drift = self.data.shape[:-1]
 
@@ -654,8 +648,8 @@ class DatFile( object ):
                 data = self.data[:,:,frames]
 
             if bkgsubtract:
-                region_rows = self.rows / self.miniR
-                region_cols = self.cols / self.miniC
+                region_rows = int( self.rows / self.miniR )
+                region_cols = int( self.cols / self.miniC )
 
                 self.noise = np.zeros( self.data.shape[:-1] )
                 for r in range( region_rows ):
@@ -895,8 +889,8 @@ class DatFile( object ):
             data = self.data[:,:,frames]
 
         if bkgsubtract:
-            region_rows = self.rows / self.miniR
-            region_cols = self.cols / self.miniC
+            region_rows = int( self.rows / self.miniR )
+            region_cols = int( self.cols / self.miniC )
 
             self.raw_noise = np.zeros( self.data.shape[:-1] )
             for r in range( region_rows ):
@@ -1035,7 +1029,7 @@ class DatFile( object ):
     ##################################################
     # (Empty) Bead find                              #
     ##################################################
-    def BeadFind( self, active_thresh=None ):
+    def BeadFind( self, active_thresh=None, nndist=None ):
         '''
         Generic beadfind algorithm adapted from Todd Rearick's Thumbnail beadfind matlab script
         This calculates the maximum deviation of the well from the neighbor-subtracted background
@@ -1052,6 +1046,9 @@ class DatFile( object ):
         # Start timing algorithm
         start_time = time.time()
 
+        if nndist is None:
+            nndist = 10
+
         # Pull the global threshold if not provided
         if active_thresh is None:
             active_thresh = self.active_thresh
@@ -1065,8 +1062,8 @@ class DatFile( object ):
         bfmat  = np.zeros(self.pinned.shape)
         bfgain = np.zeros(self.pinned.shape)
         
-        rows = self.rows / self.miniR
-        cols = self.cols / self.miniC
+        rows = int( self.rows / self.miniR )
+        cols = int( self.cols / self.miniC )
 
         nogoodpix_count = 0
         badpixel_count  = 0
@@ -1077,7 +1074,8 @@ class DatFile( object ):
                 goodpx = self.actpix[ rws, cls ]
                 
                 # For cleanliness, define the ROI for this tn block here
-                roi    = self.data[ rws, cls, : ]
+                #NOTE change type to float64 for future scaling operations
+                roi    = self.data[ rws, cls, : ].astype( np.float64 )
                 
                 # Account for the far reaches of the chip that have wacky beadfind signals:
                 if ( self.bfgain_t1[r,c] - self.bfgain_t0[r,c] ) <= 0 or goodpx.sum() < np.ceil( 0.05 * self.miniR * self.miniC ):
@@ -1089,7 +1087,11 @@ class DatFile( object ):
                 if not goodpx.any():
                     nogoodpix_count += 1
                 else:
-                    nnimg = roi - imtools.GBI( roi , ~goodpx , 10 , nn_gain=self.bfgain[rws,cls]/1000. )     
+                    gain = self.bfgain[rws,cls].astype( np.float64 )/1000.
+                    roi = roi.astype( np.float64) / gain[:,:,np.newaxis]
+                    #nn_gain = 1.
+                    #NOTE GBI requires int16 type as input for appropriate behavior
+                    nnimg = roi - imtools.GBI( roi.astype( np.int16 ) , ~goodpx , nndist , nn_gain=1 ).astype( np.float64 )     
                     nnimg[ np.isnan(nnimg) ] = 0
                     nnimg[ ~goodpx         ] = 0
                         
@@ -1158,8 +1160,8 @@ class DatFile( object ):
             raise ValueError( 'Error! dat file is of unexpected size' )
 
         # Calculate the number of miniblocks
-        rows = self.rows / self.miniR
-        cols = self.cols / self.miniC
+        rows = int( self.rows / self.miniR )
+        cols = int( self.cols / self.miniC )
         
         # Initialize data arrays
         slopes    = np.zeros(self.pinned.shape)  # This has 1 value per well
@@ -1468,8 +1470,8 @@ class DatFile( object ):
         self.CalculateActivePixels()
 
         # Get the size of the block-averaged data
-        rows = self.rows / self.miniR
-        cols = self.cols / self.miniC
+        rows = int( self.rows / self.miniR )
+        cols = int( self.cols / self.miniC )
 
         # Initialize arrays
         self.bfgain    = np.zeros( (self.rows, self.cols ) )
@@ -1617,8 +1619,8 @@ class DatFile( object ):
             blockC = self.chiptype.blockC
 
         # Calculate the number of block
-        rows = self.rows / blockR
-        cols = self.cols / blockC
+        rows = int( self.rows / blockR )
+        cols = int( self.cols / blockC )
         
         # Initialize data arrays
         self.avgtrace = np.zeros( (rows, cols, self.data.shape[2] ) )
@@ -1737,8 +1739,8 @@ class DatFile( object ):
         # Do the FFT on one pixel to get dims
         fft1 = np.fft.rfft( data[0,0,:] )
 
-        region_rows = self.rows / self.miniR
-        region_cols = self.cols / self.miniC
+        region_rows = int( self.rows / self.miniR )
+        region_cols = int( self.cols / self.miniC )
 
         fft = np.zeros( ( data.shape[0], data.shape[1], fft1.size ) )
         for r in range( region_rows ):
@@ -1838,8 +1840,8 @@ class DatFile( object ):
         blockC = getattr( self.chiptype, '%sC' % block.lower() )
 
         # Get the size of the block-averaged data
-        rows = self.rows / blockR
-        cols = self.cols / blockC
+        rows = int( self.rows / blockR )
+        cols = int( self.cols / blockC )
 
         # Initialize arrays
         output = np.zeros (( rows, cols ))

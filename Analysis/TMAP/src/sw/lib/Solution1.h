@@ -22,7 +22,7 @@ public:
 
   virtual int process(const string& b, const string& a, int qsc, int qec,
                  int mm, int mi, int o, int e, int dir,
-                 int *opt, int *te, int *qe, int *n_best);
+                 int *opt, int *te, int *qe, int *n_best, int* fitflag);
 
   int32_t query_cmp(string q, int n, uint8_t *query, int32_t query_len);
 private:

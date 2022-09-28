@@ -5,6 +5,7 @@
 #include <config.h>
 #include <time.h>
 #include <assert.h>
+#include <semaphore.h>
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 #endif
@@ -37,6 +38,56 @@
 #include "../realign/realign_c_util.h"
 
 #define PARANOID_TESTS 0
+
+// DK: declare fileno here to avoid using __USE_POSIX (which may have unknown effect on build)
+
+extern int fileno (FILE *__stream);
+
+/*!
+  Driver data to be passed to a thread
+  */
+typedef struct {
+    sam_header_t *sam_header;  /*!< the SAM Header */
+    tmap_seqs_t **seqs_buffer;  /*!< the buffers of sequences */
+    int32_t seqs_buffer_length;  /*!< the buffers length */
+    tmap_map_record_t **records;  /*!< the alignments for each sequence */
+    tmap_map_bams_t **bams;  /*!< the BAM alignments for each sequence */
+    tmap_index_t *index;  /*!< pointer to the reference index */
+    tmap_map_driver_t *driver;  /*!< the main driver object */
+    tmap_map_stats_t *stat; /*!< the driver statistics */
+    tmap_rand_t *rand;  /*!< the random number generator */
+    // DVK - realigner
+    struct RealignProxy *realigner; /*!< post-processing realigner engine */
+    struct RealignProxy *context; /*!< post-processing context-dependent realignment engine */
+    int32_t do_pairing;  /*!< 1 if we are performing pairing paramter calculation, 0 otherwise */
+    int32_t tid;  /*!< the zero-based thread id */
+    int32_t *seqCntr;
+    sem_t processor_trigger_sem;
+    sem_t processor_done_sem;
+    int32_t dismantle;
+} tmap_map_driver_thread_data_t;
+
+typedef struct {
+    tmap_seqs_io_t *io_in;
+    tmap_sam_io_t *io_out;
+    tmap_seqs_t **seqs_buffer;
+    int32_t seqs_buffer_length;
+    int32_t reads_queue_size;
+    sem_t reader_trigger_sem;
+    sem_t reader_done_sem;
+    int32_t dismantle; 
+} tmap_map_driver_thread_io_data_t;
+
+typedef struct{
+	//struct to hold data for writer thread
+	int32_t seqs_buffer_length;
+	tmap_map_bams_t **bams;
+	tmap_map_record_t **records;
+	tmap_sam_io_t *io_out;
+	sem_t writer_trigger_sem;
+	sem_t writer_done_sem;
+    int32_t dismantle; 
+} tmap_map_driver_thread_writer_data_t;
 
 
 // NB: do not turn these on, as they do not currently improve run time. They
@@ -943,7 +994,7 @@ void tail_repeats_clip_read
     tmap_seq_t* qryseq,
     tmap_refseq_t* refseq,
     tmap_map_sams_t* sams,
-    struct RealignProxy* realigner,
+    // struct RealignProxy* realigner,
     tmap_map_stats_t *stat,
     int32_t repclip_continuation,
     int32_t repclip_flag,
@@ -1010,7 +1061,8 @@ void tail_repeats_clip_read
                 filtered ++;
                 continue;
             }
-            uint8_t* ref = (uint8_t*) ref_mem (realigner, ref_tail_len);
+            // uint8_t* ref = (uint8_t*) ref_mem (realigner, ref_tail_len);
+            uint8_t* ref = alloca ( sizeof (uint8_t) * ref_tail_len);
             int32_t converted_cnt;
             tmap_refseq_subseq2 (refseq, ref_id+1, ref_tail_beg+1, ref_tail_end, ref, 0, &converted_cnt);
             // convert reference to ascii format
@@ -1129,21 +1181,7 @@ void tail_repeat_clip_reads (tmap_seqs_t *seqs_buffer, tmap_refseq_t* refseq, tm
 #endif
 
 void
-tmap_map_driver_core_worker(sam_header_t *sam_header,
-                            tmap_seqs_t **seqs_buffer, 
-                            tmap_map_record_t **records, 
-                            tmap_map_bams_t **bams,
-                            int32_t seqs_buffer_length,
-                            int32_t *buffer_idx,
-                            tmap_index_t *index,
-                            tmap_map_driver_t *driver,
-                            tmap_map_stats_t *stat,
-                            tmap_rand_t *rand,
-                            // DVK - realigner
-                            struct RealignProxy* realigner,
-                            struct RealignProxy* context,
-                            int32_t do_pairing,
-                            int32_t tid)
+tmap_map_driver_core_worker(tmap_map_driver_thread_data_t *params)
 {
     int32_t i, j, k, low = 0;
     int32_t found;
@@ -1155,6 +1193,16 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
     // common memory resource for WS traceback paths
     tmap_sw_path_t *path_buf = NULL; // buffer for traceback path
     int32_t path_buf_sz = 0;         // used portion and allocated size of traceback path. 
+    sam_header_t *sam_header=params->sam_header;
+	tmap_index_t *index=params->index;
+	tmap_map_driver_t *driver=params->driver;
+	tmap_map_stats_t *stat=params->stat;
+	tmap_rand_t *rand=params->rand;
+	// DVK - realigner
+	struct RealignProxy* realigner=params->realigner;
+	struct RealignProxy* context=params->context;
+	int32_t tid=params->tid;
+	int32_t *seqCntr=params->seqCntr;
 
     #ifdef TMAP_DRIVER_USE_HASH
     // init the occurence hash
@@ -1175,450 +1223,472 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
     tmap_map_driver_do_threads_init (driver, tid);
 
     // Go through the buffer
-    while (low < seqs_buffer_length) 
+    while(1)
     {
-        if (tid == (low % driver->opt->num_threads)) 
+        sem_wait (&params->processor_trigger_sem);
+        if (params->dismantle)
+            break;
+        while (1)
         {
-            tmap_map_stats_t *stage_stat = NULL;
-            tmap_map_record_t *record_prev = NULL;
-            int32_t num_ends;
-
-            #ifdef TMAP_DRIVER_USE_HASH
-            #ifdef TMAP_DRIVER_CLEAR_HASH_PER_READ
-            // TODO: should we hash each read, or across the thread?
-            tmap_bwt_match_hash_clear (hash);
-            #endif
-            #endif
-
-            num_ends = seqs_buffer [low]->n;
-            if(max_num_ends < num_ends) 
+            int32_t lowStart = __atomic_fetch_add(seqCntr,10,__ATOMIC_SEQ_CST);
+            int32_t lowEnd = lowStart+10;
+            if(lowEnd >params->seqs_buffer_length)
+            lowEnd=params->seqs_buffer_length;
+            if(lowStart >= params->seqs_buffer_length)
+            break;
+            for(low=lowStart;low<lowEnd;low++)
+            //for(low=0;low<params->seqs_buffer_length;low++)
             {
-                seqs = tmap_realloc (seqs, sizeof (tmap_seq_t**) * num_ends, "seqs");
-                while(max_num_ends < num_ends) 
+        //    	if (!(tid == (low % driver->opt->num_threads)))
+        //    		continue;
+                tmap_map_stats_t *stage_stat = NULL;
+                tmap_map_record_t *record_prev = NULL;
+                int32_t num_ends;
+
+                #ifdef TMAP_DRIVER_USE_HASH
+                #ifdef TMAP_DRIVER_CLEAR_HASH_PER_READ
+                // TODO: should we hash each read, or across the thread?
+                tmap_bwt_match_hash_clear (hash);
+                #endif
+                #endif
+
+                num_ends = params->seqs_buffer [low]->n;
+                if(max_num_ends < num_ends) 
                 {
-                    seqs [max_num_ends] = tmap_calloc(4, sizeof(tmap_seq_t*), "seqs[max_num_ends]");
-                    max_num_ends++;
-                }
-                max_num_ends = num_ends;
-            }
-            // re-initialize the random seed
-            if(driver->opt->rand_read_name)
-                tmap_rand_reinit(rand, tmap_hash_str_hash_func_exc(tmap_seq_get_name(seqs_buffer[low]->seqs[0])->s, driver->opt->prefix_exclude, driver->opt->suffix_exclude));
-
-            // init
-            for(i = 0; i < num_ends; i++) 
-            {
-                tmap_map_driver_init_seqs (seqs [i], seqs_buffer [low]->seqs [i], -1);
-                if (NULL != stat) stat->num_reads++;
-            }
-
-            // init records
-            records [low] = tmap_map_record_init (num_ends);
-
-            // go through each stage
-            int32_t stage_ord;
-            for (stage_ord = 0; stage_ord < driver->num_stages; ++stage_ord) 
-            { // for each stage
-
-                tmap_map_driver_stage_t *stage = driver->stages [stage_ord];
-                //// tmap_sw_param_t sw_par;
-                // stage may have special sw parameters
-                // DK here handling of global arrays matrix and iupac_matrix is completely messed up.
-                // The threads would randomly and concurrently override the matix as each of them go through stages.
-                // Safe fix would be to allocate matrix locally here and populate it.
-                // That would be unnecessary extra work per each read (which is performed here anyway)
-                // Better option is to allocate per-stage parameters storage and compute them once per stage.
-                // Implementing the latter
-                // To avoid race when filling in the stage params, init them when thread data gets initialized.
-
-                // tmap_map_util_populate_sw_par_iupac (&(stage->sw_param), stage->opt);
-
-                // stage stats
-                stage_stat = tmap_map_stats_init ();
-
-                // seed
-                for (j = 0; j < num_ends; j++) 
-                {   // for each end
-                    tmap_seq_t** stage_seqs = NULL;
-                    // should we seed using the whole read?
-                    if(0 < stage->opt->stage_seed_max_length && stage->opt->stage_seed_max_length < tmap_seq_get_bases_length (seqs [j][0])) 
+                    seqs = tmap_realloc (seqs, sizeof (tmap_seq_t**) * num_ends, "seqs");
+                    while(max_num_ends < num_ends) 
                     {
-                        stage_seqs = tmap_calloc (4, sizeof (tmap_seq_t*), "seqs[]");
-                        tmap_map_driver_init_seqs (stage_seqs, seqs_buffer [low]->seqs [stage_ord], stage->opt->stage_seed_max_length);
+                        seqs [max_num_ends] = tmap_calloc(4, sizeof(tmap_seq_t*), "seqs[max_num_ends]");
+                        max_num_ends++;
+                    }
+                    max_num_ends = num_ends;
+                }
+                // re-initialize the random seed
+                if(driver->opt->rand_read_name)
+                    tmap_rand_reinit(rand, tmap_hash_str_hash_func_exc(tmap_seq_get_name(params->seqs_buffer[low]->seqs[0])->s, driver->opt->prefix_exclude, driver->opt->suffix_exclude));
+
+                // init
+                for(i = 0; i < num_ends; i++) 
+                {
+                    tmap_map_driver_init_seqs (seqs [i], params->seqs_buffer [low]->seqs [i], -1);
+                    if (NULL != stat) stat->num_reads++;
+                }
+
+                // init records
+                params->records [low] = tmap_map_record_init (num_ends);
+
+                // go through each stage
+                int32_t stage_ord;
+                for (stage_ord = 0; stage_ord < driver->num_stages; ++stage_ord) 
+                { // for each stage
+
+                    tmap_map_driver_stage_t *stage = driver->stages [stage_ord];
+                    //// tmap_sw_param_t sw_par;
+                    // stage may have special sw parameters
+                    // DK here handling of global arrays matrix and iupac_matrix is completely messed up.
+                    // The threads would randomly and concurrently override the matix as each of them go through stages.
+                    // Safe fix would be to allocate matrix locally here and populate it.
+                    // That would be unnecessary extra work per each read (which is performed here anyway)
+                    // Better option is to allocate per-stage parameters storage and compute them once per stage.
+                    // Implementing the latter
+                    // To avoid race when filling in the stage params, init them when thread data gets initialized.
+
+                    // tmap_map_util_populate_sw_par_iupac (&(stage->sw_param), stage->opt);
+
+                    // stage stats
+                    stage_stat = tmap_map_stats_init ();
+
+                    // seed
+                    for (j = 0; j < num_ends; j++) 
+                    {   // for each end
+                        tmap_seq_t** stage_seqs = NULL;
+                        // should we seed using the whole read?
+                        if(0 < stage->opt->stage_seed_max_length && stage->opt->stage_seed_max_length < tmap_seq_get_bases_length (seqs [j][0])) 
+                        {
+                            stage_seqs = tmap_calloc (4, sizeof (tmap_seq_t*), "seqs[]");
+                            tmap_map_driver_init_seqs (stage_seqs, params->seqs_buffer [low]->seqs [stage_ord], stage->opt->stage_seed_max_length);
+                        }
+                        else 
+                            stage_seqs = seqs [j];
+                        for (k = 0; k < stage->num_algorithms; k++) 
+                        { // for each algorithm
+                            tmap_map_driver_algorithm_t *algorithm = stage->algorithms [k];
+                            tmap_map_sams_t *sams = NULL;
+                            if (stage_ord + 1 != algorithm->opt->algo_stage) 
+                                tmap_bug();
+                            // map
+                            sams = algorithm->func_thread_map (&algorithm->thread_data [tid], stage_seqs, index, hash, rand, algorithm->opt);
+                            if (NULL == sams) 
+                                tmap_error ("the thread function did not return a mapping", Exit, OutOfRange);
+                            // append
+                            tmap_map_sams_merge (params->records [low]->sams [j], sams);
+                            // destroy
+                            tmap_map_sams_destroy (sams);
+                        }
+                        stage_stat->num_after_seeding += params->records [low]->sams [j]->n;
+                        if (0 < stage->opt->stage_seed_max_length && stage->opt->stage_seed_max_length < tmap_seq_get_bases_length (seqs [j][0])) 
+                        {
+                            // free
+                            for (j = 0; j < 4; j++) 
+                            {
+                            tmap_seq_destroy (stage_seqs [j]);
+                            stage_seqs [j] = NULL;
+                            }
+                        }
+                        stage_seqs = NULL; // do not use
+                    }
+
+                    // keep mappings for subsequent stages or restore mappings from
+                    // previous stages
+                    if (1 == stage->opt->stage_keep_all) 
+                    {
+                        // merge from the previous stage
+                        if (0 < i) 
+                        {
+                            tmap_map_record_merge (params->records [low], record_prev);
+                            // destroy the record
+                            tmap_map_record_destroy (record_prev);
+                            record_prev = NULL;
+                        }
+
+                        // keep for the next stage
+                        if (i < driver->num_stages - 1) // more stages left
+                            record_prev = tmap_map_record_clone (params->records [low]);
+                    }
+
+                    // generate scores with smith waterman
+                    for (j = 0; j < num_ends; j++) 
+                    {   // for each end
+                        params->records [low]->sams [j] = tmap_map_util_sw_gen_score (index->refseq, params->seqs_buffer [low]->seqs [j], params->records [low]->sams [j], seqs [j], rand, stage->opt, &k, stat);
+                        stage_stat->num_after_scoring += params->records [low]->sams [j]->n;
+                        stage_stat->num_after_grouping += k;
+                    }
+
+                    // remove duplicates
+                    for (j = 0; j < num_ends; j++) 
+                    {   // for each end
+                        tmap_map_util_remove_duplicates (params->records [low]->sams [j], stage->opt->dup_window, rand);
+                        stage_stat->num_after_rmdup += params->records [low]->sams [j]->n;
+                    }
+
+                    // (single-end) mapping quality
+                    for (j = 0;j < num_ends; j++) // for each end
+                        driver->func_mapq (params->records [low]->sams [j], tmap_seq_get_bases_length (seqs [j][0]), stage->opt, index->refseq);
+
+
+                    // filter if we have more stages
+                    if (stage_ord < driver->num_stages-1) 
+                    {
+                        for (j = 0; j < num_ends; j++) // for each end
+                            tmap_map_sams_filter2 (params->records [low]->sams [j], stage->opt->stage_score_thr, stage->opt->stage_mapq_thr);
+                    }
+    
+                    if (0 == params->do_pairing && 0 <= driver->opt->strandedness && 0 <= driver->opt->positioning
+                    && 2 == num_ends && 0 < params->records [low]->sams [0]->n && 0 < params->records [low]->sams [1]->n)
+                    {   // pairs of reads!
+                        // read rescue
+                        if (1 == stage->opt->read_rescue) 
+                        {
+                            int32_t flag = tmap_map_pairing_read_rescue (index->refseq, 
+                                                                    params->seqs_buffer [low]->seqs[0], params->seqs_buffer [low]->seqs [1],
+                                                                    params->records [low]->sams [0], params->records [low]->sams [1],
+                                                                    seqs [0], seqs [1],
+                                                                    rand, stage->opt, stat);
+                            // recalculate mapping qualities if necessary
+                            if (0 < (flag & 0x1))  // first end was rescued
+                                driver->func_mapq (params->records [low]->sams [0], tmap_seq_get_bases_length (seqs [0][0]), stage->opt, index->refseq);
+                            if(0 < (flag & 0x2)) // second end was rescued
+                                driver->func_mapq (params->records [low]->sams [1], tmap_seq_get_bases_length (seqs [1][0]), stage->opt, index->refseq);
+                        }
+                        // pick pairs
+                        tmap_map_pairing_pick_pairs (params->records [low]->sams [0], params->records [low]->sams [1],
+                                                seqs [0][0], seqs [1][0],
+                                                rand, stage->opt);
                     }
                     else 
-                        stage_seqs = seqs [j];
-                    for (k = 0; k < stage->num_algorithms; k++) 
-                    { // for each algorithm
-                        tmap_map_driver_algorithm_t *algorithm = stage->algorithms [k];
-                        tmap_map_sams_t *sams = NULL;
-                        if (stage_ord + 1 != algorithm->opt->algo_stage) 
-                            tmap_bug();
-                        // map
-                        sams = algorithm->func_thread_map (&algorithm->thread_data [tid], stage_seqs, index, hash, rand, algorithm->opt);
-                        if (NULL == sams) 
-                            tmap_error ("the thread function did not return a mapping", Exit, OutOfRange);
-                        // append
-                        tmap_map_sams_merge (records [low]->sams [j], sams);
-                        // destroy
-                        tmap_map_sams_destroy (sams);
-                    }
-                    stage_stat->num_after_seeding += records [low]->sams [j]->n;
-                    if (0 < stage->opt->stage_seed_max_length && stage->opt->stage_seed_max_length < tmap_seq_get_bases_length (seqs [j][0])) 
                     {
-                        // free
-                        for (j = 0; j < 4; j++) 
-                        {
-                          tmap_seq_destroy (stage_seqs [j]);
-                          stage_seqs [j] = NULL;
+                        // choose alignments
+                        for (j = 0; j < num_ends; ++j) 
+                        { // for each end
+                            tmap_map_sams_filter1 (params->records [low]->sams [j], stage->opt->aln_output_mode, TMAP_MAP_ALGO_NONE, rand);
+                            stage_stat->num_after_filter += params->records [low]->sams [j]->n;
                         }
                     }
-                    stage_seqs = NULL; // do not use
-                }
 
-                // keep mappings for subsequent stages or restore mappings from
-                // previous stages
-                if (1 == stage->opt->stage_keep_all) 
-                {
-                    // merge from the previous stage
-                    if (0 < i) 
-                    {
-                        tmap_map_record_merge (records [low], record_prev);
-                        // destroy the record
-                        tmap_map_record_destroy (record_prev);
-                        record_prev = NULL;
-                    }
-
-                    // keep for the next stage
-                    if (i < driver->num_stages - 1) // more stages left
-                        record_prev = tmap_map_record_clone (records [low]);
-                }
-
-                // generate scores with smith waterman
-                for (j = 0; j < num_ends; j++) 
-                {   // for each end
-                    records [low]->sams [j] = tmap_map_util_sw_gen_score (index->refseq, seqs_buffer [low]->seqs [j], records [low]->sams [j], seqs [j], rand, stage->opt, &k);
-                    stage_stat->num_after_scoring += records [low]->sams [j]->n;
-                    stage_stat->num_after_grouping += k;
-                }
-
-                // remove duplicates
-                for (j = 0; j < num_ends; j++) 
-                {   // for each end
-                    tmap_map_util_remove_duplicates (records [low]->sams [j], stage->opt->dup_window, rand);
-                    stage_stat->num_after_rmdup += records [low]->sams [j]->n;
-                }
-
-                // (single-end) mapping quality
-                for (j = 0;j < num_ends; j++) // for each end
-                    driver->func_mapq (records [low]->sams [j], tmap_seq_get_bases_length (seqs [j][0]), stage->opt, index->refseq);
-
-
-                // filter if we have more stages
-                if (stage_ord < driver->num_stages-1) 
-                {
-                    for (j = 0; j < num_ends; j++) // for each end
-                        tmap_map_sams_filter2 (records [low]->sams [j], stage->opt->stage_score_thr, stage->opt->stage_mapq_thr);
-                }
- 
-                if (0 == do_pairing && 0 <= driver->opt->strandedness && 0 <= driver->opt->positioning
-                 && 2 == num_ends && 0 < records [low]->sams [0]->n && 0 < records [low]->sams [1]->n) 
-                {   // pairs of reads!
-                    // read rescue
-                    if (1 == stage->opt->read_rescue) 
-                    {
-                        int32_t flag = tmap_map_pairing_read_rescue (index->refseq, 
-                                                                  seqs_buffer [low]->seqs[0], seqs_buffer [low]->seqs [1],
-                                                                  records [low]->sams [0], records [low]->sams [1],
-                                                                  seqs [0], seqs [1],
-                                                                  rand, stage->opt);
-                        // recalculate mapping qualities if necessary
-                        if (0 < (flag & 0x1))  // first end was rescued
-                            driver->func_mapq (records [low]->sams [0], tmap_seq_get_bases_length (seqs [0][0]), stage->opt, index->refseq);
-                        if(0 < (flag & 0x2)) // second end was rescued
-                            driver->func_mapq (records [low]->sams [1], tmap_seq_get_bases_length (seqs [1][0]), stage->opt, index->refseq);
-                    }
-                    // pick pairs
-                    tmap_map_pairing_pick_pairs (records [low]->sams [0], records [low]->sams [1],
-                                              seqs [0][0], seqs [1][0],
-                                              rand, stage->opt);
-                }
-                else 
-                {
-                    // choose alignments
-                    for (j = 0; j < num_ends; ++j) 
-                    { // for each end
-                        tmap_map_sams_filter1 (records [low]->sams [j], stage->opt->aln_output_mode, TMAP_MAP_ALGO_NONE, rand);
-                        stage_stat->num_after_filter += records [low]->sams [j]->n;
-                    }
-                }
-
-                // generate and post-process alignments
-                found = 0;
-                for (j = 0; j < num_ends; ++j)  // for each end
-                { 
-                    tmap_map_sams_t* sams = records [low]->sams [j];
-                    tmap_seq_t* seq = seqs_buffer [low]->seqs [j];
-                    tmap_seq_t** seq_variants = seqs [j];
-                    // if there are no mappings, continue
-                    if (!sams->n)
-                        continue;
-                    // find alignment starts
-                    sams = records [low]->sams [j] = tmap_map_util_find_align_starts 
-                    (
-                        index->refseq,      // reference server
-                        sams,               // initial rough mapping 
-                        seq,                // read
-                        seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                        stage->opt,         // stage parameters
-                        &target,            // target cache control structure
-                        stat                // statistics accumulator
-                    );
-                    if (!sams->n) 
-                        continue;
-
-                    // map to amplicons (if BED is given and parameters override enabled)
-                    if (index->refseq->bed_exist && (stage->opt->use_param_ovr || stage->opt->use_bed_in_end_repair || stage->opt->use_bed_read_ends_stat))
-                        tmap_map_find_amplicons (
-                                                    stage_ord,                  // stage index
-                                                    stage->opt,         // stage options
-                                                    &(stage->sw_param), // stage sw parameters
-                                                    index->refseq,      // reference server
-                                                    sams                // mappings 
-                                                );
-
-                    // reference alignment
-                    tmap_map_util_align
-                    (
-                        index->refseq,      // reference server
-                        sams,               // mappings to compute alignments for
-                        seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                        &target,            // target cache control structure
-                        stage_ord,          // processing stage index
-                        &(stage->sw_param), // Smith-Waterman scoring parameters
-                        &path_buf,          // buffer for traceback path
-                        &path_buf_sz,       // used portion and allocated size of traceback path. 
-                        stat                // statistics accumulator
-                    );
-                    // realign in flowspace or with context, if requested
-                    if (stage->opt->aln_flowspace || stage->opt->use_param_ovr)
-                        // NB: seqs_buffer should have its key sequence if 0 < key_seq_len
-                        tmap_map_util_fsw 
+                    // generate and post-process alignments
+                    found = 0;
+                    for (j = 0; j < num_ends; ++j)  // for each end
+                    { 
+                        tmap_map_sams_t* sams = params->records [low]->sams [j];
+                        tmap_seq_t* seq = params->seqs_buffer [low]->seqs [j];
+                        tmap_seq_t** seq_variants = seqs [j];
+                        // if there are no mappings, continue
+                        if (!sams->n)
+                            continue;
+                        // find alignment starts
+                        sams = params->records [low]->sams [j] = tmap_map_util_find_align_starts
                         (
-                            seq, 
-                            sams, 
-                            index->refseq, 
-                            stage->opt->bw, 
-                            stage->opt->softclip_type, 
-                            stage->opt->score_thr,
-                            stage->opt->score_match, 
-                            stage->opt->pen_mm, 
-                            stage->opt->pen_gapo,
-                            stage->opt->pen_gape, 
-                            stage->opt->fscore, 
-                            1 - stage->opt->ignore_flowgram,
-                            stage->opt->aln_flowspace,
-                            stage->opt->use_param_ovr,
-                            stat
+                            index->refseq,      // reference server
+                            sams,               // initial rough mapping 
+                            seq,                // read
+                            seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                            stage->opt,         // stage parameters
+                            &target,            // target cache control structure
+                            stat                // statistics accumulator
                         );
-                    // context-sensitive (hp-indel-liberal) realignment
-                    if (stage->opt->do_hp_weight || stage->opt->use_param_ovr)
-                        context_align_read 
-                        (
-                            seq, 
-                            index->refseq, 
-                            sams, 
-                            context, 
-                            stat, 
-                            stage->opt
-                        );
-                    // perform anti-dyslexic realignment if enabled
-                    if (stage->opt->do_realign || stage->opt->use_param_ovr)
-                    {
-                        realign_read 
-                        (
-                            seq, 
-                            index->refseq, 
-                            sams, 
-                            realigner, 
-                            stat, 
-                            stage->opt
-                        );
-                    }
-                    // salvage ends
-                    if (stage->opt->pen_gapl >= 0 || stage->opt->use_param_ovr)
-                        tmap_map_util_salvage_edge_indels 
+                        if (!sams->n) 
+                            continue;
+
+                        // map to amplicons (if BED is given and parameters override enabled)
+                        if (index->refseq->bed_exist && (stage->opt->use_param_ovr || stage->opt->use_bed_in_end_repair || stage->opt->use_bed_read_ends_stat))
+                            tmap_map_find_amplicons (
+                                                        stage_ord,                  // stage index
+                                                        stage->opt,         // stage options
+                                                        &(stage->sw_param), // stage sw parameters
+                                                        index->refseq,      // reference server
+                                                        sams                // mappings 
+                                                    );
+
+                        // reference alignment
+                        tmap_map_util_align
                         (
                             index->refseq,      // reference server
                             sams,               // mappings to compute alignments for
                             seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
                             &target,            // target cache control structure
-                            stage->opt,         // tmap parameters
                             stage_ord,          // processing stage index
-                            &stage->sw_param,   // Smith-Waterman scoring parameters
-                            &path_buf,          // buffer for traceback path
-                            &path_buf_sz,        // used portion and allocated size of traceback path. 
-                            stat
-                        );
-                    // trim key (no local overriding for this option)
-                    if (1 == stage->opt->softclip_key)
-                        tmap_map_util_trim_key 
-                        (
-                            sams,               // mappings to compute alignments for
-                            seq,                // read
-                            seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                            index->refseq,      // reference server
-                            &target,            // target cache control structure
-                            stat
-                        );
-                    // end repair
-                    if (stage->opt->end_repair != 0 || stage->opt->use_param_ovr)
-                        tmap_map_util_end_repair_bulk 
-                        (
-                            index->refseq,      // reference server
-                            sams,               // mappings to compute alignments for
-                            seq,                // read
-                            seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                            stage->opt,         // tmap parameters
-                            &target,            // target cache control structure
+                            &(stage->sw_param), // Smith-Waterman scoring parameters
                             &path_buf,          // buffer for traceback path
                             &path_buf_sz,       // used portion and allocated size of traceback path. 
-                            stat
+                            stat                // statistics accumulator
                         );
-                    // REPAiR
-                    if (stage->opt->use_bed_read_ends_stat != 0 || stage->opt->use_param_ovr)
-                        tmap_map_util_REPAiR_bulk 
-                        (
-                            index->refseq,      // reference server
-                            sams,               // mappings to compute alignments for
-                            seq,                // read
-                            seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
-                            stage->opt,         // tmap parameters
-                            stage_ord,          // processing stage index
-                            &stage->sw_param,   // swage SW parameters
-                            &target,            // target cache control structure
-                            &path_buf,          // buffer for traceback path
-                            &path_buf_sz,       // used portion and allocated size of traceback path. 
-                            stat
-                        );
-                    // explicitly fix 5' softclip is required
-                    if ((!stage->opt->end_repair_5_prime_softclip && (stage->opt->softclip_type == 2 || stage->opt->softclip_type == 3))
-                        || stage->opt->use_param_ovr)
-                    {
-                        int i;
-                        for (i = 0; i != sams->n; ++i)
-                        {
-                            tmap_map_sam_t* s = sams->sams + i;
-                            tmap_map_util_remove_5_prime_softclip 
+                        // realign in flowspace or with context, if requested
+                        if (stage->opt->aln_flowspace || stage->opt->use_param_ovr)
+                            // NB: seqs_buffer should have its key sequence if 0 < key_seq_len
+                            tmap_map_util_fsw 
                             (
-                                index->refseq,
-                                s,
-                                seq,
-                                seq_variants,
-                                &target,
-                                &path_buf,
-                                &path_buf_sz,
-                                stage_ord,
-                                &(stage->sw_param),
-                                stage->opt,
+                                seq, 
+                                sams, 
+                                index->refseq, 
+                                stage->opt->bw, 
+                                stage->opt->softclip_type, 
+                                stage->opt->score_thr,
+                                stage->opt->score_match, 
+                                stage->opt->pen_mm, 
+                                stage->opt->pen_gapo,
+                                stage->opt->pen_gape, 
+                                stage->opt->fscore, 
+                                1 - stage->opt->ignore_flowgram,
+                                stage->opt->aln_flowspace,
+                                stage->opt->use_param_ovr,
                                 stat
                             );
-                        }
-                    }
-                    if (stage->opt->cigar_sanity_check || stage->opt->use_param_ovr)  // do this before tail repeat clipping as the latter does not update alignment box. TODO: update box in tail clip and move this to the very end of alignment post processing
-                    {
-                        int i;
-                        for (i = 0; i != sams->n; ++i)
-                        {
-                            cigar_sanity_check 
+                        // context-sensitive (hp-indel-liberal) realignment
+                        // if (stage->opt->do_hp_weight || stage->opt->use_param_ovr)
+                        if (context) // the logic that determines if context realignment is to be tried is used to define context ptr; it is NULL if context realignment is not required
+                            context_align_read 
                             (
-                                index->refseq,
-                                sams->sams + i,
-                                seq,
-                                seq_variants,
-                                &target,
+                                seq, 
+                                index->refseq, 
+                                sams, 
+                                context, 
+                                stat, 
+                                stage->opt
+                            );
+                        // perform anti-dyslexic realignment if enabled
+                        // if (stage->opt->do_realign || stage->opt->use_param_ovr)
+                        if (realigner) // the logic that determines if context realignment is to be tried is used to define context ptr; it is NULL if context realignment is not required
+                        {
+                            realign_read 
+                            (
+                                seq, 
+                                index->refseq, 
+                                sams, 
+                                realigner, 
+                                stat, 
                                 stage->opt
                             );
                         }
+                        // salvage ends
+                        if (stage->opt->pen_gapl >= 0 || stage->opt->use_param_ovr)
+                            tmap_map_util_salvage_edge_indels 
+                            (
+                                index->refseq,      // reference server
+                                sams,               // mappings to compute alignments for
+                                seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                                &target,            // target cache control structure
+                                stage->opt,         // tmap parameters
+                                stage_ord,          // processing stage index
+                                &stage->sw_param,   // Smith-Waterman scoring parameters
+                                &path_buf,          // buffer for traceback path
+                                &path_buf_sz,        // used portion and allocated size of traceback path. 
+                                stat
+                            );
+                        // trim key (no local overriding for this option)
+                        if (1 == stage->opt->softclip_key)
+                            tmap_map_util_trim_key 
+                            (
+                                sams,               // mappings to compute alignments for
+                                seq,                // read
+                                seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                                index->refseq,      // reference server
+                                &target,            // target cache control structure
+                                stat
+                            );
+                        // end repair
+                        if (stage->opt->end_repair != 0 || stage->opt->use_param_ovr)
+                            tmap_map_util_end_repair_bulk 
+                            (
+                                index->refseq,      // reference server
+                                sams,               // mappings to compute alignments for
+                                seq,                // read
+                                seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                                stage->opt,         // tmap parameters
+                                &target,            // target cache control structure
+                                &path_buf,          // buffer for traceback path
+                                &path_buf_sz,       // used portion and allocated size of traceback path. 
+                                stat
+                            );
+                        // REPAiR
+                        if (stage->opt->use_bed_read_ends_stat != 0 || stage->opt->use_param_ovr)
+                            tmap_map_util_REPAiR_bulk 
+                            (
+                                index->refseq,      // reference server
+                                sams,               // mappings to compute alignments for
+                                seq,                // read
+                                seq_variants,       // array of size 4 that contains pre-computed inverse / complement combinations
+                                stage->opt,         // tmap parameters
+                                stage_ord,          // processing stage index
+                                &stage->sw_param,   // swage SW parameters
+                                &target,            // target cache control structure
+                                &path_buf,          // buffer for traceback path
+                                &path_buf_sz,       // used portion and allocated size of traceback path. 
+                                stat
+                            );
+                        // explicitly fix 5' softclip is required
+                        if ((!stage->opt->end_repair_5_prime_softclip && (stage->opt->softclip_type == 2 || stage->opt->softclip_type == 3))
+                            || stage->opt->use_param_ovr)
+                        {
+                            int i;
+                            for (i = 0; i != sams->n; ++i)
+                            {
+                                tmap_map_sam_t* s = sams->sams + i;
+                                tmap_map_util_remove_5_prime_softclip 
+                                (
+                                    index->refseq,
+                                    s,
+                                    seq,
+                                    seq_variants,
+                                    &target,
+                                    &path_buf,
+                                    &path_buf_sz,
+                                    stage_ord,
+                                    &(stage->sw_param),
+                                    stage->opt,
+                                    stat
+                                );
+                            }
+                        }
+                        if (stage->opt->cigar_sanity_check || stage->opt->use_param_ovr)  // do this before tail repeat clipping as the latter does not update alignment box. TODO: update box in tail clip and move this to the very end of alignment post processing
+                        {
+                            int i;
+                            for (i = 0; i != sams->n; ++i)
+                            {
+                                cigar_sanity_check 
+                                (
+                                    index->refseq,
+                                    sams->sams + i,
+                                    seq,
+                                    seq_variants,
+                                    &target,
+                                    stage->opt
+                                );
+                            }
+                        }
+                        // clip repeats
+                        if (driver->opt->do_repeat_clip || stage->opt->use_param_ovr)
+                            tail_repeats_clip_read 
+                            (
+                                seq, 
+                                index->refseq, 
+                                sams, 
+                                // realigner,  // DK: dependency of repeat clipper on realignment is removed to allow easier conditional realigner memory management for massively parallel setups
+                                stat, 
+                                stage->opt->repclip_continuation,
+                                stage->opt->do_repeat_clip,
+                                stage->opt->use_param_ovr
+                            );
+
+                        stage_stat->num_with_mapping++;
+                        found = 1;
                     }
-                    // clip repeats
-                    if (driver->opt->do_repeat_clip || stage->opt->use_param_ovr)
-                        tail_repeats_clip_read 
-                        (
-                            seq, 
-                            index->refseq, 
-                            sams, 
-                            realigner, 
-                            stat, 
-                            stage->opt->repclip_continuation,
-                            stage->opt->do_repeat_clip,
-                            stage->opt->use_param_ovr
-                        );
 
-                    stage_stat->num_with_mapping++;
-                    found = 1;
-                }
+                    // TODO
+                    // if paired, update pairing score based on target start?
 
-                // TODO
-                // if paired, update pairing score based on target start?
-
-                // did we find any mappings?
-                if (found) 
-                {   // yes
-                    if (stat) 
-                        tmap_map_stats_add (stat, stage_stat);
+                    // did we find any mappings?
+                    if (found) 
+                    {   // yes
+                        if (stat) 
+                            tmap_map_stats_add (stat, stage_stat);
+                        tmap_map_stats_destroy (stage_stat);
+                        break;
+                    }
+                    else 
+                    {   // no
+                        tmap_map_record_destroy (params->records [low]);
+                        // re-init
+                        params->records [low] = tmap_map_record_init (num_ends);
+                    }
                     tmap_map_stats_destroy (stage_stat);
-                    break;
                 }
-                else 
-                {   // no
-                    tmap_map_record_destroy (records [low]);
-                    // re-init
-                    records [low] = tmap_map_record_init (num_ends);
-                }
-                tmap_map_stats_destroy (stage_stat);
-            }
 
-            // only convert to BAM and destroy the records if we are not trying to
-            // estimate the pairing parameters
-            if (0 == do_pairing) 
-            {
-                // convert the record to bam
-                if (1 == seqs_buffer [low]->n) 
+                // only convert to BAM and destroy the records if we are not trying to
+                // estimate the pairing parameters
+                if (0 == params->do_pairing)
                 {
-                    bams [low] = tmap_map_bams_init (1); 
-                    bams [low]->bams [0] = tmap_map_sams_print (seqs_buffer [low]->seqs [0], index->refseq, records [low]->sams [0], 
-                                                           0, NULL, driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
+
+                    if(params->bams[low]){
+                        tmap_map_bams_destroy(params->bams[low]);
+                        params->bams[low] = NULL;
+                    }
+
+                    // convert the record to bam
+                    if (1 == params->seqs_buffer [low]->n)
+                    {
+                        params->bams [low] = tmap_map_bams_init (1);
+                        params->bams [low]->bams [0] = tmap_map_sams_print (params->seqs_buffer [low]->seqs [0], index->refseq, params->records [low]->sams [0],
+                                                            0, NULL, driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
+                    }
+                    else 
+                    {
+                        params->bams [low] = tmap_map_bams_init (params->seqs_buffer [low]->n);
+                        for (j = 0; j < params->seqs_buffer [low]->n; j++)
+                            params->bams [low]->bams [j] = tmap_map_sams_print (params->seqs_buffer [low]->seqs [j], index->refseq, params->records [low]->sams [j],
+                                                                (0 == j) ? 1 : ((params->seqs_buffer [low]->n-1 == j) ? 2 : 0),
+                                                                params->records [low]->sams[(j+1) % params->seqs_buffer [low]->n],
+                                                                driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
+                    }
+                    // free alignments, for space
+                    tmap_map_record_destroy (params->records [low]);
+                    params->records [low] = NULL;
                 }
-                else 
+                // free seqs
+                for (i = 0; i < num_ends; i++) 
                 {
-                    bams [low] = tmap_map_bams_init (seqs_buffer [low]->n);
-                    for (j = 0; j < seqs_buffer [low]->n; j++) 
-                        bams [low]->bams [j] = tmap_map_sams_print (seqs_buffer [low]->seqs [j], index->refseq, records [low]->sams [j],
-                                                               (0 == j) ? 1 : ((seqs_buffer [low]->n-1 == j) ? 2 : 0),
-                                                               records [low]->sams[(j+1) % seqs_buffer [low]->n], 
-                                                               driver->opt->sam_flowspace_tags, driver->opt->bidirectional, driver->opt->seq_eq, driver->opt->min_al_len, driver->opt->min_al_cov, driver->opt->min_identity, driver->opt->score_match, &(stat->num_filtered_als));
+                    for (j = 0; j < 4; j++) 
+                    {
+                        tmap_seq_destroy (seqs [i][j]);
+                        seqs [i][j] = NULL;
+                    }
                 }
-                // free alignments, for space
-                tmap_map_record_destroy (records [low]); 
-                records [low] = NULL;
+                tmap_map_record_destroy (record_prev);
             }
-            // free seqs
-            for (i = 0; i < num_ends; i++) 
-            {
-                for (j = 0; j < 4; j++) 
-                {
-                    tmap_seq_destroy (seqs [i][j]);
-                    seqs [i][j] = NULL;
-                }
-            }
-            tmap_map_record_destroy (record_prev);
+            // next
+            low++;
         }
-        // next
-        (*buffer_idx) = low;
-        low++;
+        sem_post(&params->processor_done_sem);
     }
-    (*buffer_idx) = seqs_buffer_length;
 
     // free thread variables
     for (i = 0; i < max_num_ends; i++) 
@@ -1640,136 +1710,18 @@ tmap_map_driver_core_thread_worker(void *arg)
 {
   tmap_map_driver_thread_data_t *thread_data = (tmap_map_driver_thread_data_t*)arg;
 
-  tmap_map_driver_core_worker(thread_data->sam_header, thread_data->seqs_buffer, thread_data->records, thread_data->bams, 
-                              thread_data->seqs_buffer_length, thread_data->buffer_idx, thread_data->index, thread_data->driver, 
-                              thread_data->stat, thread_data->rand, /* DVK - realigner */ thread_data->realigner, thread_data->context, thread_data->do_pairing, thread_data->tid);
+  tmap_map_driver_core_worker(thread_data);
 
   return arg;
 }
 
-//static inline void
 static int32_t
-tmap_map_driver_create_threads(sam_header_t *header,
-                               tmap_seqs_t **seqs_buffer, 
-                               tmap_map_record_t **records, 
-                               tmap_map_bams_t **bams,
-                               int32_t seqs_buffer_length,
-                               tmap_index_t *index,
-                               tmap_map_driver_t *driver,
-                               tmap_map_stats_t *stat,
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-                               tmap_rand_t *rand_core,
-#endif
-#ifdef HAVE_LIBPTHREAD
-                               pthread_attr_t **attr,
-                               pthread_t **threads,
-                               tmap_map_driver_thread_data_t **thread_data,
-                               tmap_rand_t **rand,
-                               tmap_map_stats_t **stats,
-                               struct RealignProxy** realigner,
-                               struct RealignProxy** context,
-#endif
-                               int32_t do_pairing)
-{
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-  int32_t j;
-#endif
-  int32_t buffer_idx; // buffer index for processing data with a single thread
-
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-  // sample reads
-  {
-      int32_t i;
-      if(driver->opt->sample_reads < 1) {
-          for(i=j=0;i<seqs_buffer_length;i++) {
-              if(driver->opt->sample_reads < tmap_rand_get(rand_core)) continue; // skip
-              if(j < i) {
-                  tmap_seqs_t *seqs;
-                  seqs = seqs_buffer[j];
-                  seqs_buffer[j] = seqs_buffer[i]; 
-                  seqs_buffer[i] = seqs;
-              }
-              j++;
-          }
-          tmap_progress_print2("sampling %d out of %d [%.2lf%%]", j, seqs_buffer_length, 100.0*j/(double)seqs_buffer_length);
-          seqs_buffer_length = j;
-          if(0 == seqs_buffer_length) return 0;
-      }
-  }
-#endif
-
-  // do alignment
-#ifdef HAVE_LIBPTHREAD
-  if(1 == driver->opt->num_threads) {
-      buffer_idx = 0;
-      tmap_map_driver_core_worker(header, seqs_buffer, records, bams, 
-                                  seqs_buffer_length, &buffer_idx, index, driver, stat, rand[0], realigner [0], context [0], do_pairing, 0);
-  }
-  else {
-      int32_t i;
-      (*attr) = tmap_calloc(1, sizeof(pthread_attr_t), "(*attr)");
-      pthread_attr_init((*attr));
-      pthread_attr_setdetachstate((*attr), PTHREAD_CREATE_JOINABLE);
-
-      (*threads) = tmap_calloc(driver->opt->num_threads, sizeof(pthread_t), "(*threads)");
-      (*thread_data) = tmap_calloc(driver->opt->num_threads, sizeof(tmap_map_driver_thread_data_t), "(*thread_data)");
-
-      // create threads
-      for(i=0;i<driver->opt->num_threads;i++) {
-          (*thread_data)[i].sam_header = header;
-          (*thread_data)[i].seqs_buffer = seqs_buffer;
-          (*thread_data)[i].seqs_buffer_length = seqs_buffer_length;
-          (*thread_data)[i].buffer_idx = tmap_calloc(1, sizeof(int32_t), "(*thread_data)[i].buffer_id");
-          (*thread_data)[i].records = records;
-          (*thread_data)[i].bams = bams;
-          (*thread_data)[i].index = index;
-          (*thread_data)[i].driver = driver;
-          if(NULL != stats) (*thread_data)[i].stat = stats[i];
-          else (*thread_data)[i].stat = NULL;
-          (*thread_data)[i].rand = rand[i];
-          // DVK - realigner
-          (*thread_data)[i].realigner = realigner [i];
-          (*thread_data)[i].context = context [i];
-          (*thread_data)[i].do_pairing = do_pairing;
-          (*thread_data)[i].tid = i;
-          if(0 != pthread_create(&(*threads)[i], (*attr), tmap_map_driver_core_thread_worker, &(*thread_data)[i])) {
-              tmap_error("error creating threads", Exit, ThreadError);
-          }
-      }
-  }
-#else 
-  buffer_idx = 0;
-  tmap_map_driver_core_worker(header, seqs_buffer, records, bams, 
-                              seqs_buffer_length, &buffer_idx, index, driver, stat, rand, do_pairing, 0);
-#endif
-  return 1;
-}
-
-static int32_t
-tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
-                              sam_header_t *header,
-                              tmap_seqs_t **seqs_buffer, 
+tmap_map_driver_infer_pairing(tmap_seqs_t **seqs_buffer,
                               tmap_map_record_t **records, 
-                              tmap_map_bams_t **bams,
                               int32_t seqs_buffer_length,
-                              int32_t reads_queue_size,
-                              tmap_index_t *index,
                               tmap_map_driver_t *driver,
-                              tmap_map_stats_t *stat,
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-                              tmap_rand_t *rand_core,
-#endif
-#ifdef HAVE_LIBPTHREAD
-                              pthread_attr_t **attr,
-                              pthread_t **threads,
-                              tmap_map_driver_thread_data_t **thread_data,
-                              tmap_rand_t **rand,
-                              tmap_map_stats_t **stats,
-                              // DVK - realigner
-                              struct RealignProxy** realigner,
-                              struct RealignProxy** context
-#endif
-                              ) // NB: just so that the function definition is clean
+                              tmap_map_driver_thread_data_t *thread_data
+                              )
 {
   int32_t i, isize_num = 0, tmp;
   int32_t *isize = NULL;
@@ -1777,46 +1729,34 @@ tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
   int32_t max_len = 0;
 
   // check if we should do pairing
-  if(driver->opt->strandedness < 0 || driver->opt->positioning < 0 || !(driver->opt->ins_size_std < 0)) return 0;
+  if(driver->opt->strandedness < 0 ||
+		  driver->opt->positioning < 0 ||
+		  !(driver->opt->ins_size_std < 0) ||
+		  (0 == seqs_buffer_length)) return 0;
 
   // NB: infers from the first chunk of reads
   tmap_progress_print("inferring pairing parameters");
-  tmap_progress_print("loading reads");
-  seqs_buffer_length = tmap_seqs_io_read_buffer(io_in, seqs_buffer, reads_queue_size, header);
-  tmap_progress_print2("loaded %d reads", seqs_buffer_length);
-  if(0 == seqs_buffer_length) return 0;
 
   // holds the insert sizes
   isize = tmap_malloc(sizeof(int32_t) * seqs_buffer_length, "isize");
-
   // TODO: check that he data is paired...
   // TODO: check that we choose only the best scoring alignment
-  // create the threads
-  if(0 == tmap_map_driver_create_threads(header, seqs_buffer, records, 
-                                         bams, seqs_buffer_length, index, driver, NULL,
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-                                         rand_core,
-#endif
-#ifdef HAVE_LIBPTHREAD
-                                         attr, threads, thread_data, rand, NULL, realigner, context,
-#endif
-                                         1)) {
-      return 0;
+
+  for(int32_t i=0;i<driver->opt->num_threads;i++) {
+	  thread_data[i].seqs_buffer = seqs_buffer;
+	  thread_data[i].seqs_buffer_length = seqs_buffer_length;
+	  thread_data[i].do_pairing=1;
+	  sem_post(&thread_data[i].processor_trigger_sem);
+  }
+
+  // wait for the processing to be done
+  for(int32_t i=0;i<driver->opt->num_threads;i++) {
+	  sem_wait(&thread_data[i].processor_done_sem);
+	  thread_data[i].do_pairing=0;
   }
 
   // estimate pairing parameters
   for(i=0;i<seqs_buffer_length;i++) {
-#ifdef HAVE_LIBPTHREAD
-      if(1 < driver->opt->num_threads) {
-          // NB: we will write data as threads process the data.  This is to
-          // facilitate SAM/BAM writing, which may be slow, especially for
-          // BAM.
-          int32_t tid = (i % driver->opt->num_threads);
-          while((*(*thread_data)[tid].buffer_idx) <= i) {
-              usleep(1000*1000); // sleep
-          }
-      }
-#endif
       // only for paired ends
       if(NULL != records[i]
          && 2 == records[i]->n 
@@ -1853,24 +1793,6 @@ tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
       tmap_map_record_destroy(records[i]); 
       records[i] = NULL;
   }
-
-#ifdef HAVE_LIBPTHREAD
-  // join threads
-  if(1 < driver->opt->num_threads) {
-      // join threads
-      for(i=0;i<driver->opt->num_threads;i++) {
-          if(0 != pthread_join((*threads)[i], NULL)) {
-              tmap_error("error joining threads", Exit, ThreadError);
-          }
-          // free the buffer index
-          free((*thread_data)[i].buffer_idx);
-          (*thread_data)[i].buffer_idx = NULL;
-      }
-      free((*threads)); (*threads) = NULL;
-      free(*(thread_data)); (*thread_data) = NULL;
-      free((*attr)); (*attr) = NULL;
-  }
-#endif
 
   if(isize_num < 8) {
       tmap_error("failed to infer the insert size distribution (too few reads): turning pairing off", Warn, OutOfRange);
@@ -1944,20 +1866,51 @@ tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
 }
 
 #ifdef HAVE_LIBPTHREAD
-typedef struct {
-    tmap_seqs_io_t *io_in;
-    tmap_sam_io_t *io_out;
-    tmap_seqs_t **seqs_buffer;
-    int32_t seqs_buffer_length;
-    int32_t reads_queue_size;
-} tmap_map_driver_thread_io_data_t;
 
 static void *
 tmap_map_driver_thread_io_worker (void *arg)
 {
-  tmap_map_driver_thread_io_data_t *d = (tmap_map_driver_thread_io_data_t*) arg;
-  d->seqs_buffer_length = tmap_seqs_io_read_buffer (d->io_in, d->seqs_buffer, d->reads_queue_size, d->io_out->fp->header->header);
-  return d;
+    tmap_map_driver_thread_io_data_t *d = (tmap_map_driver_thread_io_data_t*) arg;
+    while (1)
+    {
+        sem_wait(&d->reader_trigger_sem);
+        if (d->dismantle)
+            break;
+        d->seqs_buffer_length = tmap_seqs_io_read_buffer (d->io_in, d->seqs_buffer, d->reads_queue_size, d->io_out->fp->header->header);
+        sem_post(&d->reader_done_sem);
+    }
+    // return d;
+    return NULL;
+}
+
+static void *
+tmap_map_driver_thread_writer_worker (void *arg)
+{
+    tmap_map_driver_thread_writer_data_t *data = (tmap_map_driver_thread_writer_data_t*) arg;
+    while(1)
+    {
+        sem_wait(&data->writer_trigger_sem);
+        if (data->dismantle)
+            break;
+        for(int i=0;i<data->seqs_buffer_length;i++) {
+                // write
+                for(int j=0;j<data->bams[i]->n;j++) { // for each end
+                    for(int k=0;k<data->bams[i]->bams[j]->n;k++) { // for each hit
+                        bam1_t *b = NULL;
+                        b = data->bams[i]->bams[j]->bams[k]; // that's a lot of BAMs
+                        if(NULL == b) tmap_bug();
+                        if(samwrite(data->io_out->fp, b) <= 0) {
+                            tmap_error("Error writing the SAM file", Exit, WriteFileError);
+                        }
+                    }
+                }
+                tmap_map_bams_destroy(data->bams[i]);
+                data->bams[i] = NULL;
+            }
+        sem_post(&data->writer_done_sem);
+    }
+    // return data;
+    return NULL;
 }
 #endif
 
@@ -1988,6 +1941,35 @@ uint8_t fill_sw_overrides (tmap_refseq_t* refseq, tmap_map_driver_t *driver)
 }
 
 
+static uint32_t find_if_realigner_or_context_is_needed 
+(
+    uint8_t driver_realign_flag,
+    uint8_t driver_context_flag,
+    tmap_map_locopt_t* local_options,
+    uint32_t local_options_cnt,
+    uint8_t* realignment_needed,
+    uint8_t* context_needed)
+{
+    if (!context_needed || !realignment_needed) 
+        return 0;
+    if (context_needed) *context_needed = 0;
+    if (realignment_needed) *realignment_needed = 0;
+    if (realignment_needed && driver_realign_flag)
+        *realignment_needed = 1;
+    if (context_needed && driver_context_flag)
+        *context_needed = 1;
+    for (tmap_map_locopt_t* sent = local_options + local_options_cnt; local_options != sent; ++local_options)
+    {
+        if (realignment_needed && !*realignment_needed && local_options->do_realign.over && local_options->do_realign.value)
+            *realignment_needed = 1;
+        if (!context_needed && *context_needed && local_options->do_hp_weight.over && local_options->do_hp_weight.value)
+            *context_needed = 1;
+        if ((!context_needed || *context_needed) && (!realignment_needed || *realignment_needed))
+            break;
+    }
+    return 1;
+}
+
 void 
 tmap_map_driver_core (tmap_map_driver_t *driver)
 {
@@ -2002,31 +1984,34 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 #endif
   tmap_map_record_t **records=NULL; // buffer for the mapped data
   tmap_map_bams_t **bams=NULL;// buffer for the mapped BAM data
+  tmap_map_bams_t **bams_to_write=NULL;// copy of buffer for the writer thread to access
   tmap_index_t *index = NULL; // reference indes
-  tmap_map_stats_t *stat = NULL; // alignment statistics
   local_ovrs = 0; // count of local (per-amplicon) logging overrides
 #ifdef HAVE_LIBPTHREAD
-  pthread_attr_t *attr = NULL;
-  pthread_attr_t attr_io;
-  pthread_t *threads = NULL;
-  pthread_t *thread_io = NULL;
-  tmap_map_driver_thread_data_t *thread_data=NULL;
+  pthread_attr_t attr;
+  pthread_t thread_reader;
+  pthread_t thread_writer;
+  pthread_t *threads = tmap_calloc(driver->opt->num_threads, sizeof(pthread_t), "threads");
+  tmap_map_driver_thread_data_t *thread_data=tmap_calloc(driver->opt->num_threads, sizeof(tmap_map_driver_thread_data_t), "thread_data");
   tmap_map_driver_thread_io_data_t thread_io_data;
+  tmap_map_driver_thread_writer_data_t thread_writer_data;
   tmap_rand_t **rand = NULL; // random # generator for each thread
-  tmap_map_stats_t **stats = NULL; // alignment statistics for each thread
+  tmap_map_stats_t **statss = NULL; // alignment statistics for each thread
 #else
   tmap_rand_t *rand = NULL; // random # generator
+  tmap_map_stats_t *stats = NULL; // alignment statistics
 #endif
 
   time_t start_time = time (NULL);
+  tmap_map_stats_t* stat = tmap_map_stats_init ();
 
   // if (driver->opt->report_stats)
   //  tmap_file_stdout = tmap_file_fdopen (fileno (stdout), "wb", TMAP_FILE_NO_COMPRESSION);
 
 // DVK - realignment
 #ifdef HAVE_LIBPTHREAD
-  struct RealignProxy** realigner = NULL;
-  struct RealignProxy** context = NULL;
+  struct RealignProxy** realigners = NULL;
+  struct RealignProxy** contexts = NULL;
 #else
   struct RealignProxy* realigner = NULL;
   struct RealignProxy* context = NULL;
@@ -2071,7 +2056,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
   // initialize the driver->options and print any relevant information
   tmap_map_driver_do_init(driver, index->refseq);
   if (!tmap_refseq_read_bed(index->refseq, driver->opt->bed_file, driver->opt->use_param_ovr, driver->opt->use_bed_read_ends_stat, &local_ovrs)) 
-    tmap_error ("Bed file read error", Exit, OutOfRange );
+    tmap_error ("Bed file read error", Exit, OutOfRange);
 
   if (local_ovrs && !driver->opt->realign_log)
     tmap_warning ("Amplicon-specific logging will have no effect since log file is not specified on command line (%s option)", "--log");
@@ -2097,17 +2082,18 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 #endif
   }
   records = tmap_malloc(sizeof(tmap_map_record_t*)*reads_queue_size, "records");
-  bams = tmap_malloc(sizeof(tmap_map_bams_t*)*reads_queue_size, "bams");
+  bams = tmap_calloc(reads_queue_size,sizeof(tmap_map_bams_t*), "bams");
+  bams_to_write = tmap_calloc(reads_queue_size, sizeof(tmap_map_bams_t*), "bams_to_write");
 
-  stat = tmap_map_stats_init();
-#ifdef HAVE_LIBPTHREAD
-  stats = tmap_malloc(driver->opt->num_threads * sizeof(tmap_map_stats_t*), "stats");
+  #ifdef HAVE_LIBPTHREAD
+  statss = tmap_malloc(driver->opt->num_threads * sizeof(tmap_map_stats_t*), "statss");
   rand = tmap_malloc(driver->opt->num_threads * sizeof(tmap_rand_t*), "rand");
   for(i=0;i<driver->opt->num_threads;i++) {
-      stats[i] = tmap_map_stats_init();
+      statss[i] = tmap_map_stats_init();
       rand[i] = tmap_rand_init(i);
   }
 #else
+  stats = tmap_map_stats_init();
   rand = tmap_rand_init(13);
 #endif
 
@@ -2129,37 +2115,54 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
     // Note: this needs to be initialized only if --do-realign is specified, 
     // !!! or if --do-repeat-clip is specified, as repeat clipping uses some of the structures in realigner for data holding
     {
+        // determine if we need realigner or context 
+        uint8_t context_needed = 0, realignment_needed = 0;
+        find_if_realigner_or_context_is_needed (driver->opt->do_realign, driver->opt->do_hp_weight, index->refseq->parmem, index->refseq->parmem_used, &realignment_needed, &context_needed);
 #ifdef HAVE_LIBPTHREAD
-        realigner = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "realigner");
-        context = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "context");
+        realigners = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "realigner");
+        contexts = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "context");
         for (i = 0; i != driver->opt->num_threads;  ++i)
         {
-            realigner [i] = realigner_create ();
-            realigner_set_scores (realigner [i], driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
-            realigner_set_bandwidth (realigner [i], driver->opt->realign_bandwidth);
-            realigner_set_clipping (realigner [i], (enum CLIPTYPE) driver->opt->realign_cliptype);
-
-            context [i] = context_aligner_create ();
-            realigner_set_scores (context [i], driver->opt->context_mat_score, driver->opt->context_mis_score, -driver->opt->context_gip_score, -driver->opt->context_gep_score);
-            realigner_set_bandwidth (context [i], driver->opt->context_extra_bandwidth);
-            realigner_set_gap_scale_mode (context [i], driver->opt->gap_scale_mode);
-            realigner_set_debug (context [i], driver->opt->debug_log);
-            if (driver->opt->debug_log && logfile) // WARNING! not a thread-safve operation. Disabled through cmd line options check for multithreaded runs
-                realigner_set_log (context [i], fileno (logfile));
+            realigners [i] = NULL;
+            if (realignment_needed)
+            {
+                realigners [i] = realigner_create_spec (driver->opt->realign_maxlen, driver->opt->realign_maxclip);
+                realigner_set_scores (realigners [i], driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+                realigner_set_bandwidth (realigners [i], driver->opt->realign_bandwidth);
+                realigner_set_clipping (realigners [i], (enum CLIPTYPE) driver->opt->realign_cliptype);
+            }
+            contexts [i] = NULL;
+            if (context_needed)
+            {
+                contexts [i] = context_aligner_create ();
+                realigner_set_scores (contexts [i], driver->opt->context_mat_score, driver->opt->context_mis_score, -driver->opt->context_gip_score, -driver->opt->context_gep_score);
+                realigner_set_bandwidth (contexts [i], driver->opt->context_extra_bandwidth);
+                realigner_set_gap_scale_mode (contexts [i], driver->opt->gap_scale_mode);
+                realigner_set_debug (contexts [i], driver->opt->debug_log);
+                if (driver->opt->debug_log && logfile) // WARNING! not a thread-safve operation. Disabled through cmd line options check for multithreaded runs
+                    realigner_set_log (contexts [i], fileno (logfile));
+            }
         }
-    #else
-        realigner = realigner_create ();
-        realigner_set_scores (realigner, driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
-        realigner_set_bandwidth (realigner, driver->opt->realign_bandwidth);
-        realigner_set_clipping (realigner, (enum CLIPTYPE) driver->opt->realign_cliptype);
-
-        context = context_aligner_create ();
-        realigner_set_scores (context, driver->opt->context_mat_score, driver->opt->context_mis_score, driver->opt->context_gip_score, driver->opt->context_gep_score);
-        realigner_set_bandwidth (context, driver->opt->context_extra_bandwidth);
-        realigner_set_gap_scale_mode (context, driver->opt->gap_scale_mode);
-        realigner_set_debug (context, driver->opt->context_debug_log);
-        if (driver->opt->debug_log && logfile)
-            realigner_set_log (context, fileno (logfile));
+#else
+        realigner = NULL;
+        if (realignment_needed)
+        {
+            realigner = realigner_create ();
+            realigner_set_scores (realigner, driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+            realigner_set_bandwidth (realigner, driver->opt->realign_bandwidth);
+            realigner_set_clipping (realigner, (enum CLIPTYPE) driver->opt->realign_cliptype);
+        }
+        context = NULL;
+        if (context_needed)
+        {
+            context = context_aligner_create ();
+            realigner_set_scores (context, driver->opt->context_mat_score, driver->opt->context_mis_score, driver->opt->context_gip_score, driver->opt->context_gep_score);
+            realigner_set_bandwidth (context, driver->opt->context_extra_bandwidth);
+            realigner_set_gap_scale_mode (context, driver->opt->gap_scale_mode);
+            realigner_set_debug (context, driver->opt->context_debug_log);
+            if (driver->opt->debug_log && logfile)
+                realigner_set_log (context, fileno (logfile));
+        }
 #endif
     }
 
@@ -2189,36 +2192,90 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
   header = NULL;
 
   // pairing
-  seqs_buffer_length = tmap_map_driver_infer_pairing(io_in, io_out->fp->header->header, seqs_buffer, records, 
-                                                     bams, seqs_buffer_length, reads_queue_size,
-                                                     index, driver, stat,
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-                                                     rand_core,
-#endif
-#ifdef HAVE_LIBPTHREAD
-                                                     &attr, &threads, &thread_data, rand, stats, realigner, context
-#endif
-                                                     );
-  if(0 == seqs_buffer_length) {
-      tmap_progress_print("loading reads");
-      seqs_buffer_length = tmap_seqs_io_read_buffer(io_in, seqs_buffer, reads_queue_size, io_out->fp->header->header);
-      tmap_progress_print2("loaded %d reads", seqs_buffer_length);
-  }
   seqs_loaded = 1;
-
+  int writer_spawned = 0;
   // main processing loop
   tmap_progress_print("processing reads");
+  thread_writer_data.bams = bams_to_write;
+
+#ifdef HAVE_LIBPTHREAD
+  if (0 != sem_init(&thread_io_data.reader_trigger_sem,0,0))
+      tmap_error ("error creating semaphore", Exit, ThreadError);
+  if (0 != sem_init(&thread_io_data.reader_done_sem,0,0))
+      tmap_error ("error creating semaphore", Exit, ThreadError);
+  // launch a new thread that loads in the reads
+  if (0 != pthread_attr_init(&attr))
+      tmap_error ("error initializing thread attribute", Exit, ThreadError);
+  thread_io_data.io_in = io_in;
+  thread_io_data.io_out = io_out;
+  thread_io_data.seqs_buffer_length = 0;
+  thread_io_data.reads_queue_size = reads_queue_size;
+  thread_io_data.seqs_buffer = seqs_buffer_next;
+  thread_io_data.dismantle = 0;
+  if(0 != pthread_create(&thread_reader, &attr, tmap_map_driver_thread_io_worker, &thread_io_data))
+	  tmap_error ("error creating threads", Exit, ThreadError);
+
+  int32_t seqCntr=0;
+
+  // create threads
+  for(int32_t i=0;i<driver->opt->num_threads;i++) 
+  {
+	  thread_data[i].sam_header = io_out->fp->header->header;
+	  thread_data[i].seqs_buffer = seqs_buffer;
+	  thread_data[i].seqs_buffer_length = seqs_buffer_length;
+	  thread_data[i].records = records;
+	  thread_data[i].bams = bams;
+	  thread_data[i].index = index;
+	  thread_data[i].driver = driver;
+	  thread_data[i].stat = statss ? statss [i] : NULL;
+	  thread_data[i].rand = rand [i];
+	  // DVK - realigner
+	  thread_data[i].realigner = realigners [i];
+	  thread_data[i].context = contexts [i];
+	  thread_data[i].do_pairing = 0;
+	  thread_data[i].tid = i;
+	  thread_data[i].seqCntr = &seqCntr;
+	  if (0 != sem_init(&thread_data[i].processor_trigger_sem,0,0))
+          tmap_error ("error creating semaphore", Exit, ThreadError);
+	  if (0 != sem_init(&thread_data[i].processor_done_sem,0,0))
+          tmap_error ("error creating semaphore", Exit, ThreadError);
+      thread_data[i].dismantle = 0;
+	  if(0 != pthread_create(&threads[i], &attr, tmap_map_driver_core_thread_worker, &thread_data[i]))
+		  tmap_error ("error creating threads", Exit, ThreadError);
+  }
+
+  // pthread_attr_init(&attr); // DK: according to pthread specs, calling pthread_init_attr on already initialized attributes has undefined behavior
+  //populate buffer with what's needed
+  thread_writer_data.seqs_buffer_length = seqs_buffer_length;
+  thread_writer_data.io_out = io_out;
+  if (0 != sem_init(&thread_writer_data.writer_trigger_sem,0,0))
+      tmap_error ("error creating semaphore", Exit, ThreadError);
+  if (0 != sem_init(&thread_writer_data.writer_done_sem,0,0))
+      tmap_error ("error creating semaphore", Exit, ThreadError);
+  bams_to_write = bams;
+  bams = thread_writer_data.bams;
+  thread_writer_data.bams = bams_to_write;
+  thread_writer_data.dismantle = 0;
+  //spawn new writer thread
+  if(0 != pthread_create(&thread_writer, &attr, tmap_map_driver_thread_writer_worker, &thread_writer_data))
+	  tmap_error ("error creating writer thread", Exit, ThreadError);
+
+  {
+      tmap_progress_print("loading reads");
+      seqs_buffer_length = tmap_seqs_io_read_buffer (io_in, seqs_buffer, reads_queue_size, io_out->fp->header->header);
+      tmap_progress_print2("loaded %d reads", seqs_buffer_length);
+  }
+
+  tmap_map_driver_infer_pairing(seqs_buffer, records, seqs_buffer_length, driver, thread_data);
+
+  #endif
+
   while(1) {
       // get the reads
       if(0 == seqs_loaded) { 
           tmap_progress_print("loading reads");
 #ifdef HAVE_LIBPTHREAD
-          // join the thread that loads in the reads
-          if(0 != pthread_join((*thread_io), NULL)) {
-              tmap_error("error joining IO thread", Exit, ThreadError);
-          }
-          free(thread_io);
-          thread_io = NULL;
+          sem_wait(&thread_io_data.reader_done_sem);
           // swap buffers
           seqs_buffer_length = thread_io_data.seqs_buffer_length;
           seqs_buffer_next = seqs_buffer; // temporarily store this here
@@ -2228,92 +2285,54 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
           seqs_buffer_length = tmap_seqs_io_read_buffer (io_in, seqs_buffer, reads_queue_size, io_out->fp->header->header);
 #endif
           seqs_loaded = 1;
+
           tmap_progress_print2("loaded %d reads", seqs_buffer_length);
       }
       if(0 == seqs_buffer_length) { // are there any more?
           break;
       }
-
 #ifdef HAVE_LIBPTHREAD
-      // launch a new thread that loads in the reads 
-      pthread_attr_init(&attr_io);
-      pthread_attr_setdetachstate(&attr_io, PTHREAD_CREATE_JOINABLE);
-      thread_io = tmap_malloc(sizeof(pthread_t), "thread_io");
-      thread_io_data.io_in = io_in;
-      thread_io_data.io_out = io_out;
-      thread_io_data.seqs_buffer_length = 0;
-      thread_io_data.reads_queue_size = reads_queue_size;
-      thread_io_data.seqs_buffer = seqs_buffer_next;
-      if(0 != pthread_create(thread_io, &attr_io, tmap_map_driver_thread_io_worker, &thread_io_data)) {
-          tmap_error("error creating threads", Exit, ThreadError);
+      // start reading the next chunk of data
+      sem_post(&thread_io_data.reader_trigger_sem);
+
+      // start processing the next chunk of sequences
+	  seqCntr=0;
+      for(int32_t i=0;i<driver->opt->num_threads;i++) {
+    	  thread_data[i].seqs_buffer = seqs_buffer;
+    	  thread_data[i].seqs_buffer_length = seqs_buffer_length;
+    	  thread_data[i].bams = bams;
+    	  sem_post(&thread_data[i].processor_trigger_sem);
       }
+
+      // wait for the processing to be done
+      for(int32_t i=0;i<driver->opt->num_threads;i++) {
+    	  sem_wait(&thread_data[i].processor_done_sem);
+      }
+
 #endif
 
-      // create the threads
-      if(0 == tmap_map_driver_create_threads(io_out->fp->header->header, seqs_buffer, records, 
-                                             bams, seqs_buffer_length, index, driver, stat,
-#ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
-                                             rand_core,
-#endif
-#ifdef HAVE_LIBPTHREAD
-                                             &attr, &threads, &thread_data, rand, stats, realigner, context,
-#endif
-                                             0)) {
-          break;
-      }
-
-      /*
-      if(-1 != driver->opt->reads_queue_size) {
-          tmap_progress_print("writing alignments");
-      }
-      */
-
-      // write data
-      for(i=0;i<seqs_buffer_length;i++) {
-#ifdef HAVE_LIBPTHREAD
-          if(1 < driver->opt->num_threads) {
-              // NB: we will write data as threads process the data.  This is to
-              // facilitate SAM/BAM writing, which may be slow, especially for
-              // BAM.
-              int32_t tid = (i % driver->opt->num_threads);
-              while((*thread_data[tid].buffer_idx) <= i) {
-                  usleep(1000*1000); // sleep
-              }
-          }
-#endif
-          // write
-          for(j=0;j<bams[i]->n;j++) { // for each end
-              for(k=0;k<bams[i]->bams[j]->n;k++) { // for each hit
-                  bam1_t *b = NULL;
-                  b = bams[i]->bams[j]->bams[k]; // that's a lot of BAMs
-                  if(NULL == b) tmap_bug();
-                  if(samwrite(io_out->fp, b) <= 0) {
-                      tmap_error("Error writing the SAM file", Exit, WriteFileError);
-                  }
-              }
-          }
-          tmap_map_bams_destroy(bams[i]);
-          bams[i] = NULL;
-      }
 
 #ifdef HAVE_LIBPTHREAD
-      // join threads
-      if(1 < driver->opt->num_threads) {
-          // join threads
-          for(i=0;i<driver->opt->num_threads;i++) {
-              if(0 != pthread_join(threads[i], NULL)) {
-                  tmap_error("error joining threads", Exit, ThreadError);
-              }
-              // add the stats
-              tmap_map_stats_add (stat, stats[i]);
-              tmap_map_stats_zero (stats[i]);
-              // free the buffer index
-              free(thread_data[i].buffer_idx);
-          }
-          free(threads); threads = NULL;
-          free(thread_data); thread_data = NULL;
-          free(attr); attr = NULL;
+      //join previous writer thread
+      if(writer_spawned){
+    	  sem_wait(&thread_writer_data.writer_done_sem);
       }
+      thread_writer_data.seqs_buffer_length = seqs_buffer_length;
+      bams_to_write = bams;
+      bams = thread_writer_data.bams;
+      thread_writer_data.bams = bams_to_write;
+	  sem_post(&thread_writer_data.writer_trigger_sem);
+
+      writer_spawned=1;
+
+      // merge thread statistics
+      for(i=0;i<driver->opt->num_threads;i++)
+      {
+        // add the stats
+        tmap_map_stats_add (stat, statss[i]);
+        tmap_map_stats_zero (statss[i]);
+      }
+
 #endif
       // TODO: should we flush when writing SAM and processing one read at a time?
 
@@ -2342,6 +2361,64 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
         seqs_loaded = 0;
     }
 
+    if(writer_spawned){
+  	  sem_wait(&thread_writer_data.writer_done_sem);
+    }
+
+    
+    if(1 < driver->opt->num_threads) 
+    {
+        // merge last iteration statistics? seems like this is futile; statss [i] at this time should always be zeroed
+        for(i=0;i<driver->opt->num_threads;i++) 
+        {
+            tmap_map_stats_add (stat, statss [i]);
+            tmap_map_stats_zero (statss[i]);
+        }
+    }
+    
+    tmap_progress_print2 ("dismantling threads");
+    // dismantle reader thread
+    thread_io_data.dismantle = 1;
+    sem_post (&thread_io_data.reader_trigger_sem);
+    if (0 != pthread_join (thread_reader, NULL))
+        tmap_error ("error joining reader thread", Exit, ThreadError);
+    tmap_progress_print2 ("   reader joined");
+    // dismantle writer thread
+    thread_writer_data.dismantle = 1;
+    sem_post(&thread_writer_data.writer_trigger_sem);
+    if (0 != pthread_join (thread_writer, NULL))
+        tmap_error ("error joining writer thread", Exit, ThreadError);
+    tmap_progress_print2 ("   writer joined");
+    // dismantle worker threads
+    for (i = 0; i < driver->opt->num_threads; ++i)
+    {
+        thread_data [i].dismantle = 1;
+        sem_post (&thread_data [i].processor_trigger_sem);
+        if (0 != pthread_join (threads [i], NULL))
+            tmap_error ("error joining worker thread", Exit, ThreadError);
+    }
+    tmap_progress_print2 ("   all workers joined");
+    // destroy semaphores
+    if (0 != sem_destroy (&thread_writer_data.writer_done_sem))
+        tmap_error ("error destroying semaphore", Exit, ThreadError);
+    if (0 != sem_destroy (&thread_writer_data.writer_trigger_sem))
+        tmap_error ("error destroying semaphore", Exit, ThreadError);
+    for (i = 0; i < driver->opt->num_threads; ++i)
+    {
+        if (0 != sem_destroy (&thread_data [i].processor_done_sem))
+            tmap_error ("error destroying semaphore", Exit, ThreadError);
+        if (0 != sem_destroy (&thread_data [i].processor_trigger_sem))
+            tmap_error ("error destroying semaphore", Exit, ThreadError);
+    }
+    if (0 != sem_destroy (&thread_io_data.reader_done_sem))
+        tmap_error ("error destroying semaphore", Exit, ThreadError);
+    if (0 != sem_destroy (&thread_io_data.reader_trigger_sem))
+        tmap_error ("error destroying semaphore", Exit, ThreadError);
+    tmap_progress_print2 ("   semaphores dismantled");
+    if (0 != pthread_attr_destroy (&attr))
+        tmap_error ("error destroying thread attributes", Exit, ThreadError);
+    tmap_progress_print2 ("   thread attributes dismantled");
+    
     if(-1 == driver->opt->reads_queue_size) 
     {
         tmap_progress_print2("processed %d reads", n_reads_processed);
@@ -2504,7 +2581,7 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             tmap_file_fprintf (tmap_file_stderr, "              Ends repaired:      %8llu %8llu\n",
                               stat->ends_REPAiRed [0], 
                               stat->ends_REPAiRed [1]);
-            tmap_file_fprintf (tmap_file_stderr, "              Ends clipped:      %8llu %8llu\n",
+            tmap_file_fprintf (tmap_file_stderr, "              Ends clipped:       %8llu %8llu\n",
                               stat->ends_REPAiR_clipped [0], 
                               stat->ends_REPAiR_clipped [1]);
             tmap_file_fprintf (tmap_file_stderr, "              Ends extended:      %8llu %8llu\n",
@@ -2530,24 +2607,24 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             tmap_file_fprintf (tmap_file_stderr, "No tail repeat clipping performed\n");
         else
         {
-            tmap_file_fprintf (tmap_file_stderr,   " Alignments tail-clipped: %llu", stat->num_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr, "Alignments tail-clipped:   %llu", stat->num_tailclipped);
             if (stat->num_seen_tailclipped)
-                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% seen)", ((double) stat->num_tailclipped) * 100 / stat->num_seen_tailclipped);
-            tmap_file_fprintf (tmap_file_stderr, "\n");
-            tmap_file_fprintf (tmap_file_stderr,   "      Tail-clipped bases: %llu", stat->bases_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                             " (%.2f%% seen)", ((double) stat->num_tailclipped) * 100 / stat->num_seen_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr,                               "\n");
+            tmap_file_fprintf (tmap_file_stderr,  "    Tail-clipped bases:   %llu", stat->bases_tailclipped);
             if (stat->bases_seen_tailclipped)
-                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% seen)", ((double) stat->bases_tailclipped) * 100 / stat->bases_seen_tailclipped);
-            tmap_file_fprintf (tmap_file_stderr, "\n");
-            tmap_file_fprintf (tmap_file_stderr,   "Completely clipped reads: %llu", stat->num_fully_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                           " (%.2f%% seen)", ((double) stat->bases_tailclipped) * 100 / stat->bases_seen_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr,                               "\n");
+            tmap_file_fprintf (tmap_file_stderr,  "    Fully clipped reads:  %llu", stat->num_fully_tailclipped);
             if (stat->num_seen_tailclipped)
-                tmap_file_fprintf (tmap_file_stderr,                               " (%.2f%% clipped)", ((double) stat->num_fully_tailclipped) * 100 / stat->num_tailclipped);
-            tmap_file_fprintf (tmap_file_stderr, ", contain %llu bases", stat->bases_fully_tailclipped);
+                tmap_file_fprintf (tmap_file_stderr,                             " (%.2f%% clipped)", ((double) stat->num_fully_tailclipped) * 100 / stat->num_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr,                                                   ", contain %llu bases", stat->bases_fully_tailclipped);
             if (stat->bases_tailclipped)
-                tmap_file_fprintf (tmap_file_stderr, " (%.2f%% clipped)", ((double) stat->bases_fully_tailclipped) * 100 / stat->bases_tailclipped);
-            tmap_file_fprintf (tmap_file_stderr, "\n");
+                tmap_file_fprintf (tmap_file_stderr,                                                                    " (%.2f%% clipped)", ((double) stat->bases_fully_tailclipped) * 100 / stat->bases_tailclipped);
+            tmap_file_fprintf (tmap_file_stderr,                                 "\n");
             if (stat->num_seen_tailclipped)
             {
-                tmap_file_fprintf (tmap_file_stderr,     "   Average bases clipped:\n");
+                tmap_file_fprintf (tmap_file_stderr,     "    Average bases clipped:\n");
                 tmap_file_fprintf (tmap_file_stderr,     "                    per read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_seen_tailclipped);
                 if (stat->num_tailclipped)
                     tmap_file_fprintf (tmap_file_stderr, "            per clipped read: %.1f\n", ((double) stat->bases_tailclipped) / stat->num_tailclipped);
@@ -2559,7 +2636,31 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
             tmap_file_fprintf (tmap_file_stderr, "No alignment filtering performed\n");
         else
         {
-            tmap_file_fprintf (tmap_file_stderr,   "  Filtered alignments: %llu\n", stat->num_filtered_als);
+            tmap_file_fprintf (tmap_file_stderr, "Filtered alignments:       %llu\n", stat->num_filtered_als);
+        }
+        tmap_file_fprintf (tmap_file_stderr,     "Candidate evaluation stats:\n");
+
+        tmap_file_fprintf (tmap_file_stderr,     "    Primary VSW (S#%d) calls:   %llu\n", driver->opt->vsw_type, stat->vect_sw_calls);
+        tmap_file_fprintf (tmap_file_stderr,     "    Fallback VSW (S#%d) calls:  %llu\n", driver->opt->vsw_fallback, stat->fallback_vsw_calls);
+        tmap_file_fprintf (tmap_file_stderr,     "    Fallback N-VSW (S#2) calls: %llu\n", stat->fallback_sw_calls);
+        tmap_file_fprintf (tmap_file_stderr,     "    DP matrix extensions:       %llu\n", stat->read_clipping_extensions);
+        tmap_file_fprintf (tmap_file_stderr,     "    VSW overflows:              %llu\n", stat->overflows);
+        tmap_file_fprintf (tmap_file_stderr,     "    VSW failures:               %llu\n", stat->vswfails);
+        tmap_file_fprintf (tmap_file_stderr,     "    Total SW failures:          %llu\n", stat->totswfails);
+        if (driver->opt->vsw_type == 4)
+        {
+            tmap_file_fprintf (tmap_file_stderr, "    Non-standard base fallbacks in forward scoring:    %llu\n", stat->nonstd_base_fallbacks_fwd);
+            tmap_file_fprintf (tmap_file_stderr, "    Non-standard base fallbacks in reverse scoring:    %llu\n", stat->nonstd_base_fallbacks_rev);
+        }
+        tmap_file_fprintf (tmap_file_stderr,     "    Symmetrically scored VSW:   %llu\n", stat->symmetric_scores);
+        tmap_file_fprintf (tmap_file_stderr,     "    Corrected asymmetries:      %llu\n", stat->asymmetric_scores_corrected);
+        tmap_file_fprintf (tmap_file_stderr,     "    Unrecoverable asymmetries   %llu\n", stat->asymmetric_scores_failed);
+        if (index->refseq->bed_exist && driver->opt->use_param_ovr && driver->opt->ovr_candeval)
+        {
+            tmap_file_fprintf (tmap_file_stderr, "    Amplicon searches:          %llu, successful %llu, failed %llu\n", stat->amplicon_searches, stat->amplicon_search_successes, stat->amplicon_searches - stat->amplicon_search_successes);
+            tmap_file_fprintf (tmap_file_stderr, "    Multi-amplicon overlaps:    %llu\n", stat->amplicon_overlaps);
+            tmap_file_fprintf (tmap_file_stderr, "    Overrides used:             %llu\n", stat->candeval_overrides);
+            tmap_file_fprintf (tmap_file_stderr, "    Multiple overrides          %llu\n", stat->multiple_candeval_overrides);
         }
   }
 
@@ -2590,11 +2691,13 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 #ifdef HAVE_LIBPTHREAD
   for (i = 0; i != driver->opt->num_threads; ++i)
   {
-      realigner_destroy (realigner [i]);
-      realigner_destroy (context [i]);
+      if(realigners [i])
+          realigner_destroy (realigners [i]);
+      if (contexts [i])
+          realigner_destroy (contexts [i]);
   }
-  free (realigner);
-  free (context);
+  free (realigners);
+  free (contexts);
 
 #else
   realigner_destroy (realigner);
@@ -2607,17 +2710,20 @@ tmap_map_driver_core (tmap_map_driver_t *driver)
 
   free(records);
   free(bams);
-  tmap_map_stats_destroy(stat);
+  free(bams_to_write);
+  tmap_map_stats_destroy (stat);
 #ifdef HAVE_LIBPTHREAD
   for(i=0;i<driver->opt->num_threads;i++) {
-      tmap_map_stats_destroy(stats[i]);
-      tmap_rand_destroy(rand[i]);
+      tmap_map_stats_destroy (statss [i]);
+      tmap_rand_destroy (rand[i]);
   }
-  free(stats);
-  free(rand);
-  free(thread_io);
+  free (statss);
+  free (rand);
+  free (thread_data);
+  free (threads);
 #else
-  tmap_rand_destroy(rand);
+  tmap_rand_destroy (rand);
+  tmap_map_stats_destroy (stats);
 #endif
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_rand_destroy(rand_core);

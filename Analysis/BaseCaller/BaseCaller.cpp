@@ -24,6 +24,9 @@
 #include <set>
 #include <vector>
 #include <fenv.h> // Floating point exceptions
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 #include "json/json.h"
 #include "MaskSample.h"
@@ -41,6 +44,7 @@
 #include "BarcodeClassifier.h"
 #include "OrderedDatasetWriter.h"
 #include "TreephaserSSE.h"
+#include "TreephaserVEC.h"
 #include "PhaseEstimator.h"
 #include "PerBaseQual.h"
 #include "BaseCallerFilters.h"
@@ -111,8 +115,9 @@ void ReportState(time_t analysis_start_time, const char *my_state)
 {
     time_t analysis_current_time;
     time(&analysis_current_time);
-    fprintf(stdout, "\n%s: Elapsed: %.1lf minutes, Timestamp: %s\n", my_state,
+    fprintf(stdout, "\n%s: Elapsed: %.2lf minutes, (%.0lf seconds) Timestamp: %s\n", my_state,
             difftime(analysis_current_time, analysis_start_time) / 60,
+            difftime(analysis_current_time, analysis_start_time),
             ctime (&analysis_current_time));
 }
 
@@ -182,8 +187,42 @@ void make_base_to_flow(const vector<char>& sequence,ion::FlowOrder& flow_order, 
     }
 }
 
+char FileCacherDummy=0; // to keep the access from being optimized away
+void *FileCacher(void *ptr)
+{
+  const char *fname=(const char *)ptr;
+  struct stat statbuf;
+  if(stat(fname,&statbuf) != 0){
+    printf("FileCacher: Failed to stat %s\n",fname);
+    return NULL;
+  }
+
+  int fd = open(fname,O_RDONLY,0);
+  char cntr=0;
+  if(fd >= 0){
+    char *dst;
+    if ((dst = (char *)mmap (0, statbuf.st_size, PROT_READ,
+      MAP_SHARED, fd, 0)) == (char *) 0xffffffffffffffff){
+      printf("FileCacher: Failed to mmap %s size %ld\n",fname,statbuf.st_size);
+      close(fd);
+      return NULL;
+    }
+
+    __off_t addr=0;
+    while(addr < statbuf.st_size){
+      cntr+=dst[addr];
+      addr += 4096;
+    }
+    FileCacherDummy=cntr;
+    munmap((void *)dst,statbuf.st_size);
+    //printf("Done caching %s\n",fname);
+    close(fd);
+  }
+  return NULL;
+}
+
 // --------------------------------------------------------------------------
-//! @brief    Main function for BaseCaller executable Mark: XXX
+//! @brief    Main function for BaseCaller executable Mark:
 //! @ingroup  BaseCaller
 
 
@@ -243,6 +282,21 @@ int main (int argc, const char *argv[])
 
     // Sampling options may reset command line arguments & change context
     bc_params.InitializeSamplingFromOptArgs(opts, bc.read_class_map->NumValidWells());
+
+    if(bc_params.GetSamplingOpts().calibration_training > 0 or bc_params.GetSamplingOpts().have_calib_panel){
+      vector<string>    filename_wells=bc_params.GetFiles().filename_wells;
+      for (unsigned int i=0; i<filename_wells.size(); ++i){
+        pthread_t worker_id;
+        if (pthread_create(&worker_id, NULL, FileCacher, (void *)filename_wells.at(i).c_str())) {
+          printf("failed to create thread\n");
+          exit(-1);
+        }
+        //std::string cmd = "nohup /usr/bin/vmtouch -t " + filename_wells.at(i) + " &";
+        //system(cmd.c_str());
+      }
+    }
+
+
     bc_params.SetBaseCallerContextVars(bc);
     wells_mngr.SetWellsContext(&bc.flow_order,
                                bc.keys,
@@ -352,7 +406,7 @@ int main (int argc, const char *argv[])
     bc.ClassifyAndSampleWells(bc_params.GetSamplingOpts());
 
     // Find distribution of clonal reads for use in read filtering:
-    filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells_mngr.Wells0(), read_class_map.filter_mask); // XXX Clonal training
+    filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells_mngr.Wells0(), read_class_map.filter_mask); // Clonal training
     MemUsage("ClonalPopulation");
     ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
 
@@ -360,9 +414,9 @@ int main (int argc, const char *argv[])
     if (not bc.estimator.HaveEstimates()) {
         MemUsage("BeforePhaseEstimation");
 
-        wells_mngr.OpenForIncrementalRead();
+        //wells_mngr.OpenForIncrementalRead();
         bc.estimator.DoPhaseEstimation(&wells_mngr, bc_params.NumThreads());
-        wells_mngr.Close();
+        //wells_mngr.Close();
         MemUsage("AfterPhaseEstimation");
     }
     bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
@@ -428,13 +482,18 @@ int main (int argc, const char *argv[])
     time(&basecall_start_time);
 
     pthread_mutex_init(&bc.mutex, NULL);
+    pthread_mutex_init(&bc.metric_mutex, NULL);
+    pthread_mutex_init(&bc.load_mutex, NULL);
 
-    pthread_t worker_id[bc_params.NumThreads()];
-    for (int worker = 0; worker < bc_params.NumThreads(); worker++)
+    bc.wells_mngr=&wells_mngr;
+    int nthreads=bc_params.NumThreads();
+    pthread_t worker_id[nthreads];
+    for (int worker = 0; worker < nthreads; worker++){
         if (pthread_create(&worker_id[worker], NULL, BasecallerWorker, &bc)) {
             printf("*Error* - problem starting thread\n");
             exit (EXIT_FAILURE);
         }
+    }
 
     for (int worker = 0; worker < bc_params.NumThreads(); worker++)
         pthread_join(worker_id[worker], NULL);
@@ -479,8 +538,8 @@ int main (int argc, const char *argv[])
     }
 
     metric_saver.Close();
-    barcodes.Close(datasets);
-    calibration_barcodes.Close(datasets_calibration);
+    barcodes.Close(datasets, bc.end_barcodes->NumEndBarcodes());
+    calibration_barcodes.Close(datasets_calibration, 0);
     if (bc.have_calibration_panel) {
       datasets.json()["IonControl"]["datasets"] = datasets_calibration.json()["datasets"];
       datasets.json()["IonControl"]["read_groups"] = datasets_calibration.read_groups();
@@ -519,8 +578,9 @@ int main (int argc, const char *argv[])
     return EXIT_SUCCESS;
 }
 
+int threadCntr=0;
 // ----------------------------------------------------------------
-//! @brief      Main code for BaseCaller worker thread Mark: XXX
+//! @brief      Main code for BaseCaller worker thread Mark:
 //! @ingroup    BaseCaller
 //! @param[in]  input  Pointer to BaseCallerContext.
 
@@ -528,17 +588,10 @@ void * BasecallerWorker(void *input)
 {
     BaseCallerContext& bc = *static_cast<BaseCallerContext*>(input);
 
-    //RawWells wells ("", bc.filename_wells.c_str());
-    WellsManager wells_mngr(bc.filename_wells, false);
-    wells_mngr.SetWellsContext(&bc.flow_order,
-                               bc.keys,
-                               bc.read_class_map,
-                               bc.wells_norm_method,
-                               bc.compress_multi_taps);
-
-    pthread_mutex_lock(&bc.mutex);
-    wells_mngr.OpenForIncrementalRead();
-    pthread_mutex_unlock(&bc.mutex);
+    pthread_mutex_lock(&bc.load_mutex);
+    WellsManager *wells_mngrp=new WellsManager(bc.wells_mngr);
+    WellsManager &wells_mngr=*wells_mngrp;
+    pthread_mutex_unlock(&bc.load_mutex);
 
     int num_flows =   bc.flow_order.num_flows();
     vector<float>     residual(num_flows, 0);
@@ -565,11 +618,18 @@ void * BasecallerWorker(void *input)
     treephaser.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
     
     // SSE treephaser definition. XXX
-#if defined( __SSE3__ )
-    TreephaserSSE treephaser_sse(bc.flow_order, bc.windowSize);
-    treephaser_sse.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
-#endif
+#if 0
+    TreephaserSSE treephaser_vec(bc.flow_order, bc.windowSize);
+    treephaser_vec.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
+#else
 
+    TreephaserVEC treephaser_vec(bc.flow_order, bc.windowSize);
+    treephaser_vec.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
+    treephaser_vec.SetBadPathLimit(bc.BadPathLimit);
+    treephaser_vec.SetManyPathLimit(bc.ManyPathLimit);
+    treephaser_vec.SetInitalPaths(bc.InitialPaths);
+    treephaser_vec.SetMaxMetrDiff(bc.MaxMetrDiff);
+#endif
 
     while (true) {
 
@@ -587,10 +647,16 @@ void * BasecallerWorker(void *input)
         }
 
         int num_usable_wells = 0;
-        for (int y = begin_y; y < end_y; ++y)
+        if(bc.calibration_training or bc.have_calibration_panel){
+          num_usable_wells=1;
+        }else{
+          for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x)
-                if (bc.read_class_map->ClassMatch(x,y, MapOutputWell))
-                    num_usable_wells++;
+              if (bc.read_class_map->ClassMatch(x,y, MapOutputWell))
+                num_usable_wells++;
+          if (begin_x == 0)
+            SaveBaseCallerProgress(10 + (80*begin_y)/bc.chip_subset.GetChipSizeY(), bc.output_directory);
+        }
 
         if      (begin_x == 0)            printf("\n% 5d/% 5d: ", begin_y, bc.chip_subset.GetChipSizeY());
         if      (num_usable_wells ==   0) printf("  ");
@@ -600,8 +666,6 @@ void * BasecallerWorker(void *input)
         else                              printf("##");
         fflush(NULL);
 
-        if (begin_x == 0)
-            SaveBaseCallerProgress(10 + (80*begin_y)/bc.chip_subset.GetChipSizeY(), bc.output_directory);
 
         pthread_mutex_unlock(&bc.mutex);
 
@@ -625,7 +689,7 @@ void * BasecallerWorker(void *input)
             continue;
         }
 
-        wells_mngr.LoadChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows);
+        wells_mngr.LoadChunk(begin_y, end_y-begin_y, begin_x, end_x-begin_x, 0, num_flows,&bc.load_mutex);
 
         for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x) {   // Loop over wells within current region
@@ -737,15 +801,16 @@ void * BasecallerWorker(void *input)
                   treephaser.SetModelParameters(cf, ie, dr);
 
                 // Execute vectorized basecaller version XXX
-#if defined( __SSE3__ )
-                if (bc.sse_dephaser) {
-                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set/delete recalibration model for this read
-                  treephaser_sse.SetModelParameters(cf, ie); // SSE version has no hook for droop.
 
-                  if (bc.dephaser == "treephaser-sse")
-                    treephaser_sse.NormalizeAndSolve(read);
+                if (bc.sse_dephaser) {
+
+                    treephaser_vec.SetAsBs(aPtr, bPtr);  // Set/delete recalibration model for this read
+                    treephaser_vec.SetModelParameters(cf, ie); // SSE version has no hook for droop.
+
+                  if (bc.dephaser == "treephaser-vec")
+                    treephaser_vec.NormalizeAndSolve(read);
                   else // bc.dephaser == "treephaser-solve" Solving without normalization
-                    treephaser_sse.SolveRead(read, 0, num_flows);
+                    treephaser_vec.SolveRead(read, 0, num_flows);
 
                   // Store debug info if desired and calibration enabled
                   if (bc.debug_normalization_bam and bc.histogram_calibration->is_enabled())
@@ -760,10 +825,10 @@ void * BasecallerWorker(void *input)
                   // Generate base_to_flow before ComputeQVmetrics. But not too early, otherwise the sequence is not ready
                   make_base_to_flow(read.sequence,bc.flow_order,base_to_flow,flow_to_base,num_flows);
 
-                  treephaser_sse.ComputeQVmetrics_flow(read,flow_to_base,bc.flow_predictors_);
+                  treephaser_vec.ComputeQVmetrics_flow(read,flow_to_base,bc.flow_predictors_);
                   compute_base_calls = false;
                 }
-#endif
+
 
                 // Use CPP code version if we didn't already use vectorized code
                 if (compute_base_calls){
@@ -992,7 +1057,7 @@ void * BasecallerWorker(void *input)
 
                 //! New mechanism for dumping potentially useful metrics.
                 if (bc.metric_saver->save_anything() and (is_random_unfiltered or !bc.metric_saver->save_subset_only())) {
-                    pthread_mutex_lock(&bc.mutex);
+                    pthread_mutex_lock(&bc.metric_mutex);
 
                     bc.metric_saver->SaveRawMeasurements          (y,x,read.raw_measurements);
                     bc.metric_saver->SaveAdditiveCorrection       (y,x,read.additive_correction);
@@ -1008,13 +1073,16 @@ void * BasecallerWorker(void *input)
                     bc.metric_saver->SaveHomopolymerRank          (y,x,homopolymer_rank);
                     bc.metric_saver->SaveNeighborhoodNoise        (y,x,neighborhood_noise);
 
-                    pthread_mutex_unlock(&bc.mutex);
+                    pthread_mutex_unlock(&bc.metric_mutex);
                 }
 
 
                 //
                 // Step 4b. Add flow signal information to ZM tag in BAM record.
                 //
+
+                // Push the reads that - at some point in time - where flagged as nomatch into the nomatch BAM
+                processed_read.PushToNomatch(bc.barcodes->NoBarcodeReadGroup());
 
                 int max_flow = num_flows;
                 if (bc.trim_zm){

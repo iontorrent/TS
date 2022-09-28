@@ -2204,6 +2204,44 @@ def plan_template_export(request, templateId):
 
     return response
 
+def parse_tec_params(dtp):
+    try:
+        return float(dtp)
+    except ValueError:
+        return None
+
+def get_template_meta(row):
+    return {
+        "fromTemplate": row.get("Template name (required)"),
+        "fromTemplateCategories": row.get("Categories"),
+        "fromTemplateChipType": row.get("Chip type (required)"),
+        "fromTemplateSequenceKitname": row.get("Sequence kit name"),
+        "fromTemplateSource": "ION"
+        }
+
+def convert_tec_params_to_float(row):
+    ct = 'Chip Heater (Do not change)'
+    cts = 'Chip Slope (Do not change)'
+    ctmt = 'Chip Min Threshold (Do not change)'
+
+    mt = 'Manifold Heater (Do not change)'
+    mts = 'Manifold Slope (Do not change)'
+    mtmt = 'Manifold Min Threshold (Do not change)'
+    if ct in row or mt in row:
+        if ct in row:
+            row[ct] = parse_tec_params(row[ct])
+        if cts in row:
+            row[cts] = parse_tec_params(row[cts])
+        if ctmt in row:
+            row[ctmt] = parse_tec_params(row[ctmt])
+        if mt in row:
+            row[mt] = parse_tec_params(row[mt])
+        if mts in row:
+            row[mts] = parse_tec_params(row[mts])
+        if mtmt in row:
+            row[mtmt] = parse_tec_params(row[mtmt])
+
+    return row
 
 def plan_template_import(request):
     def _get_kit_name(value, kitTypes):
@@ -2265,7 +2303,7 @@ def plan_template_import(request):
             # skip blank rows
             if not any(v.strip() for v in list(row.values())):
                 continue
-
+            row = convert_tec_params_to_float(row)
             planDict = {}
             planDict["isNewPlan"] = True  # this will trigger validation
             planDict["isReusable"] = True
@@ -2276,7 +2314,10 @@ def plan_template_import(request):
             planCsvKeys = export_template_keys(custom_args)
             for field, csvKey in list(planCsvKeys.items()):
                 if csvKey in row:
-                    value = row[csvKey].strip() if row[csvKey] else ""
+                    if isinstance(row[csvKey], str):
+                        value = row[csvKey].strip() if row[csvKey] else ""
+                    else:
+                        value = row[csvKey]
                     if csvKey == PlanCSVcolumns.TEMPLATE_NAME:
                         planDict["planName"] = value.replace(" ", "_")
                     elif csvKey == PlanCSVcolumns.RUNTYPE:
@@ -2353,6 +2394,7 @@ def plan_template_import(request):
                         value = value.split(";")
                     elif csvKey == PlanCSVcolumns.COLUMN_LIMS_DATA:
                         value = {"LIMS": [value]}
+                        value.update(get_template_meta(row))
                     elif csvKey == PlanCSVcolumns.CUSTOM_ARGS:
                         value = custom_args
 

@@ -21,7 +21,7 @@ extern "C" {
                                const uint8_t *query, int32_t qlen,
                                int32_t mm, int32_t mi, int32_t o, int32_t e, int32_t dir,
                                int32_t qsc, int32_t qec,
-                               int32_t *opt, int32_t *target_end, int32_t *query_start, int32_t *n_best);
+                               int32_t *opt, int32_t *target_end, int32_t *query_start, int32_t *n_best, int* fitflag);
 
     void
       tmap_vsw_wrapper_destroy(tmap_vsw_wrapper_t *v);

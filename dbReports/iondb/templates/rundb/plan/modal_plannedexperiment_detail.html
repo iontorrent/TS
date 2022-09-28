@@ -152,6 +152,18 @@
 								<td><b>{% trans "reviewplan.fields.eas.realign.label" %}:</b></td>
 								<td>{{ eas.realign }}</td>
 							</tr>
+							{% if plan.experiment.chipTecDfltAmbient %}
+							<tr>
+								<td><b>Chip Heater:</b></td>
+								<td>Dynamic</td>
+							</tr>
+							{% endif %}
+							<tr>
+								<td><b>Manifold Heater:</b></td>
+								<td>
+								{% if plan.experiment.manTecDfltAmbient %} Dynamic {% else %} Default {% endif %}
+								</td>
+							</tr>
 						</table>
 					</div>
 				</div>

@@ -20,6 +20,8 @@ static const maskCheckBox_t mcbt1[] = {
     {"T0Correct",11,Qt::Unchecked},
     {"Navigate",12,Qt::Unchecked},
 	{"Histogram",13,Qt::Unchecked},
+	{"AverageSub",14,Qt::Unchecked},
+	{"BitsNeeded",15,Qt::Unchecked},
 };
 
 RawTab::RawTab(QString _mName, Dialog *_mParent, QWidget *parent)

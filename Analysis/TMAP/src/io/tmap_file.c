@@ -408,6 +408,7 @@ tmap_file_vfprintf(tmap_file_t *fp, const char *format, va_list ap)
   if(n < 0) {
       tmap_error("vfprintf failed", Exit, WriteFileError);
   }
+  fflush (fp->fp);
 
   return n;
 } 
@@ -423,6 +424,7 @@ tmap_file_fprintf(tmap_file_t *fp, const char *format, ...)
   va_start(ap, format);
   n = vfprintf(fp->fp, format, ap);
   va_end(ap);
+  fflush (fp->fp);
 
   return n;
 } 
@@ -438,6 +440,7 @@ tmap_file_printf(const char *format, ...)
   va_start(ap, format);
   n = vfprintf(tmap_file_stdout->fp, format, ap);
   va_end(ap);
+  fflush (tmap_file_stdout->fp);
 
   return n;
 } 

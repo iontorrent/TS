@@ -89,8 +89,9 @@ void OverrideMinVarCov(int fd_nonsnp_min_var_cov,
 		               vector<VariantSpecificParams>& variant_specific_params)
 {
 	assert(allele_identity_vector.size() + 1 == global_flow_disruptive_matrix.size());
-    if (fd_nonsnp_min_var_cov < 1)
+    if (fd_nonsnp_min_var_cov < 1){
     	return;
+    }
 
 	for (unsigned int i_alt = 0; i_alt < allele_identity_vector.size(); ++i_alt){
 		// Override min_var_coverage of the allele if all the following are satisfied

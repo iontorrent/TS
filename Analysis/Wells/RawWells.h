@@ -71,6 +71,17 @@ public:
   bool mSaveAsUShort;
   float mLower;
   float mUpper;
+
+  void copy(RWH5DataSet &other){
+	  mGroup=other.mGroup.c_str();
+	  mName=other.mName.c_str();
+	  mDataset=other.mDataset;
+	  mDatatype=other.mDatatype;
+	  mDataspace=other.mDataspace;
+	  mSaveAsUShort=other.mSaveAsUShort;
+	  mLower=other.mLower;
+	  mUpper=other.mUpper;
+  };
 };
 
 
@@ -269,6 +280,8 @@ public:
 
   /* Initialization and setup. */
   void Init(const char *experimentPath, const char *rawWellsName, int rows, int col,  int flows);
+  void Init ( RawWells &rw );
+
   void CreateEmpty(int numFlows, const char *flowOrder, int rows, int cols);
   void CreateEmpty(int numFlows, const char *flowOrder);
   void SetRegion(int rowStart, int height, int colStart, int width);
@@ -319,6 +332,20 @@ public:
   float At(size_t well, size_t flow) const;
   float AtWithoutChecking(size_t row, size_t col, size_t flow) const;
   float AtWithoutChecking(size_t well, size_t flow) const;
+  inline float  AtWithIndex(uint64_t index, size_t flow) const{
+    return mFlowData[( uint64_t ) index * mChunk.flowDepth + flow - mChunk.flowStart];
+  }
+  inline void  AtFlowsWithIndex(uint64_t index, float *data) const
+  {
+    const float *tmp = &mFlowData[( uint64_t ) index * mChunk.flowDepth];
+    int len= mChunk.flowDepth - mChunk.flowStart;
+    for(int flow=0; flow < len; flow++){
+      data[flow]=tmp[flow];
+    }
+  }
+
+
+  int32_t GetInternalIndex(size_t row, size_t col) const;
 
   float GetCopyCount(size_t row, size_t col) const;
   float GetCopyCount(size_t well) const;
@@ -335,7 +362,9 @@ public:
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float resError);
   virtual void WriteFlowgramWithRes ( size_t flow, size_t x, size_t y, float val, float resError );
-
+  inline void WriteFlowgramWithIndex(size_t flow, int32_t index, float val){
+    mFlowData[( uint64_t ) index * mChunk.flowDepth + flow - mChunk.flowStart] = val;
+  }
 
   void ResetCurrentWell() { mCurrentWell = 0; }
   void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = 0, mFirsttimeGetRegionData = true,  mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
@@ -461,7 +490,8 @@ private:
   size_t mStepSize;
   int mCompression;   ///< What level of compression is being used.
   hid_t mHFile;       ///< Id for hdf5 file operations.
-  
+  bool  mIs_copy;
+
   bool mWriteOnClose;  ///< To support legacy api have a flag for writing when closing
 
   RWH5DataSet mRanks;       ///< Ranks hdf5 dataset

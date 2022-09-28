@@ -137,6 +137,10 @@ public:
     return ClassMatch(y*W+x, type);
   };
 
+  inline uint16_t getClass(int x, int y) const
+  {
+    return (class_map.at(y*W+x));
+  }
   inline bool ClassMatch(int index, ReadClassType type) const
   {
     if ( index < 0 || index >= ( W*H ) )

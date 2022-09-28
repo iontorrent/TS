@@ -11,6 +11,7 @@ import fnmatch
 import zipfile
 import shlex
 import tarfile
+from datetime import datetime
 
 from subprocess import *
 from ion.plugin import *
@@ -18,7 +19,7 @@ import makeCSA
 
 class CustomerSupportArchive(IonPlugin):
     """Generate an enhanced FSA"""
-    version = "0.4.4"
+    version = "0.5.0"
     allow_autorun = True # if true, no additional user input
     runtypes = [ RunType.FULLCHIP]
     depends = [] 
@@ -146,7 +147,7 @@ class CustomerSupportArchive(IonPlugin):
 
     def launch(self):
         """ main """
-        version = "0.4.4"
+        version = "0.5.0"
         print "Running the FieldSupport plugin."
         print "Reading startpluginjson"
         start_json = getattr(self, 'startpluginjson', None)
@@ -196,7 +197,10 @@ class CustomerSupportArchive(IonPlugin):
         self.analysis_dir = start_json["runinfo"]["analysis_dir"] 
         self.sigproc_dir = start_json["runinfo"]["sigproc_dir"]
         self.plugin_dir = start_json["runinfo"]["plugin_dir"]
-
+        try:
+            self.purification_data_dir = start_json["runinfo"]["purification_data_dir"][0]['csaLogPath']
+        except:
+            self.purification_data_dir = ""
         # Load run information
         self.runType = start_json["runplugin"]["run_type"]
         self.chipType = start_json["expmeta"]["chiptype"]
@@ -215,6 +219,13 @@ class CustomerSupportArchive(IonPlugin):
             print 'backing up previous tar file - ' + cmd
             os.system(cmd)
 
+        # Run rndplugin
+        for name, options in self.plugin_options.items():
+            try:
+                self.run_rndplugin(name)
+            except:
+                pass
+
         # Make CSA zip using plugin makeCSA
         print "making zip file : " + zip_name
         makeCSA.makeCSA(
@@ -222,16 +233,9 @@ class CustomerSupportArchive(IonPlugin):
             start_json["runinfo"]["raw_data_dir"],
             sampleResultsDirs,
             zip_path,
-            sampleNamePattern
+            sampleNamePattern,
+            self.purification_data_dir
         )
-
-
-        # Run rndplugin
-        for name, options in self.plugin_options.items():
-            try:
-                self.run_rndplugin(name)
-            except:
-                pass
 
         # Modify zip archive to include rndplugin files
         with tarfile.TarFile.open(zip_path, dereference=True, mode='a') as f:
@@ -267,6 +271,9 @@ class CustomerSupportArchive(IonPlugin):
 
     def run_rndplugin(self, plugin_name):
         print "Running plugin " + plugin_name
+        now = datetime.now()
+        current_time = now.strftime("%H:%M:%S")
+        print("Current Time =", current_time)
         plugin_dir = os.path.join(self.plugin_dir, plugin_name)
         print "plugin_dir " + plugin_dir
         output_dir = os.path.join(self.results_dir, plugin_name)

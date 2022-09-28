@@ -10,7 +10,7 @@ class LibPrepLog( object ):
     def __init__( self, path=None ):
         # must be run first
         self.init_path( path )
-
+        self.has_data = False # only set to true if we have data in parse
         if self.found:
             self.load()
             self.parse()
@@ -32,10 +32,10 @@ class LibPrepLog( object ):
             print( 'ERROR: path is None.  Please specify a path where {} can be found'.format( filename ) )
             return
         
-        # 
         self.log = os.path.join( self.path, filename )
         if os.path.exists( self.log ):
             self.found = True
+            print('File path exists: {}'.format(self.log))
 
     def load( self ):
         hdr     = []
@@ -88,7 +88,9 @@ class LibPrepLog( object ):
                     data[k].append( val )
                 except KeyError:
                     data[k] = [ val ]
-
+        
         self.data = {}
-        for k in keys:
-            self.data[k] = np.array( data[k] )
+        if data:
+            self.has_data = True
+            for k in keys:
+                self.data[k] = np.array( data[k] )

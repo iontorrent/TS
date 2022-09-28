@@ -96,13 +96,9 @@ void FitDensity::kdensity(vector<double> const& dat, vector<double> &density, ve
       k++;
     }
   }
-  vector<int> rowIndex(n,0);
-  for (int i=0; i<n; ++i){      // i-th column
-    rowIndex[i] = i*m;
-  }
   for (int i=0; i<m; ++i){      // i-th column
     for (int j=0; j<n; ++j){  // j-th row
-      density[i] += weight[j]*z[i+rowIndex[j]];
+      density[i] += weight[j]*z[i+(j*m)];
     }
     density[i] = density[i]/bandWidth;
   }

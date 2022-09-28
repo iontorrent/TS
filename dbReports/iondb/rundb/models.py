@@ -348,6 +348,7 @@ class KitInfo(models.Model):
         # ("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),
         ("readLengthDerivableFromFlows;", "Non-Hi-Q sequencing kit categories"),
         ("s5v1Kit", "S5 v1 kit categories"),
+        ("s5v1Kit;samplePrepProtocol;cerebro_550_cycling", "S5 v1 and Cerebro kit categories"),
         (
             "s5v1Kit;flowOverridable;",
             "S5 v1 kit categories with special flow count handling",
@@ -626,6 +627,7 @@ class common_CV(models.Model):
         ("AMPS_RNA", "AmpliSeq RNA products"),
         ("WGNM", "Whole genome products"),
         ("TARS_16S", "16S products"),
+        ("EXOME", "Ampliseq Exome products"),
     )
     categories = models.CharField(
         max_length=256, choices=ALLOWED_CATEGORIES, default="", blank=True, null=True
@@ -916,6 +918,12 @@ class PlannedExperimentManager(models.Manager):
             extra_kwargs["platform"] = kwargs.pop("x_platform", "")
         extra_kwargs["x_isSaveBySample"] = kwargs.pop("x_isSaveBySample", False)
         extra_kwargs["flowsInOrder"] = kwargs.pop("x_flowsInOrder", "")
+        extra_kwargs["chipTecDfltAmbient"] = kwargs.pop("x_chipTecDfltAmbient", None)
+        extra_kwargs["chipTecSlope"] = kwargs.pop("x_chipTecSlope", None)
+        extra_kwargs["chipTecMinThreshold"] = kwargs.pop("x_chipTecMinThreshold", None)
+        extra_kwargs["manTecDfltAmbient"] = kwargs.pop("x_manTecDfltAmbient", None)
+        extra_kwargs["manTecSlope"] = kwargs.pop("x_manTecSlope", None)
+        extra_kwargs["manTecMinThreshold"] = kwargs.pop("x_manTecMinThreshold", None)
 
         # EAS
         extra_kwargs["barcodedSamples"] = kwargs.pop("x_barcodedSamples", {})
@@ -945,6 +953,9 @@ class PlannedExperimentManager(models.Manager):
         )
         extra_kwargs["mixedTypeRNA_hotSpotRegionBedFile"] = kwargs.pop(
             "x_mixedTypeRNA_regionfile", ""
+        )
+        extra_kwargs["metaData"] = kwargs.pop(
+            "x_metaData", {}
         )
 
         # EAS - analysis args
@@ -1282,10 +1293,11 @@ class PlannedExperiment(models.Model):
         ("onco_liquidBiopsy", "Liquid Biopsy"),
         ("onco_solidTumor;onco_heme", "AmpliSeq HD for Tumor"),
         ("carrierSeq", "Carrier Seq"),
+        ("exome", "Ampliseq Exome"),
     )
 
     categories = models.CharField(
-        max_length=64,
+        max_length=256,
         choices=ALLOWED_CATEGORIES,
         default="",
         blank=True,
@@ -1598,6 +1610,48 @@ class PlannedExperiment(models.Model):
         else:
             return ""
 
+    def get_chipTecDfltAmbient(self):
+        experiment = self.experiment
+        if experiment and experiment.chipTecDfltAmbient:
+            return round(experiment.chipTecDfltAmbient, 4)
+        else:
+            return None
+
+    def get_chipTecSlope(self):
+        experiment = self.experiment
+        if experiment and experiment.chipTecSlope:
+            return round(experiment.chipTecSlope, 4)
+        else:
+            return None
+
+    def get_chipTecMinThreshold(self):
+        experiment = self.experiment
+        if experiment and experiment.chipTecMinThreshold:
+            return round(experiment.chipTecMinThreshold, 4)
+        else:
+            return None
+
+    def get_manTecDfltAmbient(self):
+        experiment = self.experiment
+        if experiment and experiment.manTecDfltAmbient:
+            return round(experiment.manTecDfltAmbient, 4)
+        else:
+            return None
+
+    def get_manTecSlope(self):
+        experiment = self.experiment
+        if experiment and experiment.manTecSlope:
+            return round(experiment.manTecSlope, 4)
+        else:
+            return None
+
+    def get_manTecMinThreshold(self):
+        experiment = self.experiment
+        if experiment and experiment.manTecMinThreshold:
+            return round(experiment.manTecMinThreshold, 4)
+        else:
+            return None
+
     def get_variantfrequency(self):
         return ""
 
@@ -1897,6 +1951,13 @@ class PlannedExperiment(models.Model):
             "platform",
             "chipBarcode",
             "flowsInOrder",
+            "chipTecDfltAmbient",
+            "chipTecSlope",
+            "chipTecMinThreshold",
+            "manTecDfltAmbient",
+            "manTecSlope",
+            "manTecMinThreshold",
+            "metaData"
         ]
         for key in exp_keys:
             if key in kwargs:
@@ -2520,6 +2581,13 @@ class Experiment(models.Model):
     chefStartTime = models.DateTimeField(null=True, blank=True)
     chefProtocolDeviationName = models.CharField(max_length=127, blank=True, null=True)
     chefEndTime = models.DateTimeField(null=True, blank=True)
+
+    chipTecDfltAmbient = models.FloatField(default=None, blank=True, null=True)
+    chipTecSlope = models.FloatField(default=None, blank=True, null=True)
+    chipTecMinThreshold = models.FloatField(default=None, blank=True, null=True)
+    manTecDfltAmbient = models.FloatField(default=None, blank=True, null=True)
+    manTecSlope = models.FloatField(default=None, blank=True, null=True)
+    manTecMinThreshold = models.FloatField(default=None, blank=True, null=True)
 
     def __unicode__(self):
         return self.expName
@@ -5295,6 +5363,7 @@ class GlobalConfig(models.Model):
     )
 
     majorPlatform = models.CharField(max_length=24, blank=True, null=True, default="")
+    password_max_age = models.IntegerField(default=90, blank=True)
 
     def set_TS_update_status(self, inputstr):
         self.ts_update_status = inputstr
@@ -7143,6 +7212,8 @@ class UserProfile(models.Model):
     )
     # needs_activation will be used to request user activation by admin
     needs_activation = models.BooleanField(default=False)
+    is_password_valid = models.BooleanField(default=False)
+    last_password_changed_on = models.DateTimeField(default=datetime.datetime(1984, 11, 6, tzinfo=timezone.utc))
 
     def save(self, *args, **kwargs):
         if self.user and not self.name:

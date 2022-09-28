@@ -682,7 +682,7 @@ tmap_detect_cpus()
   if (sysctl(mib, 2, &ncpu, &len, 0, 0) < 0 || len != sizeof(ncpu))
     ncpu = 1;
 #elif defined(_SC_NPROCESSORS_ONLN)
-  ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+  ncpu = sysconf(_SC_NPROCESSORS_ONLN)/2;
 #elif defined(WIN32)
   SYSTEM_INFO si;
   GetSystemInfo(&si);

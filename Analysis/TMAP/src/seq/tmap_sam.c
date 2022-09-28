@@ -143,7 +143,8 @@ tmap_sam_get_zb(tmap_sam_t *sam)
 {
   uint8_t *tag = NULL;
   // ZB
-  if(NULL == sam->b) tmap_bug();
+  if(NULL == sam->b) 
+      tmap_bug();
   tag = bam_aux_get(sam->b, "ZB");
   if(NULL != tag) return bam_aux2i(tag);
   else return -1;

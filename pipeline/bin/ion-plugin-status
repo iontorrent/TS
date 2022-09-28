@@ -58,4 +58,4 @@ if __name__ == '__main__':
             time.sleep(5)
 
     # if we made it here and did not exit as part of the try loop then we can assume that we ran out of attempts
-    raise ValueError("After many attempts the status was not able to be updated.")
+    print("After many attempts the status was not able to be updated.")

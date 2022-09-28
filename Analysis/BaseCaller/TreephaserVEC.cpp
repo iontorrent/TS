@@ -10,11 +10,10 @@
 #include <cassert>
 #include <stdint.h>
 
-#include "BaseCallerUtils.h"
-#include "DPTreephaser.h"
+//#define PRINT_DEBUG 1
+//#define DO_DEBUG (dbgX==1080 && dbgY==2133)
 
-#define SHUF_PS(reg, mode) _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(reg), mode))
-
+#define DFLT_CACHE 0x100000
 
 using namespace std;
 
@@ -22,81 +21,26 @@ ALWAYS_INLINE float Sqr(float val) {
   return val*val;
 }
 
-inline void setZeroSSE(void *dst, int size) {
-  v4i r0 = LD_VEC4I(0);
-  v4i *dstV=(v4i *)dst;
-  int lsize=size/16;
+#define memcpy_C(d,s,l)  memcpy(d,s,l)
 
-  while((size & 15) != 0) {
-    --size;
-    ((char*)dst)[size] = char(0);
-  }
-  while(lsize) {
-	  lsize--;
-	dstV[lsize]=r0;
-  }
-}
+#define memcpy_F(d,s,l)  { \
+   float *dst=(d); float *src=(s); int size=(l); \
+   while (size--)  dst[size] = src[size]; }
+
+#define memcpy_4F(d,s,l)  { \
+   float *dst=(d); float *src=(s); int size=(l); \
+   while (size--)  dst[size] = src[4*size]; }
+
+#define memcpy_4F4(d,s,l)  { \
+   float *dst=(d); float *src=(s); int size=(l); \
+   while (size--)  dst[4*size] = src[4*size]; }
 
 
-inline void setValueSSE(float *buf, float val, int size) {
-  v4f valV=LD_VEC4F(val);
-  v4f *bufV=(v4f *)buf;
-  int lsize=size/4;
-  int i=0;
-  for(;i<lsize;i++){
-    bufV[i] = valV;
-  }
-  i*=4;
-  // fill the rest of the buffer
-  while (i<size) {
-    buf[i] = val;
-    i++;
-  }  
-}
+#define memset_F(d, v, s) { \
+  float *dst=(d); float val=v; int size=s; \
+  while (size--) dst[size] = val; }
 
-inline void copySSE(void *dst, void *src, int size) {
-
-	while(size && ((uint64_t)dst & 15)){
-		--size;
-	    ((char RESTRICT_PTR)dst)[0] = ((char RESTRICT_PTR)src)[0];
-	    src=(char *)src+1;
-	    dst=(char *)dst+1;
-	}
-  while((size & 15) != 0) {
-    --size;
-    ((char*)dst)[size] = ((char*)src)[size];
-  }
-  v4i *dstV=(v4i *)dst;
-  v4i *srcV=(v4i *)src;
-  int lsize=size/16;
-  while(lsize) {
-	lsize--;
-    dstV[lsize]=srcV[lsize];
-  }
-}
-
-inline void copySSE_4th(float *dst, float *src, int size){
-
-	  while(size--) {
-	    dst[size] = src[4*size];
-	  }
-
-//	  while(((uint64_t)dst & 15) && size) {
-//		  size--;
-//	    (*dst++) = src[0];
-//	    src +=4;
-//	  }
-//	  while(size & 3) {
-//		  size--;
-//	    dst[size] = src[4*size];
-//	  }
-//	  v4f *dstV=(v4f*)dst;
-//
-//	  while(size) {
-//		v4f tmp=(v4f){src[4*(size+0)],src[4*(size+1)],src[4*(size+2)],src[4*(size+3)]};
-//	    dstV[size/4] = tmp;
-//	  }
-}
+#define memset_C(d, v, s) memset(d,v,s)
 
 inline float sumOfSquaredDiffsFloatSSE(float RESTRICT_PTR src1, float RESTRICT_PTR src2, int count) {
   float sum = 0.0f;
@@ -115,88 +59,37 @@ inline float sumOfSquaredDiffsFloatSSE(float RESTRICT_PTR src1, float RESTRICT_P
   }
   count /=4;
 
-  v4f_u sumV;
-  sumV.V = (v4f){sum,0,0,0};
+  register v4f sumV;
+  sumV = (v4f){sum,0,0,0};
   v4f *src1V=(v4f *)src1;
   v4f *src2V=(v4f *)src2;
   while(count--) {
     v4f r1 = src1V[count] - src2V[count];
-    sumV.V += r1*r1;
+    sumV += r1*r1;
   }
 
-  sum = (sumV.A[3]+sumV.A[1])+(sumV.A[2]+sumV.A[0]);
+  sum = (sumV[3]+sumV[1])+(sumV[2]+sumV[0]);
   return sum;
 }
-
-inline float  sumOfSquaredDiffsFloatSSE_recal(float RESTRICT_PTR src1, float RESTRICT_PTR src2, float RESTRICT_PTR A, float RESTRICT_PTR B, int count) {
-	  float sum = 0.0f;
-
-	  // align the pointers before beginning
-	  while(((uint64_t)src1 & 31) && count){
-			float r1=(*src1++) - (*src2++) * (*A++) - (*B++);
-		    sum += r1*r1;
-		    count--;
-	  }
-
-	  while((count & 3) != 0) {
-		--count;
-		float r1=src1[count] - src2[count]*A[count] - B[count];
-		sum += r1*r1;
-	  }
-	  count /=4;
-
-	  v4f_u sumV;
-	  sumV.V= (v4f){sum,0,0,0};
-	  v4f *src1V=(v4f *)src1;
-	  v4f *src2V=(v4f *)src2;
-	  v4f *AV=(v4f *)A;
-	  v4f *BV=(v4f *)B;
-	  while(count--) {
-	    v4f r1 = src1V[count] - src2V[count]*AV[count] - BV[count];
-	    sumV.V += r1*r1;
-	  }
-
-	  sum = (sumV.A[3]+sumV.A[1])+(sumV.A[2]+sumV.A[0]);
-	  return sum;
-}
-
-inline void sumVectFloatSSE(float RESTRICT_PTR dst, float RESTRICT_PTR src, int count) {
-
-	while(((uint64_t)dst & 15) && count){
-		count--;
-		(*dst) += (*src++);
-		dst++;
-	}
-  while((count & 3) != 0) {
-    --count;
-    dst[count] += src[count];
-  }
-  count /=4;
-  v4f sumV = LD_VEC4F(0);
-  v4f *srcV=(v4f *)src;
-  v4f *dstV=(v4f *)dst;
-
-  while(count > 0) {
-	count--;
-	dstV[count] += srcV[count];
-  }
-}
-
 
 
 // ----------------------------------------------------------------------------
 
 // Constructor used in variant caller
-TreephaserSSE::TreephaserSSE()
-  : flow_order_("TACG", 4), my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL)
+TreephaserVEC::TreephaserVEC()
+  : flow_order_("TACG", 4), my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL),
+    bad_path_limit_(10000), many_path_limit_(10000),
+    initial_paths_(-1),max_metr_diff_(0.3)
 {
   SetNormalizationWindowSize(38);
   SetFlowOrder(flow_order_);
 }
 
 // Constructor used in Basecaller
-TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize)
-  : my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL)
+TreephaserVEC::TreephaserVEC(const ion::FlowOrder& flow_order, const int windowSize)
+  : my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL),
+    bad_path_limit_(10000), many_path_limit_(10000),
+    initial_paths_(-1),max_metr_diff_(0.3)
 {
   SetNormalizationWindowSize(windowSize);
   SetFlowOrder(flow_order);
@@ -205,47 +98,19 @@ TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowS
 // ----------------------------------------------------------------
 // Initilizes all float variables to NAN so that they cause mayhem if we read out of bounds
 // and so that valgrind does not complain about uninitialized variables
-void TreephaserSSE::InitializeVariables(float init_val) {
-  
-  // Initializing the elements of the paths
-  for (unsigned int path = 0; path <= MAX_PATHS; ++path) {
-    sv_PathPtr[path]->flow            = 0;
-    sv_PathPtr[path]->window_start    = 0;
-    sv_PathPtr[path]->window_end      = 0;
-    sv_PathPtr[path]->dotCnt          = 0;
-    sv_PathPtr[path]->sequence_length = 0;
-    sv_PathPtr[path]->last_hp         = 0;
-    sv_PathPtr[path]->nuc             = 0;
-    
-    sv_PathPtr[path]->res      = init_val;
-    sv_PathPtr[path]->metr     = init_val;
-    sv_PathPtr[path]->flowMetr = init_val;
-    sv_PathPtr[path]->penalty  = init_val;
-    for (int val=0; val<MAX_VALS; val++) {
-      sv_PathPtr[path]->state[val]         = init_val;
-      sv_PathPtr[path]->pred[val]          = init_val;
-      sv_PathPtr[path]->state_inphase[val] = init_val;
-    }
-    for (int val=0; val<(2*MAX_VALS + 12); val++)
-      sv_PathPtr[path]->sequence[val] = 0;
-  }
+void TreephaserVEC::InitializeVariables() {
+
   
   // Initializing the other variables of the object
   for (unsigned int idx=0; idx<4; idx++) {
-    ad_FlowEnd.A[idx] = 0;
-    ad_Idx.A[idx] = 0;
-    ad_End.A[idx] = 0;
-    ad_Beg.A[idx] = 0;
+    ad_FlowEnd[idx] = 0;
+    flow_Buf[idx] = 0;
+    winEnd_Buf[idx] = 0;
+    winStart_Buf[idx] = 0;
   }
   for (unsigned int val=0; val<MAX_VALS; val++) {
-    rd_NormMeasure[val]      = init_val;
-    rd_SqNormMeasureSum[val] = init_val;
-  }
-  for (unsigned int idx=0; idx<=(MAX_VALS); idx++) {
-	    state_Buf[idx].V = LD_VEC4F(0);
-	    pred_Buf[idx].V = LD_VEC4F(0);
-	    nres_Buf[idx].V = LD_VEC4F(0);
-	    pres_Buf[idx].V = LD_VEC4F(0);
+    rd_NormMeasure[val]      = 0;
+    rd_SqNormMeasureSum[val] = 0;
   }
   ad_Adv = 0;
 }
@@ -254,37 +119,23 @@ void TreephaserSSE::InitializeVariables(float init_val) {
 // ----------------------------------------------------------------
 
 // Initialize Object
-void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order)
+void TreephaserVEC::SetFlowOrder(const ion::FlowOrder& flow_order)
 {
   flow_order_ = flow_order;
   num_flows_ = flow_order.num_flows();
 
   // For some perverse reason cppcheck does not like this loop
-  //for (int path = 0; path <= MAX_PATHS; ++path)
-  //  sv_PathPtr[path] = &(sv_pathBuf[path]);
-  sv_PathPtr[0] = &(sv_pathBuf[0]);
-  sv_PathPtr[1] = &(sv_pathBuf[1]);
-  sv_PathPtr[2] = &(sv_pathBuf[2]);
-  sv_PathPtr[3] = &(sv_pathBuf[3]);
-  sv_PathPtr[4] = &(sv_pathBuf[4]);
-  sv_PathPtr[5] = &(sv_pathBuf[5]);
-  sv_PathPtr[6] = &(sv_pathBuf[6]);
-  sv_PathPtr[7] = &(sv_pathBuf[7]);
-  sv_PathPtr[8] = &(sv_pathBuf[8]);
+  for (int path = 0; path < MAX_ACT_PATHS; path++)
+    sv_PathPtr[path] = &(sv_pathBuf[path]);
+
   // -- For valgrind and debugging & to make cppcheck happy
-  InitializeVariables(0.0);
+  InitializeVariables();
   // --
 
-  ad_MinFrac.V=LD_VEC4F(1e-6f);
-
-  int nextIdx[4];
-  nextIdx[3] = nextIdx[2] = nextIdx[1] = nextIdx[0] = short(num_flows_);
+  v4i nextIdx = LD_VEC4I(num_flows_);
   for(int flow = num_flows_-1; flow >= 0; --flow) {
     nextIdx[flow_order_.int_at(flow)] = flow;
-    ts_NextNuc[0][flow] = (short)(ts_NextNuc4[flow].A[0] = nextIdx[0]);
-    ts_NextNuc[1][flow] = (short)(ts_NextNuc4[flow].A[1] = nextIdx[1]);
-    ts_NextNuc[2][flow] = (short)(ts_NextNuc4[flow].A[2] = nextIdx[2]);
-    ts_NextNuc[3][flow] = (short)(ts_NextNuc4[flow].A[3] = nextIdx[3]);
+    ts_NextNuc[flow] = nextIdx;
   }
 
   ts_StepCnt = 0;
@@ -298,7 +149,6 @@ void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order)
   
   // The initialization of the recalibration fields for all paths is necessary since we are
   // over-running memory in the use of the recalibration parameters
-  ResetRecalibrationStructures(MAX_VALS);
 
   pm_model_available_              = false;
   recalibrate_predictions_         = false;
@@ -308,7 +158,7 @@ void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order)
 
 // ----------------------------------------------------------------
 
-void TreephaserSSE::SetModelParameters(double cf, double ie)
+void TreephaserVEC::SetModelParameters(double cf, double ie)
 {
   if (cf == my_cf_ and ie == my_ie_)
     return;
@@ -317,13 +167,13 @@ void TreephaserSSE::SetModelParameters(double cf, double ie)
 
   for(int flow = 0; flow < num_flows_; ++flow) {
     dist[flow_order_.int_at(flow)] = 1.0;
-    ts_Transition4[flow].A[0] = ts_Transition[0][flow] = float(dist[0]*(1-ie));
+    ts_Transition[flow][0] = float(dist[0]*(1-ie));
     dist[0] *= cf;
-    ts_Transition4[flow].A[1] = ts_Transition[1][flow] = float(dist[1]*(1-ie));
+    ts_Transition[flow][1] = float(dist[1]*(1-ie));
     dist[1] *= cf;
-    ts_Transition4[flow].A[2] = ts_Transition[2][flow] = float(dist[2]*(1-ie));
+    ts_Transition[flow][2] = float(dist[2]*(1-ie));
     dist[2] *= cf;
-    ts_Transition4[flow].A[3] = ts_Transition[3][flow] = float(dist[3]*(1-ie));
+    ts_Transition[flow][3] = float(dist[3]*(1-ie));
     dist[3] *= cf;
   }
   my_cf_ = cf;
@@ -332,15 +182,17 @@ void TreephaserSSE::SetModelParameters(double cf, double ie)
 
 // ----------------------------------------------------------------
 
-void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
+void TreephaserVEC::NormalizeAndSolve(BasecallerRead& read)
 {
-  copySSE(rd_NormMeasure, &read.raw_measurements[0], num_flows_*sizeof(float));
+  memcpy_F(rd_NormMeasure, &read.raw_measurements[0], num_flows_);
   // Disable recalibration during normalization stage if requested
   if (skip_recal_during_normalization_)
     recalibrate_predictions_ = false;
 
+  Solve(ts_StepBeg[0], ts_StepEnd[0], ts_StepBeg[1], initial_paths_, max_metr_diff_);
+  WindowedNormalize(read, 0);
   for(int step = 0; step < ts_StepCnt; ++step) {
-    bool is_final = Solve(ts_StepBeg[step], ts_StepEnd[step]);
+    bool is_final = Solve(ts_StepBeg[step], ts_StepEnd[step], ts_StepBeg[step+1], initial_paths_, max_metr_diff_);
     WindowedNormalize(read, step);
     if (is_final)
       break;
@@ -351,450 +203,153 @@ void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
   // And turn recalibration back on (if available) for the final solving part
   EnableRecalibration();
 
-  Solve(ts_StepBeg[ts_StepCnt], ts_StepEnd[ts_StepCnt]);
+  Solve(ts_StepBeg[ts_StepCnt], ts_StepEnd[ts_StepCnt], ts_StepEnd[ts_StepCnt], -1, max_metr_diff_);
 
-  int to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, num_flows_); // Apparently window_end can be larger than num_flows_
-  read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
-  copySSE(&read.sequence[0], sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
-  copySSE(&read.normalized_measurements[0], rd_NormMeasure, num_flows_*sizeof(float));
-  setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
-  copySSE(&read.prediction[0], sv_PathPtr[MAX_PATHS]->pred, to_flow*sizeof(float));
-  setZeroSSE(&read.state_inphase[0], num_flows_*sizeof(float));
-  copySSE(&read.state_inphase[0], sv_PathPtr[MAX_PATHS]->state_inphase, to_flow*sizeof(float));
+  int to_flow = min(sv_PathPtr[BEST_PATH]->window_end, num_flows_); // Apparently window_end can be larger than num_flows_
+  read.sequence.resize(sv_PathPtr[BEST_PATH]->sequence_length);
+  memcpy_C(&read.sequence[0], sv_PathPtr[BEST_PATH]->sequence, sv_PathPtr[BEST_PATH]->sequence_length);
+  memcpy_F(&read.normalized_measurements[0], rd_NormMeasure, num_flows_);
+  memset_F(&read.prediction[to_flow], 0, num_flows_-to_flow);
+  memcpy_F(&read.prediction[0], sv_PathPtr[BEST_PATH]->pred, to_flow);
+  memset_F(&read.state_inphase[to_flow], 0, num_flows_-to_flow);
+  memcpy_F(&read.state_inphase[0], sv_PathPtr[BEST_PATH]->state_inphase, to_flow);
 
   // copy inphase population and reset state_inphase flag
   if(state_inphase_enabled_){
     for (int p = 0; p <= 8; ++p) {
-      setZeroSSE(&(sv_PathPtr[p]->state_inphase[0]), num_flows_*sizeof(float));
+      memset_F(&(sv_PathPtr[p]->state_inphase[0]), 0, num_flows_);
     }
   }
   state_inphase_enabled_ = false;
 }
 
-// ----------------------------------------------------------------------
-
-// advanceStateInPlace is only used for the simulation step.
-
-void TreephaserSSE::advanceStateInPlace(PathRec RESTRICT_PTR path, int nuc, int end) {
-  int idx = ts_NextNuc[nuc][path->flow];
-  if(idx > end)
-    idx = end;
-  if(path->flow != idx) {
-    path->flow = idx;
-    idx = path->window_end;
-    float alive = 0.0f;
-    float RESTRICT_PTR trans = ts_Transition[nuc];
-    const float minFrac = 1e-6f;
-    int b = path->window_start;
-    int e = idx--;
-    int em1 = e-1;
-    int i = b;
-    v4i maskL=(v4i){1,2,3,0};
-    while(i < idx) {
-        alive += path->state[i];
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        ++i;
-      if(!(s < minFrac))
-        break;
-      b++;
-    }
-
-    while(/*(i&3) && */(i < em1)) {
-      alive += path->state[i];
-      float s = alive * trans[i];
-      path->state[i] = s;
-      alive -= s;
-      ++i;
-    }
-#if 0
-    int llen=(em1-i)/4;
-    v4f *psp=(v4f *)&path->state[i];
-    v4f *trp=(v4f *)&trans[i];
-    for(int j=0;j < llen;j++) {
-	      v4f_u ps,s,t;
-	      ps.V =psp[j];
-	      t.V = trp[j];
 
 
-	      for(int li=0;li<4;li++){
-			  alive += ps.A[0];
-			  s.A[0] = alive * t.A[0];
-			  alive -= s.A[0];
-			  // shift ps, s, and t to the left
-			  ps.V = __builtin_shuffle (ps, maskL);
-			  s.V = __builtin_shuffle (s, maskL);
-			  t.V = __builtin_shuffle (t, maskL);
-	      }
-	      psp[j] = s.V;
-    }
-    i+=4*llen;
-#endif
-    // flow > window start
-    if(i > b) {
-      // flow < window end - 1
-      while(i < idx) {
-        alive += path->state[i];
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        ++i;
-      }
-      alive += path->state[i];
-    
-      // flow >= window end - 1
-      while(i < e) {
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        if((i == (e-1)) && (e < end) && (alive > minFrac))
-          path->pred[e++] = 0.0f;
-        i++;
-      }
-    } 
-    // flow = window start(or window end - 1)
-    else {
-      alive += path->state[i];
-      while(i < em1) {
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        if((i == b)&& (s < minFrac))
-            b++;
-        else
-        	break;
-        i++;
-      }
-      while(i < em1) {
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        i++;
-      }
-      while(i < e) { 
-        float s = alive * trans[i];
-        path->state[i] = s;
-        alive -= s;
-        if((i == b)&& (s < minFrac))
-            b++;
-        if((i == (e-1)) && (e < end) && (alive > minFrac))
-          path->pred[e++] = 0.0f;
-        i++;
-      }
-    }
-    path->window_start = b;
-    path->window_end = e;
-  }
-}
-
-#define AD_MINFRAC LD_VEC4F(1e-6f)
-//// pseudo code:
-//	for(int li=0;li<4;li++){
-//	      rAlive[li] += parentState;
-//
-//		  if (parent->flow != child->flow or parent->flow == 0) {
-//				// This nuc begins a new homopolymer
-//			  rS[li] = parent->state[flow];
-//		  }
-//		  else{
-//			  rS[li] = transition_base_[nuc][flow] * rAlive[li]
-//		  }
-//		  childState[j] = rS[li];
-//		  rAlive[li] -= rS[li];
-//
-//	}
-//// pseudo code:
-#define advanceI( parentState, j, rParNuc, ts_tr, rAlive, rS) {\
-\
-	/*rS = (v4f)((v4i)LD_VEC4F(parentState) & (v4i) rParNuc);*/  \
-	/*v4f rTemp1s; = rParNuc;*/ \
- \
-	/* add parent state at this flow */ \
-	rAlive += LD_VEC4F(parentState); \
- \
-	/* one of the entries is 0xFFFF.. where the homopolymer is extended, rest are 0 */ \
-	/* keep the parent state for child  where parent homopolymer is extended, rest are 0 */ \
-	/*rS = (v4f) ((v4i) rS & (v4i) rParNuc); */\
- \
-	/* select transitions where this nuc begins a new homopolymer */ \
-	/*rTemp1s = rAlive * (v4f) (~(v4i)rParNuc & (v4i)(ts_tr)); */ \
- \
-	/* multiply transition probabilities with alive */ \
-	/*rTemp1s *= rAlive;*/ \
- \
-	/* child state for this flow */ \
-	rS = (v4f)((v4i)LD_VEC4F(parentState) & (v4i)rParNuc) + rAlive * (v4f) (~(v4i)rParNuc & (v4i)(ts_tr)); \
- \
-	/* storing child states to the buffer */ \
-	state_Buf[j].V = rS; \
- \
-	/* alive *= transition_flow[nuc&7][flow] from DpTreephaser.cpp */ \
- \
-	rAlive -= rS; \
-}
-
-// this one is all about calculating the residual
-inline void TreephaserSSE::CalcResidualI(PathRec RESTRICT_PTR parent,
-		int flow, int j, v4f &rS, v4f rTemp1s_, v4f &rPenNeg, v4f &rPenPos)
+void TreephaserVEC::advanceState4 (PathRecV RESTRICT_PTR path, int end)
 {
 
-    v4f rTemp1S=(rTemp1s_);
-	/* storing child predictions */
-	pred_Buf[j].V = rTemp1S;
+  ALIGN(64)v4f nres2_Buf[MAX_VALS];
+  ALIGN(64)v4f pres2_Buf[MAX_VALS];
 
-	/* apply recalibration model paramters to predicted signal if model is available */
-	if (recalibrate_predictions_) {
-		rTemp1S *= LD_VEC4F(parent->calib_A[flow]);
-		rTemp1S += LD_VEC4F(parent->calib_B[flow]);
-	}
-
-	/* load normalized measurement for the parent */
-	rS = LD_VEC4F(rd_NormMeasure[flow]);
-
-	/* residual from normalized and predicted values for this flow */
-	rS -= rTemp1S;
-
-	rTemp1S = rS;
-	/* find out the negative residual. The number which are -ve have highest bit one and therefore gives */
-	/* four ints with 0's in the ones which are not negative */
-	rS = (v4f)(_mm_srai_epi32((__m128i)rS,31));
-	/*rS = (v4f) (((v4i) rS) >> 31);  get the signed bit... */
-
-	/* squared residual */
-	rTemp1S = rTemp1S * rTemp1S;
-
-	/* select negative residuals */
-	rS = (v4f) ((v4i) rS & (v4i) rTemp1S);
-
-	/* select positive residuals */
-	rTemp1S = (v4f) ((v4i) rTemp1S ^ (v4i) rS);
-
-	/* add to negative penalty the square of negative residuals */
-	rPenNeg += rS;
-
-	/* add squared residuals to postive penalty */
-	rPenPos += rTemp1S;
-
-	/* running sum of negative penalties */
-	nres_Buf[j].V = rPenNeg;
-	/* running sum of positive penalties */
-	pres_Buf[j].V = rPenPos;
-}
-
-#define CheckWindowStartBase()  \
-/* tracking flow from parent->window_start */ \
-v4i rTemp1i = (v4i)rBeg; \
- \
-/* obtain window start for child which doesn't extend parent homopolymer. The one that extends */ \
-/* has all bits for its word as 1 */ \
-rTemp1i = (rTemp1i | (v4i)rParNuc); \
- \
-/* compare parent window start to current flow i. All match except one where parent last hp extends */ \
-rTemp1i = (v4i)_mm_cmpeq_epi32((__m128i)rTemp1i,(__m128i)LD_VEC4I(flow)); \
- \
-/* filter min frac for nuc homopolymer child paths */ \
-v4f rTemp1s = (v4f)(rTemp1i &  (v4i)AD_MINFRAC); \
- \
-/* compares not less than equal to for two _m128i words. Entries will be 0xFFFF... for words where */ \
-/* (kStateWindowCutoff > child->state[flow]). Rest of the words are 0 */ \
-rTemp1s = (v4f)_mm_cmpnle_ps(rTemp1s, rS); \
- \
-/* increasing child window start if child state less than state window cut off. */ \
-rBeg = ((v4i)rBeg - (v4i)rTemp1s);
-
-
-#define CheckWindowStart1() { \
-CheckWindowStartBase(); \
-\
-/* this intrinsic gives sign of each word in binary indicating 1 for -ve sign and 0 for +ve */ \
-/* if ad_adv is greater than 0, it indicates increase in child window start for some child path */ \
-ad_Adv = _mm_movemask_ps(rTemp1s); \
-\
-}
-
-#define CheckWindowStart2() { \
-CheckWindowStartBase(); \
-\
-rTemp1i = (v4i)_mm_cmpeq_epi32((__m128i)rBeg, (__m128i)rEnd); \
-rBeg += rTemp1i; \
-}
-
-
-#define CheckWindowEnd() { \
- \
-v4f rTemp1s = (v4f)(LD_VEC4I(-1) + rEnd); \
-rTemp1s = (v4f)((v4i)rTemp1s | (v4i)rParNuc); \
-rTemp1s = (v4f)_mm_cmpeq_epi32((__m128i)rTemp1s, (__m128i)LD_VEC4I(flow)); \
-rTemp1s = (v4f)((v4i)rTemp1s & (v4i)rAlive);\
-rTemp1s = (v4f)_mm_cmpnle_ps(rTemp1s, AD_MINFRAC);\
-/* child->window_end < max_flow */ \
-rS = (v4f)_mm_cmpnle_ps((v4f)rFlowEnd, (v4f)rEnd); \
-/* flow == child->window_end-1 and child->window_end < max_flow and alive > kStateWindowCutoff */ \
-rTemp1s = (v4f)((v4i)rTemp1s & (v4i)rS); \
- \
-/* if non zero than an increase in window end for some child paths */ \
-ad_Adv = _mm_movemask_ps(rTemp1s); \
-/* increases the child window end */ \
-rEnd -= (v4i)rTemp1s; /* - (-1)  is the same thing as +1 */ \
-}
-
-void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
-{
-
-  int idx = parent->flow;
-
-  // max flows
-  v4i rFlowEnd = LD_VEC4I(end);
-  // parent flow
-  v4i rNucCpy = LD_VEC4I(idx);
-
-  // child flows or the flow at which child nuc incorporates (corresponds to 
+  // child flows or the flow at which child nuc incorporates (corresponds to
   // find child flow in AdvanceState() in DPTreephaser.cpp
-  v4i rNucIdx = ts_NextNuc4[idx].V;
-  rNucIdx = (v4i)_mm_min_epi16((__m128i)rNucIdx, (__m128i)rFlowEnd);
+  flow_Buf = (v4i)_mm_min_epi16((__m128i)ts_NextNuc[path->flow], (__m128i)LD_VEC4I(end));
 
-  // compare parent flow and child flows 
-  rNucCpy = (v4i)_mm_cmpeq_epi32((__m128i)rNucCpy, (__m128i)rNucIdx);
+  // compare parent flow and child flows
+  v4f rParNuc = (v4f)_mm_cmpeq_epi32((__m128i)LD_VEC4I(path->flow), (__m128i)flow_Buf);
 
-  // store max_flow in ad_FlowEnd
-  ad_FlowEnd.V = rFlowEnd;
-
-  // four child flows in four 32 bit integers
-  ad_Idx.V = rNucIdx;
-
-  // changes datatype from int to float without doing any conversion
-  v4f rParNuc = (v4f)(rNucCpy);
-
- // set alive to 0 for all 4 Nuc paths
-  v4f rAlive = LD_VEC4F(0);
+  // set alive to 0 for all 4 Nuc paths
+  v4f alive = LD_VEC4F(0);
 
   // penalties for each nuc corresponding to four childs
-  v4f rPenNeg = rAlive;
-  v4f rPenPos = rAlive;
+  v4f rPenNeg = alive;
+  v4f rPenPos = alive;
+  nres2_Buf[0]= alive;
+  pres2_Buf[0]= alive;
+  //path->pred_Buf[path->window_start]=alive;
+  const v4f minFrac = LD_VEC4F( 1e-6 );
 
-  int parLast = parent->window_end;
-  v4i rEnd = LD_VEC4I(parLast);
-  parLast--;
-  v4i rBeg = LD_VEC4I(parent->window_start);
+  int endi = path->window_end;
+  int flow = path->window_start;
+  v4i e =LD_VEC4I(endi);
+  v4i b =LD_VEC4I(flow);
 
 
-  int flow = parent->window_start;
-  int j = 1;
-  ad_Adv = 1;
-  float *parent_CalibA= &parent->calib_A[0];
-  float *parent_CalibB= &parent->calib_B[0];
-  v4f rS;
+  v4i bInc = LD_VEC4I(-1);
+  v4i eInc = bInc;
+  int lastNuc=path->nuc;
 
-  // iterate over the flows from parent->window_start to (parent->window_end - 1)
-  // break this loop if child->window_start does not increase for any of the child paths from 
-  // parent->window_start
-  while(flow < parLast) {
-    advanceI(parent->state[flow], j, rParNuc, ts_Transition4[flow].V, rAlive, rS);
+  v4f *ps=path->state;
+  v4f *tst=ts_Transition;
+  v4f *nsb=&nres2_Buf[0];
+  v4f *psb=&pres2_Buf[0];
+  v4f *pdb=path->pred_Buf;
+  float *rdn=rd_NormMeasureAdj;
+  int j=1;
 
-    CheckWindowStart1();
+  while (flow < endi) {
+    // advance
+    float state=*(float *)&ps[flow][lastNuc];
+    alive += state;
+    v4f s = (v4f)((v4i)LD_VEC4F(state) & (v4i)rParNuc) +
+		      alive * (v4f) (~(v4i)rParNuc & (v4i)tst[flow]);
+    ps[flow] = s;
+    alive -= s;
 
-    CalcResidualI(parent, flow, j, rS, (LD_VEC4F(parent->pred[flow])+rS),rPenNeg,rPenPos);
+    // check window start
+    bInc = (bInc & (v4i) (s < minFrac));
+    b -= bInc; // minus -1 is the same as +1
+
+    v4f pred = s + pdb[flow][lastNuc];
+    pdb[flow] = pred;
+
+    // compute residuals
+    v4f res = rdn[flow] - pred; // difference between real signal and prediction
+    v4i resSel = (v4i) (_mm_srai_epi32 ((__m128i ) res, 31)); // fills with sign bits.. negative residuals are all 1's
+    res = res*res;
+    rPenNeg += (v4f) (resSel & (v4i) res);
+    rPenPos += (v4f) (~resSel & (v4i) res);
+    nsb[j] = rPenNeg;
+    psb[j] = rPenPos;
 
     flow++;
     j++;
-    if(ad_Adv == 0)
-      break;
   }
 
-  // if none of the child paths has increase in window start.
-  // this loop is the same as the previous loop, just doesn't check for window start
-  if(EXPECTED(ad_Adv == 0)) {
+  b += (v4i) (e == b); // if (window_start==window_end) window_start--;
+  eInc = eInc & (v4i) (alive > minFrac);
+  e -= eInc; // minus -1 same as plus 1
 
-    // child window start
-    ad_Beg.V = rBeg;
+  // flow >= path->window_end
+  while ((flow < end) && _mm_movemask_ps ((v4f) eInc)) {
+    v4f s = alive * (v4f) (~(v4i)rParNuc & (v4i)tst[flow]);
+    ps[flow] = s;
+    alive -= s;
 
-    // flow < parent->window_end - 1
-    while(flow < parLast) {
+    v4f pred = s;
+    pdb[flow] = pred;
+    v4f res = rdn[flow] - pred; // difference between real signal and prediction
+    v4i resSel = (v4i) (_mm_srai_epi32 ((__m128i ) res, 31)); // fills with sign bits.. negative residuals are all 1's
+    res = res*res;
+    rPenNeg += (v4f) (resSel & (v4i) res);
+    rPenPos += (v4f) (~resSel & (v4i) res);
+    nsb[j] = rPenNeg;
+    psb[j] = rPenPos;
 
-      advanceI(parent->state[flow], j, rParNuc, ts_Transition4[flow].V, rAlive, rS);
+    eInc = eInc & (v4i) (alive > minFrac);
+    e -= eInc;
+    flow++;
+    j++;
+  }
 
-      CalcResidualI(parent, flow, j, rS, (LD_VEC4F(parent->pred[flow])+rS),rPenNeg,rPenPos);
+  nres_WE=rPenNeg;
+  pres_WE=rPenPos;
 
-      flow++;
-      j++;
-    }
+  winStart_Buf = b;
+  winEnd_Buf = (v4i) _mm_min_epi16 ((__m128i ) e, (__m128i ) LD_VEC4I(end));
 
-    // flow = parent->window_end - 1
-    {
-      advanceI(parent->state[flow], j, rParNuc, (v4i) ts_Transition4[flow].V, rAlive, rS);
+  v4i wsi = winStart_Buf - path->window_start;
+  v4i fli = flow_Buf - path->window_start;
+  penNegV=nres_WE;
+  for (int nuc = 0; nuc < 4; ++nuc) {
 
-      CalcResidualI(parent, flow, j, rS, (LD_VEC4F(parent->pred[flow])+rS),rPenNeg,rPenPos);
+    // sum of squared residuals left of child window start
+    resV[nuc]  = nres2_Buf[wsi[nuc]][nuc];
+    metrV[nuc] = pres2_Buf[wsi[nuc]][nuc];
 
-      CheckWindowEnd();
-
-      flow++;
-      j++;
-    }
-
-   // flow >= parent window end
-    while((flow < end) && (ad_Adv != 0)) {
-      rS = (v4f)(~(v4i)rParNuc & (v4i)ts_Transition4[flow].V); //_mm_andnot_ps(rTemp1s, ts_Transition4[flow]);
-      rS *= rAlive;
-      state_Buf[j].V=rS;
-      rAlive -= rS;
-
-      CalcResidualI(parent, flow, j, rS, rS,rPenNeg,rPenPos);
-
-      CheckWindowEnd();
-
-      flow++;
-      j++;
-    }
-
-    rEnd = (v4i)_mm_min_epi16((__m128i)rEnd, (__m128i)ad_FlowEnd.V);
-    ad_End.V = rEnd;
-
-  } 
-  // This branch is for if one of the child paths has an increase in window_start 
-  // flow = (parent->window_end - 1)
-  else {
-
-    {
-      advanceI(parent->state[flow], j, rParNuc, ts_Transition4[flow].V, rAlive, rS);
-
-      CalcResidualI(parent, flow, j, rS, (LD_VEC4F(parent->pred[flow])+rS),rPenNeg,rPenPos);
-
-      CheckWindowStart2();
-
-      CheckWindowEnd();
-
-      flow++;
-      j++;
-    }
-
-    // flow >= parent->window_end
-    while((flow < end) && (ad_Adv != 0)) {
-      v4f rTemp1s = rParNuc;
-      rTemp1s = _mm_andnot_ps(rTemp1s, ts_Transition4[flow].V);
-      rTemp1s *= rAlive;
-      rS = rTemp1s;
-      state_Buf[j].V=rS;
-      rAlive -= rS;
-
-      CheckWindowStart2();
-
-      CalcResidualI(parent, flow, j, rS, rS,rPenNeg,rPenPos);
-
-      CheckWindowEnd();
-
-      flow++;
-      j++;
-    }
-
-    rEnd = (v4i)_mm_min_epi16((__m128i)rEnd, (__m128i)ad_FlowEnd.V);
-    ad_Beg.V = rBeg;
-    ad_End.V = rEnd;
+    // sum of squared residuals left of child->flow
+    penParV[nuc] = pres2_Buf[fli[nuc]][nuc];
 
   }
+  metrV+=path->res;
+  resV += metrV;
+  metrV += penNegV;
+  penParV += penNegV;
+  penNegV += penParV;
+  distV = resV + nres_WE + pres_WE;
 }
 
-void TreephaserSSE::sumNormMeasures() {
+void TreephaserVEC::sumNormMeasures() {
   int i = num_flows_;
   float sum = 0.0f;
   rd_SqNormMeasureSum[i] = 0.0f;
@@ -804,10 +359,10 @@ void TreephaserSSE::sumNormMeasures() {
 
 // -------------------------------------------------
 
-void TreephaserSSE::RecalibratePredictions(PathRec *maxPathPtr)
+void TreephaserVEC::RecalibratePredictions(PathRecV *maxPathPtr)
 {
   // Distort predictions according to recalibration model
-  int to_flow = min(maxPathPtr->flow+1, num_flows_);
+  int to_flow = min(maxPathPtr->flow, num_flows_);
 
   for (int flow=0; flow<to_flow; flow++) {
     maxPathPtr->pred[flow] =
@@ -817,396 +372,587 @@ void TreephaserSSE::RecalibratePredictions(PathRec *maxPathPtr)
 
 }
 
-void TreephaserSSE::ResetRecalibrationStructures(int num_flows) {
+void TreephaserVEC::ResetRecalibrationStructures(int num_flows) {
   for (int p = 0; p <= 8; ++p) {
-    setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
-	setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows_*sizeof(float));
+    memset_F(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
+	memset_F(&(sv_PathPtr[p]->calib_B[0]), 0, num_flows_);
   }
 }
 
 // --------------------------------------------------
 
-void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow)
+void TreephaserVEC::SolveRead(BasecallerRead& read, int begin_flow, int end_flow)
 {
-  copySSE(rd_NormMeasure, &(read.normalized_measurements[0]), num_flows_*sizeof(float));
-  setZeroSSE(sv_PathPtr[MAX_PATHS]->pred, num_flows_*sizeof(float)); // Not necessary?
-  copySSE(sv_PathPtr[MAX_PATHS]->sequence, &(read.sequence[0]), (int)read.sequence.size()*sizeof(char));
-  sv_PathPtr[MAX_PATHS]->sequence_length = read.sequence.size();
+  memcpy_F(rd_NormMeasure, &(read.normalized_measurements[0]), num_flows_);
+  memset_F(sv_PathPtr[BEST_PATH]->pred, 0, num_flows_); // Not necessary?
+  memcpy_C(sv_PathPtr[BEST_PATH]->sequence, &(read.sequence[0]), (int)read.sequence.size());
+  sv_PathPtr[BEST_PATH]->sequence_length = read.sequence.size();
 
-  Solve(begin_flow, end_flow);
+  Solve(begin_flow, end_flow,end_flow,-1,max_metr_diff_ );
 
-  int to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, end_flow);
-  read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
-  copySSE(&(read.sequence[0]), sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
-  setZeroSSE(&(read.prediction[0]), num_flows_*sizeof(float));
-  copySSE(&(read.prediction[0]), sv_PathPtr[MAX_PATHS]->pred, to_flow*sizeof(float));
+  int to_flow = min(sv_PathPtr[BEST_PATH]->window_end, end_flow);
+  read.sequence.resize(sv_PathPtr[BEST_PATH]->sequence_length);
+  memcpy_C(&(read.sequence[0]), sv_PathPtr[BEST_PATH]->sequence, sv_PathPtr[BEST_PATH]->sequence_length);
+  memset_F(&(read.prediction[0]), 0, num_flows_);
+  memcpy_F(&(read.prediction[0]), sv_PathPtr[BEST_PATH]->pred, to_flow);
 }
 
-// -------------------------------------------------
 
-bool TreephaserSSE::Solve(int begin_flow, int end_flow)
+// -------------------------------------------------
+PathRecV *TreephaserVEC::sortPaths(int & pathCnt, int &parentPathIdx, int &badPaths, int numActivePaths)
+{
+#ifdef PRINT_DEBUG
+    int commonSeq=0;
+    if(DO_DEBUG){
+    	printf("pathCnt=%d  \n",pathCnt);
+        float minMetr=25.0f;
+        int  minFlow=1000;
+        for(int i = 0; i < pathCnt; ++i){
+        	if(sv_PathPtr[i]->flow < minFlow)
+        		minFlow=sv_PathPtr[i]->flow;
+        }
+        int diff=0;
+        for(;commonSeq<sv_PathPtr[0]->sequence_length && !diff;commonSeq++){
+            for(int i = 0; i < pathCnt; ++i){
+            	if(sv_PathPtr[0]->sequence[commonSeq] != sv_PathPtr[i]->sequence[commonSeq]){
+            		diff=1;
+            	}
+            }
+        }
+        if(commonSeq)
+        	commonSeq--;
+
+        for(int i = 0; i < pathCnt; ++i){
+          sv_PathPtr[i]->sequence[sv_PathPtr[i]->sequence_length]=0; // null-terminate
+          printf("%s  (%d %s %d/%d-%d) sig(%.3f/%.3f) %.3f/%.3f/%.3f\n",(minFlow==sv_PathPtr[i]->flow?"--":"  "),
+        		  commonSeq,&sv_PathPtr[i]->sequence[commonSeq],
+				  sv_PathPtr[i]->window_start,
+				  sv_PathPtr[i]->flow,
+    			  sv_PathPtr[i]->window_end,
+    			  sv_PathPtr[i]->pred[sv_PathPtr[i]->flow],
+    			  sv_PathPtr[i]->state[sv_PathPtr[i]->flow],
+    			  sv_PathPtr[i]->penalty,sv_PathPtr[i]->flowMetr,sv_PathPtr[i]->metr);
+        }
+        printf("\n");
+    }
+#endif
+
+    int maxPaths = MAX_PATHS-4;
+    if(numActivePaths > 0)
+      maxPaths = min(maxPaths,numActivePaths);
+   if(pathCnt > (maxPaths-1)) {
+	  int m = sv_PathPtr[0]->flow;
+	  int i = 1;
+	  do {
+		int n = sv_PathPtr[i]->flow;
+		if(m < n)
+		  m = n;
+	  } while(++i < pathCnt);
+	  if((m -= MAX_PATH_DELAY) > 0) {
+		do {
+		  if(sv_PathPtr[--i]->flow < m){
+#ifdef PRINT_DEBUG
+			sv_PathPtr[pathCnt]->sequence[sv_PathPtr[pathCnt]->sequence_length]=0; // null-terminate
+			printf("Removing path %s too far behind\n",&sv_PathPtr[pathCnt]->sequence[commonSeq]);
+#endif
+			swap(sv_PathPtr[i], sv_PathPtr[--pathCnt]);
+		  }
+		} while(i > 0);
+	  }
+	}
+
+	while(pathCnt > maxPaths) {
+	  float m = sv_PathPtr[0]->flowMetr;
+	  int i = 1;
+	  int j = 0;
+	  do {
+		float n = sv_PathPtr[i]->flowMetr;
+		if(m < n) {
+		  m = n;
+		  j = i;
+		}
+	  } while(++i < pathCnt);
+#ifdef PRINT_DEBUG
+      if(DO_DEBUG){
+        sv_PathPtr[j]->sequence[sv_PathPtr[j]->sequence_length]=0; // null-terminate
+        printf("%s Removing path %s too many paths\n",(j>= 4?"****":"    "),&sv_PathPtr[j]->sequence[commonSeq]);
+      }
+#endif
+	  swap(sv_PathPtr[j], sv_PathPtr[--pathCnt]);
+	  badPaths++;
+	}
+    PathRecV *parent = sv_PathPtr[0];
+    for(int i = 1; i < pathCnt; ++i){
+      if(parent->metr > sv_PathPtr[i]->metr) {
+        parent = sv_PathPtr[i];
+        parentPathIdx = i;
+      }
+    }
+    return (parent);
+}
+
+
+float TreephaserVEC::computeParentDist(PathRecV RESTRICT_PTR parent, int end_flow)
+{
+   // Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
+   // Computing squared distance between parent's predicted signal and normalized measurements
+   float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
+   dist += sumOfSquaredDiffsFloatSSE((float*)(&(rd_NormMeasureAdj[parent->window_start])),
+                                     (float*)(&(parent->pred[parent->window_start])),
+                                      parent->window_end-parent->window_start);
+   return dist;
+}
+
+void TreephaserVEC::CopyPath (PathRecV RESTRICT_PTR dest, PathRecV RESTRICT_PTR parent,
+			 PathRecV RESTRICT_PTR child, int saveFlow,
+			 int &numSaved, int cached_flow, int cached_flow_ws, int cached_flow_seq)
+{
+  int pws=parent->window_start;
+  int cws=child->window_start;
+  int cwe=child->window_end;
+  int nuc=child->nuc;
+  int pf=parent->flow;
+  int cf=child->flow;
+  int psl=parent->sequence_length;
+
+  memcpy_4F(&dest->pred[pws],&parent->pred_Buf[pws][nuc],cws - pws+1);
+
+  if (state_inphase_enabled_) {
+    //extending from parent->state_inphase[pf] to fill the gap
+    for (int tempInd = pf + 1; tempInd < cf; tempInd++) {
+      dest->state_inphase[tempInd] = max ((float)dest->state[cf][nuc], 0.01f);
+    }
+    dest->state_inphase[cf] = max ((float)dest->state[cf][nuc], 0.01f);
+  }
+
+  dest->sequence_length = psl + 1;
+  dest->sequence[psl] = flow_order_[cf];
+  dest->sequence[dest->sequence_length]=0;
+
+  if (psl and dest->sequence[psl] != dest->sequence[psl - 1])
+    dest->last_hp = 0;
+  else
+    dest->last_hp = parent->last_hp;
+  dest->last_hp++;
+
+  dest->flowMetr = (cf == 0)?0:((child->metr + 0.5f * child->flowMetr) / cf);
+
+  if (recalibrate_predictions_) {
+    //explicitly fill zeros between pf and cf;
+    for (int tempInd = pf + 1; tempInd < cf; tempInd++) {
+      dest->calib_A[tempInd] = 1.0f;
+      dest->calib_B[tempInd] = 0.0f;
+    }
+    int hp_length = min (dest->last_hp, MAX_HPXLEN);
+    dest->calib_A[cf] = (*As_).at (cf).at (
+	flow_order_.int_at (cf)).at (hp_length);
+    dest->calib_B[cf] = (*Bs_).at (cf).at (
+	flow_order_.int_at (cf)).at (hp_length);
+    rd_NormMeasureAdj[cf] = (rd_NormMeasure[cf]-dest->calib_B[cf])/dest->calib_A[cf];
+  }
+  {
+    dest->flow = child->flow;
+    dest->window_start = child->window_start;
+    dest->window_end = child->window_end;
+    dest->res = child->res;
+    dest->metr = child->metr;
+    dest->newSignal = child->newSignal;
+    dest->dist = child->dist;
+    dest->nuc = child->nuc;
+  }
+
+  dest->cached_flow = min(dest->flow,cached_flow);
+  dest->cached_flow_ws = min(dest->window_start,cached_flow_ws);
+  dest->cached_flow_seq = min(dest->sequence_length,cached_flow_seq);
+
+
+#ifdef PRINT_DEBUG
+    if(DO_DEBUG){
+      child->sequence[child->sequence_length]=0; // null-terminate
+      if (singleChild != 1)
+	    printf("adding child %s\n",child->sequence);
+    }
+#endif
+
+}
+
+void TreephaserVEC::CopyPathNew (PathRecV RESTRICT_PTR dest, PathRecV RESTRICT_PTR parent,
+			 PathRecV RESTRICT_PTR child, int saveFlow,
+			 int &numSaved, int cached_flow, int cached_flow_ws, int cached_flow_seq)
+{
+  int dcf = (dest->cached_flow&0xffff);
+  int dws = (dest->cached_flow_ws&0xffff);
+  int dseq= (dest->cached_flow_seq&0xffff);
+
+  int pws=parent->window_start;
+  int cws=child->window_start;
+  int cwe=child->window_end;
+  int nuc=child->nuc;
+  int pf=parent->flow;
+  int cf=child->flow;
+  int psl=parent->sequence_length;
+  int cwemcws=cwe-cws;
+  int pfmdcf=pf-dcf+1;
+
+  memcpy_4F(&dest->pred[pws],&parent->pred_Buf[pws][nuc],cws - pws+1);
+
+  if (dest != parent)
+  {
+    // copy the beginning of the arrays as well
+    memcpy_4F4(&dest->state[cws][nuc],&parent->state[cws][nuc],cwemcws);
+    memcpy_F(&dest->pred[dws], &parent->pred[dws], pws - dws);
+    memcpy_4F4(&dest->pred_Buf[cws][nuc],&parent->pred_Buf[cws][nuc],cwemcws);
+    memcpy_C(&dest->sequence[dseq], &parent->sequence[dseq], psl - dseq);
+  }
+
+  if (state_inphase_enabled_) {
+    if (dest != parent)
+    {
+      memcpy_F(&dest->state_inphase[dcf], &parent->state_inphase[dcf],pfmdcf);
+    }
+
+    //extending from parent->state_inphase[pf] to fill the gap
+    for (int tempInd = pf + 1; tempInd < cf; tempInd++) {
+      dest->state_inphase[tempInd] = max ((float)dest->state[cf][nuc], 0.01f);
+    }
+    dest->state_inphase[cf] = max ((float)dest->state[cf][nuc], 0.01f);
+  }
+
+  dest->sequence_length = psl + 1;
+  dest->sequence[psl] = flow_order_[cf];
+  dest->sequence[dest->sequence_length]=0;
+  if (psl and dest->sequence[psl] != dest->sequence[psl - 1])
+    dest->last_hp = 0;
+  else
+    dest->last_hp = parent->last_hp;
+  dest->last_hp++;
+
+  dest->flowMetr = (cf == 0)?0:((child->metr + 0.5f * child->flowMetr) / cf);
+
+  if (recalibrate_predictions_) {
+    if (dest != parent && cf > 0)
+    {
+      memcpy_F(&dest->calib_A[dcf], &parent->calib_A[dcf],pfmdcf);
+      memcpy_F(&dest->calib_B[dcf], &parent->calib_B[dcf],pfmdcf);
+    }
+    //explicitly fill zeros between pf and cf;
+    for (int tempInd = pf + 1; tempInd < cf; tempInd++) {
+      dest->calib_A[tempInd] = 1.0f;
+      dest->calib_B[tempInd] = 0.0f;
+    }
+    int hp_length = min (dest->last_hp, MAX_HPXLEN);
+    dest->calib_A[cf] = (*As_).at (cf).at (
+	flow_order_.int_at (cf)).at (hp_length);
+    dest->calib_B[cf] = (*Bs_).at (cf).at (
+	flow_order_.int_at (cf)).at (hp_length);
+    rd_NormMeasureAdj[cf] = (rd_NormMeasure[cf]-dest->calib_B[cf])/dest->calib_A[cf];
+  }
+  if(dest != child)
+  {
+    dest->flow = child->flow;
+    dest->window_start = child->window_start;
+    dest->window_end = child->window_end;
+    dest->res = child->res;
+    dest->metr = child->metr;
+    dest->newSignal = child->newSignal;
+    dest->dist = child->dist;
+    dest->nuc = child->nuc;
+  }
+
+  dest->saved = parent->saved;
+  dest->cached_flow = min(dest->flow,cached_flow);
+  dest->cached_flow_ws = min(dest->window_start,cached_flow_ws);
+  dest->cached_flow_seq = min(dest->sequence_length,cached_flow_seq);
+
+#ifdef PRINT_DEBUG
+    if(DO_DEBUG){
+      child->sequence[child->sequence_length]=0; // null-terminate
+      if (singleChild != 1)
+	    printf("adding child %s\n",child->sequence);
+    }
+#endif
+
+}
+
+void
+TreephaserVEC::CopyPathDeep (PathRecV RESTRICT_PTR destPath,
+			     PathRecV RESTRICT_PTR srcPath)
+{
+  memcpy_4F4(&destPath->state[srcPath->window_start][srcPath->nuc],
+	     &srcPath->state[srcPath->window_start][srcPath->nuc],
+	     srcPath->window_end -srcPath->window_start);
+  memcpy_4F4(&destPath->pred_Buf[srcPath->window_start][srcPath->nuc],
+	     &srcPath->pred_Buf[srcPath->window_start][srcPath->nuc],
+	     srcPath->window_end - srcPath->window_start + 1);
+  memcpy_F(destPath->pred,srcPath->pred,srcPath->window_end + 1);
+  memcpy_4F(&destPath->pred[srcPath->window_start],
+	    &destPath->pred_Buf[srcPath->window_start][srcPath->nuc],
+	    srcPath->window_end - srcPath->window_start);
+  memcpy_C(destPath->sequence,srcPath->sequence,srcPath->sequence_length + 1);
+  if (state_inphase_enabled_) {
+    memcpy_F(destPath->state_inphase,srcPath->state_inphase,srcPath->flow + 1);
+  }
+
+  destPath->sequence_length = srcPath->sequence_length;
+
+  if (recalibrate_predictions_) {
+    memcpy_F(destPath->calib_A,srcPath->calib_A,srcPath->flow + 1);
+    memcpy_F(destPath->calib_B,srcPath->calib_B,srcPath->flow + 1);
+  }
+
+  destPath->flow = srcPath->flow;
+  destPath->window_start = srcPath->window_start;
+  destPath->window_end = srcPath->window_end;
+  destPath->res = srcPath->res;
+  destPath->metr = srcPath->metr;
+  destPath->newSignal = srcPath->newSignal;
+  destPath->dist = srcPath->dist;
+  destPath->flowMetr = srcPath->flowMetr;
+  destPath->nuc = srcPath->nuc;
+  destPath->penalty = srcPath->penalty;
+  destPath->last_hp = srcPath->last_hp;
+  destPath->cached_flow=0;
+  destPath->cached_flow_seq=0;
+  destPath->cached_flow_ws=0;
+}
+
+
+
+// -------------------------------------------------
+bool TreephaserVEC::Solve(int begin_flow, int end_flow, int saveFlow, int numActivePaths, float maxMetrDiff)
 {
   sumNormMeasures();
 
-  PathRec RESTRICT_PTR parent = sv_PathPtr[0];
-  PathRec RESTRICT_PTR best = sv_PathPtr[MAX_PATHS];
+  PathRecV RESTRICT_PTR parent = sv_PathPtr[0];
+  PathRecV RESTRICT_PTR best = sv_PathPtr[BEST_PATH];
 
-  parent->flow = 0;
-  parent->window_start = 0;
-  parent->window_end = 1;
-  parent->res = 0.0f;
-  parent->metr = 0.0f;
-  parent->flowMetr = 0.0f;
-  parent->dotCnt = 0;
-  parent->state[0] = 1.0f;
-  parent->sequence_length = 0;
-  parent->last_hp = 0;
-  parent->pred[0] = 0.0f;
-  parent->state_inphase[0] = 1.0f;
+
+  for(int flow=begin_flow;flow<end_flow;flow++){
+    rd_NormMeasureAdj[flow]=rd_NormMeasure[flow];
+  }
+
+  int cached_flow=DFLT_CACHE;
+  int cached_flow_ws=DFLT_CACHE;
+  int cached_flow_seq=DFLT_CACHE;
 
   int pathCnt = 1;
+  int numSaved=0;
   float bestDist = 1e20;
   end_flow = min(end_flow, num_flows_);
 
   // Simulating beginning of the read  up to or one base past begin_flow
   if(begin_flow > 0) {
+    int found=0;
 
-    static const int char_to_nuc[8] = {-1, 0, -1, 1, 3, -1, -1, 2};
+    if(sv_PathPtr[SAVED_PATHS]->flow > 0){
+	int pth=0;
+	for(;pth<NUM_SAVED_PATHS;pth++){
+	    if(sv_PathPtr[SAVED_PATHS+pth]->flow > 0 &&
+		memcmp(sv_PathPtr[SAVED_PATHS+pth]->sequence,
+		      sv_PathPtr[BEST_PATH]->sequence,
+		      sv_PathPtr[SAVED_PATHS+pth]->sequence_length)==0){
 
-    for (int base = 0; base < best->sequence_length; ++base) {
-      parent->sequence_length++;
-      parent->sequence[base] = best->sequence[base];
-      if (base and parent->sequence[base] != parent->sequence[base-1])
-        parent->last_hp = 0;
-      parent->last_hp++;
-      if (parent->last_hp > MAX_HPXLEN) { // Safety to not overrun recalibration array
-        parent->last_hp = MAX_HPXLEN;
-      }
-
-      advanceStateInPlace(parent, char_to_nuc[best->sequence[base]&7], num_flows_);
-      if (parent->flow >= num_flows_)
-        break;
-      int to_flow = min(parent->window_end, end_flow);
-      sumVectFloatSSE(&parent->pred[parent->window_start], &parent->state[parent->window_start], to_flow-parent->window_start);
-//      for(int k = parent->window_start; k < to_flow; ++k) {
-//        if((k & 3) == 0) {
-//          sumVectFloatSSE(&parent->pred[k], &parent->state[k], to_flow-k);
-//          break;
-//        }
-//        parent->pred[k] += parent->state[k];
-//      }
-      // Recalibration part of the initial simulation: log coefficients for simulation part
-      if(recalibrate_predictions_) {
-        parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-        parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-      }
-      if (parent->flow >= begin_flow)
-        break;
+	      best=sv_PathPtr[SAVED_PATHS+pth];
+	      sv_PathPtr[SAVED_PATHS+pth]=parent;
+	      sv_PathPtr[0]=best;
+	      parent=best;
+	      found=1;
+	      break;
+	    }
+	}
     }
 
-    // No point solving the read if we simulated the whole thing.
-    if(parent->window_end < begin_flow or parent->flow >= num_flows_) {
-      sv_PathPtr[MAX_PATHS] = parent;
-      sv_PathPtr[0] = best;
-      return true;
-    }
+    if(!found) return true;
+
     parent->res = sumOfSquaredDiffsFloatSSE(
-      (float*)rd_NormMeasure, (float*)parent->pred, parent->window_start);
-   }
+        (float*)rd_NormMeasure, (float*)parent->pred, parent->window_start);
+  }else{
+    for(int i=0;i<MAX_ACT_PATHS;i++){
+      sv_PathPtr[i]->calib_A[0]=1.0;
+      sv_PathPtr[i]->calib_B[0]=0;
 
-  best->window_end = 0;
-  best->sequence_length = 0;
+      memset(sv_PathPtr[i]->pred,0,num_flows_*sizeof(sv_PathPtr[i]->pred[0]));
+    }
+    parent->flow = 0;
+    parent->window_start = 0;
+    parent->window_end = 1;
+    parent->res = 0.0f;
+    parent->metr = 0.0f;
+    parent->flowMetr = 0.0f;
+    parent->newSignal = 1.0f;
+    parent->state[0] = LD_VEC4F(1.0f);
+    parent->sequence_length = 0;
+    parent->last_hp = 0;
+    parent->pred[0] = 0.0f;
+    parent->pred_Buf[0]=LD_VEC4F(0);
+    parent->state_inphase[0] = 1.0f;
+    parent->nuc=0;
+
+  }
+
+  for(int i=1;i<MAX_ACT_PATHS;i++){
+    sv_PathPtr[i]->flow=0; // mark as invalid for restart
+    //sv_PathPtr[i]->window_end = 1;
+    sv_PathPtr[i]->sequence_length = 0;
+    sv_PathPtr[i]->cached_flow=DFLT_CACHE;
+    sv_PathPtr[i]->cached_flow_ws=DFLT_CACHE;
+    sv_PathPtr[i]->cached_flow_seq=DFLT_CACHE;
+  }
+  sv_PathPtr[0]->cached_flow=DFLT_CACHE;
+  sv_PathPtr[0]->cached_flow_ws=DFLT_CACHE;
+  sv_PathPtr[0]->cached_flow_seq=DFLT_CACHE;
+
+
+  parent->dist=computeParentDist(parent,end_flow);
+  parent->saved=0;
+  int badPaths=0;
+  int manyPaths=0;
 
   do {
+    int parentPathIdx=0;
+    int childPathIdx=-1;
+    float bestpen = 19.8;
+    parent=sv_PathPtr[0];
+    if(pathCnt>1)
+      parent = sortPaths(pathCnt,parentPathIdx,badPaths,numActivePaths);
+    else
+      badPaths=0;
 
-    if(pathCnt > 3) {
-      int m = sv_PathPtr[0]->flow;
-      int i = 1;
-      do {
-        int n = sv_PathPtr[i]->flow;
-        if(m < n)
-          m = n;
-      } while(++i < pathCnt);
-      if((m -= MAX_PATH_DELAY) > 0) {
-        do {
-          if(sv_PathPtr[--i]->flow < m)
-            swap(sv_PathPtr[i], sv_PathPtr[--pathCnt]);
-        } while(i > 0);
+    int pf=parent->flow;
+    int pws=parent->window_start;
+    int pseq=parent->sequence_length;
+    int numChild=0;
+   if(!(parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)){
+     advanceState4(parent, end_flow);
+
+      for(int nuc = 0; nuc < 4; ++nuc) {
+        bestpen = min(bestpen,(float)penNegV[nuc]);
       }
-    }
 
-    while(pathCnt > MAX_PATHS-4) {
-      float m = sv_PathPtr[0]->flowMetr;
-      int i = 1;
-      int j = 0;
-      do {
-        float n = sv_PathPtr[i]->flowMetr;
-        if(m < n) {
-          m = n;
-          j = i;
-        }
-      } while(++i < pathCnt);
-      swap(sv_PathPtr[j], sv_PathPtr[--pathCnt]);
-    }
+      int numChild=0;
+      for(int nuc = 0; nuc < 4; ++nuc) {
+	if(flow_Buf[nuc] >= end_flow)
+	      continue;
+	if(penNegV[nuc]-bestpen >= maxMetrDiff)
+	  continue;
 
-    parent = sv_PathPtr[0];
-    int parentPathIdx = 0;
-    for(int i = 1; i < pathCnt; ++i)
-      if(parent->metr > sv_PathPtr[i]->metr) {
-        parent = sv_PathPtr[i];
-        parentPathIdx = i;
-      }
-    if(parent->metr >= 1000.0f)
-      break;
-   int parent_flow = parent->flow;
+	float newSignal=rd_NormMeasureAdj[flow_Buf[nuc]] / parent->state[flow_Buf[nuc]][nuc];
+	if(newSignal < 0.3f && parent->newSignal < 0.3f)
+	  continue;
+	distV[nuc] += rd_SqNormMeasureSum[winEnd_Buf[nuc]]-rd_SqNormMeasureSum[end_flow];
 
-    // compute child path flow states, predicted signal,negative and positive penalties
-    advanceState4(parent, end_flow);
-
-    int n = pathCnt;
-    double bestpen = 25.0;
-    for(int nuc = 0; nuc < 4; ++nuc) {
-      PathRec RESTRICT_PTR child = sv_PathPtr[n];
-
-      child->flow = min(ad_Idx.A[nuc], end_flow);
-      child->window_start = ad_Beg.A[nuc];
-      child->window_end = min(ad_End.A[nuc], end_flow);
-
-      // Do not attempt to calculate child->last_hp in this loop; bad things happen
-      if(child->flow >= end_flow or parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)
-        continue;
-
-      // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
-      //char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
-      int cwsIdx=child->window_start-parent->window_start;
-      int cfIdx =child->flow-parent->window_start;
-      int cweIdx=child->window_end-parent->window_start;
-
-      // child path metric
-      float metr = parent->res + pres_Buf[cwsIdx].A[nuc];//*((float RESTRICT_PTR)(pn+child->window_start*16+(AD_PRES_OFS-AD_NRES_OFS)));
-
-      // sum of squared residuals for positive residuals for flows < child->flow
-      float penPar = pres_Buf[cfIdx].A[nuc];//*((float RESTRICT_PTR)(pn+child->flow*16+(AD_PRES_OFS-AD_NRES_OFS)));
-
-      // sum of squared residuals for negative residuals for flows < child->window_end
-      float penNeg = nres_Buf[cweIdx].A[nuc];//*((float RESTRICT_PTR)(pn+child->window_end*16));
-
-      // sum of squared residuals left of child window start
-      child->res = metr + nres_Buf[cwsIdx].A[nuc];//*((float RESTRICT_PTR)(pn+child->window_start*16));
-      
-      metr += penNeg;
-
-      // penPar corresponds to penalty1 in DPTreephaser.cpp
-      penPar += penNeg;
-      penNeg += penPar;
-
-      // penalty = penalty1 + (kNegativeMultiplier = 2)*penNeg
-      if(penNeg >= 20.0)
-        continue;
- 
-      if(bestpen > penNeg)
-        bestpen = penNeg;
-      else if(penNeg-bestpen >= 0.2)
-        continue;
-
-      // child->path_metric > sum_of_squares_upper_bound
-      if(metr > bestDist)
-        continue;
-
-      float newSignal = rd_NormMeasure[child->flow];
-      
-      // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end
-      // Check 'dot' criterion
-      if(child->flow < parent->window_end){
-        if (recalibrate_predictions_)
-          newSignal -= (parent->calib_A[child->flow]*parent->pred[child->flow]+parent->calib_B[child->flow]);
-        else
-          newSignal -= parent->pred[child->flow];
-      }
-   	  newSignal /= state_Buf[cfIdx+1].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+AD_STATE_OFS + (child->flow-parent->window_start)*16));
-      child->dotCnt = 0;
-      if(newSignal < 0.3f) {
-        if(parent->dotCnt > 0)
-          continue;
-        child->dotCnt = 1;
-      }
-      // child path survives at this point
-      child->metr = float(metr);
-      child->flowMetr = float(penPar);
-      child->penalty = float(penNeg);
-      child->nuc = nuc;
-      ++n;
-    }
-
-    // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
-    // Computing squared distance between parent's predicted signal and normalized measurements
-    float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
-	if (recalibrate_predictions_) {
-		int i=parent->window_start;
-	  dist += sumOfSquaredDiffsFloatSSE_recal((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
-											  (float RESTRICT_PTR)(&(parent->pred[i])),
-											  (float RESTRICT_PTR)(&(parent->calib_A[i])),
-											  (float RESTRICT_PTR)(&(parent->calib_B[i])),
-											   parent->window_end-i);
-	} else {
-		int i=parent->window_start;
-	  dist += sumOfSquaredDiffsFloatSSE((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
-										(float RESTRICT_PTR)(&(parent->pred[i])),
-										 parent->window_end-i);
-	}
-    // Finished computing squared distance
-
-    int bestPathIdx = -1;
-
-    // current best path is parent path
-    if(bestDist > dist) {
-      bestPathIdx = parentPathIdx;
-      parentPathIdx = -1;
-    }
-
-    int childPathIdx = -1;
-    while(pathCnt < n) {
-      PathRec RESTRICT_PTR child = sv_PathPtr[pathCnt];
-      // Rule that depends on finding the best nuc
-      if(child->penalty-bestpen >= 0.2f) {
-        sv_PathPtr[pathCnt] = sv_PathPtr[--n];
-        sv_PathPtr[n] = child;
-      } 
-      else if((childPathIdx < 0) && (parentPathIdx >= 0)) {
-        sv_PathPtr[pathCnt] = sv_PathPtr[--n];
-        sv_PathPtr[n] = child;
-        childPathIdx = n;
-      }
-      // this is the child path to be kept 
-      else {
-        if (child->flow)
-          child->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow;
-        //char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-        {
-        	int len=child->window_end-parent->window_start;
-            copySSE_4th(&child->state[parent->window_start],&state_Buf[1].A[child->nuc],len);
-            copySSE_4th(&child->pred[parent->window_start],&pred_Buf[1].A[child->nuc],len);
-        }
-//        for(int i = parent->window_start, j = 1, e = child->window_end; i < e; ++i, j ++) {
-//		  child->state[i] = state_Buf[j].A[child->nuc];//*((float*)(ad_Buf+child->nuc*4+AD_STATE_OFS + j));
-//          child->pred[i] = pred_Buf[j].A[child->nuc];  //*((float*)(ad_Buf+child->nuc*4+AD_PRED_OFS + j));
-//        }
-        copySSE(child->pred, parent->pred, parent->window_start << 2);
-
-        copySSE(child->sequence, parent->sequence, parent->sequence_length);
-
-        if(state_inphase_enabled_){
-            if(child->flow > 0){
-              int cpSize = (parent->flow+1)*sizeof(float);
-              copySSE(child->state_inphase, parent->state_inphase, cpSize);
-            }
-            //extending from parent->state_inphase[parent->flow] to fill the gap
-            for(int tempInd = parent->flow+1; tempInd < child->flow; tempInd++){
-                child->state_inphase[tempInd] = max(child->state[child->flow],0.01f);
-            }
-            child->state_inphase[child->flow] = max(child->state[child->flow],0.01f);
-        }
-
-        child->sequence_length = parent->sequence_length + 1;
-        child->sequence[parent->sequence_length] = flow_order_[child->flow];
-        if (parent->sequence_length and child->sequence[parent->sequence_length] != child->sequence[parent->sequence_length-1])
-          child->last_hp = 0;
-        else
-          child->last_hp = parent->last_hp;
-        child->last_hp++;
-
-        // copy whole vector to avoid memory access to fields that have been written to by (longer) previously discarded paths XXX
-        // --> Reintroducing memory overrun since it seems to yield better performance
-        if (recalibrate_predictions_) {
-          if(child->flow > 0){
-            // --- Reverting to old code with memory overrun
-            int cpSize = (parent->flow+1) << 2;
-            //memcpy(child->calib_A, parent->calib_A, cpSize);
-            //memcpy(child->calib_B, parent->calib_B, cpSize);
-            // ---
-            copySSE(child->calib_A, parent->calib_A, cpSize);
-            copySSE(child->calib_B, parent->calib_B, cpSize);
+	// child path survives at this point
+	PathRecV RESTRICT_PTR child = sv_PathPtr[pathCnt];
+	child->flow = flow_Buf[nuc];
+	child->window_start = winStart_Buf[nuc];
+	child->window_end = winEnd_Buf[nuc];
+	child->res = resV[nuc];
+	child->newSignal = newSignal;
+	child->metr = metrV[nuc];
+	child->flowMetr = penParV[nuc];
+	child->penalty = penNegV[nuc];
+	child->nuc = nuc;
+	child->dist = distV[nuc];
+	numChild++;
+	if((childPathIdx < 0) && (bestDist < parent->dist || (parent->dist >= child->dist))){
+          sv_PathPtr[pathCnt] = sv_PathPtr[MAX_PATHS-1];
+          sv_PathPtr[MAX_PATHS-1] = child;
+          childPathIdx = MAX_PATHS-1;
+          if(bestDist >= child->dist){
+            best=parent;
+            bestDist=child->dist;
           }
-          //explicitly fill zeros between parent->flow and child->flow;
-          for(int tempInd = parent->flow + 1; tempInd < child->flow; tempInd++){
-            child->calib_A[tempInd] = 1.0f;
-            child->calib_B[tempInd] = 0.0f;
-          }
-          int hp_length = min(child->last_hp, MAX_HPXLEN);
-          child->calib_A[child->flow] = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
-          child->calib_B[child->flow] = (*Bs_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
+        }else{
+          CopyPathNew(child,parent,child,saveFlow,numSaved,cached_flow,cached_flow_ws,cached_flow_seq);
+          ++pathCnt;
         }
-        ++pathCnt;
       }
+   }
+
+   if(childPathIdx >= 0) {
+     CopyPath(parent,parent,sv_PathPtr[childPathIdx],saveFlow,numSaved,cached_flow,cached_flow_ws,cached_flow_seq);
+   }else{
+     if(bestDist >= parent->dist){
+       bestDist = parent->dist;
+       sv_PathPtr[parentPathIdx] = sv_PathPtr[--pathCnt];
+       sv_PathPtr[pathCnt] = sv_PathPtr[BEST_PATH];
+       sv_PathPtr[BEST_PATH] = parent;
+       best=parent;
+     }else{
+       sv_PathPtr[parentPathIdx] = sv_PathPtr[--pathCnt];
+       sv_PathPtr[pathCnt] = parent;
+     }
+   }
+     if(pathCnt > 1){
+	if(cached_flow==DFLT_CACHE){
+         cached_flow=0;//pf;
+         cached_flow_ws=0;//pws;
+         cached_flow_seq=0;//pseq;
+         for(int pthi=0;pthi<=BEST_PATH;pthi++){
+   	   PathRecV RESTRICT_PTR pth = sv_PathPtr[pthi];
+           pth->cached_flow=min(pth->cached_flow,cached_flow);
+           pth->cached_flow_ws=min(pth->cached_flow_ws,cached_flow_ws);
+           pth->cached_flow_seq=min(pth->cached_flow_seq,cached_flow_seq);
+         }
+       }
+     }else if(cached_flow != DFLT_CACHE){
+       cached_flow=DFLT_CACHE;
+       cached_flow_ws=DFLT_CACHE;
+       cached_flow_seq=DFLT_CACHE;
+     }
+
+     if(saveFlow > 0){
+       if(best->flow >= saveFlow && (pathCnt == 1 || best->flow >= end_flow)){
+
+	 if(numSaved == 0){
+	   // save all the current paths
+	   if(sv_PathPtr[BEST_PATH] != best){
+	     CopyPathDeep(sv_PathPtr[BEST_PATH],best);
+	     best=sv_PathPtr[BEST_PATH];
+	   }
+	   for(int i=0;i<pathCnt && i < NUM_SAVED_PATHS;i++){
+	     swap(sv_PathPtr[SAVED_PATHS+i],sv_PathPtr[i]);
+	     numSaved++;
+	   }
+	 }
+	 break;
+       }
+       if(numSaved == 0 && best->flow >= (saveFlow-8) && pathCnt != 1){
+	   for(int i=0;i<pathCnt && i < NUM_SAVED_PATHS;i++){
+	     CopyPathDeep(sv_PathPtr[SAVED_PATHS+i],sv_PathPtr[i]);
+	     numSaved++;
+	   }
+       }
+     }
+
+     if(numChild> 2)
+       manyPaths++;
+  } while(pathCnt > 0 && badPaths < bad_path_limit_ && manyPaths < many_path_limit_);
+
+  for(int i=0;i<4;i++){
+    if(best == sv_PathPtr[i]){
+      sv_PathPtr[i]=sv_PathPtr[BEST_PATH];
+      sv_PathPtr[BEST_PATH]=best;
     }
-
-    // In the event, there is no best path, one of the child is copied to the parent
-    if(childPathIdx >= 0) {
-      PathRec RESTRICT_PTR child = sv_PathPtr[childPathIdx];
-      parent_flow = parent->flow; //MJ
-      parent->flow = child->flow;
-      parent->window_end = child->window_end;
-      parent->res = child->res;
-      parent->metr = child->metr;
-      (child->flow == 0) ? (parent->flowMetr == 0) : (parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow);
-      parent->dotCnt = child->dotCnt;
-      //char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
-      for(int i = parent->window_start, j = 1, e = child->window_end; i < e; ++i, j ++) {
-        parent->state[i] = state_Buf[j].A[child->nuc];//*((float*)(ad_Buf+child->nuc*4+AD_STATE_OFS+j));
-        parent->pred[i] = pred_Buf[j].A[child->nuc];//*((float*)(ad_Buf+child->nuc*4+AD_PRED_OFS+j));
-      }
-
-      parent->sequence[parent->sequence_length] = flow_order_[parent->flow];
-      if (parent->sequence_length and parent->sequence[parent->sequence_length] != parent->sequence[parent->sequence_length-1])
-        parent->last_hp = 0;
-      parent->last_hp++;
-      parent->sequence_length++;
-
-      //update calib_A and calib_B for parent
-      if (recalibrate_predictions_) {
-        for(int tempInd = parent_flow + 1; tempInd < child->flow; tempInd++){
-          parent->calib_A[tempInd] = 1.0f;
-          parent->calib_B[tempInd] = 0.0f;
-        }
-        parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-        parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-      }
-
-      if(state_inphase_enabled_){
-          for(int tempInd = parent_flow+1; tempInd < parent->flow; tempInd++){
-              parent->state_inphase[tempInd] = parent->state[parent->flow];
-          }
-          parent->state_inphase[parent->flow] = parent->state[parent->flow];
-      }
-
-      parent->window_start = child->window_start;
-      parentPathIdx = -1;
-    }
-
-    // updating parent as best path
-    if(bestPathIdx >= 0) {
-      bestDist = dist;
-      sv_PathPtr[bestPathIdx] = sv_PathPtr[--pathCnt];
-      sv_PathPtr[pathCnt] = sv_PathPtr[MAX_PATHS];
-      sv_PathPtr[MAX_PATHS] = parent;
-    } else if(parentPathIdx >= 0) {
-      sv_PathPtr[parentPathIdx] = sv_PathPtr[--pathCnt];
-      sv_PathPtr[pathCnt] = parent;
-    }
-
-  } while(pathCnt > 0);
+  }
+  best=sv_PathPtr[BEST_PATH];
+  memcpy_4F(&best->pred[best->window_start],
+	    &best->pred_Buf[best->window_start][best->nuc],
+	    best->window_end - best->window_start);
 
   // At the end change predictions according to recalibration model and reset data structures
   if (recalibrate_predictions_) {
-    RecalibratePredictions(sv_PathPtr[MAX_PATHS]);
+    RecalibratePredictions(sv_PathPtr[BEST_PATH]);
     ResetRecalibrationStructures(end_flow);
   }
-
-  return false;
+  if(saveFlow > 0 && numSaved==0)
+    return true;
+  else
+    return false;
 }
 
 
-void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
+void TreephaserVEC::WindowedNormalize(BasecallerRead& read, int num_steps)
 {
 //  int num_flows = read.raw_measurements.size();
   float median_set[windowSize_];
@@ -1216,33 +962,38 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
   float next_normalizer = 0;
   int estim_flow = 0;
   int apply_flow = 0;
+  PathRecV *path=sv_PathPtr[BEST_PATH];
+  int start_step=max(0,num_steps-1);
 
-  for (int step = 0; step <= num_steps; ++step) {
+  for (int step = start_step; step <= num_steps; ++step) {
 
-    int window_end = estim_flow + windowSize_;
-    int window_middle = estim_flow + windowSize_ / 2;
-    if (window_middle > num_flows_)
-      break;
+    int window_start = (step+0) * windowSize_;
+    int window_end   = (step+1) * windowSize_;
+    int apply_flow_start = max(0,window_start-(windowSize_/2));
+    int apply_flow_end   = min(num_flows_,window_start+(windowSize_/2));
 
     float normalizer = next_normalizer;
 
     int median_set_size = 0;
-    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->window_end; ++estim_flow)
-      if (sv_PathPtr[MAX_PATHS]->pred[estim_flow] < 0.3)
-        median_set[median_set_size++] = read.raw_measurements[estim_flow] - sv_PathPtr[MAX_PATHS]->pred[estim_flow];
-
-    if (median_set_size > 5) {
-      //cout << step << ":" << median_set_size << ":" << windowSize_ << endl;
-      std::nth_element(median_set, median_set + median_set_size/2, median_set + median_set_size);
-      next_normalizer = median_set[median_set_size / 2];
-      if (step == 0)
-        normalizer = next_normalizer;
+    float average=0;
+    for (estim_flow=window_start; estim_flow < window_end ; ++estim_flow){
+      if (path->pred[estim_flow] < 0.3){
+        average += read.raw_measurements[estim_flow] - path->pred[estim_flow];
+        median_set_size++;
+      }
     }
 
-    float delta = (next_normalizer - normalizer) / static_cast<float>(windowSize_);
+    if (median_set_size > 5) {
+      next_normalizer = average/(float)median_set_size;
+      if (step == 0)
+        normalizer = next_normalizer;
+      else
+	normalizer = read.additive_correction[apply_flow_start-1];
+    }
 
-    for (; apply_flow < window_middle and apply_flow < num_flows_; ++apply_flow) {
-      //cout << apply_flow << ":" << window_middle << ":" << num_flows_ << endl;
+    float delta = (next_normalizer - normalizer) / (float)windowSize_;
+
+    for (apply_flow=apply_flow_start; apply_flow < apply_flow_end; ++apply_flow) {
       rd_NormMeasure[apply_flow] = read.raw_measurements[apply_flow] - normalizer;
       read.additive_correction[apply_flow] = normalizer;
       normalizer += delta;
@@ -1260,30 +1011,37 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
   estim_flow = 0;
   apply_flow = 0;
 
-  for (int step = 0; step <= num_steps; ++step) {
+  for (int step = start_step; step <= num_steps; ++step) {
 
-    int window_end = estim_flow + windowSize_;
-    int window_middle = estim_flow + windowSize_ / 2;
-    if (window_middle > num_flows_)
-      break;
+    int window_start = (step+0) * windowSize_;
+    int window_end   = (step+1) * windowSize_;
+    int apply_flow_start = max(0,window_start-(windowSize_/2));
+    int apply_flow_end   = min(num_flows_,window_start+(windowSize_/2));
 
     float normalizer = next_normalizer;
 
     int median_set_size = 0;
-    for (; estim_flow < window_end and estim_flow < num_flows_ and estim_flow < sv_PathPtr[MAX_PATHS]->window_end; ++estim_flow)
-      if (sv_PathPtr[MAX_PATHS]->pred[estim_flow] > 0.5 and rd_NormMeasure[estim_flow] > 0)
-        median_set[median_set_size++] = rd_NormMeasure[estim_flow] / sv_PathPtr[MAX_PATHS]->pred[estim_flow];
+    float average=0;
+    for (estim_flow=window_start; estim_flow < window_end ; ++estim_flow){
+      if (path->pred[estim_flow] > 0.5 and rd_NormMeasure[estim_flow] > 0){
+        median_set[median_set_size++] = rd_NormMeasure[estim_flow] / path->pred[estim_flow];
+        average+=rd_NormMeasure[estim_flow] / path->pred[estim_flow];
+      }
+    }
 
     if (median_set_size > 5) {
+      average /= (float)median_set_size;
       std::nth_element(median_set, median_set + median_set_size/2, median_set + median_set_size);
-      next_normalizer = median_set[median_set_size / 2];
+      next_normalizer = (median_set[median_set_size / 2] + average)/2;
       if (step == 0)
         normalizer = next_normalizer;
+      else
+	normalizer = read.multiplicative_correction[apply_flow_start-1];
     }
 
     float delta = (next_normalizer - normalizer) / static_cast<float>(windowSize_);
 
-    for (; apply_flow < window_middle and apply_flow < num_flows_; ++apply_flow) {
+    for (apply_flow=apply_flow_start; apply_flow < apply_flow_end; ++apply_flow) {
       rd_NormMeasure[apply_flow] /= normalizer;
       read.multiplicative_correction[apply_flow] = normalizer;
       normalizer += delta;
@@ -1297,11 +1055,7 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
 }
 
 
-// ------------------------------------------------------------------------
-// Compute quality metrics
-// Why does this function completely ignore recalibration?
-
-void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
+void  TreephaserVEC::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_,const bool flow_quality)
 {
   static const char nuc_int_to_char[5] = "ACGT";
   int num_flows = flow_order_.num_flows();
@@ -1314,19 +1068,19 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
   read.penalty_mismatch.assign(num_bases, 0);
   read.penalty_residual.assign(num_bases, 0);
 
-  PathRec RESTRICT_PTR parent = sv_PathPtr[0];
-  PathRec RESTRICT_PTR children[4] = {sv_PathPtr[1], sv_PathPtr[2], sv_PathPtr[3], sv_PathPtr[4]};
+  PathRecV RESTRICT_PTR parent = sv_PathPtr[0];
   parent->flow = 0;
   parent->window_start = 0;
   parent->window_end = 1;
   parent->res = 0.0f;
   parent->metr = 0.0f;
   parent->flowMetr = 0.0f;
-  parent->dotCnt = 0;
-  parent->state[0] = 1.0f;
+  parent->newSignal = 1.0f;
+  parent->state[0] = LD_VEC4F(1.0f);
   parent->sequence_length = 0;
   parent->last_hp = 0;
   parent->pred[0] = 0.0f;
+  parent->pred_Buf[0]=LD_VEC4F(0);
 
   float recent_state_inphase = 1;
   float recent_state_total = 1;
@@ -1340,213 +1094,47 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
           }
           // compute child path flow states, predicted signal,negative and positive penalties
           advanceState4(parent, num_flows);
-
-          float penalty[4] = { 0, 0, 0, 0 };
-          int called_nuc = -1;
+      int called_nuc = -1;
       for(int nuc = 0; nuc < 4; ++nuc) {
-        PathRec RESTRICT_PTR child = children[nuc];
         if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
           called_nuc = nuc;
-        child->flow = min(ad_Idx.A[nuc], flow_order_.num_flows());
-        child->window_end = min(ad_End.A[nuc], flow_order_.num_flows());
-        child->window_start = min(ad_Beg.A[nuc], child->window_end);
-
-        // Apply easy termination rules
-        if (child->flow >= num_flows || parent->last_hp >= MAX_HPXLEN ) {
-          penalty[nuc] = 25; // Mark for deletion
-          continue;
-        }
-
-        // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
-//        char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
-
-        // sum of squared residuals for positive residuals for flows < child->flow
-        float penPar = pres_Buf[child->flow-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+(AD_PRES_OFS)+(child->flow-parent->window_start-1)*16));
-
-        // sum of squared residuals for negative residuals for flows < child->window_end
-        float penNeg = nres_Buf[child->window_end-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+AD_NRES_OFS+(child->window_end-parent->window_start-1)*16));
-
-        penalty[nuc] = penPar + penNeg;
       }
 
-      // find current incorporating base
-      assert(called_nuc > -1);
-      assert(children[called_nuc]->flow == solution_flow);
-
-      PathRec RESTRICT_PTR childToKeep = children[called_nuc];
-      //copy
-//      char RESTRICT_PTR p = ad_Buf+ called_nuc*4 + AD_STATE_OFS;
-
-      recent_state_total = 0;
-      for(int i = parent->window_start, j = 1, e = childToKeep->window_end; i < e; ++i, j ++) {
-        childToKeep->state[i] = state_Buf[j].A[called_nuc];// *((float*)(p+j*16));
-        childToKeep->pred[i] = pred_Buf[j].A[called_nuc];// *((float*)(p+j*16+(AD_PRED_OFS-AD_STATE_OFS)));
-        recent_state_total += childToKeep->state[i];
+      for(int i = parent->window_start, e = winStart_Buf[called_nuc]; i < e; ++i) {
+        parent->pred[i] = parent->pred_Buf[i][called_nuc];
       }
-      //sse implementation with aligned memory; no gain as the number of elements to be summed up is small
-//      recent_state_total = vecSumSSE(state_Buf, countStates);
 
-      copySSE(childToKeep->pred, parent->pred, parent->window_start << 2);
-
-      if (childToKeep->flow == parent->flow)
-        childToKeep->last_hp = parent->last_hp + 1;
+      if (flow_Buf[called_nuc] == parent->flow)
+        parent->last_hp = parent->last_hp + 1;
       else
-        childToKeep->last_hp = 1;
+        parent->last_hp = 1;
 
-      recent_state_inphase = childToKeep->state[solution_flow];
+      recent_state_inphase = parent->state[solution_flow][called_nuc];
 
       // Get delta penalty to next best solution
       read.penalty_mismatch[base] = -1; // min delta penalty to earlier base hypothesis
       read.penalty_residual[base] = 0;
 
       if (solution_flow - parent->window_start > 0)
-        read.penalty_residual[base] = penalty[called_nuc] / (solution_flow - parent->window_start);
+        read.penalty_residual[base] = penParV[called_nuc] / (solution_flow - parent->window_start);
 
       for (int nuc = 0; nuc < 4; ++nuc) {
         if (nuc == called_nuc)
             continue;
-        float penalty_mismatch = penalty[called_nuc] - penalty[nuc];
+        float penalty_mismatch = penParV[called_nuc] - penParV[nuc];
         read.penalty_mismatch[base] = max(read.penalty_mismatch[base], penalty_mismatch);
       }
 
-      // Called state is the starting point for next base
-      PathRec RESTRICT_PTR swap = parent;
-      parent = children[called_nuc];
-      children[called_nuc] = swap;
+      parent->flow = min((int)(flow_Buf[called_nuc]), flow_order_.num_flows());
+      parent->window_end = min((int)(winEnd_Buf[called_nuc]), flow_order_.num_flows());
+      parent->window_start = min((int)(winStart_Buf[called_nuc]), parent->window_end);
+      parent->nuc=called_nuc;
     }
     read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
-    read.state_total[solution_flow] = max(recent_state_total, 0.01f);
-    }
-
-  if(recalibrate_predictions_) {
-    RecalibratePredictions(parent);
-    ResetRecalibrationStructures(num_flows_);
   }
-  setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
-  copySSE(&read.prediction[0], parent->pred, parent->window_end*sizeof(float));
-}
-
-
-void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& flow_to_base, const bool flow_predictors_,const bool flow_quality)
-{
-  static const char nuc_int_to_char[5] = "ACGT";
-  int num_flows = flow_order_.num_flows();
-  read.state_inphase.assign(num_flows, 1);
-  read.state_total.assign(num_flows, 1);
-
-  if (read.sequence.empty())
-    return;
-  int num_bases = read.sequence.size();
-  read.penalty_mismatch.assign(num_bases, 0);
-  read.penalty_residual.assign(num_bases, 0);
-  if (flow_predictors_ || flow_quality) {
-      read.penalty_mismatch_flow.assign(num_flows, 0);
-      read.penalty_residual_flow.assign(num_flows, 0);
+  for(int i = parent->window_start, e = parent->window_end; i < e; ++i) {
+    parent->pred[i] = parent->pred_Buf[i][parent->nuc];
   }
-
-  PathRec RESTRICT_PTR parent = sv_PathPtr[0];
-  PathRec RESTRICT_PTR children[4] = {sv_PathPtr[1], sv_PathPtr[2], sv_PathPtr[3], sv_PathPtr[4]};
-  parent->flow = 0;
-  parent->window_start = 0;
-  parent->window_end = 1;
-  parent->res = 0.0f;
-  parent->metr = 0.0f;
-  parent->flowMetr = 0.0f;
-  parent->dotCnt = 0;
-  parent->state[0] = 1.0f;
-  parent->sequence_length = 0;
-  parent->last_hp = 0;
-  parent->pred[0] = 0.0f;
-
-  float recent_state_inphase = 1;
-  float recent_state_total = 1;
-
-  // main loop for base calling
-  for (int solution_flow = 0, base = 0; solution_flow < num_flows; ++solution_flow) {
-      for (; base<num_bases and read.sequence[base]==flow_order_[solution_flow]; ++base) {
-          if(recalibrate_predictions_) {
-            parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-            parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
-          }
-          // compute child path flow states, predicted signal,negative and positive penalties
-          advanceState4(parent, num_flows);
-
-          float penalty[4] = { 0, 0, 0, 0 };
-          int called_nuc = -1;
-      for(int nuc = 0; nuc < 4; ++nuc) {
-        PathRec RESTRICT_PTR child = children[nuc];
-        if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
-          called_nuc = nuc;
-        child->flow = min(ad_Idx.A[nuc], flow_order_.num_flows());
-        child->window_end = min(ad_End.A[nuc], flow_order_.num_flows());
-        child->window_start = min(ad_Beg.A[nuc], child->window_end);
-
-        // Apply easy termination rules
-        if (child->flow >= num_flows || parent->last_hp >= MAX_HPXLEN ) {
-          penalty[nuc] = 25; // Mark for deletion
-          continue;
-        }
-
-        // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
-//        char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
-
-        // sum of squared residuals for positive residuals for flows < child->flow
-        float penPar = pres_Buf[child->flow-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+(AD_PRES_OFS)+(child->flow-parent->window_start-1)*16));
-
-        // sum of squared residuals for negative residuals for flows < child->window_end
-        float penNeg = nres_Buf[child->window_end-parent->window_start].A[nuc];// *((float RESTRICT_PTR)(ad_Buf+nuc*4+AD_NRES_OFS+(child->window_end-parent->window_start-1)*16));
-
-        penalty[nuc] = penPar + penNeg;
-      }
-
-      // find current incorporating base
-      assert(called_nuc > -1);
-      assert(children[called_nuc]->flow == solution_flow);
-
-      PathRec RESTRICT_PTR childToKeep = children[called_nuc];
-      //copy
-//      char RESTRICT_PTR p = ad_Buf+ called_nuc*4 + AD_STATE_OFS;
-
-      recent_state_total = 0;
-      for(int i = parent->window_start, j = 1, e = childToKeep->window_end; i < e; ++i, j ++) {
-        childToKeep->state[i] = state_Buf[j].A[called_nuc];// *((float*)(p+j*16));
-        childToKeep->pred[i] = pred_Buf[j].A[called_nuc];// *((float*)(p+j*16+(AD_PRED_OFS-AD_STATE_OFS)));
-        recent_state_total += childToKeep->state[i];
-      }
-      //sse implementation with aligned memory; no gain as the number of elements to be summed up is small
-//      recent_state_total = vecSumSSE(state_Buf, countStates);
-
-      copySSE(childToKeep->pred, parent->pred, parent->window_start << 2);
-
-      if (childToKeep->flow == parent->flow)
-        childToKeep->last_hp = parent->last_hp + 1;
-      else
-        childToKeep->last_hp = 1;
-
-      recent_state_inphase = childToKeep->state[solution_flow];
-
-      // Get delta penalty to next best solution
-      read.penalty_mismatch[base] = -1; // min delta penalty to earlier base hypothesis
-      read.penalty_residual[base] = 0;
-
-      if (solution_flow - parent->window_start > 0)
-        read.penalty_residual[base] = penalty[called_nuc] / (solution_flow - parent->window_start);
-
-      for (int nuc = 0; nuc < 4; ++nuc) {
-        if (nuc == called_nuc)
-            continue;
-        float penalty_mismatch = penalty[called_nuc] - penalty[nuc];
-        read.penalty_mismatch[base] = max(read.penalty_mismatch[base], penalty_mismatch);
-      }
-
-      // Called state is the starting point for next base
-      PathRec RESTRICT_PTR swap = parent;
-      parent = children[called_nuc];
-      children[called_nuc] = swap;
-    }
-    read.state_inphase[solution_flow] = max(recent_state_inphase, 0.01f);
-    read.state_total[solution_flow] = max(recent_state_total, 0.01f);
-    }
 
   if (flow_predictors_ || flow_quality) { //if (flow_predictors_)
       //vector<int> flows_to_proc;
@@ -1556,30 +1144,15 @@ void  TreephaserSSE::ComputeQVmetrics_flow(BasecallerRead& read, vector<int>& fl
               // copy from what's stored in read.penalty_mismatch[base]
               read.penalty_mismatch_flow[solution_flow] = read.penalty_mismatch[curr_base];
               read.penalty_residual_flow[solution_flow] = read.penalty_residual[curr_base];
-              /*
-              int nFlows = flows_to_proc.size();
-              if (nFlows>0) {
-              for (int i=0; i<nFlows; ++i) {
-                  int flow = flows_to_proc[i];
-                  read.penalty_mismatch_flow[flow] = 0;
-                  read.penalty_residual_flow[flow] = 0;
-                  }
-              flows_to_proc.clear();
-              */
-              }
-          else {
-              //flows_to_proc.push_back(solution_flow);
-              continue;
-            }
-          }
+	  }
       }
+  }
 
   if(recalibrate_predictions_) {
     RecalibratePredictions(parent);
-    ResetRecalibrationStructures(num_flows_);
   }
-  setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
-  copySSE(&read.prediction[0], parent->pred, parent->window_end*sizeof(float));
+  memset_F(&read.prediction[parent->window_end], 0, num_flows_-parent->window_end);
+  memcpy_F(&read.prediction[0], &parent->pred[0], parent->window_end);
 }
 
 

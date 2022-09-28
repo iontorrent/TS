@@ -45,12 +45,51 @@ int int64_cmp (const void* i1, const void* i2)
     else return 1;
 }
 
+int double_cmp (const void* i1, const void* i2)
+{
+    if (*(double *) i1 < *(double *) i2) return -1;
+    else if (*(double *) i1 == *(double *) i2) return 0;
+    else return 1;
+}
+
+// #define USE_TMAP_HISTO_LOCAL_BSEARCH
+#if defined (USE_TMAP_HISTO_LOCAL_BSEARCH)
+typedef int (*compar_fn_t) (const void *, const void *);
+
+void* local_bsearch (const void *key, const void *base, size_t nmemb, size_t size, compar_fn_t compar)
+{
+    size_t l, u, idx;
+    const void *p;
+    int comparison;
+
+    l = 0;
+    u = nmemb;
+    while (l < u)
+    {
+        idx = (l + u) / 2;
+        p = (void *) (((const char *) base) + (idx * size));
+        comparison = (*compar) (key, p);
+        if (comparison < 0)
+            u = idx;
+        else if (comparison > 0)
+            l = idx + 1;
+        else
+            return (void *) p;
+    }
+
+    return (void *) (((const char *) base) + (l * size));;
+}
+#endif
+
 void add_to_hist64i (uint64_t* hist, size_t bin_cnt, int64_t* bin_lower_bounds, int64_t value)
 {
     // find the bin: do linear search to save on recurrent calls (and on implementation, as bsearch does not fit :)
     // DK: tmap_binary_search is flawed (enters infine loop when searching for a value equal to first element in the array)
-    // const int64_t* bound = tmap_binary_search (&value, bin_lower_bounds, bin_cnt, sizeof (int64_t), lt_int);
-    const int64_t* bound = bsearch (&value, bin_lower_bounds, bin_cnt, sizeof (int64_t), int64_cmp);
+    // DK: 12/3/2020: Fixed tmap_binary_search 
+
+    const int64_t* bound = tmap_binary_search (&value, bin_lower_bounds, bin_cnt, sizeof (int64_t), lt_int);
+    // const int64_t* bound = bsearch (&value, bin_lower_bounds, bin_cnt, sizeof (int64_t), int64_cmp);
+    // const int64_t* bound = (const int64_t*) binary_search (&value, bin_lower_bounds, bin_cnt, sizeof (int64_t), int64_cmp);
     // get bin index
     size_t idx = bound - bin_lower_bounds;
     // increment histogram bin value
@@ -61,6 +100,7 @@ void add_to_hist64d (uint64_t* hist, size_t bin_cnt, double* bin_lower_bounds, d
 {
     // find the bin: do linear search to save on recurrent calls (and on implementation, as bsearch does not fit :)
     const double* bound = tmap_binary_search (&value, bin_lower_bounds, bin_cnt, sizeof (double), lt_double);
+    // const double* bound = (const double*) local_bsearch (&value, bin_lower_bounds, bin_cnt, sizeof (double), double_cmp);
     // get bin index
     size_t idx = bound - bin_lower_bounds;
     // increment bin value

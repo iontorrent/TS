@@ -205,11 +205,34 @@ void HypothesisStack::AllocateFrequencyStarts(int num_hyp_no_null, vector<Allele
     vector<int> fake_hs_alleles;
     fake_hs_alleles.reserve(num_hyp_no_null - 1);
 
+    // Find best alt allele from AO
+    int best_i_alt = -1;
+    int best_ao = 0;
+    // Find AO
+    map<string, vector<string> >::const_iterator ao_it = variant->info.find("AO");
+    if (ao_it != variant->info.end() and ao_it->second.size() == variant->alt.size()){
+      for (int i_alt = 0; i_alt < (int) ao_it->second.size(); ++i_alt){
+        if (ao_it->second.at(i_alt) == "."){
+          best_i_alt = -1;
+          break;
+        }
+        int ao = stoi(ao_it->second.at(i_alt));
+        if (ao > best_ao){
+          best_ao = ao;
+          best_i_alt = i_alt;
+        }
+      }
+    }
+
     // try pure frequencies for the alleles
     if(try_alternatives){
     	// try pure frequencies for alt alleles
     	for(int i_hyp = 1; i_hyp < num_hyp_no_null; ++i_hyp){
     		int i_alt = i_hyp - 1;
+    		// Pure frequency for the best alt allele only.
+    		if (i_alt != best_i_alt and best_i_alt >= 0){
+    		  continue;
+    		}
    			if (allele_identity_vector[i_alt].status.isFakeHsAllele){
    				// I don't want to try the pure freq for a fake hs allele/
    				fake_hs_alleles.push_back(i_hyp);

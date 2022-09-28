@@ -1252,6 +1252,8 @@ enum ovr_opt_code
     // --c-bw
     OO_c_bw,
 
+    // --score-thr
+    OO_score_thr,
     // --end-repair
     OO_end_repair,
     // --max-one-large-indel-rescue
@@ -1396,10 +1398,12 @@ static const sysopt_t overridable_opts [] =
     { "c-gep",                                  required_argument,  NULL, OO_c_gep },
     // --c-bw
     { "c-bw",                                   required_argument,  NULL, OO_c_bw },
+    // --score-thr
+    { "score_thr",                              required_argument,  NULL, OO_score_thr },
 
     // Following options are recognised per se as well as with -le and -he suffixes:
     // --end-repair
-    { "end-repair",                             required_argument,  NULL, OO_end_repair },
+    { "end-repair",                                     required_argument,  NULL, OO_end_repair },
     // --max-one-large-indel-rescue
     { "max-one-large-indel-rescue",                     required_argument,  NULL, OO_max_one_large_indel_rescue },
     // --min-anchor-large-indel-rescue
@@ -1528,8 +1532,8 @@ int string_to_args (char* argstring, char*** argv_p) // this would return 0 or 2
 static uint8_t str2int (const char* str, int* value)
 {
     char* endptr;
-    int errono_save = errno;
-    errno = 0;
+    // int errno_save = errno;
+    // errno = 0;
     long val = strtol (str, &endptr, 10);
     if (*endptr) // there was some garbage down a string
         return 0;
@@ -1554,8 +1558,8 @@ static uint8_t str2int (const char* str, int* value)
 static uint8_t str2double (const char* str, double* value)
 {
     char* endptr;
-    int errono_save = errno;
-    errno = 0;
+    // int errno_save = errno;
+    // errno = 0;
     double val = strtod (str, &endptr);
     if (*endptr) // there was some garbage down a string
         return 0;
@@ -1890,6 +1894,14 @@ uint32_t parse_overrides (tmap_map_locopt_t* local_params, char* param_spec_str,
                     ++ovr_count;
                 else
                     tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --c-bw");
+                break;
+            case OO_score_thr:
+                if (str2int (optarg, &value))
+                    local_params->score_thr.value = value,
+                    local_params->score_thr.over = 1,
+                    ++ovr_count;
+                else
+                    tmap_user_fileproc_msg (bed_fname, lineno, "Error parsing parameters override: --end-repair");
                 break;
             case OO_end_repair:
                 if (str2int (optarg, &value))
@@ -2669,6 +2681,24 @@ tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32
         }
         else
         {
+            if (b [num-1] > beg) 
+            {
+                tmap_error ("Bed file is not sorted by begin", Warn, OutOfRange);
+                fclose (fp);
+                return 0;
+            }
+            else if (e [num-1] >= end)
+            {
+                // ZZ:current ampl is contained in the previous one
+                continue;
+                // DK: overrides for containing one preceed
+            }
+            else if (b [num-1] == beg)
+            {
+                // ZZ:current one has same beg, but larger end, replace previous one
+                num--;
+                // DK: overrides for longer one preceed
+            }
             if (num >= memsize)
             {
                 uint32_t prevsize = memsize;
@@ -2688,24 +2718,6 @@ tmap_refseq_read_bed_core (tmap_refseq_t *refseq, char *bedfile, int flag, int32
                         *par_idx = UINT32_MAX;
                     last_parovr_mem_size = memsize;
                 }
-            }
-            if (b [num-1] > beg) 
-            {
-                tmap_error ("Bed file is not sorted by begin", Warn, OutOfRange);
-                fclose (fp);
-                return 0;
-            }
-            else if (e [num-1] >= end)
-            {
-                // ZZ:current ampl is contained in the previous one
-                continue;
-                // DK: overrides for containing one preceed
-            }
-            else if (b [num-1] == beg)
-            {
-                // ZZ:current one has same beg, but larger end, replace previous one
-                num--;
-                // DK: overrides for longer one preceed
             }
         }
         b [num] = beg;

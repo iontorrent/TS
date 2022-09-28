@@ -39,7 +39,7 @@
 #define DEFAULT_DEBUG_ERROR_FLOW           -1
 #define DEFAULT_DEBUG_ALIGNED_FLOW         -1
 #define DEFAULT_DEBUG_POSITIVE_REF_FLOW    -1
-#define DEFAULT_N_THREADS                  5
+#define DEFAULT_N_THREADS                  0
 #define DEFAULT_THREADS_SHARE_MEMORY       "false"
 
 using namespace std;

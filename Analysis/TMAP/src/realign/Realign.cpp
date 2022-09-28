@@ -74,14 +74,14 @@ void Realigner::InitializeRealigner(unsigned int reserve_size, unsigned int clip
   isForwardStrandRead_   = true;
   verbose_               = false;
   invalid_cigar_in_input = false;
-  
+
   alignment_bandwidth_   = 20;
   q_limit_minus_.reserve(reserve_size);
   q_limit_plus_.reserve(reserve_size);
-  clipped_anchors_.cigar_left.reserve(50);
-  clipped_anchors_.cigar_right.reserve(50);
-  clipped_anchors_.md_left.reserve(50);
-  clipped_anchors_.md_right.reserve(50);
+  clipped_anchors_.cigar_left.reserve(clipping_size);
+  clipped_anchors_.cigar_right.reserve(clipping_size);
+  clipped_anchors_.md_left.reserve(clipping_size);
+  clipped_anchors_.md_right.reserve(clipping_size);
 
   pretty_tseq_.reserve(reserve_size);
   pretty_qseq_.reserve(reserve_size);

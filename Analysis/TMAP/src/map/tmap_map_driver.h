@@ -154,66 +154,6 @@ tmap_map_driver_run(tmap_map_driver_t *driver);
 void
 tmap_map_driver_destroy(tmap_map_driver_t *driver);
 
-/*! 
-  Driver data to be passed to a thread                         
-  */
-typedef struct {                                            
-    sam_header_t *sam_header;  /*!< the SAM Header */
-    tmap_seqs_t **seqs_buffer;  /*!< the buffers of sequences */    
-    int32_t seqs_buffer_length;  /*!< the buffers length */
-    int32_t *buffer_idx; /*!< the current zero-based index into the buffer */
-    tmap_map_record_t **records;  /*!< the alignments for each sequence */
-    tmap_map_bams_t **bams;  /*!< the BAM alignments for each sequence */
-    tmap_index_t *index;  /*!< pointer to the reference index */
-    tmap_map_driver_t *driver;  /*!< the main driver object */
-    tmap_map_stats_t *stat; /*!< the driver statistics */
-    tmap_rand_t *rand;  /*!< the random number generator */
-    // DVK - realigner
-    struct RealignProxy *realigner; /*!< post-processing realigner engine */
-    struct RealignProxy *context; /*!< post-processing context-dependent realignment engine */
-    int32_t do_pairing;  /*!< 1 if we are performing pairing paramter calculation, 0 otherwise */
-    int32_t tid;  /*!< the zero-based thread id */
-} tmap_map_driver_thread_data_t;
-
-/*!
-  The core worker routine of mapall
-  @param  sam_header           the SAM Header
-  @param  seqs_buffer           the buffer of sequences
-  @param  records              the records to return
-  @param  bams                 the bams to return
-  @param  seqs_buffer_length    the number of sequences in the buffer
-  @param  buffer_idx            the current zero-based index into the buffer
-  @param  index                the reference index
-  @param  driver               the driver
-  @param  stat                 the driver statistics
-  @param  rand                 the random number generator
-  @param  do_pairing           1 if we are performing pairing paramter calculation, 0 otherwise 
-  @param  tid                  the thread ids
- */
-void
-tmap_map_driver_core_worker(sam_header_t *sam_header,
-                            tmap_seqs_t **seqs_buffer, 
-                            tmap_map_record_t **records,
-                            tmap_map_bams_t **bams,
-                            int32_t seqs_buffer_length,
-                            int32_t *buffer_idx,
-                            tmap_index_t *index,
-                            tmap_map_driver_t *driver,
-                            tmap_map_stats_t* stat,
-                            tmap_rand_t *rand,
-                            // DVK - realign
-                            struct RealignProxy *realigner, 
-                            struct RealignProxy *context, 
-                            int32_t do_pairing,
-                            int32_t tid);
-
-/*!
- A wrapper around the core function of mapall
- @param  arg  the worker arguments in the type: tmap_map_driver_thread_data_t
- @return      the worker arguments
- */
-void *
-tmap_map_driver_core_thread_worker(void *arg);
 
 /*!
   the core routine for mapping data with or without threads

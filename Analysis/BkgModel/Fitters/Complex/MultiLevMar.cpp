@@ -196,9 +196,9 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParametersOnlyRegion (
       total_iter++;
     }
   }
-  if (lm_state.region_success_step<1){
-    printf("No successes: MultiFlowSpecializedLevMarFitParametersOnlyRegion in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
-  }
+//  if (lm_state.region_success_step<1){
+//    printf("No successes: MultiFlowSpecializedLevMarFitParametersOnlyRegion in region(col=%d,row=%d)\n", bkg.region_data->region->col, bkg.region_data->region->row);
+//  }
   CleanTerminateOptimization();
   return ( total_iter );
 }
@@ -510,8 +510,8 @@ void MultiFlowLevMar::LevMarFitRegion (
       else
       {
         cont_proc = lm_state.IncreaseRegionStep();
-        if (cont_proc)
-          printf ( "LevMarFitRegion: Reached max lambda %f in region(col=%d,row=%d):\n", lm_state.reg_lambda,bkg.region_data->region->col, bkg.region_data->region->row);
+//if (cont_proc)
+//          printf ( "LevMarFitRegion: Reached max lambda %f in region(col=%d,row=%d):\n", lm_state.reg_lambda,bkg.region_data->region->col, bkg.region_data->region->row);
       }
     }
     else

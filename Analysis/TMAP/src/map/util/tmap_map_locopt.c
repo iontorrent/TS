@@ -13,6 +13,7 @@ void tmap_map_locopt_init (tmap_map_locopt_t* locopt)
     locopt->gapl_len.over = 0;
     locopt->bw.over = 0;
     locopt->softclip_type.over = 0;
+    locopt->score_thr.over = 0;
     locopt->end_repair.over = 0;
     locopt->end_repair_he.over = 0;
     locopt->end_repair_le.over = 0;

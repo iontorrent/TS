@@ -40,8 +40,8 @@ namespace FitDensity {
  * @return - density at value supplied
  */
 inline double FitDensity::phi(double const x){
-   double pi = 3.14159265358979323846; 
-   return 1 / sqrt(2 * pi)* exp(-0.5 * x * x);
+   double one_over_sqrt_2mpi = 0.39894228040143267793994605993438; //1/sqrt(2 * pi)
+   return one_over_sqrt_2mpi * exp(-0.5 * x * x);
 }
 
 #endif // FITDENSITY_H

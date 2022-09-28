@@ -1310,7 +1310,7 @@ char* ret_begin;
 
 inline void process(const string& t, const string& q, int qsc, int qec,
                     int ma, int mi, int go, int ge, int dir,
-                    int *_opt, int *_te, int *_qe, int *_n_best) {
+                    int *_opt, int *_te, int *_qe, int *_n_best, int* fitflag) {
   m = q.size();
   a = q.data();
 

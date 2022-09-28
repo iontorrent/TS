@@ -21,8 +21,8 @@ void ZeromerMatDiff::ShiftReference(int n_frames, size_t n_flow_wells, float shi
     if (start_frame >= 0 && end_frame < n_frames) { 
       //interpolate...
       float mult = shift - floor(shift);
-      shifted.col(frame_ix).array() = (orig.col(end_frame).array() - orig.col(start_frame).array()) * mult;
-      shifted.col(frame_ix).array() += orig.col(start_frame).array();
+      shifted.col(frame_ix).array() = (orig.col(end_frame).array() - orig.col(start_frame).array()) * mult +
+    		                           orig.col(start_frame).array();
     }
     else {
       // extrapolate backwards
@@ -110,30 +110,29 @@ void ZeromerMatDiff::ZeromerSumSqErrorTrim(const int *zero_flows, size_t n_zero_
   double ssq_sum = 0;
   size_t bad_count = 0;
   float max_value = 1000.0f;
+  float max_value_sq = max_value*max_value;
   for (size_t z_ix = 0; z_ix < n_zero_flows; z_ix++) {
     size_t flow_ix = zero_flows[z_ix];
     for (size_t col_ix = 0; col_ix < n_frames; col_ix++) {
       float *__restrict signal_start = signal_data + n_wells * flow_ix + n_flow_wells * col_ix;
-      float *__restrict signal_end = signal_start + n_wells;
       float *__restrict predict_start = predict_data + n_wells * flow_ix + n_flow_wells * col_ix;
       const char *__restrict bad_start = bad_wells;
-      while (signal_start != signal_end) {
-        double value = *signal_start - *predict_start; //*signal_start * *signal_start;
-        if (*bad_start == 0 && isfinite(value) && fabs(value) <= max_value) {
-          ssq_sum += value * value;
+      for(size_t trc=0;trc<n_wells;trc++) {
+        float value = signal_start[trc] - predict_start[trc]; //*signal_start * *signal_start;
+        value=value*value;
+
+
+        if (isfinite(value) && value <= max_value_sq) {
+        	if(bad_start[trc] == 0)
+        		ssq_sum += value;
         }
-        else if (*bad_start == 0) {
-          *predict_start = *signal_start + max_value;
-          ssq_sum += max_value;
-          bad_count++;
+        else{
+          predict_start[trc] = signal_start[trc] + max_value;
+          if(bad_start[trc] == 0){
+			  ssq_sum += max_value_sq;
+			  bad_count++;
+          }
         }
-        // levmar has it's own version of residual calculation so have to sub in the nan values
-        if (!isfinite(value) || std::isnan(value) || value > max_value) {
-          *predict_start = *signal_start + max_value;
-        }
-        bad_start++;
-        signal_start++;
-        predict_start++;
       }
     }
   }
@@ -144,57 +143,42 @@ void ZeromerMatDiff::FitTauB(const int *zero_flows, size_t n_zero_flows,
                              const float *trace_data, const float *ref_data, 
                              size_t n_wells, size_t n_flows, size_t n_flow_wells,
                              size_t n_frames, float taue_est, float *__restrict taub) {
-  Eigen::Map<Eigen::VectorXf, Eigen::Aligned> taub_v(taub, n_flow_wells);
-  Eigen::VectorXf vec_sum_x2(n_wells), vec_sum_xy(n_wells), 
-    vec_previous(n_wells), taub_sum(n_wells);
-  taub_sum.setZero();  
-  taub_v.setZero();
+  float vec_sum_xx   [n_wells] __attribute__ ((aligned (64)));
+  float vec_sum_xy   [n_wells] __attribute__ ((aligned (64)));
+  float vec_previous [n_wells] __attribute__ ((aligned (64)));
+  float taub_sum     [n_wells] __attribute__ ((aligned (64)));
+
+  memset(taub_sum,0,sizeof(taub_sum));
   for (size_t flow_ix = 0; flow_ix < n_zero_flows; flow_ix++) {
     int z_ix = zero_flows[flow_ix];
 
-    vec_sum_x2.setZero();
-    vec_sum_xy.setZero();
-    vec_previous.setZero();
+    memset(vec_sum_xx,0,sizeof(vec_sum_xx));
+    memset(vec_sum_xy,0,sizeof(vec_sum_xy));
+    memset(vec_previous,0,sizeof(vec_previous));
     for (size_t frame_ix = 0; frame_ix < n_frames; frame_ix++) {
       size_t offset = frame_ix * n_flow_wells + n_wells * z_ix;
-      const float * __restrict trace_ptr_start = trace_data + offset;
-      const float * __restrict trace_ptr_end = trace_ptr_start + n_wells;
+      const float * __restrict trace_ptr = trace_data + offset;
       const float * __restrict ref_ptr = ref_data + offset;
-      float * __restrict previous_ptr = vec_previous.data();
-      float * __restrict xx_ptr = vec_sum_x2.data();
-      float * __restrict xy_ptr = vec_sum_xy.data();
-      while (trace_ptr_start != trace_ptr_end) {
-        float diff = *ref_ptr - *trace_ptr_start;
-        float taues = *ref_ptr * taue_est;
-        float y = *previous_ptr + diff + taues;
-        *previous_ptr += diff;
-        float x = *trace_ptr_start;
-        *xx_ptr += x * x;
-        *xy_ptr += x * y;
-
-        trace_ptr_start++;
-        ref_ptr++;
-        previous_ptr++;
-        xx_ptr++;
-        xy_ptr++;
+      for(size_t trc=0;trc<n_wells;trc++) {
+        float diff = ref_ptr[trc] - trace_ptr[trc];
+        float taues = ref_ptr[trc] * taue_est;
+        float y = vec_previous[trc] + diff + taues;
+        vec_previous[trc] += diff;
+        float x = trace_ptr[trc];
+        vec_sum_xx[trc] += x * x;
+        vec_sum_xy[trc] += x * y;
       }
     }
-    float *__restrict tau_b_start = taub_sum.data();
-    float *__restrict tau_b_end = tau_b_start + n_wells;
-    float *__restrict xx_ptr = vec_sum_x2.data();
-    float *__restrict xy_ptr = vec_sum_xy.data();
-    while (tau_b_start != tau_b_end) {
-      *tau_b_start++ += *xy_ptr++ / *xx_ptr++;
+    for(size_t trc=0;trc<n_wells;trc++) {
+    	taub_sum[trc] += vec_sum_xy[trc] / vec_sum_xx[trc];
     }
   }
 
   /* for now same taub estimate per nuc, just copy for each flow. */
   for (size_t flow_ix = 0; flow_ix < n_flows; flow_ix++) {
     float *__restrict tau_b_start = taub + flow_ix * n_wells;
-    float *__restrict tau_b_end = tau_b_start + n_wells;
-    float *__restrict tau_b_sum_start = taub_sum.data();
-    while (tau_b_start != tau_b_end) {
-      *tau_b_start++ = *tau_b_sum_start++ / n_zero_flows;
+    for(size_t trc=0;trc<n_wells;trc++) {
+      tau_b_start[trc] = taub_sum[trc] / n_zero_flows;
     }
   }
 
@@ -207,80 +191,61 @@ void ZeromerMatDiff::FitTauBNuc(const int *zero_flows, size_t n_zero_flows,
                                 size_t n_frames, float taue_est, float *__restrict taub) {
   float nuc_weight_mult = .3;
   float combo_weight_mult = .7;
-     
-  Eigen::Map<Eigen::VectorXf, Eigen::Aligned> taub_v(taub, n_flow_wells);
-  Eigen::VectorXf vec_sum_x2(n_wells), vec_sum_xy(n_wells), 
-    vec_previous(n_wells), taub_sum(n_wells);
-  Eigen::MatrixXf taub_nuc(n_wells, 4);
+  float vec_sum_xx[n_wells] __attribute__ ((aligned (64)));
+  float vec_sum_xy[n_wells] __attribute__ ((aligned (64)));
+  float vec_previous[n_wells] __attribute__ ((aligned (64)));
+  float taub_sum[n_wells] __attribute__ ((aligned (64)));
+  float taub_nuc[4][n_wells] __attribute__ ((aligned (64)));
   int nuc_counts[4] = {0,0,0,0};
-  taub_nuc.setZero();
-  taub_v.setZero();
-  taub_sum.setZero();    
+
+  memset(taub_nuc,0,sizeof(taub_nuc));
+  memset(taub_sum,0,sizeof(taub_sum));
   for (size_t flow_ix = 0; flow_ix < n_zero_flows; flow_ix++) {
     int z_ix = zero_flows[flow_ix];
-    vec_sum_x2.setZero();
-    vec_sum_xy.setZero();
-    vec_previous.setZero();
+    memset(vec_sum_xx,0,sizeof(vec_sum_xx));
+    memset(vec_sum_xy,0,sizeof(vec_sum_xy));
+    memset(vec_previous,0,sizeof(vec_previous));
     for (size_t frame_ix = 0; frame_ix < n_frames; frame_ix++) {
       size_t offset = frame_ix * n_flow_wells + n_wells * z_ix;
-      const float * __restrict trace_ptr_start = trace_data + offset;
-      const float * __restrict trace_ptr_end = trace_ptr_start + n_wells;
-      const float * __restrict ref_ptr = ref_data + offset;
-      float * __restrict previous_ptr = vec_previous.data();
-      float * __restrict xx_ptr = vec_sum_x2.data();
-      float * __restrict xy_ptr = vec_sum_xy.data();
-      while (trace_ptr_start != trace_ptr_end) {
-        float diff = *ref_ptr - *trace_ptr_start;
-        float taues = *ref_ptr * taue_est;
-        float y = *previous_ptr + diff + taues;
-        *previous_ptr += diff;
-        float x = *trace_ptr_start;
-        *xx_ptr += x * x;
-        *xy_ptr += x * y;
-
-        trace_ptr_start++;
-        ref_ptr++;
-        previous_ptr++;
-        xx_ptr++;
-        xy_ptr++;
+      const float * trace_ptr = trace_data + offset;
+      const float * ref_ptr = ref_data + offset;
+      for(size_t trc=0;trc<n_wells;trc++) {
+        float diff = ref_ptr[trc] - trace_ptr[trc];
+        float taues = ref_ptr[trc] * taue_est;
+        float y = vec_previous[trc] + diff + taues;
+        vec_previous[trc] += diff;
+        float x = trace_ptr[trc];
+        vec_sum_xx[trc] += x * x;
+        vec_sum_xy[trc] += x * y;
       }
     }
     int nuc_ix = nuc_flows[z_ix];
     nuc_counts[nuc_ix]++;
-    float *__restrict tau_b_nuc_start = taub_nuc.col(nuc_ix).data();
-    float *__restrict tau_b_start = taub_sum.data();
-    float *__restrict tau_b_end = tau_b_start + n_wells;
-    float *__restrict xx_ptr = vec_sum_x2.data();
-    float *__restrict xy_ptr = vec_sum_xy.data();
-    while (tau_b_start != tau_b_end) {
-      float value = *xy_ptr++ / *xx_ptr++;
+    float *tau_b_nuc = taub_nuc[nuc_ix];
+    for(size_t trc=0;trc<n_wells;trc++) {
+      float value = vec_sum_xy[trc] / vec_sum_xx[trc];
       if (!isfinite(value)) {
         value = 0;
       }
-      *tau_b_start++ += value;
-      *tau_b_nuc_start++ += value;
+      taub_sum[trc] += value;
+      tau_b_nuc[trc] += value;
     }
   }
 
   /* for now same taub estimate per nuc, just copy for each flow. */
   for (size_t flow_ix = 0; flow_ix < n_flows; flow_ix++) {
     int nuc_ix = nuc_flows[flow_ix];
-    float *__restrict tau_b_start = taub + flow_ix * n_wells;
-    float *__restrict tau_b_end = tau_b_start + n_wells;
-    float *__restrict tau_b_sum_start = taub_sum.data();
-    float *__restrict tau_b_nuc_sum_start = taub_nuc.col(nuc_ix).data();
+    float *tau_b = taub + flow_ix * n_wells;
+    float *tau_b_nuc_sum = taub_nuc[nuc_ix];
     // little awkward as we mult weight by number of observances but then divide out for average but more readable to keep calc
     float nuc_div = nuc_counts[nuc_ix];
     float nuc_weight = nuc_counts[nuc_ix] * nuc_weight_mult;
     float nuc_mult = nuc_div > 0.0f ? nuc_weight / nuc_div : 0.0f;
     float total_weight = nuc_weight + combo_weight_mult;
     float combo_mult = combo_weight_mult/n_zero_flows;
-    while (tau_b_start != tau_b_end) {
+    for(size_t trc=0;trc<n_wells;trc++) {
       // weighted average of nuc specific and overall for this well taub
-      *tau_b_start = ((*tau_b_sum_start * combo_mult) + (*tau_b_nuc_sum_start * nuc_mult)) / total_weight;
-      tau_b_start++;
-      tau_b_sum_start++;
-      tau_b_nuc_sum_start++;
+      tau_b[trc] = ((taub_sum[trc] * combo_mult) + (tau_b_nuc_sum[trc] * nuc_mult)) / total_weight;
     }
   }
 }

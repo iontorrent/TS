@@ -17,6 +17,49 @@
 
 using namespace std;
 
+// ------------------------------------------------------------------
+
+ProcessedRead::ProcessedRead(int default_read_group)
+{
+  read_group_index        =  default_read_group;       // Needs to be a valid index at startup
+  is_control_barcode      = false;
+  org_rg_idx              = -1;
+  barcode_n_errors        =  0;
+  barcode_filt_zero_error = false;
+  barcode_adapter_filtered= false;
+  barcode_distance        = 0.0;
+  handle_index            = -1;
+  handle_n_errors         =  0;
+  barcode_handle_filtered = false;
+  end_barcode_index       = -1;
+  end_barcode_filtered    = false;
+  end_bc_n_errors         = -1;
+  end_handle_index        = -1;
+  end_handle_n_errors     = -1;
+  end_adapter_filtered    = false;
+  end_handle_filtered     = false;
+  trimmed_tags.Clear();
+}
+
+bool ProcessedRead::PushToNomatch(int no_match_index)
+{
+  // Just return if this is a non-barcoded run
+  if (no_match_index < 0)
+    return false;
+  // Also return if this read was not filtered
+  if (org_rg_idx < 0)
+    return false;
+
+  if (org_rg_idx != read_group_index and no_match_index != read_group_index){
+    cerr << "WARNING: read group index " << read_group_index << " does not match org_rg_idx " << org_rg_idx
+         << " or no_match_index " << no_match_index << " for read " << bam.Name << endl;
+  }
+
+  read_group_index = no_match_index;
+  filter.UndoBarcodeTrimming();
+
+  return true;
+}
 
 // ------------------------------------------------------------------
 
@@ -31,6 +74,7 @@ OrderedDatasetWriter::OrderedDatasetWriter()
   compress_bam_          = true;
   have_handles_          = false;
   num_bamwriter_threads_ = 0;
+  no_barcode_read_group_ = -1;
   pthread_mutex_init(&dropbox_mutex_, NULL);
   pthread_mutex_init(&write_mutex_, NULL);
   pthread_mutex_init(&delete_mutex_, NULL);
@@ -101,6 +145,9 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   read_group_end_handle_rejected_.assign(num_read_groups_, 0);
 
   for (int rg = 0; rg < num_read_groups_; ++rg) {
+    if (not datasets.read_group(rg).isMember("barcode_name"))
+      no_barcode_read_group_ = rg;
+
     read_group_name_.at(rg) = datasets.read_group_name(rg);
     read_group_num_barcode_errors_.at(rg).assign(3,0);
     read_group_barcode_bias_.at(rg).assign(datasets.GetBCmaxFlows(),0.0);
@@ -406,6 +453,13 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
     if (entry->filter.is_filtered and not save_filtered_reads_)
       continue;
 
+    // In a last filtering step move the surviving start adapter filtered ones to nomatch
+    // thus avoiding that small primer-dimers trigger the contamination warning
+    // processed_read.barcode_adapter_filtered
+    //if (entry->barcode_adapter_filtered >= 0){
+    //  entry->read_group_index = no_barcode_read_group_;
+    //}
+
     int target_file_idx = read_group_dataset_.at(entry->read_group_index);
     if (target_file_idx < 0) // Read group not assigned to a dataset?
       continue;
@@ -437,40 +491,40 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 
     // Barcode No-match accounting
     // 0-error filtered barcodes
-    if (entry->barcode_filt_zero_error >= 0){
-      read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
-      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_filt_zero_error)+".SB");
+    if (entry->barcode_filt_zero_error){
+      read_group_barcode_filt_zero_err_.at(entry->org_rg_idx)++;
+      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->org_rg_idx)+".SB");
     }
     // Account for filtered reads due to barcode adapter rejection
-    if (entry->barcode_adapter_filtered >= 0){
-      read_group_barcode_adapter_rejected_.at(entry->barcode_adapter_filtered)++;
-      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_adapter_filtered)+".SA");
+    if (entry->barcode_adapter_filtered){
+      read_group_barcode_adapter_rejected_.at(entry->org_rg_idx)++;
+      AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->org_rg_idx)+".SA");
     }
 
     // *** End barcode
 
     // No-match accounting
-    if (entry->end_barcode_filtered >= 0){
-      string org_rg = read_group_name_.at(entry->end_barcode_filtered);
+    if (entry->end_barcode_filtered){
+      string org_rg = read_group_name_.at(entry->org_rg_idx);
 
       if (entry->filter.adapter_type < 0){
-        read_group_no_bead_adapter_.at(entry->end_barcode_filtered)++;
+        read_group_no_bead_adapter_.at(entry->org_rg_idx)++;
         AddOriginalReadGroupTag(entry->bam, org_rg);
       }
       else if (entry->end_adapter_filtered) {
-        read_group_end_adapter_rejected_.at(entry->end_barcode_filtered)++;
+        read_group_end_adapter_rejected_.at(entry->org_rg_idx)++;
         AddOriginalReadGroupTag(entry->bam, org_rg+".EA");
       }
       else if (entry->end_handle_filtered){
-        read_group_end_handle_rejected_.at(entry->end_barcode_filtered)++;
+        read_group_end_handle_rejected_.at(entry->org_rg_idx)++;
         AddOriginalReadGroupTag(entry->bam, org_rg+".EH");
       }
       else{
-        read_group_end_barcode_rejected_.at(entry->end_barcode_filtered)++;
+        read_group_end_barcode_rejected_.at(entry->org_rg_idx)++;
         AddOriginalReadGroupTag(entry->bam, org_rg+".EB");
       }
       if (read_group_end_barcode_counts_.size() >0 and entry->end_barcode_index >=0){
-        ++read_group_end_barcode_counts_.at(entry->end_barcode_filtered).at(entry->end_barcode_index);
+        ++read_group_end_barcode_counts_.at(entry->org_rg_idx).at(entry->end_barcode_index);
       }
 
     }
@@ -488,9 +542,9 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
         read_group_handle_dist_.at(entry->read_group_index).at(entry->handle_index)++;
         read_group_num_handle_errors_.at(entry->read_group_index).at(entry->handle_n_errors)++;
       }
-      else if (entry->barcode_handle_filtered >=0){
-        read_group_handle_rejected_.at(entry->barcode_handle_filtered)++;
-        AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->barcode_handle_filtered)+".SH");
+      else if (entry->barcode_handle_filtered){
+        read_group_handle_rejected_.at(entry->org_rg_idx)++;
+        AddOriginalReadGroupTag(entry->bam, read_group_name_.at(entry->org_rg_idx)+".SH");
       }
 
       if (entry->end_handle_index >= 0){

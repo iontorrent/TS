@@ -475,7 +475,7 @@ def service_status(services):
                 "/var/run/rabbitmq/pid"
             ) or check_service("rabbitmq-server")
         elif name in ["tomcat7", "tomcat8"]:
-            status["tomcat"] = complicated_status("/var/run/%s.pid" % name)
+            status["tomcat"] = complicated_status("/usr/share/%s/temp/catalina.pid" % name)
         elif name == "postgresql":
             status["postgresql"] = check_service("postgresql") or check_service(
                 "postgresql@*"
@@ -601,7 +601,8 @@ def ManagedPool(*args, **kwargs):
 def get_instrument_info(rig):
     instr = {
         "name": rig.name,
-        "type": rig.type or "PGM"
+        "type": rig.type or "PGM",
+        "serial": rig.serial
     }
     if instr["type"] == "Raptor":
         instr["type"] = "S5"

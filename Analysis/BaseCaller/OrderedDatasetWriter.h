@@ -34,6 +34,7 @@ struct ReadFilteringHistory {
 
   void GenerateZDVector(vector<int16_t>& zd_vector);  // Save filtering history to a vector
   void CalledRead(int num_bases) { is_called=true; n_bases=num_bases; };
+  void UndoBarcodeTrimming();
 
   // Basic information
   bool    is_filtered;                          //!< true if the read should not be saved
@@ -134,44 +135,30 @@ public:
 //! @ingroup  BaseCaller
 
 struct ProcessedRead {
-  ProcessedRead(int default_read_group) {
-    read_group_index        =  default_read_group;       // Needs to be a valid index at startup
-    is_control_barcode      = false;
-    barcode_n_errors        =  0;
-    barcode_filt_zero_error = -1;
-    barcode_adapter_filtered= -1;
-    barcode_distance        = 0.0;
-    handle_index            = -1;
-    handle_n_errors         =  0;
-    barcode_handle_filtered = -1;
-    end_barcode_index       = -1;
-    end_barcode_filtered    = -1;
-    end_bc_n_errors         = -1;
-    end_handle_index        = -1;
-    end_handle_n_errors     = -1;
-    end_adapter_filtered    = false;
-    end_handle_filtered     = false;
-	trimmed_tags.Clear();
-  }
+  ProcessedRead(int default_read_group);
+
+  bool PushToNomatch(int no_match_index);
+
 
   // Variables storing barcode classification results
   int                   read_group_index;         //!< Read group index, generally based on barcode classification.
+  int                   org_rg_idx;               //!< Indicator that the read is intended for the nomatch-bam file. Stores original read group index
   bool                  is_control_barcode;       //!< Identified the read as having a control barcode
 
   int                   barcode_n_errors;         //!< Number of base mismatches in barcode sequence.
-  int                   barcode_filt_zero_error;  //!< Inidcator whether a hard decision match was filtered in signal space.
-  int                   barcode_adapter_filtered; //!< Indicator whether barcode adapter was too dissimilar
+  bool                  barcode_filt_zero_error;  //!< Inidcator whether a hard decision match was filtered in signal space.
+  bool                  barcode_adapter_filtered; //!< Indicator whether barcode adapter was too dissimilar
   float                 barcode_distance;         //!< Distance to assigned barcode in signal space.
   vector<float>         barcode_bias;             //!< A bias vector for the assigned barcode.
 
   // Front handles
   int                   handle_index;             //!< Index of assigned handle
   int                   handle_n_errors;          //!< Number of errors in handle assignment
-  int                   barcode_handle_filtered;  //!< Read was filtered for not matching any handle
+  bool                  barcode_handle_filtered;  //!< Read was filtered for not matching any handle
 
   // End barcodes
   int                   end_barcode_index;        //!< In case we demulitplex read groups, the end barcode index.
-  int                   end_barcode_filtered;     //!< Read was filtered for not matching end barcode
+  bool                  end_barcode_filtered;     //!< Read was filtered for not matching end barcode
   int                   end_bc_n_errors;          //!< Number of errors in end barcode assignment
   bool                  end_adapter_filtered;     //!< Indicator whether barcode adapter was too dissimilar
   int                   end_handle_index;         //!< Index of assigned handle
@@ -254,6 +241,7 @@ private:
   vector<int>               read_group_dataset_;    //!< Which dataset should a given read group be saved to?
   vector<string>            read_group_name_;
   int                       num_read_groups_;
+  int                       no_barcode_read_group_; //!< Index of the non-barcoded read group
 
   int                       num_regions_;           //!< Total number of regions to expect
   int                       num_regions_written_;   //!< Number of regions physically written thus far

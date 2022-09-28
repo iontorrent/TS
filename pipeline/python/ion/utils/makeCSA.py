@@ -5,7 +5,9 @@ import os
 import shutil
 import tarfile
 import tempfile
+import traceback
 import zipfile
+import subprocess
 
 result_patterns = [
     "ion_params_00.json",
@@ -117,7 +119,17 @@ def writeZip(fullnamepath, filelist, dirtrim="", openmode="w"):
     for item in filelist:
         if os.path.exists(item):
             arcname = item.replace(dirtrim, "")
-            csa.write(item, arcname)
+            try:
+                csa.write(item, arcname)
+            except IOError as e:
+                print("utils.makeCSA IO Error: %s" % str(e))
+                continue
+            except ValueError as e:
+                print("utils.makeCSA Value Error: %s" % str(e))
+                continue
+            except Exception as e:
+                print("utils.makeCSA Unknown Error: %s" % str(e))
+                continue
 
     # Close zip archive file
     csa.close()
@@ -150,8 +162,7 @@ def migrateZip(logzipname, fullnamepath, openmode="w"):
     csa.close()
     return
 
-
-def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
+def legacy_makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
     """Create the CSA zip file"""
 
     def integrate_chef_log(csa_file_path, chef_log_path):
@@ -175,7 +186,14 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
                     csa_handle.write(
                         os.path.join(chef_log_temp_dir, chef_log_file), chef_log_file
                     )
-                except IOError:
+                except IOError as e:
+                    print("utils.makeCSA IO Error: %s" % str(e))
+                    continue
+                except ValueError as e:
+                    print("utils.makeCSA Value Error: %s" % str(e))
+                    continue
+                except Exception as e:
+                    print("utils.makeCSA Unknown Error: %s" % str(e))
                     continue
         finally:
             if os.path.exists(str(chef_log_temp_dir)):
@@ -209,5 +227,26 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
 
     # Append contents of pgm_logs.zip file in case rawdata contents has been deleted
     migrateZip(os.path.join(reportDir, "pgm_logs.zip"), csaFullPath, openmode="a")
+
+    return csaFullPath
+
+def makeCSA(reportDir, rawDataDir, csa_file_name=None, chefLogPath=""):
+    """Create the CSA zip file using FieldSupport plugin script"""
+    csaFullPath = None
+    if os.path.exists('/results/plugins/FieldSupport/makeCSA.py'):
+        try:
+            cmd = ['python', '/results/plugins/FieldSupport/makeCSA.py',
+                   '-r', reportDir, '-w', rawDataDir,
+                   '-f', str(csa_file_name or ""), '-c', str(chefLogPath or "")]
+            output = subprocess.check_output(cmd)
+            # Ex: ['/results/analysis/output/Home/xxx_tn_014/FSA_fix_testing_014.support.zip']
+            csa_path_plugin = [x for x in output.split() if "support.zip" in x]
+            if csa_path_plugin:
+                csaFullPath = csa_path_plugin[0].strip()
+        except Exception as Err:
+            raise Exception(Err)
+    else:
+        # This is for backward compatability, if user reverts to previous plugin version
+        csaFullPath = legacy_makeCSA(reportDir, rawDataDir, csa_file_name, chefLogPath)
 
     return csaFullPath

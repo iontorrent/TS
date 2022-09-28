@@ -323,13 +323,13 @@ class Explog( object ):
     def get_chiptype( self ):
         ''' Get the chip type, initially trying from TsChipType '''
         TsChipType = self.find('TsChipType')
-        if not TsChipType:
-            try:
+        try:
+            if not TsChipType:
                 self.chiptype = ct.ChipType( self.find('ChipType') )
-            except:
-                self.chiptype = ct.ChipType( 'unknown' )
-        else:
-            self.chiptype = ct.ChipType( TsChipType )
+            else:
+                self.chiptype = ct.ChipType( TsChipType )
+        except:
+            self.chiptype = ct.ChipType( 'unknown' )
 
         if self.chiptype.type in ['P0','510','520','521','521v2','530','530v2']:
             self.metrics['ChipType'] = 'Proton 0'

@@ -69,12 +69,12 @@ public:
   int  FlowAlignClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors);
 
   int  SignalSpaceClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
-                                 vector<float>& best_bias, int& filtered_zero_errors);
+                                 vector<float>& best_bias, bool& filtered_zero_errors, int& org_read_group);
 
   int  ProportionalSignalClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
-                                 vector<float>& best_bias, int& filtered_zero_errors);
+                                 vector<float>& best_bias, bool& filtered_zero_errors, int& org_read_group);
 
-  bool AdapterValidation(const BasecallerRead& basecaller_read, int& best_barcode, int& filtered_read_group);
+  bool AdapterValidation(const BasecallerRead& basecaller_read, int best_barcode, bool& filtered_read);
 
   void ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read, const vector<int>& base_to_flow);
 
@@ -86,7 +86,7 @@ public:
 
   Mask* GetBarcodeMaskPointer() { return &barcode_mask_; };
 
-  void Close(BarcodeDatasets& datasets);
+  void Close(BarcodeDatasets& datasets, int num_end_barcodes);
 
 protected:
 

@@ -10,7 +10,84 @@ TS_AUTH  = requests.auth.HTTPBasicAuth( TS_USER, TS_PASS )
 
 METAL_RE = re.compile( r'.+?>(?P<object>[\w._-]*)</a></td>' )
 
-class CSVBase( object ):
+class MetalMixin( object ):
+    """ Container for handy TS metal navigation. """
+    @staticmethod
+    def get_url( url, auth=TS_AUTH ):
+        """ Shortcut to get a url through requests using standard TS_AUTH.  Does not assume json or txt. """
+        return requests.get( url, auth=auth )
+    
+    @staticmethod
+    def find_plugin_dir( report_url, plugin_name, auth=TS_AUTH ):
+        """ Given a report URL, find the path to the given plugin's metal plugin_out dir. """
+        plugin_data = os.path.join( report_url, 'metal/plugin_out' )
+        
+        plugins = requests.get( plugin_data, auth=auth )
+        for l in plugins.text.splitlines():
+            if plugin_name in l:
+                # This iterates through and for multiple overwritten plugins will end up with the latest plugin
+                line = l.strip()
+                #print( line )
+                
+        pattern = METAL_RE
+        m = pattern.match( line )
+        if m:
+            plugin_dir = os.path.join( plugin_data , m.groupdict()['object'] )
+            return plugin_dir
+        else:
+            print( 'Plugin Dir not found for {} at {}!'.format( plugin_name, report_url ) )
+            return None
+
+        
+    @staticmethod
+    def get_barcodes( plugin_url=None, report_url=None, plugin=None, auth=TS_AUTH ):
+        if not plugin_url and (report_url and plugin):
+            plugin_url = self.find_plugin_dir( report_url, plugin, auth=auth )
+            
+        if not plugin_url:
+            print( 'Plugin Dir not found!' )
+            return None
+        
+        if plugin=='coverageAnalysis_CB':
+            bc_pattern = re.compile( r'(IonDual_[0-9]{4}-IonDual_[0-9]{4})' )
+            print('using alternative method of finding barcodes') 
+            all = requests.get( plugin_url , auth=auth )
+            barcodes = []
+            for l in all.text.splitlines():
+                if 'href' in l:
+                    d = l.split('"')[1].split('/')[-1]
+                    if bc_pattern.match( d ):
+                        barcodes.append( d )
+
+        else:
+            print('using regular method')
+            bc_data  = requests.get( os.path.join( plugin_url, 'barcodes.json' ) , auth=auth )
+            bc       = json.loads( bc_data.text )
+            barcodes = bc.keys()
+        return barcodes
+    
+    
+    @staticmethod
+    def find_plugin_file( ts_url, file_pattern, auth=TS_AUTH ):
+        """ Takes a TS URL (within metal) and searches for files of a given pattern, e.g. 'amplicat.xls' """
+        fline = None
+        page  = requests.get( ts_url, auth=auth )
+        for line in page.text.splitlines():
+            if file_pattern in line:
+                fline = line
+                
+        pattern = METAL_RE
+        m = pattern.match( fline )
+        if m:
+            file_path = os.path.join( ts_url , m.groupdict()['object'] )
+            #print( 'found {} file path {}'.format(file_pattern,file_path))
+            return file_path
+        else:
+            print( 'File containing {} not found at {}!'.format( file_pattern, ts_url ) )
+            return None
+
+
+class CSVBase( MetalMixin ):
     """ Base class with methods for for loading a csv file and doing later analysis on it. """
     def __init__( self, csv_file, *args, **kwargs ):
         self.csv_file = csv_file
@@ -110,77 +187,7 @@ class CSVBase( object ):
                 
         return files
 
-    
-    @staticmethod
-    def find_plugin_dir( report_url, plugin_name, auth=TS_AUTH ):
-        """ Given a report URL, find the path to the given plugin's metal plugin_out dir. """
-        plugin_data = os.path.join( report_url, 'metal/plugin_out' )
-        
-        plugins = requests.get( plugin_data, auth=auth )
-        for l in plugins.text.splitlines():
-            if plugin_name in l:
-                # This iterates through and for multiple overwritten plugins will end up with the latest plugin
-                line = l.strip()
-                #print( line )
-                
-        pattern = METAL_RE
-        m = pattern.match( line )
-        if m:
-            plugin_dir = os.path.join( plugin_data , m.groupdict()['object'] )
-            return plugin_dir
-        else:
-            print( 'Plugin Dir not found for {} at {}!'.format( plugin_name, report_url ) )
-            return None
 
-        
-    @staticmethod
-    def get_barcodes( plugin_url=None, report_url=None, plugin=None, auth=TS_AUTH ):
-        if not plugin_url and (report_url and plugin):
-            plugin_url = self.find_plugin_dir( report_url, plugin, auth=auth )
-            
-        if not plugin_url:
-            print( 'Plugin Dir not found!' )
-            return None
-        
-        if plugin=='coverageAnalysis_CB':
-            bc_pattern = re.compile( r'(IonDual_[0-9]{4}-IonDual_[0-9]{4})' )
-            print('using alternative method of finding barcodes') 
-            all = requests.get( plugin_url , auth=auth )
-            barcodes = []
-            for l in all.text.splitlines():
-                if 'href' in l:
-                    d = l.split('"')[1].split('/')[-1]
-                    if bc_pattern.match( d ):
-                        barcodes.append( d )
-
-        else:
-            print('using regular method')
-            bc_data  = requests.get( os.path.join( plugin_url, 'barcodes.json' ) , auth=auth )
-            bc       = json.loads( bc_data.text )
-            barcodes = bc.keys()
-        return barcodes
-    
-    
-    @staticmethod
-    def find_plugin_file( ts_url, file_pattern, auth=TS_AUTH ):
-        """ Takes a TS URL (within metal) and searches for files of a given pattern, e.g. 'amplicat.xls' """
-        fline = None
-        page  = requests.get( ts_url, auth=auth )
-        for line in page.text.splitlines():
-            if file_pattern in line:
-                fline = line
-                
-        pattern = METAL_RE
-        m = pattern.match( fline )
-        if m:
-            file_path = os.path.join( ts_url , m.groupdict()['object'] )
-            #print( 'found {} file path {}'.format(file_pattern,file_path))
-            return file_path
-        else:
-            print( 'File containing {} not found at {}!'.format( file_pattern, ts_url ) )
-            return None
-        
-        
 class AmpliCat( CSVBase ):
     """
     Class for reading and analyzing amplicat.xls files from AmpliSeqCheckup_UMT, which come from the plugin's

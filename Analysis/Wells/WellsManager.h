@@ -29,6 +29,7 @@ class WellsManager {
   string                     flow_order_;
   unsigned int               num_flows_;
   bool                       verbose_;
+  string                     norm_method_;
   //unsigned int               num_verbose_;
 
 public:
@@ -37,17 +38,20 @@ public:
   ReadClassMap   const      *read_class_map;
 
   WellsManager(const vector<string> & wells_file_names, bool verbose);
+  WellsManager( WellsManager *rw);
 
   int NumWells() const
   { return raw_wells_.size(); };
 
   void OpenForIncrementalRead();
 
+
   void Close();
 
   void LoadChunk(size_t rowStart,  size_t rowHeight,
                  size_t colStart,  size_t colWidth,
-                 size_t flowStart, size_t flowDepth);
+                 size_t flowStart, size_t flowDepth,
+				 pthread_mutex_t *mutex=NULL);
 
   void SetWellsContext(
         ion::FlowOrder const  *flow_order,

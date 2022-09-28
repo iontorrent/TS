@@ -29,7 +29,7 @@ from iondb.rundb.models import (
     Cruncher,
     DMFileStat,
     NewsPost,
-    GlobalConfig,
+    GlobalConfig, UserProfile,
 )
 from iondb.utils import devices
 from iondb.utils.files import get_disk_attributes_gb, is_mounted
@@ -149,6 +149,18 @@ def format_date(date):
     else:
         return date
 
+def showPasswordWarningMsg(request):
+    username = request.user.username
+    user_profile = UserProfile.objects.filter(user__username__in=[username])
+    last_updated = user_profile[0].last_password_changed_on
+    pwd_max_age = GlobalConfig.objects.get().password_max_age
+    duration = datetime.datetime.utcnow().date() - last_updated.date()
+
+    if duration.days > pwd_max_age or not user_profile[0].is_password_valid:
+        return "Strongly recommended to change your password"
+
+    return None
+
 def showDeprecationMsg():
     try:
         majorPlatform = GlobalConfig.get().majorPlatform
@@ -256,6 +268,7 @@ def dashboard_fragments(request, skip_runs=False):
             "ts_version": TS_version,
             "update_status": update_status,
             "showDeprecationMsg": showDeprecationMsg(),
+            "showPasswordWarningMsg": showPasswordWarningMsg(request),
             "instruments": {
                 "connected": instr_connected,
                 "offline": instr_offline,

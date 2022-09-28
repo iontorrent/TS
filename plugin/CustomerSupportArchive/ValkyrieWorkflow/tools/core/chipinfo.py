@@ -200,12 +200,13 @@ datatables.masks = masks
 # ecc cal
 labels = ( 'chipcal', 'dynamic_range', 'cal_timeout' )
 ecc_cal = {
-    '3-series': ( None, 400, None ), 
-    'P1': ( 2048, 300, None ), 
-    '541v2': ( 2048, 250, None ), 
-    'PQ': ( 2048, 200, None ), 
-    '560': ( 2048, 250, 750 ), 
-    'none': ( None, None, None ), 
+    '3-series'  : ( None, 400, None ), 
+    'P1'        : ( 2048, 300, None ), 
+    '541v2'     : ( 2048, 250, None ), 
+    'PQ'        : ( 2048, 200, None ), 
+    'GX7'       : ( 2048, 180, None ), 
+    '560'       : ( 2048, 250, 750 ), 
+    'none'      : ( None, None, None ), 
 }
 #ecc_cal = { k:DataClass(labels, v) for k, v in ecc_cal.items() }
 ecc_cal = { k:dict(zip(labels, v)) for k, v in ecc_cal.items() }
@@ -249,6 +250,7 @@ chiptable = (
     ('Valkyrie_3528',      False,      '541', 'Valkyrie',     'none',       'P1',  'Valkyrie', 'valkyrie', 'Valkyrie', 'P1a',   ),
     (   'narrow_541',      False,      '541',  '541_nar',     'none',       'P1',     'p1ecc',       'P1',       'P1', 'P1',    ),
     (    '541v2_250',      False,    '541v2',       'P1',     'none',    '541v2',        'P1',       'P1',       'P1', 'P1',    ),
+    (          'GX5',      False,    '541v2',       'P1',     'none',    '541v2',  'Valkyrie', 'valkyrie',       'P1', 'P1',    ),
     (    '541v2_280',      False,    '541v2',  '541_280',     'none',    '541v2',        'P1',       'P1',       'P1', 'P1',    ),
     ( 'Val541v2_250',      False,    '541v2',       'P1',     'none',    '541v2',  'Valkyrie', 'valkyrie',       'P1', 'P1',    ),
     ( 'Val541v2_280',      False,    '541v2',  '541_280',     'none',    '541v2',  'Valkyrie', 'valkyrie',       'P1', 'P1',    ),
@@ -256,6 +258,7 @@ chiptable = (
     (     '550_3490',      False,      '550', '550_3490', '550_3490',       'PQ',        'P1',      '550', '550_3490', 'P1',    ),
     (     '550_3491',      False,      '550', '550_3491', '550_3491',       'PQ',        'P1',      '550', '550_3490', 'P1',    ),
     (     '550_3525',       True,      '550', '550_3525', '550_3525',       'PQ',        'P1',      '550', '550_3525', 'P1',    ),
+    (          'GX7',       True,      '550', '550_3525',     'none',      'GX7',  'Valkyrie', 'valkyrie', '550_3525', 'P1',    ),
     (     '560_3610',       True,      '560', '560_3610', '560_3610',      '560',        'P1',       'P1', '550_3490', 'P1',    ),
     #(      'P2.2.1',      False,       'P2',     'P221',      'P22',       'PQ',        'P1',       'P1', '550_3490', 'P221',  ),
     #(      'P2.2.2',      False,       'P2',     'P222',      'P22',       'PQ',        'P1',       'P1', '550_3490', 'PQ',    ),
@@ -309,8 +312,9 @@ aliases = {
     '541v1'      : '541',
     '541V1'      : '541',
     '541v2'      : '541v2_250',
-    'GX5'        : '541v2_250',
-    'GX5v2'      : '541v2_250',
+    #'GX5'        : '541v2_250',
+    #'GX5v2'      : '541v2_250',
+    'GX5v2'      : 'GX5',
     '540v2'      : '541v2_250',
     'Val541'     : 'Valkyrie_3528',
     'Val540'     : 'Valkyrie_3528',
@@ -320,8 +324,8 @@ aliases = {
     '550v1'      : '550_3525',
     '550'        : '550_3525',
     '550v1'      : '550_3525',
-    'GX7'        : '550_3525',
-    'GX7v1'      : '550_3525',
+    'GX7v1'      : 'GX7',
+    #'GX7v1'      : '550_3525',
     'P2.2'       : 'P2.2.2',
     'PQv1'       : 'P2.2.2',
     '560'        : '560_3610',

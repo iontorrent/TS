@@ -694,6 +694,8 @@ int PrepareHotspots(int argc, const char *argv[])
       // Process custom tags
       vector<string>  bstrand;
       vector<string>  hp_max_length;
+      vector<string>  oid;
+      vector<string>  omapalt;
       string raw_oid;
       string raw_omapalt;
       string raw_oalt;
@@ -753,6 +755,10 @@ int PrepareHotspots(int argc, const char *argv[])
           split(raw_bstrand, ',', bstrand);
         if (not raw_hp_max_length.empty())
           split(raw_hp_max_length, ',', hp_max_length);
+	if (not raw_oid.empty())
+	  split(raw_oid, ',', oid);
+	if (not raw_omapalt.empty())
+	  split(raw_omapalt, ',', omapalt);
 
       }
 
@@ -784,14 +790,19 @@ int PrepareHotspots(int argc, const char *argv[])
 	continue;
       } 
       unsigned int allele_idx = 0;
-      for (char *sub_alt = strtok(current_alt,","); sub_alt; sub_alt = strtok(NULL,",")) {
+      // the below is wrong, since the alt list has to match to the omapalt to get the correct index.
+      if (oid.empty() or  oid.size() != omapalt.size()) {
+       for (char *sub_alt = strtok(current_alt,","); sub_alt; sub_alt = strtok(NULL,",")) {
 
         Allele allele;
         allele.chr_idx = chr_idx;
         allele.ref = current_ref;
         allele.alt = sub_alt;
         allele.pos = strtol(current_start,NULL,10)-1;
-        allele.id = current_id;
+	if (allele_idx < oid.size()) 
+	    allele.id = oid[allele_idx];
+	else 
+            allele.id = current_id;
         if (allele.id == ".")
           allele.id = "hotspot";
 
@@ -818,7 +829,42 @@ int PrepareHotspots(int argc, const char *argv[])
         line_status.back().opos = allele.opos;
         line_status.back().id = allele.id;
         allele_idx++;
-      }
+       }
+      } else {
+       for (allele_idx = 0; allele_idx < oid.size(); allele_idx++) {
+        Allele allele;
+        allele.chr_idx = chr_idx;
+        allele.ref = current_ref;
+        allele.alt = omapalt[allele_idx];
+        allele.pos = strtol(current_start,NULL,10)-1;
+        allele.id = oid[allele_idx];
+        if (allele.id == ".")
+          allele.id = "hotspot";
+
+        allele.filtered = false;
+        line_status.push_back(LineStatus(line_number));
+        allele.line_status = &line_status.back();
+        allele.opos = allele.pos;
+        allele.oref = allele.ref;
+        allele.oalt = allele.alt;
+
+        if (allele_idx < bstrand.size()) {
+          if (bstrand[allele_idx] != ".")
+            allele.custom_tags["BSTRAND"] = bstrand[allele_idx];
+        }
+
+        if (allele_idx < hp_max_length.size()) {
+          if (hp_max_length[allele_idx] != ".")
+            allele.custom_tags["hp_max_length"] = hp_max_length[allele_idx];
+        }
+
+        alleles[allele.chr_idx].push_back(allele);
+        //line_status.back().allele = &alleles[allele.chr_idx].back();
+        line_status.back().chr_idx = allele.chr_idx;
+        line_status.back().opos = allele.opos;
+        line_status.back().id = allele.id;
+       } //for
+      } // else
     }
 
     fclose(input);

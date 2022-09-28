@@ -257,6 +257,7 @@ float AlignmentSpatial::Get_Data(int frame, int y, int x)
 void AlignmentSpatial::CustomTracePlotAdder(double &xmin, double &xmax, double &ymin, double &ymax)
 {
     static QCPItemText *seqText[MAX_NUM_TRACES]={NULL};
+    static QCPItemText *seqText2[MAX_NUM_TRACES]={NULL};
     if(ymin > -0.5)
         ymin=-0.5;
     if(ymax < 5)
@@ -267,7 +268,7 @@ void AlignmentSpatial::CustomTracePlotAdder(double &xmin, double &xmax, double &
         for(int trc=0;trc<MAX_NUM_TRACES;trc++)
         {
             int idx=traces[trc].y*cols+traces[trc].x;
-            double x_coord = xmin+0.1*(xmax-xmin);//0.2;
+            double x_coord = xmin+0.05*(xmax-xmin);//0.2;
             double y_coord = ymin+0.8*(double)(MAX_NUM_TRACES - trc)*(ymax-ymin)/(double)MAX_NUM_TRACES;//MAX_NUM_TRACES - trc;
 
 //                printf("%s: %d y_coord=%lf ymax=%lf ymin=%lf %d %d\n",__FUNCTION__,trc,y_coord,ymax,ymin,(SequenceQueryBasesOut && SequenceQueryBasesOut[idx]?1:0),(SequenceAlignedBasesOut && SequenceAlignedBasesOut[idx]?1:0));
@@ -281,7 +282,7 @@ void AlignmentSpatial::CustomTracePlotAdder(double &xmin, double &xmax, double &
                     uint xcolor=colormap[xcolorIdx % ColormapSize];
 
                     //qp.setColor(QColor(qRed(xcolor),qGreen(xcolor),qBlue(xcolor)));
-                    QFont myfont("QFont::Courier", 8);
+                    QFont myfont("QFont::Courier", 7);
                     myfont.setStyleHint(QFont::TypeWriter);
 
                     seqText[trc] = new QCPItemText(_mTracePlot);
@@ -290,16 +291,38 @@ void AlignmentSpatial::CustomTracePlotAdder(double &xmin, double &xmax, double &
                     seqText[trc]->setFont(myfont);
                     seqText[trc]->setPositionAlignment(Qt::AlignLeft|Qt::AlignVCenter);
                 }
+                if(seqText2[trc] == NULL){
+                    //QPen qp;
+
+                    uint xcolorIdx= trc*ColormapSize/MAX_NUM_TRACES;
+                    uint xcolor=colormap[xcolorIdx % ColormapSize];
+
+                    //qp.setColor(QColor(qRed(xcolor),qGreen(xcolor),qBlue(xcolor)));
+                    QFont myfont("QFont::Courier", 7);
+                    myfont.setStyleHint(QFont::TypeWriter);
+
+                    seqText2[trc] = new QCPItemText(_mTracePlot);
+                    _mTracePlot->addItem(seqText2[trc]);
+                    seqText2[trc]->setColor(QColor(qRed(xcolor),qGreen(xcolor),qBlue(xcolor)));
+                    seqText2[trc]->setFont(myfont);
+                    seqText2[trc]->setPositionAlignment(Qt::AlignLeft|Qt::AlignVCenter);
+                }
                 seqText[trc]->position->setCoords(x_coord, y_coord);
+                seqText2[trc]->position->setCoords(x_coord, y_coord+30);
+
 
                 //printf("%s: setting text to %s",__FUNCTION__,SequenceAlignedBasesOut[idx]);
                 char localStr[250];
-                sprintf(localStr,"%s%s:%.200s",(showQueryBases?"QB":"AB"),(SequenceAlignedBasesOut[idx]?"(A)":""),seq);
-
+                sprintf(localStr,"QB:%d:%.200s",strlen(SequenceQueryBasesOut[idx]),SequenceQueryBasesOut[idx]);
                 seqText[trc]->setText(localStr);
+                sprintf(localStr,"AB:%d:%.200s",strlen(SequenceAlignedBasesOut[idx]),SequenceAlignedBasesOut[idx]);
+                seqText2[trc]->setText(localStr);
+
             }else{
                 if(seqText[trc])
                     seqText[trc]->setText("");
+                if(seqText2[trc])
+                    seqText2[trc]->setText("");
             }
         }
     }

@@ -497,6 +497,7 @@ $(document).ready(function () {
             if (planOpt.isPlanBySample){
                 toggleDisableElements($('[name=sampleDescription]'), true);
                 toggleDisableElements($('[name=sampleExternalId]'), true);
+                toggleDisableElements($('[name=barcodeId]'), true);
             }
 
             // display validation errors

@@ -18,6 +18,10 @@ extern "C"
   */
 #define TMAP_MAP_OPT_FSW_OFFSET 2
 /*!
+  The default padding for the read when searching for overlapping amplicons 
+  */
+#define TMAP_MAP_OPT_AMPLICON_SCOPE 0
+/*!
   The default match score.
   */
 #define TMAP_MAP_OPT_SCORE_MATCH 1
@@ -58,6 +62,8 @@ extern "C"
 #define TMAP_MAP_OPT_REALIGN_SCORE_GE    -2
 #define TMAP_MAP_OPT_REALIGN_BW           50
 #define TMAP_MAP_OPT_REALIGN_CLIPTYPE     2
+#define TMAP_MAP_OPT_REALIGN_MAXLEN       500
+#define TMAP_MAP_OPT_REALIGN_MAXCLIP      50
 
 #define TMAP_MAP_OPT_CONTEXT_SCORE_MATCH  ((double) TMAP_MAP_OPT_SCORE_MATCH)
 #define TMAP_MAP_OPT_CONTEXT_SCORE_MM     ((double) -TMAP_MAP_OPT_PEN_MM)
@@ -227,9 +233,11 @@ typedef struct __tmap_map_opt_t {
     int64_t bam_start_vfo; /*!< starting virtual file offset (--bam-start-vfo) */
     int64_t bam_end_vfo; /*!< ending virtual file offset (--bam-end-vfo) */
     int32_t use_param_ovr; /*!< use parameters overwrite if given in BED file */
+    int32_t ovr_candeval; /*!< use parameters overwrites in candidate evaluation */
     int32_t use_bed_in_end_repair; /*!< use coordinates of amplicon edges in end repair */
     int32_t use_bed_in_mapq; /*!< use coordinates of amplicons mapq computing */
     int32_t use_bed_read_ends_stat; /*use read ends statisitcs from BED if provided */
+    int32_t amplicon_scope; /*padding to the read when searching for overlapping amplions */
     int32_t score_match;  /*!< the match score (-A,--score-match) */
     int32_t pen_mm;  /*!< the mismatch penalty (-M,--pen-mismatch) */
     int32_t pen_gapo;  /*!< the indel open penalty (-O,--pen-gap-open) */
@@ -276,7 +284,14 @@ typedef struct __tmap_map_opt_t {
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
     double sample_reads;  /*!< sample the reads at this fraction (-x,--sample-reads) */
 #endif
+
+    // candidate evaluation - hit SW scoring, initial zone boundaries
     int32_t vsw_type; /*!< the vectorized smith waterman algorithm (-H,--vsw-type) */
+    int32_t vsw_fallback; /*!< the smith waterman algorithm used as fallback (used when the main one fails or if failure pre-conditions is detected)*/
+    int32_t confirm_vsw_corr; /*!< use non-vectorized SW to confirm VSW assymetric score corrections */
+    int32_t candidate_ext; /*!< extend candidate alignment zone to capture full read footprint */
+    int32_t correct_failed_vsw; /*!< fall back to non-vectorized (slow) SW algorithm if vectorized fails*/
+    int32_t use_nvsw_on_nonstd_bases; /*!< fall back to non-vectorized (slow) SW algorithm if non-standard bases are present in aligned zone*/
 
     // DVK: realignment control
     int32_t do_realign; /*!< perform realignment after mapping */
@@ -286,6 +301,8 @@ typedef struct __tmap_map_opt_t {
     int32_t realign_gep_score; /*!< realignment gap extension score */
     int32_t realign_bandwidth; /*!< realignment DP matrix band width */
     int32_t realign_cliptype; /*!< realignment clipping type: 0: none, 1: semiglobal, 2: semiglobal+soft clip bead end, 3: semiglobal + soft clip key end, 4: local alignment */
+    int32_t realign_maxlen; /*!< realignment maximal alignment length supproted (should be set to a minimal reasonable value to avoid excessive memory use)*/
+    int32_t realign_maxclip; /*!< realignment maximal clip length supproted*/
 
     int32_t do_hp_weight; /*!< perform realignment with context-specific gap scores */
     // int32_t context_noclip; /*!< perform realignment with context-specific gap scores */

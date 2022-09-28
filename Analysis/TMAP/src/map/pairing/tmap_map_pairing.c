@@ -335,7 +335,7 @@ tmap_map_pairing_read_rescue_helper(tmap_refseq_t *refseq,
                                     double ins_size_mean, double ins_size_std,
                                     int32_t strandedness, int32_t positioning, // positioning should be relateive to one/two
                                     int32_t read_rescue_std_num,
-                                    tmap_rand_t *rand, tmap_map_opt_t *opt)
+                                    tmap_rand_t *rand, tmap_map_opt_t *opt, tmap_map_stats_t* stats)
 {
   int32_t i, j;
   int32_t best, n_best, best_mapq=-1;
@@ -452,7 +452,7 @@ tmap_map_pairing_read_rescue_helper(tmap_refseq_t *refseq,
   opt_local.max_seed_band = 0;
   opt_local.stage_seed_freqc = 0.0;
   opt_local.bw += ins_size_std * read_rescue_std_num;
-  sams = tmap_map_util_sw_gen_score(refseq, two_orig, sams, two_seq, rand, &opt_local, NULL);
+  sams = tmap_map_util_sw_gen_score(refseq, two_orig, sams, two_seq, rand, &opt_local, NULL, stats);
 
   return sams;
 }
@@ -462,7 +462,7 @@ tmap_map_pairing_read_rescue(tmap_refseq_t *refseq,
                              tmap_seq_t *one_seq_orig, tmap_seq_t *two_seq_orig,
                              tmap_map_sams_t *one, tmap_map_sams_t *two, 
                              tmap_seq_t *one_seq[2], tmap_seq_t *two_seq[2], 
-                             tmap_rand_t *rand, tmap_map_opt_t *opt)
+                             tmap_rand_t *rand, tmap_map_opt_t *opt, tmap_map_stats_t* stat)
 {
   tmap_map_sams_t *one_rr = NULL, *two_rr = NULL;
   int32_t i, flag = 0;
@@ -472,7 +472,7 @@ tmap_map_pairing_read_rescue(tmap_refseq_t *refseq,
                                                opt->ins_size_mean, opt->ins_size_std,
                                                opt->strandedness, 1-opt->positioning, // NB: update positioning 
                                                opt->read_rescue_std_num,
-                                               rand, opt);
+                                               rand, opt, stat);
   //fprintf(stderr, "RR #1: %d\n", one_rr->n);
   if(0 < one_rr->n) {
       /*
@@ -494,7 +494,7 @@ tmap_map_pairing_read_rescue(tmap_refseq_t *refseq,
                                                opt->ins_size_mean, opt->ins_size_std,
                                                opt->strandedness, opt->positioning, 
                                                opt->read_rescue_std_num,
-                                               rand, opt);
+                                               rand, opt, stat);
   //fprintf(stderr, "RR #2: %d\n", one_rr->n);
   if(0 < two_rr->n) {
       /*

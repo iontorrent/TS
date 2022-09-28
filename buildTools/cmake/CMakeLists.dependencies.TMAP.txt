@@ -1,0 +1,187 @@
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+
+set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
+#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
+
+set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+
+# Use the closest ION_UPDATE_SERVER we can find.
+#message(STATUS "Searching for an ION_UPDATE_SERVER...")
+#foreach ( SERVER updates updates.itw updates.iontorrent.com )
+#    # See if we can look up the server in question.
+#    execute_process( COMMAND host -W 2 -t A ${SERVER}
+#       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
+#
+#    # If we can find it, great! We're done!
+#    if ( NOT ${NOT_FOUND} )
+#       set( ION_UPDATE_SERVER ${SERVER} )
+#       break()
+#    endif()
+#endforeach()
+
+# If we find a server, let everyone know.
+if (ION_UPDATE_SERVER)
+    message(STATUS "Using ION_UPDATE_SERVER: ${ION_UPDATE_SERVER}")
+else()
+    message(WARNING "Could not find a valid ION_UPDATE_SERVER.")
+endif()
+
+include(ExternalProject)
+
+find_program(LSB_RELEASE_COMMAND lsb_release)
+if(LSB_RELEASE_COMMAND)
+    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
+        OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
+    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+endif(LSB_RELEASE_COMMAND)
+
+# If defined while running cmake look for mkl
+# e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
+if (DEFINED MKL_INSTALL_PATH)
+  message("Setting mkl root to ${MKL_INSTALL_PATH}")
+  include_directories(${MKL_INSTALL_PATH}/include)
+  set(MKL_LINK_LIBS "-Wl,--start-group  ${MKL_INSTALL_PATH}/lib/intel64/libmkl_intel_lp64.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_core.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_sequential.a -Wl,--end-group")
+else()
+  message("Not setting mkl root ${MKL_INSTALL_PATH}")
+endif()
+
+
+#option(ION_USE_MKL "Using Intel MKL" OFF)
+#mark_as_advanced(ION_USE_MKL)
+
+#option(ION_USE_SYSTEM_CUDA "Use CUDA system libraries" OFF)
+#mark_as_advanced(ION_USE_SYSTEM_CUDA)
+
+#option(ION_USE_CUDA "Compile CUDA code" ON)
+#mark_as_advanced(ION_USE_CUDA)
+
+#option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
+#mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
+
+#option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
+#mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
+
+option (ION_USE_SYSTEM_LIBSTATGEN "Use libstatgen system libraries" OFF)
+mark_as_advanced(ION_USE_SYSTEM_LIBSTATGEN)
+
+
+
+# uncomment for profiling if gprofile installed
+# add_library(PROFILE STATIC IMPORTED)
+# set_property(TARGET PROFILE PROPERTY IMPORTED_LOCATION "/usr/local/lib/libprofiler.a")
+
+include_directories("${PROJECT_BINARY_DIR}")
+include_directories("${PROJECT_SOURCE_DIR}")
+include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1")
+
+# wget https://github.com/samtools/htslib/archive/1.2.1.tar.gz
+# md5sum : 81f5f1aa17a188a6b6250ca67d83384d
+# tar xvzf 1.2.1.tar.gz
+# tar cvzf htslib-1.2.1.tar.gz htslib-1.2.1
+# md5sum : 028c9110bd80d40e13dbd8270ee7eb2b
+if(NOT ION_USE_SYSTEM_HTSLIB)
+  set(proj_name "htslib")
+  set(proj_version "1.2.1+ion2")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}_proj
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/htslib-1.2.1.tar.gz"
+    #URL_MD5 028c9110bd80d40e13dbd8270ee7eb2b
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    #BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/htslib-1.2+ion2.patch"
+  )
+  set(ION_HTSLIB_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libhts.a")
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
+else()
+  set(ION_HTSLIB_LIBS "hts")
+endif()
+
+
+# wget https://github.com/samtools/samtools/archive/1.2.tar.gz
+# md5sum 2748356ef392c0694ca1142de37cf2aa
+# tar xvzf 1.2.tar.gz
+# tar cvzf samtools-1.2.tar.gz samtools-1.2
+# md5sum f94f6ea20f5d581459f90daa39020a60
+if (NOT ION_USE_SYSTEM_SAMTOOLS)
+  set(proj_name "samtools")
+  set(proj_version "1.2+ion4")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    DEPENDS htslib_proj
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-1.2.tar.gz"
+    #URL_MD5 f94f6ea20f5d581459f90daa39020a60
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-1.2+ion4.patch"
+  )
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
+  set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libbam.a")
+  message(STATUS "SAMTOOLS_INCLUDE_DIRS: ${PROJECT_BINARY_DIR}/../${proj_name_version}")
+else()
+    set(ION_SAMTOOLS_LIBS libbam.a)
+    include_directories("/usr/include/samtools")
+    message(STATUS "SAMTOOLS_INCLUDE_DIRS: /usr/include/samtools")
+endif()
+
+
+if (NOT ION_USE_SYSTEM_BAMTOOLS)
+    set(proj_name "bamtools")
+    if (${LSB_RELEASE_CODENAME} STREQUAL "bionic")
+        set(revision_tag 740562a67a3)#set date below accordingly
+        set(proj_version "2.4.2.20190207+git${revision_tag}")
+    else()
+        set(revision_tag 15eadb925f)#set date below accordingly
+        set(proj_version "2.4.0.20150702+git${revision_tag}")
+    endif()
+
+    set(proj_name_version "${proj_name}-${proj_version}")
+    set(bamtools_patch_file "${proj_name_version}.patch")
+    ExternalProject_add(${proj_name}
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/${proj_name_version}.tar.gz"
+      PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+      SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+      BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+      CMAKE_ARGS
+        -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
+      PATCH_COMMAND patch -p0 -t -N < "${PROJECT_SOURCE_DIR}/../external/${bamtools_patch_file}"
+    )
+    include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include/bamtools")
+    set(ION_BAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/bamtools/libbamtools.a")
+else()
+    find_library(ION_BAMTOOLS_LIBS NAMES bamtools libbamtools)
+    include_directories("/usr/include/bamtools")
+    add_custom_target(bamtools)
+endif()
+
+if (NOT ION_USE_SYSTEM_LIBSTATGEN)
+    set (proj_name "libStatGen")
+    set (proj_version "1.0.14")
+    set (proj_name_version "${proj_name}-${proj_version}")
+    ExternalProject_add(${proj_name}
+        URL "https://github.com/statgen/libStatGen/archive/v1.0.14.tar.gz"
+        PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+        SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+        BUILD_IN_SOURCE 1
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND make USER_WARNINGS=-Wall
+        INSTALL_COMMAND ""
+        #PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/libstatgen-1.0.14.patch"
+    )
+    set(ION_STATGEN_LIBS  "${PROJECT_BINARY_DIR}/../${proj_name_version}/libStatGen.a")
+    set(ION_STATGEN_INCLUDES "${PROJECT_BINARY_DIR}/../${proj_name_version}/include")
+else()
+    find_library(ION_BAMTOOLS_LIBS NAMES libstatgen)
+    include_directories("/usr/include/libstatgen")
+    add_custom_target(libstatgen)
+endif()

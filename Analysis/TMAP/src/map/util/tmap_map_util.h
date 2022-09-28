@@ -431,7 +431,9 @@ tmap_map_util_sw_gen_score
     tmap_seq_t **seqs,
     tmap_rand_t *rand,
     tmap_map_opt_t *opt,
-    int32_t *num_after_grouping
+    int32_t *num_after_grouping,
+    tmap_map_stats_t *stat      // statistics
+
 );
 
 void tmap_map_util_populate_sw_par_iupac_direct 
@@ -740,11 +742,11 @@ tmap_map_get_amplicon
     int32_t seqid,
     uint32_t start,
     uint32_t end,
+    uint32_t strand,
     uint32_t *ampl_start,
     uint32_t *ampl_end,
     tmap_map_locopt_t** overrides,
-    tmap_map_endstat_p_t* ends,
-    uint32_t strand
+    tmap_map_endstat_p_t* ends
 );
 
 uint8_t

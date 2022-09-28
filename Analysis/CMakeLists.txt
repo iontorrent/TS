@@ -1,5 +1,5 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8.12)
 file(STRINGS "project_name.txt" PROJECT_NAME_TXT)
 list(GET PROJECT_NAME_TXT 0 PROJECT_NAME)
 project (${PROJECT_NAME})
@@ -338,6 +338,11 @@ add_dependencies(Crop IONVERSION)
 target_link_libraries(Crop ion-analysis pthread dl)
 install(TARGETS Crop DESTINATION bin)
 
+#add_executable(lbTest crop/lbTest.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+#add_dependencies(lbTest IONVERSION)
+#target_link_libraries(lbTest ion-analysis pthread dl)
+#install(TARGETS lbTest DESTINATION bin)
+
 add_executable(ChkDat crop/ChkDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(ChkDat IONVERSION)
 target_link_libraries(ChkDat ion-analysis pthread dl)
@@ -482,6 +487,8 @@ set(BaseCallerSRCS
 if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
     list(APPEND BaseCallerSRCS
         BaseCaller/TreephaserSSE.cpp)
+    list(APPEND BaseCallerSRCS
+        BaseCaller/TreephaserVEC.cpp)
 endif()
 
 add_executable(BaseCaller ${BaseCallerSRCS})
@@ -1110,6 +1117,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX5v2.h5" DESTINATION ${I
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX5v2.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX7v1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX7v1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX9v1.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/phredTable.GX9v1.Recal.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.530.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.540.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/nnmodel.550.h5" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1148,6 +1157,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX5v2_analysis.json" DESTINATIO
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX5v2_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX7v1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX7v1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX9v1_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/args_GX9v1_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_900_beadfind.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/args_P1.0.19_analysis.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1209,6 +1220,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_560.param.json" DESTINATION ${I
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_541v2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_GX5v2.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_GX7v1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_GX9v1.param.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 #
 #
 #
@@ -1242,13 +1254,13 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATI
 install(FILES "${PROJECT_SOURCE_DIR}/config/StructureMetaInfo.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 #if(NOT ION_USE_SYSTEM_ARMADILLO)
-#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6" DESTINATION lib)
-#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion0-install/lib/libarmadillo.so.6.100.0" DESTINATION lib)
+#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion1-install/lib/libarmadillo.so.6" DESTINATION lib)
+#   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-6.100.0+ion1-install/lib/libarmadillo.so.6.100.0" DESTINATION lib)
 #endif()
 
-install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion0/tabix" DESTINATION bin)
-install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion0/bgzip" DESTINATION bin)
-install(PROGRAMS "${PROJECT_BINARY_DIR}/../samtools-1.2+ion2/samtools" DESTINATION bin)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion2/tabix" DESTINATION bin)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.2.1+ion2/bgzip" DESTINATION bin)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/../samtools-1.2+ion4/samtools" DESTINATION bin)
 
 add_test("trimfastq.pl" "perl" "-cw" "${PROJECT_SOURCE_DIR}/trimfastq.pl")
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/trimfastq.pl" DESTINATION bin)

@@ -1,8 +1,8 @@
 /* Copyright (C) 2016 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "WellsSpatial.h"
 #include "RawWells.h"
-#include "../BaseCaller/WellsNormalization.h"
-#include "../BaseCaller/BaseCallerParameters.h"
+#include "WellsNormalization.h"
+#include "BaseCallerParameters.h"
 #include <iostream>
 #include <string>
 
@@ -222,7 +222,13 @@ void WellsRdrThread::run()
 
 
         WellsNormalization wells_norm(&bc.flow_order, "default");
-        wells_norm.SetWells(&wells, &mMask);
+        ReadClassMap read_class_map;
+        std::vector<std::string> maskNames;
+        maskNames.push_back(mask_fn);
+        read_class_map.LoadMaskFiles(maskNames, true);
+
+
+        wells_norm.SetWells(&wells, &read_class_map,0);
         wells.ReadWells();
         wells_norm.CorrectSignalBias(bc.keys);
         wells_norm.DoKeyNormalization(bc.keys);

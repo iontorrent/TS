@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <vector>
 #include "BaseCallerUtils.h"
+#include "Vecs.h"
 
 #ifdef _WIN32
   #define ALIGN(AAlignSize) __declspec(align(AAlignSize))
@@ -140,6 +141,10 @@ protected:
   //! @brief     Solving a read
   bool  Solve(int begin_flow, int end_flow);
   //! @brief     Normalizing a read
+  void sortPaths(int & pathCnt);
+  float computeParentDist(PathRec RESTRICT_PTR parent, int end_flow);
+  void CopyPath(PathRec RESTRICT_PTR dest, PathRec RESTRICT_PTR parent, PathRec RESTRICT_PTR child);
+
   void  WindowedNormalize(BasecallerRead& read, int step);
   //! @brief     Make recalibration changes to predictions explicitly visible
   void  RecalibratePredictions(PathRec *maxPathPtr);
@@ -165,11 +170,11 @@ protected:
 
   ALIGN(64) float ft_stepNorms[MAX_STEPS];
 
-  ALIGN(64) float ad_MinFrac[4];
-  ALIGN(16) int   ad_FlowEnd[4];
-  ALIGN(16) int   ad_Idx[4];
-  ALIGN(16) int   ad_End[4];
-  ALIGN(16) int   ad_Beg[4];
+  ALIGN(64) v4f   ad_MinFrac;
+  ALIGN(16) v4i   ad_FlowEnd;
+  ALIGN(16) v4i   ad_Idx;
+  ALIGN(16) v4i   ad_End;
+  ALIGN(16) v4i   ad_Beg;
   ALIGN(16) char  ad_Buf[4*MAX_VALS*4*sizeof(float)];
 
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows

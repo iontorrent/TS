@@ -101,11 +101,16 @@ class TemplateParams:
         self.libraryReadLength = 0
         self.samplePrepProtocol = ""
         self.irworkflow = ""
+        self.usableSequenceThreshold = ""
+        self.keySignal = ""
+        self.beadLoading = ""
+
         # Experiment
         self.chipType = ""
         self.flows = 0
         self.sequencekitname = ""
         self.flowOrder = ""
+        self.metaData = {}
         # EAS
         self.barcodeKitName = ""
         self.libraryKey = "TCAG"
@@ -117,6 +122,16 @@ class TemplateParams:
         self.libraryKitName = ""
         self.selectedPlugins = ""
         self.endBarcodeKitName = ""
+        self.sseBedFile = ""
+        self.mixedTypeRNA_reference = ""
+        self.mixedTypeRNA_targetRegionBedFile = ""
+        self.mixedTypeRNA_hotSpotRegionBedFile = ""
+        self.chipTecDfltAmbient = None
+        self.chipTecSlope = None
+        self.chipTecMinThreshold = None
+        self.manTecDfltAmbient = None
+        self.manTecSlope = None
+        self.manTecMinThreshold = None
 
         if instrument == PGM:
             self.instrumentType = "PGM"
@@ -188,9 +203,16 @@ def finish_creating_sys_template(currentTime, sysTemplate, templateParams):
 
     sysTemplate.save()
 
+    threshold = 30
     for qcType in models.QCType.objects.all():
+        if 'Usable Sequence' in qcType.qcName and templateParams.usableSequenceThreshold:
+            threshold = templateParams.usableSequenceThreshold
+        if 'Key Signal' in qcType.qcName and templateParams.keySignal:
+            threshold = templateParams.keySignal
+        if 'Bead Loading' in qcType.qcName and templateParams.beadLoading:
+            threshold = templateParams.beadLoading
         sysDefaultQC, isQcCreated = models.PlannedExperimentQC.objects.get_or_create(
-            plannedExperiment=sysTemplate, qcType=qcType, threshold=30
+            plannedExperiment=sysTemplate, qcType=qcType, threshold=threshold
         )
 
         sysTemplate.plannedexperimentqc_set.add(sysDefaultQC)
@@ -228,6 +250,11 @@ def create_sys_template_experiment(currentTime, sysTemplate, templateParams):
         "storageHost": "",
         "notes": "",
         "status": templateParams.planStatus,
+        "chipTecDfltAmbient": templateParams.chipTecDfltAmbient,
+        "chipTecSlope": templateParams.chipTecSlope,
+        "manTecDfltAmbient": templateParams.manTecDfltAmbient,
+        "manTecSlope": templateParams.manTecSlope,
+        "metaData": templateParams.metaData or {}
     }
 
     experiment = models.Experiment(**exp_kwargs)
@@ -261,6 +288,7 @@ def create_sys_template_eas(
         "targetRegionBedFile": templateParams.targetRegionBedFile,
         "threePrimeAdapter": templateParams.threePrimeAdapter,
         "tfKey": templateParams.tfKey,
+        "sseBedFile": templateParams.sseBedFile
     }
 
     eas = models.ExperimentAnalysisSettings(**eas_kwargs)
@@ -275,6 +303,14 @@ def create_sys_template_eas(
     )
     return sysTemplate
 
+
+def orderedJson(obj):
+    if isinstance(obj, dict):
+        return sorted((k, orderedJson(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return sorted(orderedJson(x) for x in obj)
+    else:
+        return obj
 
 @cache_plugin_config
 def finish_sys_template(sysTemplate, isCreated, templateParams, plugins={}):
@@ -363,6 +399,69 @@ def finish_sys_template(sysTemplate, isCreated, templateParams, plugins={}):
         )
 
         exp.flowsInOrder = templateParams.flowOrder
+        hasChanges = True
+
+    if exp.chipTecDfltAmbient != templateParams.chipTecDfltAmbient:
+        print(
+            ">>> DIFF: orig exp.chipTecDfltAmbient=%s for system template.id=%d; name=%s"
+            % (exp.chipTecDfltAmbient, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.chipTecDfltAmbient = templateParams.chipTecDfltAmbient
+        hasChanges = True
+
+    if exp.chipTecSlope != templateParams.chipTecSlope:
+        print(
+            ">>> DIFF: orig exp.chipTecSlope=%s for system template.id=%d; name=%s"
+            % (exp.chipTecSlope, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.chipTecSlope = templateParams.chipTecSlope
+        hasChanges = True
+
+    if exp.chipTecMinThreshold != templateParams.chipTecMinThreshold:
+        print(
+            ">>> DIFF: orig exp.chipTecMinThreshold=%s for system template.id=%d; name=%s"
+            % (exp.chipTecMinThreshold, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.chipTecMinThreshold = templateParams.chipTecMinThreshold
+        hasChanges = True
+
+    if exp.manTecDfltAmbient != templateParams.manTecDfltAmbient:
+        print(
+            ">>> DIFF: orig exp.manTecDfltAmbient=%s for system template.id=%d; name=%s"
+            % (exp.manTecDfltAmbient, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.manTecDfltAmbient = templateParams.manTecDfltAmbient
+        hasChanges = True
+
+    if exp.manTecSlope != templateParams.manTecSlope:
+        print(
+            ">>> DIFF: orig exp.manTecSlope=%s for system template.id=%d; name=%s"
+            % (exp.manTecSlope, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.manTecSlope = templateParams.manTecSlope
+        hasChanges = True
+
+    if exp.manTecMinThreshold != templateParams.manTecMinThreshold:
+        print(
+            ">>> DIFF: orig exp.manTecMinThreshold=%s for system template.id=%d; name=%s"
+            % (exp.manTecMinThreshold, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.manTecMinThreshold = templateParams.manTecMinThreshold
+        hasChanges = True
+
+    if orderedJson(exp.metaData) != orderedJson(templateParams.metaData):
+        print(
+            ">>> DIFF: orig exp.metaData=%s for system template.id=%d; name=%s"
+            % (exp.metaData, sysTemplate.id, sysTemplate.planName)
+        )
+
+        exp.metaData = templateParams.metaData
         hasChanges = True
 
     if hasChanges:
@@ -487,6 +586,33 @@ def finish_sys_template(sysTemplate, isCreated, templateParams, plugins={}):
         eas.tfKey = templateParams.tfKey
         hasChanges = True
 
+    if eas.mixedTypeRNA_reference != templateParams.mixedTypeRNA_reference:
+        print(
+            ">>> DIFF: orig eas.mixedTypeRNA_reference=%s for system template.id=%d; name=%s"
+            % (eas.mixedTypeRNA_reference, sysTemplate.id, sysTemplate.planName)
+        )
+
+        eas.mixedTypeRNA_reference = templateParams.mixedTypeRNA_reference
+        hasChanges = True
+
+    if eas.mixedTypeRNA_targetRegionBedFile != templateParams.mixedTypeRNA_targetRegionBedFile:
+        print(
+            ">>> DIFF: orig eas.mixedTypeRNA_targetRegionBedFile=%s for system template.id=%d; name=%s"
+            % (eas.mixedTypeRNA_targetRegionBedFile, sysTemplate.id, sysTemplate.planName)
+        )
+
+        eas.mixedTypeRNA_targetRegionBedFile = templateParams.mixedTypeRNA_targetRegionBedFile
+        hasChanges = True
+
+    if eas.mixedTypeRNA_hotSpotRegionBedFile != templateParams.mixedTypeRNA_hotSpotRegionBedFile:
+        print(
+            ">>> DIFF: orig eas.mixedTypeRNA_hotSpotRegionBedFile=%s for system template.id=%d; name=%s"
+            % (eas.mixedTypeRNA_hotSpotRegionBedFile, sysTemplate.id, sysTemplate.planName)
+        )
+
+        eas.mixedTypeRNA_hotSpotRegionBedFile = templateParams.mixedTypeRNA_hotSpotRegionBedFile
+        hasChanges = True
+
     if sysTemplate.latestEAS != eas:
         print(
             ">>> DIFF: orig eas.latestEAS=%s for system template.id=%d; name=%s"
@@ -531,6 +657,38 @@ def _get_plugin_dict(pluginName, userInput={}):
 
     return pluginDict
 
+def get_plugin_user_input_from_custom_json(configFileName = None):
+    pluginUserInput = {}
+    if configFileName:
+        with open(configFileName) as fileInput:
+            data = json.load(fileInput)
+            if data:
+                pluginUserInput = data
+    return pluginUserInput
+
+def _get_plugin_dict_custom(pluginName, customUserInputJson=None):
+    try:
+        userInput = get_plugin_user_input_from_custom_json(customUserInputJson)
+        selectedPlugin = models.Plugin.objects.get(
+            name=pluginName, selected=True, active=True
+        )
+        pluginDict = {
+            "id": selectedPlugin.id,
+            "name": selectedPlugin.name,
+            "version": selectedPlugin.version,
+            "userInput": userInput,
+            "ampliSeqVariantCallerConfig": userInput,
+            "features": [],
+        }
+    except models.Plugin.DoesNotExist:
+        pluginDict = {
+            "name": pluginName,
+            "version": "1.0",
+            "userInput": userInput,
+            "features": [],
+        }
+
+    return pluginDict
 
 def get_tvc_plugin_dict(configuration):
     """tvc: variantCaller"""
@@ -616,7 +774,7 @@ def add_or_update_sys_template(templateParams, isSystemDefault=False):
             "templatingKitName": templateParams.templatingKitName,
             "controlSequencekitname": templateParams.controlSequencekitname,
             "samplePrepKitName": templateParams.samplePrepKitName,
-            "metaData": "",
+            "metaData": templateParams.metaData or {},
             "date": currentTime,
             "applicationGroup": applicationGroup_obj,
             "sampleGrouping": sampleGrouping_obj,
@@ -946,7 +1104,7 @@ def add_or_update_genericseq_system_templates():
     finish_sys_template(sysTemplate, isCreated, templateParams)
 
     # 14
-    templateParams = TemplateParams("System Generic Seq Template", PGM, "GENS")
+    templateParams = TemplateParams("System Generic Seq Template", S5, "GENS")
     templateParams.update({"flows": 500, "reference": "hg19"})
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
@@ -1355,7 +1513,7 @@ def add_or_update_reproseq_system_templates():
     DEFAULT_P1_3_PRIME_ADAPTER_SEQUENCE = "ATCACCGACTGCCCATAGAGAGGAAAGCGG"
     BARCODE_KIT_PGM = "Ion SingleSeq Barcode set 1-24"
     BARCODE_KIT_S5 = "Ion SingleSeq Barcode set 1-96"
-    CATEGORIES = "repro"
+    CATEGORIES = "repro;multi_ir_workflow_support"
     LIBRARY_KIT = "IonPicoPlex"
     LIBRARY_READ_LENGTH = 0
     REFERENCE = "hg19"
@@ -1365,6 +1523,7 @@ def add_or_update_reproseq_system_templates():
     plugins = {}
     plugins["FilterDuplicates"] = _get_plugin_dict("FilterDuplicates")
 
+    metaData = {"lockAssayParams": ["applicationGroupName", "runType", "chipType", "flows", "sequenceKit", "libraryKitType", "templateKit"]}
     # 32
     templateParams = TemplateParams(
         "Ion ReproSeq Aneuploidy - Ion PGM System", PGM, RUN_TYPE
@@ -1378,6 +1537,7 @@ def add_or_update_reproseq_system_templates():
             "sequencekitname": "IonPGMHiQView",
             "libraryKitName": LIBRARY_KIT,
             "barcodeKitName": BARCODE_KIT_PGM,
+            "metaData": metaData,
             "reference": REFERENCE,
             "threePrimeAdapter": DEFAULT_P1_3_PRIME_ADAPTER_SEQUENCE,
             "categories": CATEGORIES,
@@ -1412,6 +1572,7 @@ def add_or_update_reproseq_system_templates():
             "reference": REFERENCE,
             "threePrimeAdapter": PGS_S5_3PrimeAdapter,
             "categories": CATEGORIES,
+            "metaData": metaData,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -2554,25 +2715,53 @@ def add_or_update_ocp_myeloid_s5_system_templates():
 
 
 def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
+    # These templates has the 550 chef protocol auto selected for 5.18.
     BARCODE_KIT_NAME = "Ion AmpliSeq HD Dual Barcode Kit 1-24"
-    CATEGORIES_DNA = "Oncomine;barcodes_12;onco_liquidBiopsy;onco_heme;mrd;"
-    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_48;onco_liquidBiopsy;onco_heme;"
-    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_24;onco_liquidBiopsy;onco_heme;mrd;"
+    CATEGORIES_DNA = "Oncomine;barcodes_6;onco_liquidBiopsy;onco_heme;mrd;"
+    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_18;onco_liquidBiopsy;onco_heme;"
+    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_8;onco_liquidBiopsy;onco_heme;mrd;"
+    CATEGORIES_MHT = "Oncomine;barcodes_18;onco_liquidBiopsy;onco_heme;mrd;"
+    CATEGORIES_DNA_MHT = "Oncomine;barcodes_5;onco_liquidBiopsy;onco_heme;mrd;"
+    CATEGORIES_DNA_n_FUSIONS_MHT = "Oncomine;barcodes_6;onco_liquidBiopsy;onco_heme;mrd;"
+
     CHIP_NAME = "550"
     FLOWS = 550
     LIB_KIT_NAME = "Ion AmpliSeq HD Library Kit"
     LIBRARY_READ_LENGTH = 200
     REFERENCE = "hg19"
     SAMPLE_GROUPING = "Self"
-    SAMPLE_PREP_PROTOCOL = ""
+    SAMPLE_PREP_PROTOCOL = "cerebro_550"
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S550 V1"
-    PLAN_STATUS = "inactive"
+    BEDFILE = "Oncomine_Myeloid_MRD_DNA_Regions_v1.2.bed"
+    HOTSPOT_FILE = "Oncomine_Myeloid_MRD_DNA_Hotspots_v1.2.bed"
+    FUSION_REFERENCE = "Oncomine_Myeloid_MRD_RNA_Fusions_v1.2_Reference"
+    FUSION_BEDFILE = "Oncomine_Myeloid_MRD_RNA_Fusions_v1.2_Reference.bed"
+    MICROHAPLOTYPE_DNA_BEDFILE = "Oncomine_Myeloid_MRD_DNA_Microhaplotype_Regions_v1.2.bed"
+    MICROHAPLOTYPE_DNA_HOTSPOT_FILE = "Oncomine_Myeloid_MRD_DNA_Microhaplotype_Hotspots_v1.2.bed"
+    MICROHAPLOTYPE_BEDFILE = "Oncomine_Myeloid_MRD_Microhaplotype_Regions_v1.2.bed"
+    MICROHAPLOTYPE_HOTSPOT_FILE = "Oncomine_Myeloid_MRD_Microhaplotype_Hotspots_v1.2.bed"
 
     # pre-select plugins
-    plugins = {}
-    plugins["molecularCoverageAnalysis"] = get_mca_plugin_dict("ampliseq_hd_cfdna")
-    plugins["sampleID"] = _get_plugin_dict("sampleID")
+    # Add custom param to MCA plugin - TS-18359
+    CUSTOM_PLUGIN_CONFIG_FILENAME_TVC = "rundb/fixtures/systemtemplateparams/cerebro_mrd_parameters.json"
+    CUSTOM_PLUGIN_CONFIG_FILENAME_MCA = "rundb/fixtures/systemtemplateparams/cerebro_mrd_mca_parameters.json"
+    plugins = {
+        "coverageAnalysis":  _get_plugin_dict("coverageAnalysis"),
+        "molecularCoverageAnalysis": _get_plugin_dict_custom("molecularCoverageAnalysis", CUSTOM_PLUGIN_CONFIG_FILENAME_MCA),
+    }
+    plugins_with_custom_tvc = dict(plugins)
+    plugins_with_custom_tvc.update({"variantCaller": _get_plugin_dict_custom("variantCaller", CUSTOM_PLUGIN_CONFIG_FILENAME_TVC)})
+
+    plugins_microaplotype = dict(plugins)
+    plugins_microaplotype.update({"microhaplotype_analysis" : _get_plugin_dict("microhaplotype_analysis")})
+
+    plugins_microaplotype_custom_tvc = dict(plugins_with_custom_tvc)
+    plugins_microaplotype_custom_tvc.update({"microhaplotype_analysis": _get_plugin_dict("microhaplotype_analysis")})
+
+    fusion_plugins = {
+        "coverageAnalysis": _get_plugin_dict("coverageAnalysis")
+    }
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD DNA for 550", S5, "AMPS_HD_DNA"
@@ -2587,15 +2776,16 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
             "reference": REFERENCE,
+            "targetRegionBedFile": BEDFILE,
+            "hotSpotRegionBedFile": HOTSPOT_FILE,
             "sampleGrouping": SAMPLE_GROUPING,
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_with_custom_tvc)
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD Fusions for 550", S5, "AMPS_HD_RNA"
@@ -2609,19 +2799,19 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "flows": FLOWS,
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
-            "reference": "",
+            "reference": FUSION_REFERENCE,
+            "targetRegionBedFile": FUSION_BEDFILE,
             "sampleGrouping": "Single Fusions",
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, fusion_plugins)
 
     templateParams = TemplateParams(
-        "Oncomine Myeloid MRD DNA and Fusions for 550", S5, "AMPS_HD_DNA_RNA_1"
+        "Oncomine Myeloid MRD DNA and Fusions for 550", S5, "AMPS_HD_DNA_RNA"
     )
     templateParams.update(
         {
@@ -2633,22 +2823,102 @@ def add_or_update_ocp_myeloid_mrd_550_s5_system_templates():
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
             "reference": REFERENCE,
+            "targetRegionBedFile": BEDFILE,
+            "hotSpotRegionBedFile": HOTSPOT_FILE,
+            "mixedTypeRNA_reference": FUSION_REFERENCE,
+            "mixedTypeRNA_targetRegionBedFile": FUSION_BEDFILE,
             "sampleGrouping": "DNA and Fusions",
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_with_custom_tvc)
 
+    #Microhaplotype templates
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD Microhaplotype for 550", S5, "AMPS_HD_DNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_MHT,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_HOTSPOT_FILE,
+            "sampleGrouping": SAMPLE_GROUPING,
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype)
+
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD DNA and Microhaplotype for 550", S5, "AMPS_HD_DNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_DNA_MHT,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_DNA_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_DNA_HOTSPOT_FILE,
+            "sampleGrouping": SAMPLE_GROUPING,
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype_custom_tvc)
+
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD DNA Fusions and Microhaplotype for 550", S5, "AMPS_HD_DNA_RNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA + RNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_DNA_n_FUSIONS_MHT,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_DNA_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_DNA_HOTSPOT_FILE,
+            "mixedTypeRNA_reference": FUSION_REFERENCE,
+            "mixedTypeRNA_targetRegionBedFile": FUSION_BEDFILE,
+            "sampleGrouping": "DNA and Fusions",
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype_custom_tvc)
 
 def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
     BARCODE_KIT_NAME = "Ion AmpliSeq HD Dual Barcode Kit 1-24"
-    CATEGORIES_DNA = "Oncomine;barcodes_12;onco_liquidBiopsy;onco_heme;mrd"
-    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_48;onco_liquidBiopsy;onco_heme;"
-    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_24;onco_liquidBiopsy;onco_heme;mrd"
+    CATEGORIES_DNA = "Oncomine;barcodes_4;onco_liquidBiopsy;onco_heme;mrd"
+    CATEGORIES_RNA_FUSIONS = "Oncomine;barcodes_12;onco_liquidBiopsy;onco_heme;"
+    CATEGORIES_DNA_n_FUSIONS = "Oncomine;barcodes_4;onco_liquidBiopsy;onco_heme;mrd"
+    CATEGORIES_MHT = "Oncomine;barcodes_12;onco_liquidBiopsy;onco_heme;mrd"
+    CATEGORIES_DNA_MHT = "Oncomine;barcodes_3;onco_liquidBiopsy;onco_heme;mrd"
+
     CHIP_NAME = "540"
     FLOWS = 550
     LIB_KIT_NAME = "Ion AmpliSeq HD Library Kit"
@@ -2658,12 +2928,36 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
     SAMPLE_PREP_PROTOCOL = ""
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
-    PLAN_STATUS = "inactive"
+    BEDFILE = "Oncomine_Myeloid_MRD_DNA_Regions_v1.2.bed"
+    HOTSPOT_FILE = "Oncomine_Myeloid_MRD_DNA_Hotspots_v1.2.bed"
+    FUSION_REFERENCE = "Oncomine_Myeloid_MRD_RNA_Fusions_v1.2_Reference"
+    FUSION_BEDFILE = "Oncomine_Myeloid_MRD_RNA_Fusions_v1.2_Reference.bed"
+    MICROHAPLOTYPE_DNA_BEDFILE = "Oncomine_Myeloid_MRD_DNA_Microhaplotype_Regions_v1.2.bed"
+    MICROHAPLOTYPE_DNA_HOTSPOT_FILE = "Oncomine_Myeloid_MRD_DNA_Microhaplotype_Hotspots_v1.2.bed"
+    MICROHAPLOTYPE_BEDFILE = "Oncomine_Myeloid_MRD_Microhaplotype_Regions_v1.2.bed"
+    MICROHAPLOTYPE_HOTSPOT_FILE = "Oncomine_Myeloid_MRD_Microhaplotype_Hotspots_v1.2.bed"
+
 
     # pre-select plugins
-    plugins = {}
-    plugins["molecularCoverageAnalysis"] = get_mca_plugin_dict("ampliseq_hd_cfdna")
-    plugins["sampleID"] = _get_plugin_dict("sampleID")
+    # Add custom param to MCA plugin - TS-18359
+    CUSTOM_PLUGIN_CONFIG_FILENAME_TVC = "rundb/fixtures/systemtemplateparams/cerebro_mrd_parameters.json"
+    CUSTOM_PLUGIN_CONFIG_FILENAME_MCA = "rundb/fixtures/systemtemplateparams/cerebro_mrd_mca_parameters.json"
+    plugins = {
+        "coverageAnalysis":  _get_plugin_dict("coverageAnalysis"),
+        "molecularCoverageAnalysis": _get_plugin_dict_custom("molecularCoverageAnalysis", CUSTOM_PLUGIN_CONFIG_FILENAME_MCA),
+    }
+    plugins_with_custom_tvc = dict(plugins)
+    plugins_with_custom_tvc.update({"variantCaller": _get_plugin_dict_custom("variantCaller", CUSTOM_PLUGIN_CONFIG_FILENAME_TVC)})
+
+    plugins_microaplotype = dict(plugins)
+    plugins_microaplotype.update({"microhaplotype_analysis" : _get_plugin_dict("microhaplotype_analysis")})
+
+    plugins_microaplotype_custom_tvc = dict(plugins_with_custom_tvc)
+    plugins_microaplotype_custom_tvc.update({"microhaplotype_analysis": _get_plugin_dict("microhaplotype_analysis")})
+
+    fusion_plugins = {
+        "coverageAnalysis":  _get_plugin_dict("coverageAnalysis")
+    }
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD DNA for 540", S5, "AMPS_HD_DNA"
@@ -2678,15 +2972,16 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
             "reference": REFERENCE,
+            "targetRegionBedFile": BEDFILE,
+            "hotSpotRegionBedFile": HOTSPOT_FILE,
             "sampleGrouping": SAMPLE_GROUPING,
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_with_custom_tvc)
 
     templateParams = TemplateParams(
         "Oncomine Myeloid MRD Fusions for 540", S5, "AMPS_HD_RNA"
@@ -2700,19 +2995,19 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "flows": FLOWS,
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
-            "reference": "",
+            "reference": FUSION_REFERENCE,
+            "targetRegionBedFile": FUSION_BEDFILE,
             "sampleGrouping": "Single Fusions",
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, fusion_plugins)
 
     templateParams = TemplateParams(
-        "Oncomine Myeloid MRD DNA and Fusions for 540", S5, "AMPS_HD_DNA_RNA_1"
+        "Oncomine Myeloid MRD DNA and Fusions for 540", S5, "AMPS_HD_DNA_RNA"
     )
     templateParams.update(
         {
@@ -2724,15 +3019,93 @@ def add_or_update_ocp_myeloid_mrd_540_s5_system_templates():
             "libraryKitName": LIB_KIT_NAME,
             "libraryReadLength": LIBRARY_READ_LENGTH,
             "reference": REFERENCE,
+            "targetRegionBedFile": BEDFILE,
+            "hotSpotRegionBedFile": HOTSPOT_FILE,
+            "mixedTypeRNA_reference": FUSION_REFERENCE,
+            "mixedTypeRNA_targetRegionBedFile": FUSION_BEDFILE,
             "sampleGrouping": "DNA and Fusions",
             "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
             "sequencekitname": SEQ_KIT_NAME,
             "templatingKitName": TEMPLATE_KIT_NAME,
-            "planStatus": PLAN_STATUS,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
-    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_with_custom_tvc)
+
+    # Microhaplotype templates for Cerebro
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD Microhaplotype for 540", S5, "AMPS_HD_DNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_MHT,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_HOTSPOT_FILE,
+            "sampleGrouping": SAMPLE_GROUPING,
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype)
+
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD DNA and Microhaplotype for 540", S5, "AMPS_HD_DNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_DNA_MHT,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_DNA_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_DNA_HOTSPOT_FILE,
+            "sampleGrouping": SAMPLE_GROUPING,
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype_custom_tvc)
+
+    templateParams = TemplateParams(
+        "Oncomine Myeloid MRD DNA Fusions and Microhaplotype for 540", S5, "AMPS_HD_DNA_RNA"
+    )
+    templateParams.update(
+        {
+            "applicationGroup": "DNA + RNA",
+            "barcodeKitName": BARCODE_KIT_NAME,
+            "categories": CATEGORIES_DNA_n_FUSIONS,
+            "chipType": CHIP_NAME,
+            "flows": FLOWS,
+            "libraryKitName": LIB_KIT_NAME,
+            "libraryReadLength": LIBRARY_READ_LENGTH,
+            "reference": REFERENCE,
+            "targetRegionBedFile": MICROHAPLOTYPE_DNA_BEDFILE,
+            "hotSpotRegionBedFile": MICROHAPLOTYPE_DNA_HOTSPOT_FILE,
+            "mixedTypeRNA_reference": FUSION_REFERENCE,
+            "mixedTypeRNA_targetRegionBedFile": FUSION_BEDFILE,
+            "sampleGrouping": "DNA and Fusions",
+            "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
+            "sequencekitname": SEQ_KIT_NAME,
+            "templatingKitName": TEMPLATE_KIT_NAME,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins_microaplotype_custom_tvc)
 
 
 def add_or_update_proton_PQ_system_template():
@@ -3031,7 +3404,7 @@ def add_or_update_tagseq_cfdna_s5_540_chef_system_template(templateName):
 def add_or_update_immune_repertoire_clonality_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "540"
     END_BARCODE_KIT_NAME = ""
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3041,19 +3414,17 @@ def add_or_update_immune_repertoire_clonality_s5_system_templates():
     SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     TEMPLATE_KIT_NAME = "Ion Chef S540 V1"
     PLAN_STATUS = "planned"
+    FLOWS = 550
 
     # the follow templates will be create with same settings.
     template_names = [
-        "Oncomine BCR IGHKL-SR - DNA",
-        "Oncomine BCR IGH FR3-J RF1 Assay",
-        "Oncomine BCR IGH FR2-J RF2 Assay",
+        "Oncomine BCR Pan-Clonality Assay",
+        "Oncomine IGH FR3(d)-J Assay",
+        "Oncomine IGH FR2-J Assay",
         "Oncomine TCR Pan-Clonality Assay"
     ]
 
     for template_name in template_names:
-        FLOWS = 500 if template_name in ["Oncomine BCR IGHKL-SR - DNA",
-                                         "Oncomine TCR Pan-Clonality Assay"] else 550
-
         templateParams = TemplateParams(template_name, S5, "MIXED")
         templateParams.update(
             {
@@ -3100,7 +3471,7 @@ def add_or_update_immune_repertoire_clonality_s5_system_templates():
 def add_or_update_immune_repertoire_SHM_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "530"
     END_BARCODE_KIT_NAME = ""
     FLOWS = 1100
@@ -3112,13 +3483,23 @@ def add_or_update_immune_repertoire_SHM_s5_system_templates():
     TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
     SAMPLE_PREP_PROTOCOL = "pcr400bp"
     PLAN_STATUS = "planned"
+    USABLE_SEQ_THRESHOLD = 30
 
     # the follow templates will be create with same settings.
     template_names = [
         "Oncomine BCR IGH FR1-J RF3 Assay",
         "Oncomine BCR IGHV SHM Leader-J Assay"
     ]
+
+    # the follow templates will be create with same settings.
+    template_names = [
+        "Oncomine IGH FR1-J Assay",
+        "Oncomine IGHV Leader-J Assay"
+    ]
     for template_name in template_names:
+        if template_name in "Oncomine IGHV Leader-J Assay":
+            LIBRARY_READ_LENGTH = 400
+            USABLE_SEQ_THRESHOLD = 20
         templateParams = TemplateParams(template_name, S5, "MIXED")
         templateParams.update(
             {
@@ -3136,6 +3517,7 @@ def add_or_update_immune_repertoire_SHM_s5_system_templates():
                 "templatingKitName": TEMPLATE_KIT_NAME,
                 "samplePrepProtocol": SAMPLE_PREP_PROTOCOL,
                 "planStatus": PLAN_STATUS,
+                "usableSequenceThreshold": USABLE_SEQ_THRESHOLD,
             }
         )
         sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -3146,7 +3528,7 @@ def add_or_update_immune_repertoire_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Select BC Set-1"
     BARCODE_KIT_NAME_DUAL = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "530"
     FLOWS = 850
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3205,7 +3587,7 @@ def add_or_update_immune_repertoire_s5_system_templates():
 def add_or_update_immune_repertoire_long_igh_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "530"
     FLOWS = 1100
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3243,7 +3625,7 @@ def add_or_update_immune_repertoire_long_igh_s5_system_templates():
 def add_or_update_immune_repertoire_pgm_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Select BC Set-1"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "318"
     FLOWS = 800
     LIBRARY_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3335,7 +3717,7 @@ def add_or_update_tagseq_cfdna_s5_550_chef_system_template(templateName):
 def add_or_update_immune_repertoire_short_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "540"
     END_BARCODE_KIT_NAME = ""  # TODO: replace with the real barcode kit
     FLOWS = 500
@@ -3373,7 +3755,7 @@ def add_or_update_immune_repertoire_short_s5_system_templates():
 def add_or_update_immune_repertoire_short_igh_mouse_s5_system_templates():
     APPLICATION_GROUP = "immune_repertoire"
     BARCODE_KIT_NAME = "Ion Dual Barcode Kit 1-96"
-    CATEGORIES = "onco_immune;immunology"
+    CATEGORIES = "onco_immune;immunology;multi_ir_workflow_support"
     CHIP = "540"
     END_BARCODE_KIT_NAME = ""  # TODO: replace with the real barcode kit
     FLOWS = 500
@@ -3846,8 +4228,8 @@ def add_or_update_carrierseq_system_templates():
 def add_or_update_oncomine_ocav4_550_system_templates():
     # OCAv4 550
     OCAV4_BARCODE_KIT_NAME = "IonXpress"
-    OCAV4_CATEGORIES = "Oncomine;onco_solidTumor;onco_immune;ocav4"
-    OCAV4_CATEGORIES_2 = "Oncomine;barcodes_8;onco_solidTumor;onco_immune;ocav4"
+    OCAV4_CATEGORIES = "Oncomine;onco_solidTumor;onco_immune;ocav4;tecParam"
+    OCAV4_CATEGORIES_2 = "Oncomine;barcodes_8;onco_solidTumor;onco_immune;ocav4;tecParam"
     OCAV4_CHIP_NAME = "550"
     OCAV4_FLOWS = 500
     OCAV4_FUSION_LIB_KIT_NAME = "Ion AmpliSeq Library Kit Plus"
@@ -3857,6 +4239,13 @@ def add_or_update_oncomine_ocav4_550_system_templates():
     OCAV4_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
     OCAV4_TEMPLATE_KIT_NAME = "Ion Chef S550 V1"
     OCAV4_STATUS = "planned"
+    # PlaceHolder : Get below final values from R&D and update all OCA4(DNA, DNA&Fusion and Fusion only) templates
+    CHIP_TEC_DFLTAMBIENT = 0.0
+    CHIP_TEC_SLOPE = 0.0
+    CHIP_TEC_MINTHRESHOLD = 0.0
+    MAN_TEC_DFLTAMBIENT = 26.90
+    MAN_TEC_SLOPE = 1.47
+    MAN_TEC_MINTHRESHOLD = 40
 
     # pre-select plugins
     plugins = {}
@@ -3879,6 +4268,12 @@ def add_or_update_oncomine_ocav4_550_system_templates():
             "sequencekitname": OCAV4_SEQ_KIT_NAME,
             "templatingKitName": OCAV4_TEMPLATE_KIT_NAME,
             "planStatus": OCAV4_STATUS,
+            "chipTecDfltAmbient": CHIP_TEC_DFLTAMBIENT,
+            "chipTecSlope": CHIP_TEC_SLOPE,
+            "chipTecMinThreshold": CHIP_TEC_MINTHRESHOLD,
+            "manTecDfltAmbient": MAN_TEC_DFLTAMBIENT,
+            "manTecSlope": MAN_TEC_SLOPE,
+            "manTecMinThreshold": MAN_TEC_MINTHRESHOLD,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -3902,6 +4297,12 @@ def add_or_update_oncomine_ocav4_550_system_templates():
             "sequencekitname": OCAV4_SEQ_KIT_NAME,
             "templatingKitName": OCAV4_TEMPLATE_KIT_NAME,
             "planStatus": OCAV4_STATUS,
+            "chipTecDfltAmbient": CHIP_TEC_DFLTAMBIENT,
+            "chipTecSlope": CHIP_TEC_SLOPE,
+            "chipTecMinThreshold": CHIP_TEC_MINTHRESHOLD,
+            "manTecDfltAmbient": MAN_TEC_DFLTAMBIENT,
+            "manTecSlope": MAN_TEC_SLOPE,
+            "manTecMinThreshold": MAN_TEC_MINTHRESHOLD,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
@@ -3925,10 +4326,54 @@ def add_or_update_oncomine_ocav4_550_system_templates():
             "sequencekitname": OCAV4_SEQ_KIT_NAME,
             "templatingKitName": OCAV4_TEMPLATE_KIT_NAME,
             "planStatus": OCAV4_STATUS,
+            "chipTecDfltAmbient": CHIP_TEC_DFLTAMBIENT,
+            "chipTecSlope": CHIP_TEC_SLOPE,
+            "chipTecMinThreshold": CHIP_TEC_MINTHRESHOLD,
+            "manTecDfltAmbient": MAN_TEC_DFLTAMBIENT,
+            "manTecSlope": MAN_TEC_SLOPE,
+            "manTecMinThreshold": MAN_TEC_MINTHRESHOLD,
         }
     )
     sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
     finish_sys_template(sysTemplate, isCreated, templateParams)
+
+def add_or_update_hiv_drug_system_templates():
+    HIV_DRUG_CHIP = "520"
+    HIV_DRUG_FLOWS = 850
+    HIV_DRUG_REFERENCE = "HXB2"
+    HIV_DRUG_BARCODE = "IonCode"
+    HIV_DRUG_SEQ_KIT_NAME = "Ion S5 Sequencing Kit"
+    HIV_DRUG_TEMPLATE_KIT_NAME = "Ion Chef S530 V2"
+    HIV_DRUG_LIBRARY_KIT_NAME = "Ampliseq DNA V1"
+    HIV_DRUG_STATUS = "planned"
+    HIV_DRUG_BEDFILE = "WG00248.3.20170122.designed.bed"
+
+    # pre-select plugins
+    plugins = {}
+    plugins["ARUPHIVGenotyper"] = _get_plugin_dict("ARUPHIVGenotyper")
+    plugins["coverageAnalysis"] = _get_plugin_dict("coverageAnalysis")
+
+    templateParams = TemplateParams(
+        templateName="Ion Ampliseq HIV Drug Resistance Research Panel", instrument=S5, runType="AMPS"
+    )
+
+    templateParams.update(
+        {
+            "applicationGroup": "DNA",
+            "barcodeKitName": HIV_DRUG_BARCODE,
+            "categories": "",
+            "chipType": HIV_DRUG_CHIP,
+            "flows": HIV_DRUG_FLOWS,
+            "reference": HIV_DRUG_REFERENCE,
+            "targetRegionBedFile": HIV_DRUG_BEDFILE,
+            "sequencekitname": HIV_DRUG_SEQ_KIT_NAME,
+            "templatingKitName": HIV_DRUG_TEMPLATE_KIT_NAME,
+            "libraryKitName": HIV_DRUG_LIBRARY_KIT_NAME,
+            "planStatus": HIV_DRUG_STATUS,
+        }
+    )
+    sysTemplate, isCreated, isUpdated = add_or_update_sys_template(templateParams)
+    finish_sys_template(sysTemplate, isCreated, templateParams, plugins)
 
 
 def add_or_update_pan_bacteria_540_system_templates():
@@ -4060,6 +4505,7 @@ def add_or_update_all_system_templates():
         add_or_update_immune_repertoire_clonality_s5_system_templates()
         add_or_update_immune_repertoire_SHM_s5_system_templates()
         add_or_update_trilink_small_rna_system_templates()
+        add_or_update_hiv_drug_system_templates()
 
     except Exception:
         print(format_exc())
@@ -4153,7 +4599,14 @@ def clean_up_obsolete_templates():
             "Ion Carrier Seq DNA - Ion S5 System",
             "Oncomine BCR IGH FR3-J Assay Reflex 1",
             "Oncomine BCR IGH FR2-J Assay Reflex 2",
-            "Oncomine BCR IGHV SHM FR1 - J Assay"
+            "Oncomine BCR IGHV SHM FR1 - J Assay",
+            "Oncomine BCR IGH FR1-J RF3 Assay",
+            "Oncomine BCR IGH FR2-J RF2 Assay",
+            "Oncomine BCR IGH FR3-J RF1 Assay",
+            "Oncomine BCR IGH FR3-J Assay",
+            "Oncomine BCR IGHV SHM Leader-J Assay",
+            "Oncomine BCR IGHV SHM FR1-J Assay",
+            "Oncomine BCR IGHKL-SR - DNA"
         ]
 
         templates = models.PlannedExperiment.objects.filter(
@@ -4220,6 +4673,7 @@ def add_or_updateSystemTemplate_OffCycleRelease(**sysTemp):
         print(format_exc())
 
     return status
+
 
 
 def generate_offcycle_params():

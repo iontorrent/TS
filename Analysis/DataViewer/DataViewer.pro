@@ -1,7 +1,7 @@
 QT += widgets core gui printsupport
 
 CONFIG += c++11
-INCLUDEPATH += /usr/include/hdf5/serial/ ../ ../file-io/ ../Util/ ../Mask/ ../AnalysisOrg ../TsInputUtil/ ../Wells/ ../Image/ ../../build/bamtools-2.4.0.20150702+git15eadb925f-install/include/bamtools/ ../VariantCaller/Bookkeeping/ ../../external/jsoncpp-src-amalgated0.6.0-rc1/ ../../build/armadillo-6.100.0+ion0/include/
+INCLUDEPATH += /usr/include/hdf5/serial/ ../ ../file-io/ ../Util/ ../Mask/ ../AnalysisOrg ../TsInputUtil/ ../Wells/ ../Image/ ../BaseCaller/ ../../build/bamtools-2.4.0.20150702+git15eadb925f-install/include/bamtools/ ../VariantCaller/Bookkeeping/ ../../external/jsoncpp-src-amalgated0.6.0-rc1/ ../../build/armadillo-6.100.0+ion1/include/
 
 # for 18.04
     INCLUDEPATH += /usr/include/bamtools/
@@ -66,9 +66,10 @@ SOURCES       = main.cpp \
     GainTab.cpp \
     AlignmentSpatial.cpp \
     modeltab.cpp \
-    ../BaseCaller/WellsNormalization.cpp \
+    ../Wells/WellsNormalization.cpp \
     ../Mask/Mask.cpp \
     ../BaseCaller/BaseCallerParameters.cpp \
+    ../BaseCaller/ReadClassMap.cpp \
 #    ../BaseCaller/OrderedDatasetWriter.cpp \
 #    ../Calibration/FlowAlignment.cpp \
 #    ../BaseCaller/PhaseEstimator.cpp \
