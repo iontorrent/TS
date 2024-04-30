@@ -37,9 +37,9 @@ MANAGERS = ADMINS
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": "iondb",
-        "USER": "ion",
-        "PASSWORD": "ion",
+        "NAME": os.environ["db"],
+        "USER": os.environ["dbuser"],
+        "PASSWORD": os.environ["dbpassword"],
         "HOST": "",
         "PORT": "",
     }
